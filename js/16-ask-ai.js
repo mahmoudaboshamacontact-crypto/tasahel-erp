@@ -2,7 +2,7 @@
 (function () {
   if (window.__phase14) return; window.__phase14 = true;
   const eh = escapeHtml;
-  const isMgr = () => window.__role === 'manager';
+  const isMgr = () => window.__role === 'manager' || !!(currentUser && ['mahmoud.aboshama@tasahel.com.eg', 'mahmoud.aboshama.contact@gmail.com'].includes(String(currentUser.email || '').toLowerCase()));
   const nextM = m => { const a = m.split('-').map(Number); return a[1] === 12 ? (a[0] + 1) + '-01' : a[0] + '-' + String(a[1] + 1).padStart(2, '0'); };
   const SUGG = ['إيه أكتر خدمة جابت إيراد الشهر ده؟', 'قارن مبيعات الشهر ده بالشهر اللي قبله', 'مين أحسن موظف الشهر ده وبكام؟', 'إيه نسبة طرق الدفع؟', 'إيه اللي متأخر أو لسه مش مكتمل؟'];
   let ctx = null, ctxAt = 0, msgs = [], hist = [], busy = false;
@@ -97,6 +97,10 @@
   }
   const _li = window.loadInitialData;
   window.loadInitialData = async function () { const x = await _li.apply(this, arguments); inject(); return x; };
+  /* لو الأيقونة ما ظهرتش وقت التحميل (الدور اتأخر مثلاً) نحاول تاني عند تغيير التاب */
+  const _sw = window.switchTab;
+  if (typeof _sw === 'function') window.switchTab = function () { const r = _sw.apply(this, arguments); try { inject(); } catch (e) { /* */ } return r; };
+  setTimeout(function () { try { inject(); } catch (e) { /* */ } }, 3000);
   const _lo = window.handleLogout;
   window.handleLogout = async function () { ctx = null; msgs = []; hist = []; ['ai-fab', 'ai-panel'].forEach(id => { const e = $(id); if (e) e.remove(); }); return _lo.apply(this, arguments); };
 })();
