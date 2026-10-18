@@ -142,6 +142,7 @@
   };
   document.addEventListener('click', function (e) { if (!e.target.closest('#menu-wrap') || e.target.closest('#nav-menu .tab-btn')) close(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  const _st = window.switchTab;
   window.switchTab = function (id) {
     const r = _st.apply(this, arguments);
     const b = $b(), tb = document.getElementById('tab-' + id + '-btn');
