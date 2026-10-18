@@ -1,0 +1,264 @@
+/* =====================================================================
+   المرحلة 18 (نسخة الأداء): ألوان ثابتة + حركة وقت الضغط بس + داشبورد غنية + طباعة
+   القاعدة: مفيش أي animation لا نهائي. أي حركة بتشتغل مرة واحدة بعد ضغطة/إجراء.
+   ===================================================================== */
+
+:root { --n1: 45,212,191; --n2: 96,165,250; --n3: 167,139,250; --cardbg: #ffffff; }
+html.dark { --cardbg: #0f172a; }
+
+/* ---------- (1) كارت حفظ المعاملة يتحرك مع السكرول على اللابتوب ---------- */
+/* overflow-x:hidden على html/body/main كان بيكسر sticky. clip بيمنع الخروج من الشاشة من غير ما يعمل scroll container */
+html, body, main { overflow-x: clip !important; }
+@media (min-width: 1024px) {
+  #req-form > aside { position: sticky; top: 5.25rem; align-self: start; }
+}
+
+/* ---------- (2) نيون ثابت (من غير أنيميشن) حوالين الكروت ----------
+   مستثنى منه كروت الطلبات (data-tx / data-st17 / خصم / تعليق) علشان تدرج الألوان والأيقونات بتاعتها تفضل زي ما هي */
+:is(#tab-new, #tab-dash) .card:not([class*="bg-"]):not([data-tx]):not([data-st17]):not(.f16-disc):not(.f16-cmt), .dx-card {
+  border: 1px solid transparent;
+  background-image:
+    linear-gradient(var(--cardbg), var(--cardbg)),
+    linear-gradient(135deg, rgba(var(--n1), .55), rgba(var(--n2), .28) 48%, rgba(var(--n3), .55));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  transition: box-shadow .25s ease;
+}
+html.dark :is(#tab-new, #tab-dash) .card:not([class*="bg-"]):not([data-tx]):not([data-st17]):not(.f16-disc):not(.f16-cmt), html.dark .dx-card {
+  background-image:
+    linear-gradient(var(--cardbg), var(--cardbg)),
+    linear-gradient(135deg, rgba(var(--n1), .38), rgba(var(--n2), .18) 48%, rgba(var(--n3), .38));
+}
+@media (hover: hover) {
+  :is(#tab-new, #tab-dash) .card:not([class*="bg-"]):not([data-tx]):not([data-st17]):not(.f16-disc):not(.f16-cmt):hover, .dx-card:hover {
+    box-shadow: 0 0 0 1px rgba(var(--n1), .22), 0 12px 30px -14px rgba(var(--n2), .45);
+  }
+}
+
+/* لفّة نيون واحدة لما تدوس على كارت (مرة واحدة وبتخلص) */
+@property --na { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@keyframes p18-sweep { from { --na: 0deg; opacity: 1; } to { --na: 360deg; opacity: 0; } }
+.p18-ring::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none; z-index: 3;
+  background: conic-gradient(from var(--na), transparent 0 52%, rgba(var(--n1), .95), rgba(var(--n2), .95), rgba(var(--n3), .95), transparent);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: p18-sweep .95s ease-out 1 both;
+}
+
+/* ---------- (3) حركات وقت الإجراء بس (ضغط على فترة / تحديث / فتح التاب) ---------- */
+@keyframes dx-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes dx-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes dx-rise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.dx-go .dx-card, .dx-go .dash-in, .dx-go #dsh-kpis > div { animation: dx-in .5s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+.dx-go .dx-bar { transform-origin: right center; animation: dx-grow .8s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 30ms + .15s); }
+.dx-go .dx-col { transform-origin: center bottom; animation: dx-rise .7s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 18ms + .1s); }
+
+/* ---------- (4) لوحة الداشبورد الجديدة ---------- */
+.dx-sec { display: grid; gap: 1rem; }
+.dx-h { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .75rem; }
+.dx-h h3 { font-weight: 700; font-size: .9rem; color: #0b1b33; display: flex; align-items: center; gap: .5rem; }
+html.dark .dx-h h3 { color: #fff; }
+.dx-h small { font-size: 11px; color: #94a3b8; }
+.dx-card { border-radius: 1rem; padding: 1.1rem; min-width: 0; }
+.dx-grid-2 { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+.dx-grid-3 { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+@media (min-width: 768px) { .dx-grid-2 { grid-template-columns: 1fr 1fr; } .dx-grid-3 { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1100px) { .dx-grid-3 { grid-template-columns: 1fr 1fr 1fr; } }
+.dx-span2 { grid-column: 1 / -1; }
+
+/* الخلاصة الذكية */
+.dx-ins { display: flex; flex-direction: column; gap: .5rem; }
+.dx-ins-row { display: flex; gap: .65rem; align-items: flex-start; padding: .6rem .75rem; border-radius: .8rem; background: rgba(148, 163, 184, .08); font-size: 13px; line-height: 1.7; color: #334155; }
+html.dark .dx-ins-row { color: #cbd5e1; }
+.dx-ins-row b { color: #0b1b33; font-weight: 700; } html.dark .dx-ins-row b { color: #fff; }
+.dx-ico { flex: none; width: 1.9rem; height: 1.9rem; border-radius: .6rem; display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; color: #fff; background: rgb(var(--c, 13, 148, 136)); }
+
+/* تنبيهات */
+.dx-alerts { display: grid; gap: .6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 768px) { .dx-alerts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .dx-alerts { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.dx-al { text-align: start; border-radius: .9rem; padding: .7rem .8rem; border: 1px solid rgba(var(--c), .35); background: rgba(var(--c), .08); cursor: pointer; transition: transform .15s ease, background-color .15s ease; display: flex; gap: .6rem; align-items: center; min-width: 0; }
+.dx-al:active { transform: scale(.97); }
+.dx-al[aria-expanded="true"] { background: rgba(var(--c), .16); }
+.dx-al .n { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1.25rem; color: rgb(var(--c)); line-height: 1; }
+.dx-al .t { font-size: 11.5px; font-weight: 600; color: #475569; line-height: 1.4; min-width: 0; }
+html.dark .dx-al .t { color: #cbd5e1; }
+.dx-al-list { grid-column: 1 / -1; border-radius: .9rem; border: 1px dashed rgba(148, 163, 184, .5); padding: .25rem .75rem; }
+.dx-al-list > div { display: flex; justify-content: space-between; gap: .75rem; padding: .5rem 0; border-bottom: 1px solid rgba(148, 163, 184, .2); font-size: 12px; }
+.dx-al-list > div:last-child { border: 0; }
+.dx-ok { display: flex; align-items: center; gap: .6rem; padding: .9rem; border-radius: .9rem; background: rgba(16, 185, 129, .1); color: #047857; font-weight: 600; font-size: 13px; }
+html.dark .dx-ok { color: #6ee7b7; }
+
+/* بلاطات سريعة */
+.dx-tiles { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 768px) { .dx-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .dx-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.dx-tile { display: flex; gap: .65rem; align-items: center; padding: .85rem; min-width: 0; }
+.dx-tile .l { font-size: 11px; color: #64748b; }
+.dx-tile .v { font-size: .95rem; font-weight: 700; color: #0b1b33; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.dark .dx-tile .v { color: #fff; }
+.dx-tile .s { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* خط سير العمل */
+.dx-pipe { display: grid; gap: .6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 900px) { .dx-pipe { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.dx-stage { border-radius: .9rem; padding: .8rem; background: rgba(var(--c), .08); border: 1px solid rgba(var(--c), .3); min-width: 0; }
+.dx-stage .n { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1.5rem; color: rgb(var(--c)); line-height: 1.1; }
+.dx-stage .l { font-size: 12px; font-weight: 700; color: #334155; } html.dark .dx-stage .l { color: #e2e8f0; }
+.dx-stage .m { font-size: 11px; color: #64748b; margin-top: .25rem; line-height: 1.6; }
+
+/* صفوف بشرائط */
+.dx-rows { display: flex; flex-direction: column; gap: .65rem; }
+.dx-row .top { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; font-size: 12px; }
+.dx-row .top .a { font-weight: 600; color: #0b1b33; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html.dark .dx-row .top .a { color: #fff; }
+.dx-row .top .b { font-family: 'JetBrains Mono', monospace; color: #64748b; flex: none; font-size: 11.5px; }
+.dx-track { height: .45rem; border-radius: 9999px; background: rgba(148, 163, 184, .2); overflow: hidden; margin-top: .3rem; }
+.dx-bar { height: 100%; border-radius: 9999px; background: rgb(var(--c, 13, 148, 136)); width: var(--w, 0%); }
+.dx-sub { font-size: 10.5px; color: #94a3b8; margin-top: .2rem; }
+
+.dx-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dx-tbl th { text-align: start; font-weight: 600; color: #64748b; padding: .45rem .5rem; border-bottom: 1px solid rgba(148, 163, 184, .3); white-space: nowrap; font-size: 11px; }
+.dx-tbl td { padding: .5rem; border-bottom: 1px solid rgba(148, 163, 184, .15); color: #334155; }
+html.dark .dx-tbl td { color: #cbd5e1; }
+.dx-tbl td.m, .dx-tbl th.m { font-family: 'JetBrains Mono', monospace; text-align: end; white-space: nowrap; }
+.dx-tbl td.nm { font-weight: 600; color: #0b1b33; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html.dark .dx-tbl td.nm { color: #fff; }
+.dx-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.dx-pill { display: inline-block; border-radius: 9999px; padding: .1rem .55rem; font-size: 10.5px; font-weight: 700; background: rgba(var(--c), .14); color: rgb(var(--c)); }
+
+/* أعمدة (ساعات / أيام / الشهر) */
+.dx-cols { display: flex; align-items: flex-end; gap: 3px; height: 7rem; }
+.dx-cols > div { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; }
+.dx-col { border-radius: 4px 4px 0 0; background: rgb(var(--c, 13, 148, 136)); height: var(--h, 0%); min-height: 2px; opacity: .85; }
+.dx-cols > div.on .dx-col { opacity: 1; box-shadow: 0 0 0 1px rgba(var(--n1), .6); }
+.dx-lbls { display: flex; gap: 3px; margin-top: .3rem; font-size: 9.5px; color: #94a3b8; font-family: 'JetBrains Mono', monospace; }
+.dx-lbls > span { flex: 1 1 0; text-align: center; min-width: 0; overflow: hidden; }
+
+/* حاجات متتوقعهاش */
+.dx-surp { display: grid; gap: .5rem; grid-template-columns: 1fr; }
+@media (min-width: 768px) { .dx-surp { grid-template-columns: 1fr 1fr; } }
+.dx-surp > div { display: flex; gap: .65rem; align-items: flex-start; padding: .65rem .75rem; border-radius: .85rem; background: rgba(var(--c), .07); border: 1px solid rgba(var(--c), .25); font-size: 12.5px; line-height: 1.7; color: #334155; }
+html.dark .dx-surp > div { color: #cbd5e1; }
+.dx-surp b { color: #0b1b33; } html.dark .dx-surp b { color: #fff; }
+.dx-empty { padding: 1.25rem; text-align: center; font-size: 12px; color: #94a3b8; }
+
+/* ---------- (5) كروت الطلبات: أيقونات وتدرجات الألوان (خصم / تعليق / حالة) ---------- */
+/* بقيت بسيطة الـ specificity (:where) علشان لو في ستايل أقوى في ملفاتك يكسبها */
+:where(.f16-badge) { display: inline-flex; align-items: center; gap: .25rem; border-radius: 9999px; padding: .1rem .55rem; font-size: 10px; font-weight: 700; line-height: 1.5; }
+:where(.f16-b-disc) { background: #fef3c7; color: #92400e; }
+:where(.f16-b-cmt) { background: #ede9fe; color: #5b21b6; }
+html.dark :where(.f16-b-disc) { background: rgba(245, 158, 11, .18); color: #fcd34d; }
+html.dark :where(.f16-b-cmt) { background: rgba(139, 92, 246, .22); color: #c4b5fd; }
+
+:where(.st17-b) { display: inline-flex; align-items: center; border-radius: 9999px; padding: .2rem .65rem; font-size: 11px; font-weight: 700; white-space: nowrap; background: rgba(var(--sc, 100,116,139), .15); color: rgb(var(--sct, 71,85,105)); }
+:where(.st17-b[data-s="Delivered"]) { --sc: 16,185,129; --sct: 4,120,87; }
+:where(.st17-b[data-s="Complete"]) { --sc: 14,165,233; --sct: 3,105,161; }
+:where(.st17-b[data-s="In Progress"]) { --sc: 245,158,11; --sct: 146,64,14; }
+:where(.st17-b[data-s="Under Review"]) { --sc: 244,63,94; --sct: 159,18,57; }
+html.dark :where(.st17-b[data-s="Delivered"]) { --sct: 110,231,183; }
+html.dark :where(.st17-b[data-s="Complete"]) { --sct: 125,211,252; }
+html.dark :where(.st17-b[data-s="In Progress"]) { --sct: 252,211,77; }
+html.dark :where(.st17-b[data-s="Under Review"]) { --sct: 253,164,175; }
+
+/* بقيت بـ specificity أعلى من .card / .dark .card علشان التدرج يظهر فوق خلفية الكارت */
+body [data-st17="Delivered"] { background-image: linear-gradient(to left, rgba(16, 185, 129, .10), transparent 55%); }
+body [data-st17="Complete"] { background-image: linear-gradient(to left, rgba(14, 165, 233, .10), transparent 55%); }
+body [data-st17="In Progress"] { background-image: linear-gradient(to left, rgba(245, 158, 11, .10), transparent 55%); }
+body [data-st17="Under Review"] { background-image: linear-gradient(to left, rgba(244, 63, 94, .10), transparent 55%); }
+:where(tr[data-st17="Delivered"] > td:first-child) { box-shadow: inset -3px 0 0 #10b981; }
+:where(tr[data-st17="Complete"] > td:first-child) { box-shadow: inset -3px 0 0 #0ea5e9; }
+:where(tr[data-st17="In Progress"] > td:first-child) { box-shadow: inset -3px 0 0 #f59e0b; }
+:where(tr[data-st17="Under Review"] > td:first-child) { box-shadow: inset -3px 0 0 #f43f5e; }
+/* خصم / تعليق: تدرج وإطار ملوّن فوق لون الحالة */
+body .f16-disc { background-image: linear-gradient(120deg, rgba(245, 158, 11, .20), rgba(245, 158, 11, .04) 55%, transparent); border-color: rgba(245, 158, 11, .55); }
+body .f16-cmt { background-image: linear-gradient(120deg, rgba(139, 92, 246, .18), rgba(139, 92, 246, .04) 55%, transparent); border-color: rgba(139, 92, 246, .5); }
+body .f16-disc.f16-cmt { background-image: linear-gradient(120deg, rgba(245, 158, 11, .20), rgba(139, 92, 246, .16) 55%, transparent); border-color: rgba(168, 85, 247, .55); }
+@keyframes p18-flash { 0% { background-color: rgba(var(--n1), .32); } 100% { background-color: transparent; } }
+:where(.st17-flash) { animation: p18-flash 1.4s ease-out 1; }
+
+/* قوائم اختيار الحالة جوه نافذة المعاملة */
+:where(.st-sel[data-s="Delivered"]) { border-color: #10b981; }
+:where(.st-sel[data-s="Complete"]) { border-color: #0ea5e9; }
+:where(.st-sel[data-s="In Progress"]) { border-color: #f59e0b; }
+:where(.st-sel[data-s="Under Review"]) { border-color: #f43f5e; }
+
+/* جرس الإشعارات */
+:where(.ub-ic) { flex: none; width: 2rem; height: 2rem; border-radius: .65rem; display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; color: #fff; background: #64748b; }
+:where(.ub-c-chat) { background: #0d9488; } :where(.ub-c-task) { background: #2563eb; } :where(.ub-c-cmt) { background: #7c3aed; } :where(.ub-c-late) { background: #e11d48; }
+:where(.ub-n) { border-radius: 9999px; background: #e11d48; color: #fff; font-size: 10px; font-weight: 700; padding: 0 .4rem; line-height: 1.1rem; }
+:where(.ub-dot) { width: .5rem; height: .5rem; border-radius: 9999px; background: #0d9488; display: inline-block; }
+:where(.ub-has) { color: #0d9488; }
+
+/* اسأل السيستم: تصميم داكن نيون (أسود + بنفسجي + أحمر) - ثابت، والحركة وقت الفتح/الضغط بس */
+.ai-fab { --v: 139,92,246; --r: 244,63,94; position: fixed; bottom: 1rem; right: 1rem; z-index: 90; width: 3.5rem; height: 3.5rem; border-radius: 9999px; border: 2px solid transparent; cursor: pointer; font-size: 1.55rem; display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(#0a0912, #0a0912) padding-box, linear-gradient(135deg, rgb(var(--v)), #d946ef 50%, rgb(var(--r))) border-box;
+  box-shadow: 0 0 0 1px rgba(var(--v), .25), 0 6px 22px -4px rgba(var(--v), .65), 0 0 26px -6px rgba(var(--r), .6); transition: transform .18s ease, box-shadow .2s ease; }
+.ai-fab svg { filter: drop-shadow(0 0 5px rgba(217, 70, 239, .55)); }
+@media (hover: hover) { .ai-fab:hover { transform: translateY(-2px) scale(1.06); box-shadow: 0 0 0 1px rgba(var(--v), .4), 0 10px 30px -4px rgba(var(--v), .8), 0 0 34px -4px rgba(var(--r), .75); } }
+.ai-fab:active { transform: scale(.93); }
+.ai-fab.on { box-shadow: 0 0 0 1px rgba(var(--r), .5), 0 8px 28px -4px rgba(var(--r), .7), 0 0 30px -6px rgba(var(--v), .7); }
+@keyframes aix-open { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+.ai-panel { position: fixed; z-index: 91; right: 1rem; bottom: 5.5rem; width: min(420px, calc(100vw - 2rem)); height: min(calc(100dvh - 7rem), 760px); border-radius: 22px; overflow: hidden; color: #e5e7eb;
+  border: 1.5px solid transparent;
+  background: linear-gradient(#08070f, #08070f) padding-box, linear-gradient(160deg, rgba(139, 92, 246, .9), rgba(217, 70, 239, .35) 45%, rgba(244, 63, 94, .85)) border-box;
+  box-shadow: 0 30px 70px -20px rgba(0, 0, 0, .75), 0 0 40px -12px rgba(139, 92, 246, .55), 0 0 50px -16px rgba(244, 63, 94, .45); animation: aix-open .28s cubic-bezier(.2, .8, .2, 1) both; }
+.ai-panel.hidden { display: none; }
+@media (max-width: 520px) { .ai-panel { right: .5rem; left: .5rem; width: auto; bottom: 5rem; height: calc(100dvh - 6rem); } .ai-fab { right: .75rem; bottom: .75rem; } }
+.aix-wrap { display: flex; flex-direction: column; height: 100%; background: radial-gradient(120% 60% at 100% 0%, rgba(139, 92, 246, .16), transparent 60%), radial-gradient(90% 50% at 0% 100%, rgba(244, 63, 94, .10), transparent 60%); }
+.aix-head { display: flex; align-items: center; gap: .65rem; padding: .85rem 1rem; border-bottom: 1px solid rgba(139, 92, 246, .22); }
+.aix-logo { width: 2.2rem; height: 2.2rem; border-radius: .75rem; display: inline-flex; align-items: center; justify-content: center; font-size: 1.15rem; background: rgba(139, 92, 246, .12); border: 1px solid rgba(139, 92, 246, .35); flex: none; }
+.aix-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.aix-t b { font-size: .9rem; background: linear-gradient(90deg, #c4b5fd, #f0abfc 55%, #fda4af); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.aix-t small { font-size: 10px; color: #8b8aa3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aix-ib { width: 2rem; height: 2rem; border-radius: .6rem; border: 0; background: transparent; color: #9ca3af; cursor: pointer; flex: none; }
+.aix-ib:hover { background: rgba(139, 92, 246, .16); color: #fff; }
+.aix-msgs { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: .7rem; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(139, 92, 246, .4) transparent; }
+.aix-row { display: flex; } .aix-row.me { justify-content: flex-end; } .aix-row.bot { justify-content: flex-start; }
+.aix-b { max-width: 88%; padding: .6rem .85rem; border-radius: 1rem; font-size: 13.5px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; }
+.aix-b.me { color: #fff; background: linear-gradient(135deg, #7c3aed, #c026d3 60%, #e11d48); border-end-end-radius: .3rem; box-shadow: 0 6px 18px -8px rgba(192, 38, 211, .7); }
+.aix-b.bot { background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .09); color: #e5e7eb; border-end-start-radius: .3rem; }
+.aix-b.bot b { color: #fff; }
+.aix-b.err { background: rgba(244, 63, 94, .12); border: 1px solid rgba(244, 63, 94, .4); color: #fecdd3; }
+@keyframes aix-dot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+.aix-typing { display: inline-flex; gap: 5px; padding: .85rem 1rem; }
+.aix-typing i { width: 6px; height: 6px; border-radius: 9999px; background: #c084fc; animation: aix-dot 1.1s ease-in-out infinite; }
+.aix-typing i:nth-child(2) { animation-delay: .15s; } .aix-typing i:nth-child(3) { animation-delay: .3s; }
+.aix-empty { margin: auto 0; text-align: center; display: flex; flex-direction: column; align-items: center; gap: .5rem; padding: 1rem 0; }
+.aix-orb { width: 4rem; height: 4rem; border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; border: 1.5px solid transparent; background: linear-gradient(#0c0a16, #0c0a16) padding-box, linear-gradient(135deg, #8b5cf6, #d946ef, #f43f5e) border-box; box-shadow: 0 0 30px -4px rgba(139, 92, 246, .7), 0 0 36px -8px rgba(244, 63, 94, .6); }
+.aix-h { font-weight: 800; font-size: 1.05rem; color: #fff; margin-top: .4rem; }
+.aix-p { font-size: 12px; color: #8b8aa3; margin-bottom: .6rem; }
+.aix-chips { display: flex; flex-direction: column; gap: .45rem; width: 100%; }
+.aix-chip { text-align: start; padding: .6rem .85rem; border-radius: .85rem; font-size: 12.5px; color: #d1d5db; cursor: pointer; background: rgba(255, 255, 255, .04); border: 1px solid rgba(139, 92, 246, .28); transition: background-color .15s ease, border-color .15s ease, transform .15s ease; }
+.aix-chip:hover { background: rgba(139, 92, 246, .14); border-color: rgba(217, 70, 239, .6); color: #fff; }
+.aix-chip:active { transform: scale(.98); }
+.aix-form { display: flex; align-items: center; gap: .55rem; padding: .75rem; border-top: 1px solid rgba(139, 92, 246, .22); background: rgba(0, 0, 0, .35); }
+.aix-in { flex: 1; min-width: 0; height: 2.7rem; padding: 0 .95rem; border-radius: 9999px; font-size: 13.5px; color: #fff; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); outline: none; }
+.aix-in::placeholder { color: #7c7b93; }
+.aix-in:focus { border-color: rgba(217, 70, 239, .7); box-shadow: 0 0 0 3px rgba(139, 92, 246, .22); }
+.aix-send { width: 2.7rem; height: 2.7rem; border-radius: 9999px; border: 0; cursor: pointer; flex: none; color: #fff; background: linear-gradient(135deg, #7c3aed, #d946ef 55%, #f43f5e); box-shadow: 0 6px 18px -6px rgba(217, 70, 239, .8); transition: transform .15s ease; }
+.aix-send:active { transform: scale(.92); } .aix-send:disabled { opacity: .5; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .ai-panel, .aix-typing i { animation: none; } }
+
+/* ---------- (6) الطباعة: ورق أبيض + مفيش قص للصفوف ---------- */
+@media print {
+  html, html.dark, body, body.dark { background: #fff !important; background-image: none !important; color: #000 !important; overflow: visible !important; height: auto !important; width: auto !important; max-width: none !important; }
+  body::before, body::after { display: none !important; }
+  #printArea, #print-content { background: #fff !important; overflow: visible !important; width: 100% !important; max-width: none !important; height: auto !important; }
+  #print-content { padding: 0 !important; }
+  #printArea *, #printArea *::before, #printArea *::after { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-shadow: none !important; }
+  #printArea table { width: 100% !important; max-width: none !important; table-layout: auto; page-break-inside: auto; break-inside: auto; }
+  #printArea thead { display: table-header-group !important; }
+  #printArea tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+  #printArea th, #printArea td { white-space: normal !important; overflow: visible !important; word-break: break-word; overflow-wrap: anywhere; }
+  #printArea [style*="1123px"] { width: 100% !important; min-height: 0 !important; }
+  #printArea img { max-width: 100%; }
+  .receipt-half, .receipt-box { max-height: none !important; overflow: visible !important; page-break-inside: avoid; break-inside: avoid; }
+}
+
+/* ---------- (7) تقليل الحركة + تبديل ليلي/نهاري فوري ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .dx-go .dx-card, .dx-go .dx-bar, .dx-go .dx-col, .p18-ring::after { animation: none !important; }
+}
+html.p18-switching *, html.p18-switching *::before, html.p18-switching *::after { transition: none !important; animation: none !important; }
