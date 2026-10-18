@@ -1,0 +1,71 @@
+.label{display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:.375rem}
+.dark .label{color:#cbd5e1}
+.field{width:100%;border-radius:.75rem;border:1px solid #e2e8f0;background:#fff;padding:.625rem .875rem;font-size:14px;color:#0f172a;box-shadow:0 1px 2px rgba(0,0,0,.05);transition:border-color .2s,box-shadow .2s;outline:none}
+.dark .field{border-color:#334155;background:#1e293b;color:#f8fafc}
+.field:focus{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.15)}
+.card{border-radius:1rem;border:1px solid rgba(226,232,240,.8);background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.03),0 8px 20px -8px rgba(15,23,42,.06);transition:box-shadow .25s,border-color .25s}
+.dark .card{border-color:#1e293b;background:#0f172a}
+.step{display:flex;height:1.75rem;width:1.75rem;align-items:center;justify-content:center;border-radius:9999px;background:#0b1b33;font-size:.75rem;font-weight:700;color:#fff;flex-shrink:0}
+.dark .step{background:#0d9488}
+.tab-btn{border-radius:.75rem;padding:.5rem .875rem;font-size:.75rem;font-weight:600;transition:background-color .2s,color .2s;white-space:nowrap;display:flex;align-items:center;gap:.375rem;flex-shrink:0}
+.th{padding:.875rem .75rem;text-align:right}
+.mono{font-variant-numeric:tabular-nums}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:9999px}.dark ::-webkit-scrollbar-thumb{background:#334155}
+#printArea{display:none}
+@page{size:A4 portrait;margin:8mm}
+@media print{body>*:not(#printArea){display:none!important}#printArea{display:block!important;font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;direction:rtl;color:#000;background:#fff}.receipt-box{border:2px solid #0b1b33;padding:18px;border-radius:10px;background:#fff}.no-print{display:none!important}*,*::before,*::after{animation:none!important;transition:none!important;opacity:1!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}#printArea tr{opacity:1!important;transform:none!important}}
+/* ===== حركات ===== */
+@keyframes aTab{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes aPop{from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:none}}
+@keyframes aFade{from{opacity:0}to{opacity:1}}
+@keyframes aRow{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+@keyframes aAur{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(40px,-30px) scale(1.15)}}
+@keyframes aShine{from{background-position:200% 0}to{background-position:-200% 0}}
+main>div[id^="tab-"]:not(.hidden){animation:aTab .38s cubic-bezier(.2,.8,.2,1) both}
+tbody tr:nth-child(-n+10),#recent-cards-container>*:nth-child(-n+10),#search-results-cards>*:nth-child(-n+10),#sheet-cards-container>*:nth-child(-n+10){animation:aRow .3s cubic-bezier(.2,.8,.2,1) both}
+tbody tr:nth-child(n+2),#recent-cards-container>*:nth-child(n+2){animation-delay:.05s}tbody tr:nth-child(n+4),#recent-cards-container>*:nth-child(n+4){animation-delay:.1s}tbody tr:nth-child(n+7){animation-delay:.15s}
+.modal:not(.hidden){animation:aFade .2s both}.modal:not(.hidden)>div{animation:aPop .3s cubic-bezier(.2,.8,.2,1) both}
+#login{position:relative;overflow:hidden;background:radial-gradient(1200px 600px at 80% -10%,#134e4a 0,#0b1b33 60%)!important}
+#login::before,#login::after{content:"";position:absolute;border-radius:50%;filter:blur(60px);opacity:.45}
+#login::before{width:420px;height:420px;background:#0d9488;top:-120px;right:-80px}
+#login::after{width:360px;height:360px;background:#2563eb;bottom:-140px;left:-60px}
+#login>div{position:relative;z-index:1;animation:aPop .6s cubic-bezier(.2,.8,.2,1) both}
+#dash-kpis>*{animation:aPop .5s cubic-bezier(.2,.8,.2,1) both}#dash-kpis>*:nth-child(2){animation-delay:.07s}#dash-kpis>*:nth-child(3){animation-delay:.14s}#dash-kpis>*:nth-child(4){animation-delay:.21s}
+#save-btn:not(:disabled):hover{background-image:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.22) 50%,transparent 70%);background-size:200% 100%;animation:aShine 1.2s linear 1}
+button:not(:disabled):active{transform:scale(.97)}
+.lift{transition:transform .2s,border-color .2s}.lift:hover{transform:translateY(-2px);border-color:#0d9488}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}}
+
+#nav-menu .tab-btn{width:100%;justify-content:flex-start;padding:.6rem .85rem;font-size:.8rem}
+
+/* ===== ضبط شريط التابات والهيدر والموبايل ===== */
+header .min-h-\[4\.25rem\] { min-height: 3.5rem !important; }
+header { padding-top: 0 !important; padding-bottom: 0 !important; }
+header nav { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+header nav .tab-btn { padding: 0.375rem 0.625rem !important; font-size: 0.7rem !important; }
+
+/* ===== ضبط شكل أيقونات التنبيهات (+99) عشان متبوظش الهيدر ===== */
+#chat-badge, #tk-badge, #late-badge, #nt-count, #menu-dot { 
+    font-size: 9px !important; 
+    padding: 0 4px !important; 
+    min-width: 14px !important; 
+    height: 14px !important; 
+    line-height: 14px !important; 
+    top: -2px !important; 
+    right: -2px !important; 
+    position: absolute !important;
+    border-radius: 9999px;
+}
+/* إخفاء الإشعار من زرار الداش بورد لو ظهر برة القائمة عشان ميبوظش شكل زرار الثلاث نقاط */
+#menu-wrap #late-badge { display: none !important; }
+#nav-menu #late-badge { display: inline-block !important; position: static !important; margin-right: auto; }
+
+@media(max-width:639px){
+  header nav .tab-btn>span:not([class*="rounded-full"]){display:none}
+  header nav .tab-btn{padding:.4rem .5rem !important}
+}
+
+/* ===== كروت الموبايل ===== */
+.mobile-card{background:#fff;border:1px solid #e2e8f0;border-radius:1rem;padding:.75rem;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.dark .mobile-card{background:#0f172a;border-color:#1e293b}
+body{overflow-x:hidden;overflow-x:clip}
