@@ -1,6 +1,6 @@
-/* ===== نظام الموارد البشرية والشيفتات المتقدم (مربوط بالإشعارات + الإيميل الذكي) ===== */
+/* ===== نظام الموارد البشرية والشيفتات المتقدم (نسخة مستقرة وخفيفة) ===== */
 (function () {
-  if (window.__phase13_pro_v4) return; window.__phase13_pro_v4 = true;
+  if (window.__phase13_pro_v5) return; window.__phase13_pro_v5 = true;
   const GRACE = 10, PAID_LEAVE = ['annual', 'sick', 'mission'];
   const isMgr = () => window.__role ? window.__role === 'manager' : !!(currentUser && ['mahmoud.aboshama@tasahel.com.eg', 'mahmoud.aboshama.contact@gmail.com'].includes(String(currentUser.email || '').toLowerCase()));
   const missing = err => /42P01|PGRST205|does not exist|schema cache/i.test(((err && err.message) || '') + ' ' + ((err && err.code) || ''));
@@ -23,10 +23,8 @@
 
   const root = () => $('tab-hr');
 
-  /* ارسال إشعار للجرس في الهيدر */
   async function notifyManager(title, message) {
     try {
-      // إرسال الإشعار لجدول الإشعارات العام في السيستم
       await sbClient.from('notifications').insert({
         title: title,
         message: message,
@@ -34,9 +32,7 @@
         created_at: new Date().toISOString(),
         read: false
       });
-    } catch (e) {
-      console.log('Notification trigger fallback:', e);
-    }
+    } catch (e) { console.log('Notification log:', e); }
   }
 
   async function load() {
@@ -72,7 +68,7 @@
     const paid = new Set();
     leaves.filter(x => x.user_id === uid && x.status === 'approved' && PAID_LEAVE.includes(x.kind)).forEach(x => paid.add(x.from_day));
 
-    let present = 0, absent = 0, lateMin = 0, earlyLeaveMin = 0, hours = 0;
+    let present = 0, absent = 0, lateMin = 0, earlyLeaveMin = 0;
     const shift = getShift(uid);
     const startMins = shift.start.split(':').map(Number).reduce((h, m) => h * 60 + m);
     const endMins = shift.end.split(':').map(Number).reduce((h, m) => h * 60 + m);
@@ -84,15 +80,13 @@
         present++;
         const ci = new Date(r.check_in), mIn = ci.getHours() * 60 + ci.getMinutes();
         if (mIn - startMins > GRACE) lateMin += (mIn - startMins);
-        
         if (r.check_out) {
           const co = new Date(r.check_out), mOut = co.getHours() * 60 + co.getMinutes();
           if (endMins - mOut > 5) earlyLeaveMin += (endMins - mOut);
-          hours += (co - ci) / 36e5;
         }
       } else if (!paid.has(k) && !(k === today())) absent++;
     }
-    return { present, absent, lateMin, earlyLeaveMin, hours, shift };
+    return { present, absent, lateMin, earlyLeaveMin, shift };
   }
 
   function payroll(uid) {
@@ -171,7 +165,6 @@
     return h;
   }
 
-  /* الإجازات والمأموريات + إظهار زر الإيميل بشكل دائم ومباشر للموظف والمدير */
   function viewLv() {
     const me = currentUser.id, mgr = isMgr(), list = leaves.filter(x => mgr || x.user_id === me);
     let h = `<form onsubmit="hr.reqLeave(event)" class="card grid gap-3 p-4 sm:grid-cols-6"><div class="sm:col-span-6 text-xs font-bold text-ink dark:text-white">${mgr ? 'تسجيل إجازة / مأمورية لموظف' : 'طلب إجازة أو مأمورية عمل'}</div>` +
@@ -252,7 +245,6 @@
     run(sbClient.from('hr_shifts').upsert({ user_id: uid, week_start: curWeekStart, start_time: f.s.value, end_time: f.e.value }, { onConflict: 'user_id,week_start' }), 'تم حفظ الشيفت الأسبوعي');
   };
 
-  /* طلب إجازة / مأمورية + إرسال إشعار للمدير فوراً ليظهر على الجرس */
   hr.reqLeave = async e => {
     e.preventDefault(); const f = e.target.elements, mgr = isMgr();
     const payload = {
@@ -265,13 +257,9 @@
       mission_details: f.det ? f.det.value.trim() : null,
       status: mgr ? 'approved' : 'pending'
     };
-
     const res = await run(sbClient.from('hr_leaves').insert(payload), mgr ? 'تم تسجيل الطلب' : 'تم إرسال الطلب بنجاح');
     if (res && !mgr) {
-      const empName = nameOf(currentUser.id);
-      const title = f.k.value === 'mission' ? 'طلب مأمورية عمل جديد' : 'طلب إجازة جديد';
-      const msg = `قام الموظف (${empName}) بتقديم ${LK[f.k.value]} بتاريخ ${f.f.value}`;
-      notifyManager(title, msg);
+      notifyManager('طلب مأمورية/إجازة جديد', `قام الموظف (${nameOf(currentUser.id)}) بتقديم طلب ${LK[f.k.value]}`);
     }
   };
 
@@ -280,13 +268,8 @@
     if (!item) return;
     const empName = nameOf(item.user_id);
     const bodyText = `السيد مدير الإدارة المحترم،\n\nتحية طيبة وبعد،\n\nإحاطة بعلم سيادتكم بخصوص مأمورية العمل الرسمية الخاصة بالموظف: (${empName}).\n- التاريخ: ${item.from_day}\n- جهة المأمورية: ${item.destination || 'جهة خارجية'}\n- تفاصيل الهدف: ${item.mission_details || item.reason || 'مأمورية عمل رسمية'}\n\nتفضلوا بقبول فائق الاحترام والتقدير.`;
-    
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(bodyText);
-      showToast('تم نسخ نص الإيميل الاحترافي للحافظة بنجاح!');
-    } else {
-      alert(bodyText);
-    }
+    if (navigator.clipboard) { navigator.clipboard.writeText(bodyText); showToast('تم نسخ نص الإيميل الاحترافي للحافظة!'); }
+    else { alert(bodyText); }
   };
 
   hr.addAdj = e => {
@@ -303,20 +286,40 @@
   hr.delAtt = id => { if (confirm('حذف السجل؟')) run(sbClient.from('hr_attendance').delete().eq('id', id)); };
   hr.delAdj = id => { if (confirm('حذف الحركة؟')) run(sbClient.from('hr_adjustments').delete().eq('id', id)); };
 
+  /* إدراج التاب بشكل آمن جداً ومضمون في القائمة الجانبية أو عناصر السيستم */
   function inject() {
     if ($('tab-hr')) return;
-    const nb = $('tab-notes-btn'), nt =$('tab-notes'); if (!nb || !nt) return;
+    // البحث عن زر الداشبورد أو أي عنصر رئيسي لإدراج تاب الموارد البشرية بجانبه بشكل آمن
+    const nb = $('tab-notes-btn') || document.querySelector('.tab-btn'); 
+    const nt = $('tab-notes') || document.querySelector('.space-y-4'); 
+    if (!nb) return;
+    
     nb.insertAdjacentHTML('afterend', `<button id="tab-hr-btn" onclick="switchTab('hr')" class="tab-btn"><i class="fa-solid fa-people-group"></i><span>الموارد البشرية</span></button>`);
-    nt.insertAdjacentHTML('afterend', `<div id="tab-hr" class="hidden space-y-4"></div>`);
+    if (nt && nt.parentNode) {
+      nt.parentNode.insertAdjacentHTML('beforeend', `<div id="tab-hr" class="hidden space-y-4 max-w-7xl mx-auto px-2"></div>`);
+    }
   }
 
   const _st = window.switchTab;
   window.switchTab = function (id) {
-    const r = _st.apply(this, arguments); const t = $('tab-hr'), b =$('tab-hr-btn'), on = id === 'hr'; if (!t || !b) return r;
+    const r = _st ? _st.apply(this, arguments) : null; 
+    const t = $('tab-hr'), b =$('tab-hr-btn'), on = id === 'hr'; 
+    if (!t) return r;
     t.classList.toggle('hidden', !on);
-    if (on) render(); return r;
+    if (b) {
+      b.className = 'tab-btn ' + (on ? 'bg-ink text-white dark:bg-brand-600 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800');
+    }
+    if (on) render(); 
+    return r;
   };
 
   const _li = window.loadInitialData;
-  window.loadInitialData = async function () { const x = await _li.apply(this, arguments); inject(); return x; };
+  window.loadInitialData = async function () { 
+    const x = _li ? await _li.apply(this, arguments) : null; 
+    inject(); 
+    return x; 
+  };
+  
+  // التشغيل الفوري في حال كانت البيانات محملة مسبقاً
+  setTimeout(() => { inject(); }, 500);
 })();
