@@ -1,6 +1,6 @@
-/* ===== نظام الموارد البشرية المتقدم (Workforce - المأموريات - الإيميل الذكي) ===== */
+/* ===== نظام الموارد البشرية والشيفتات المتقدم (مربوط بالإشعارات + الإيميل الذكي) ===== */
 (function () {
-  if (window.__phase13_pro_v2) return; window.__phase13_pro_v2 = true;
+  if (window.__phase13_pro_v4) return; window.__phase13_pro_v4 = true;
   const GRACE = 10, PAID_LEAVE = ['annual', 'sick', 'mission'];
   const isMgr = () => window.__role ? window.__role === 'manager' : !!(currentUser && ['mahmoud.aboshama@tasahel.com.eg', 'mahmoud.aboshama.contact@gmail.com'].includes(String(currentUser.email || '').toLowerCase()));
   const missing = err => /42P01|PGRST205|does not exist|schema cache/i.test(((err && err.message) || '') + ' ' + ((err && err.code) || ''));
@@ -18,12 +18,27 @@
   const nameOf = id => { const p = profiles.find(x => x.id === id); return p ? (p.full_name || 'موظف') : 'موظف'; };
   const fld = 'field !py-2 text-xs transition duration-150 focus:border-brand-500';
 
-  let month = new Date().toLocaleDateString('en-CA').slice(0, 7), sub = 'dash', staff = [], att = [], leaves = [], adj = [], shifts = [], comm = new Map(), setup = false, busy = false;
+  let month = new Date().toLocaleDateString('en-CA').slice(0, 7), sub = 'dash', staff = [], att = [], leaves = [], adj = [], shifts = [], setup = false, busy = false;
   let curWeekStart = (() => { const d = new Date(); d.setDate(d.getDate() - d.getDay()); return ymd(d); })();
 
   const root = () => $('tab-hr');
 
-  /* ---------- تحميل البيانات من Supabase ---------- */
+  /* ارسال إشعار للجرس في الهيدر */
+  async function notifyManager(title, message) {
+    try {
+      // إرسال الإشعار لجدول الإشعارات العام في السيستم
+      await sbClient.from('notifications').insert({
+        title: title,
+        message: message,
+        type: 'hr_leave',
+        created_at: new Date().toISOString(),
+        read: false
+      });
+    } catch (e) {
+      console.log('Notification trigger fallback:', e);
+    }
+  }
+
   async function load() {
     const a = month + '-01', b = nextM(month) + '-01', y0 = month.slice(0, 4) + '-01-01', y1 = (Number(month.slice(0, 4)) + 1) + '-01-01';
     const [s, t, l, j, sh] = await Promise.all([
@@ -41,7 +56,6 @@
     return true;
   }
 
-  /* تحديد شيفت الموظف الأسبوعي المخصص */
   const getShift = (uid) => {
     const sh = shifts.find(x => x.user_id === uid && x.week_start === curWeekStart);
     if (sh) return { start: sh.start_time.slice(0, 5), end: sh.end_time.slice(0, 5) };
@@ -52,7 +66,6 @@
   const cfg = uid => staff.find(x => x.user_id === uid) || { user_id: uid, base_salary: 0, work_start: '09:00', annual_leave_days: 21, hire_date: null };
   const people = () => isMgr() ? profiles.filter(p => p.id) : profiles.filter(p => p.id === currentUser.id);
 
-  /* ---------- الحسابات الإحصائية وحساب الشيفتات ---------- */
   function stats(uid) {
     const c = cfg(uid), rows = att.filter(r => r.user_id === uid), by = new Map(rows.map(r => [r.day, r]));
     const last = month === today().slice(0, 7) ? today() : ymd(new Date(new Date(nextM(month) + '-01T00:00').getTime() - 864e5));
@@ -74,7 +87,7 @@
         
         if (r.check_out) {
           const co = new Date(r.check_out), mOut = co.getHours() * 60 + co.getMinutes();
-          if (endMins - mOut > 5) earlyLeaveMin += (endMins - mOut); // انصراف مبكر
+          if (endMins - mOut > 5) earlyLeaveMin += (endMins - mOut);
           hours += (co - ci) / 36e5;
         }
       } else if (!paid.has(k) && !(k === today())) absent++;
@@ -89,7 +102,6 @@
     return { base, bonus, ded, adv, absDed, st, net: base + bonus - ded - adv - absDed };
   }
 
-  /* ---------- واجهات العرض السريعة ---------- */
   const tabs = () => isMgr()
     ? [['dash', 'الرئيسية'], ['wf', 'جدول الشيفتات (Workforce)'], ['att', 'سجل الحضور'], ['lv', 'الإجازات والمأموريات'], ['adj', 'سلف وخصومات'], ['pay', 'الرواتب'], ['set', 'الإعدادات']]
     : [['dash', 'الرئيسية'], ['att', 'حضوري'], ['lv', 'إجازاتي ومأمورياتي'], ['pay', 'كشفي']];
@@ -98,7 +110,6 @@
   const tile = (l, v, c) => `<div class="card p-4"><div class="text-[11px] text-slate-500">${l}</div><div class="mt-1 text-base font-bold mono ${c || 'text-ink dark:text-white'}">${v}</div></div>`;
   const empty = t => `<div class="card p-6 text-center text-xs text-slate-400">${t}</div>`;
 
-  /* 1. اللوحة الرئيسية */
   function viewDash() {
     const me = currentUser.id, k = today(), r = att.find(x => x.user_id === me && x.day === k) || {};
     const st = stats(me);
@@ -119,7 +130,6 @@
     </div>`;
   }
 
-  /* 2. قسم الشيفتات الأسبوعي (Workforce) */
   function viewWF() {
     if (!isMgr()) return empty('هذه الشاشة مخصصة لإدارة جدول الشيفتات.');
     const ps = people();
@@ -127,7 +137,7 @@
       <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
         <div>
           <div class="text-sm font-bold text-ink dark:text-white">جدول توزيع الحضور والانصراف الأسبوعي (Workforce)</div>
-          <div class="text-xs text-slate-500 mt-0.5">تحديد مواعيد الحضور والانصراف المخصصة لكل موظف للأسبوع الحاضر.</div>
+          <div class="text-xs text-slate-500 mt-0.5">تحديد مواعيد الحضور والانصراف المخصصة لكل موظف للأسبوع الحالي.</div>
         </div>
         <div class="flex items-center gap-2">
           <label class="text-xs text-slate-500">تاريخ بداية الأسبوع:</label>
@@ -150,7 +160,6 @@
     </div>`;
   }
 
-  /* 3. سجل الحضور والشيفت المخصص */
   function viewAtt() {
     const ps = people(), st = ps.map(p => [p, stats(p.id)]);
     let h = `<div class="card overflow-x-auto"><table class="w-full text-xs text-right"><thead class="bg-slate-50 dark:bg-slate-800/60 text-slate-500"><tr><th class="p-3">الموظف</th><th class="p-3">الشيفت المخصص</th><th class="p-3">أيام الحضور</th><th class="p-3">غياب</th><th class="p-3">تأخير (دقائق)</th><th class="p-3">انصراف مبكر</th></tr></thead><tbody>` +
@@ -162,7 +171,7 @@
     return h;
   }
 
-  /* 4. الإجازات والمأموريات وإنشاء الإيميل الذكي */
+  /* الإجازات والمأموريات + إظهار زر الإيميل بشكل دائم ومباشر للموظف والمدير */
   function viewLv() {
     const me = currentUser.id, mgr = isMgr(), list = leaves.filter(x => mgr || x.user_id === me);
     let h = `<form onsubmit="hr.reqLeave(event)" class="card grid gap-3 p-4 sm:grid-cols-6"><div class="sm:col-span-6 text-xs font-bold text-ink dark:text-white">${mgr ? 'تسجيل إجازة / مأمورية لموظف' : 'طلب إجازة أو مأمورية عمل'}</div>` +
@@ -170,7 +179,7 @@
       `<select name="k" onchange="document.getElementById('mission-fields').style.display = (this.value==='mission'?'grid':'none')" class="${fld}">${Object.keys(LK).map(k => `<option value="${k}">${LK[k]}</option>`).join('')}</select>` +
       `<input name="f" type="date" required value="${today()}" class="${fld}"><input name="t" type="date" required value="${today()}" class="${fld}">` +
       `<input name="r" placeholder="السبب / التفاصيل" class="${fld}">` +
-      `<div id="mission-fields" class="sm:col-span-6 hidden grid-cols-2 gap-2"><input name="dst" placeholder="جهة المأمورية (اسم الشركة / الفرع)" class="${fld}"><input name="det" placeholder="الهدف التفصيلي للمأمورية" class="${fld}"></div>` +
+      `<div id="mission-fields" class="sm:col-span-6 hidden grid-cols-2 gap-2"><input name="dst" placeholder="جهة المأمورية (اسم الشركة / السفارة)" class="${fld}"><input name="det" placeholder="الهدف التفصيلي للمأمورية" class="${fld}"></div>` +
       `<button class="rounded-xl bg-brand-600 hover:bg-brand-700 px-3 py-2 text-xs font-bold text-white transition active:scale-95">تسجيل الطلب</button></form>`;
     
     h += `<div class="space-y-2">` + (list.length ? list.map(x => `<div class="card p-3 text-xs space-y-2 border border-slate-100 dark:border-slate-800">
@@ -178,24 +187,45 @@
         <div><span class="font-bold text-ink dark:text-white">${mgr ? escapeHtml(nameOf(x.user_id)) + ' - ' : ''}${LK[x.kind]}</span> <span class="text-slate-500">(${dl(x.from_day)})</span></div>
         <div class="flex items-center gap-2">
           <span class="rounded-full px-2.5 py-0.5 font-semibold ${x.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${SK[x.status]}</span>
-          ${x.kind === 'mission' ? `<button type="button" onclick="hr.genEmail('${x.id}')" class="rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 text-[11px] font-bold"><i class="fa-solid fa-envelope ms-1"></i>نسخ نص الإيميل</button>` : ''}
+          ${x.kind === 'mission' ? `<button type="button" onclick="hr.genEmail('${x.id}')" class="rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 text-[11px] font-bold transition active:scale-95"><i class="fa-solid fa-envelope ms-1"></i>نسخ الإيميل الجاهز</button>` : ''}
           ${mgr && x.status === 'pending' ? `<button type="button" onclick="hr.decide('${x.id}','approved')" class="rounded-lg bg-emerald-600 text-white px-2 py-1 font-bold">موافقة</button>` : ''}
         </div>
       </div>
-      ${x.destination ? `<div class="text-slate-500 text-[11px]">الجهة: <b>${escapeHtml(x.destination)}</b> \vert{} الهدف: ${escapeHtml(x.mission_details || '—')}</div>` : ''}
+      ${x.destination || x.mission_details ? `<div class="text-slate-500 text-[11px]">الجهة: <b>${escapeHtml(x.destination \vert{}\vert{} '—')}</b> \vert{} الهدف: ${escapeHtml(x.mission_details || x.reason || '—')}</div>` : ''}
     </div>`).join('') : empty('لا توجد طلبات.')) + `</div>`;
     return h;
   }
 
-  /* 5. الرواتب */
+  function viewAdj() {
+    if (!isMgr()) return empty('هذه الصفحة مخصصة للمديرين فقط.');
+    let h = `<form onsubmit="hr.addAdj(event)" class="card grid gap-3 p-4 sm:grid-cols-5"><div class="sm:col-span-5 text-xs font-bold text-ink dark:text-white">إضافة حركة مالية (${mLabel(month)})</div><select name="u" class="${fld}">${people().map(p => `<option value="${p.id}">${escapeHtml(p.full_name || 'موظف')}</option>`).join('')}</select><select name="k" class="${fld}"><option value="advance">سلفة</option><option value="deduction">خصم</option><option value="bonus">مكافأة</option></select><input name="a" type="number" min="1" step="any" required placeholder="المبلغ" class="${fld}"><input name="n" placeholder="ملاحظة" class="${fld}"><button class="rounded-xl bg-brand-600 hover:bg-brand-700 px-3 py-2 text-xs font-bold text-white transition active:scale-95">إضافة</button></form>`;
+    h += `<div class="space-y-2">` + (adj.length ? adj.map(x => `<div class="card flex items-center justify-between gap-2 p-3 text-xs"><div><b class="text-ink dark:text-white">${escapeHtml(nameOf(x.user_id))}</b> · ${AK[x.kind]}${x.note ? ' · ' + escapeHtml(x.note) : ''}</div><div class="flex items-center gap-3"><b class="mono ${x.kind === 'bonus' ? 'text-emerald-600' : 'text-rose-600'}">${x.kind === 'bonus' ? '+' : '-'}${formatCurrency(x.amount)}</b><button type="button" onclick="hr.delAdj('${x.id}')" class="text-slate-400 hover:text-rose-600"><i class="fa-solid fa-trash-can"></i></button></div></div>`).join('') : empty('لا توجد حركات مالية.')) + `</div>`;
+    return h;
+  }
+
   function viewPay() {
     const ps = people(), rows = ps.map(p => [p, payroll(p.id)]);
     return `<div class="card overflow-x-auto"><table class="w-full text-xs text-right"><thead class="bg-slate-50 dark:bg-slate-800/60 text-slate-500"><tr><th class="p-3">الموظف</th><th class="p-3">الأساسي</th><th class="p-3">مكافآت</th><th class="p-3">خصومات</th><th class="p-3">سلف</th><th class="p-3">خصم الغياب</th><th class="p-3">الصافي</th></tr></thead><tbody>` +
       rows.map(([p, r]) => `<tr class="border-t border-slate-100 dark:border-slate-800"><td class="p-3 font-semibold">${escapeHtml(p.full_name || 'موظف')}</td><td class="p-3 mono">${formatCurrency(r.base)}</td><td class="p-3 mono text-emerald-600">${formatCurrency(r.bonus)}</td><td class="p-3 mono text-rose-600">${formatCurrency(r.ded)}</td><td class="p-3 mono text-rose-600">${formatCurrency(r.adv)}</td><td class="p-3 mono text-rose-600">${formatCurrency(r.absDed)}</td><td class="p-3 mono font-bold text-ink dark:text-white">${formatCurrency(r.net)}</td></tr>`).join('') + `</tbody></table></div>`;
   }
 
-  function viewAdj() { return empty('قسم السلف والخصومات جاهز ومدمج مع الرواتب.'); }
-  function viewSet() { return empty('قسم الإعدادات المتقدمة.'); }
+  function viewSet() {
+    if (!isMgr()) return empty('هذه الشاشة مخصصة للمديرين فقط.');
+    const ps = people();
+    return `<div class="grid gap-4 sm:grid-cols-2">` + ps.map(p => {
+      const c = cfg(p.id);
+      return `<form onsubmit="hr.saveCfg(event,'${p.id}')" class="card space-y-3 p-4 border border-slate-100 dark:border-slate-800 hover:border-brand-500/50 transition">
+        <div class="text-sm font-bold text-ink dark:text-white">${escapeHtml(p.full_name || 'موظف')}</div>
+        <div class="grid grid-cols-2 gap-3 text-xs text-slate-500">
+          <label>المرتب الأساسي<input name="b" type="number" min="0" step="any" value="${Number(c.base_salary) || 0}" class="${fld} mt-1"></label>
+          <label>بداية الدوام الافتراضية<input name="s" type="time" value="${(c.work_start || '09:00').slice(0, 5)}" class="${fld} mt-1"></label>
+          <label>رصيد الإجازة السنوي<input name="a" type="number" min="0" value="${c.annual_leave_days == null ? 21 : c.annual_leave_days}" class="${fld} mt-1"></label>
+          <label>تاريخ التعيين<input name="h" type="date" value="${c.hire_date || ''}" class="${fld} mt-1"></label>
+        </div>
+        <button class="w-full rounded-xl bg-brand-600 hover:bg-brand-700 px-3 py-2 text-xs font-bold text-white transition active:scale-95">حفظ البيانات الوظيفية</button>
+      </form>`;
+    }).join('') + `</div>`;
+  }
 
   const VIEWS = { dash: viewDash, wf: viewWF, att: viewAtt, lv: viewLv, adj: viewAdj, pay: viewPay, set: viewSet };
 
@@ -207,7 +237,6 @@
 
   async function render() { if (busy) return; busy = true; try { await load(); } finally { busy = false; } paint(); }
 
-  /* ---------- الأوامر والتطبيقت ---------- */
   const hr = window.hr = {};
   const run = async (p, ok) => { const r = await p; if (r.error) return showError('تعذّر الحفظ', r.error), false; if (ok) showToast(ok); await render(); return true; };
   
@@ -218,14 +247,13 @@
     if (!r.check_out) return run(sbClient.from('hr_attendance').update({ check_out: now }).eq('id', r.id), 'تم تسجيل الانصراف');
   };
 
-  /* حفظ الشيفت الأسبوعي */
   hr.saveShift = (e, uid) => {
     e.preventDefault(); const f = e.target.elements;
     run(sbClient.from('hr_shifts').upsert({ user_id: uid, week_start: curWeekStart, start_time: f.s.value, end_time: f.e.value }, { onConflict: 'user_id,week_start' }), 'تم حفظ الشيفت الأسبوعي');
   };
 
-  /* طلب إجازة / مأمورية */
-  hr.reqLeave = e => {
+  /* طلب إجازة / مأمورية + إرسال إشعار للمدير فوراً ليظهر على الجرس */
+  hr.reqLeave = async e => {
     e.preventDefault(); const f = e.target.elements, mgr = isMgr();
     const payload = {
       user_id: mgr ? f.u.value : currentUser.id,
@@ -237,24 +265,44 @@
       mission_details: f.det ? f.det.value.trim() : null,
       status: mgr ? 'approved' : 'pending'
     };
-    run(sbClient.from('hr_leaves').insert(payload), 'تم حفظ الطلب');
+
+    const res = await run(sbClient.from('hr_leaves').insert(payload), mgr ? 'تم تسجيل الطلب' : 'تم إرسال الطلب بنجاح');
+    if (res && !mgr) {
+      const empName = nameOf(currentUser.id);
+      const title = f.k.value === 'mission' ? 'طلب مأمورية عمل جديد' : 'طلب إجازة جديد';
+      const msg = `قام الموظف (${empName}) بتقديم ${LK[f.k.value]} بتاريخ ${f.f.value}`;
+      notifyManager(title, msg);
+    }
   };
 
-  /* مولد الإيميلات الذكي للمأمورية */
   hr.genEmail = id => {
     const item = leaves.find(x => String(x.id) === String(id));
     if (!item) return;
     const empName = nameOf(item.user_id);
-    const bodyText = `السيد مدير الإدارة المحترم،\n\nتحية طيبة وبعد،\n\nيُرجى العلم بأنه تم تسجيل مأمورية عمل رسمية لصالح الموظف: (${empName}).\n- تاريخ المأمورية: ${item.from_day}\n- جهة المأمورية: ${item.destination || 'جهة خارجية'}\n- تفاصيل الهدف: ${item.mission_details || item.reason || 'مأمورية عمل رسمية'}\n\nتفضلوا بقبول فائق الاحترام والتقدير.`;
+    const bodyText = `السيد مدير الإدارة المحترم،\n\nتحية طيبة وبعد،\n\nإحاطة بعلم سيادتكم بخصوص مأمورية العمل الرسمية الخاصة بالموظف: (${empName}).\n- التاريخ: ${item.from_day}\n- جهة المأمورية: ${item.destination || 'جهة خارجية'}\n- تفاصيل الهدف: ${item.mission_details || item.reason || 'مأمورية عمل رسمية'}\n\nتفضلوا بقبول فائق الاحترام والتقدير.`;
     
-    navigator.clipboard.writeText(bodyText);
-    showToast('تم نسخ نص الإيميل الجاهز للحافظة بنجاح!');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(bodyText);
+      showToast('تم نسخ نص الإيميل الاحترافي للحافظة بنجاح!');
+    } else {
+      alert(bodyText);
+    }
+  };
+
+  hr.addAdj = e => {
+    e.preventDefault(); const f = e.target.elements;
+    run(sbClient.from('hr_adjustments').insert({ user_id: f.u.value, month, kind: f.k.value, amount: Number(f.a.value), note: f.n.value.trim() || null, created_by: currentUser.id }), 'تمت الإضافة');
+  };
+
+  hr.saveCfg = (e, uid) => {
+    e.preventDefault(); const f = e.target.elements;
+    run(sbClient.from('hr_staff').upsert({ user_id: uid, base_salary: Number(f.b.value) || 0, work_start: f.s.value || '09:00', annual_leave_days: Number(f.a.value) || 0, hire_date: f.h.value || null }, { onConflict: 'user_id' }), 'تم الحفظ');
   };
 
   hr.decide = (id, s) => run(sbClient.from('hr_leaves').update({ status: s, decided_by: currentUser.id }).eq('id', id), 'تم التحديث');
   hr.delAtt = id => { if (confirm('حذف السجل؟')) run(sbClient.from('hr_attendance').delete().eq('id', id)); };
+  hr.delAdj = id => { if (confirm('حذف الحركة؟')) run(sbClient.from('hr_adjustments').delete().eq('id', id)); };
 
-  /* ربط التاب */
   function inject() {
     if ($('tab-hr')) return;
     const nb = $('tab-notes-btn'), nt =$('tab-notes'); if (!nb || !nt) return;
