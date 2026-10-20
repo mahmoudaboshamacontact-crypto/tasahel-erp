@@ -1,6 +1,6 @@
-/* ===== نظام الموارد البشرية والشيفتات المتكامل (النسخة النهائية المستقرة) ===== */
+/* ===== نظام الموارد البشرية والشيفتات المتكامل (نسخة الإنجيكشن المضمونة) ===== */
 (function () {
-  if (window.__phase13_pro_final) return; window.__phase13_pro_final = true;
+  if (window.__phase13_pro_stable) return; window.__phase13_pro_stable = true;
   const GRACE = 10, PAID_LEAVE = ['annual', 'sick', 'mission'];
   const isMgr = () => window.__role ? window.__role === 'manager' : !!(currentUser && ['mahmoud.aboshama@tasahel.com.eg', 'mahmoud.aboshama.contact@gmail.com'].includes(String(currentUser.email || '').toLowerCase()));
   const missing = err => /42P01|PGRST205|does not exist|schema cache/i.test(((err && err.message) || '') + ' ' + ((err && err.code) || ''));
@@ -23,7 +23,6 @@
 
   const root = () => $('tab-hr');
 
-  /* إرسال إشعار فوري للجرس في الهيدر */
   async function notifyManager(title, message) {
     try {
       await sbClient.from('notifications').insert({
@@ -287,15 +286,20 @@
   hr.delAtt = id => { if (confirm('حذف السجل؟')) run(sbClient.from('hr_attendance').delete().eq('id', id)); };
   hr.delAdj = id => { if (confirm('حذف الحركة؟')) run(sbClient.from('hr_adjustments').delete().eq('id', id)); };
 
-  /* إدراج التاب بشكل آمن ومضمون في القائمة */
+  /* دالة حقن ذكية مع آلية تكرار تلقائية لضمان عدم اختفاء التاب نهائياً */
   function inject() {
-    if ($('tab-hr')) return;
-    const nb = $('tab-notes-btn'), nt =$('tab-notes'); 
-    if (!nb) return;
-    nb.insertAdjacentHTML('afterend', `<button id="tab-hr-btn" onclick="switchTab('hr')" class="tab-btn"><i class="fa-solid fa-people-group"></i><span>الموارد البشرية</span></button>`);
-    if (nt && nt.parentNode) {
+    if ($('tab-hr') &&$('tab-hr-btn')) return true;
+    const nb = $('tab-notes-btn') || document.querySelector('.tab-btn');
+    const nt = $('tab-notes') || document.querySelector('.space-y-4');
+    if (!nb) return false;
+
+    if (!$('tab-hr-btn')) {
+      nb.insertAdjacentHTML('afterend', `<button id="tab-hr-btn" onclick="switchTab('hr')" class="tab-btn"><i class="fa-solid fa-people-group"></i><span>الموارد البشرية</span></button>`);
+    }
+    if (!$('tab-hr') && nt && nt.parentNode) {
       nt.parentNode.insertAdjacentHTML('beforeend', `<div id="tab-hr" class="hidden space-y-4 max-w-7xl mx-auto px-2"></div>`);
     }
+    return true;
   }
 
   const _st = window.switchTab;
@@ -318,5 +322,10 @@
     return x; 
   };
   
-  setTimeout(() => { inject(); }, 300);
+  // محاولة الحقن فوراً وكل 200 ميللي ثانية لحد ما تظهر العناصر تماماً في الصفحة
+  const pollInterval = setInterval(() => {
+    if (inject()) {
+      clearInterval(pollInterval);
+    }
+  }, 200);
 })();
