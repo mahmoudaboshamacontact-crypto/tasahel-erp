@@ -15,22 +15,34 @@ html, body, main { overflow-x: clip !important; }
 
 /* ---------- (2) نيون ثابت (من غير أنيميشن) حوالين الكروت ----------
    مستثنى منه كروت الطلبات (data-tx / data-st17 / خصم / تعليق) علشان تدرج الألوان والأيقونات بتاعتها تفضل زي ما هي */
-:is(#tab-new, #tab-dash) .card:not([class*="bg-"]):not([data-tx]):not([data-st17]):not(.f16-disc):not(.f16-cmt), .dx-card {
+#app .card:not([class*="bg-"]):not([data-tx]):not([data-st17]):not(.f16-disc):not(.f16-cmt),
+#app .mobile-card:not([data-st17]),
+#app .hm-nav-card,
+#app .hm-emp-card,
+.dx-card {
   border: 1px solid transparent;
   background-image:
     linear-gradient(var(--cardbg), var(--cardbg)),
     linear-gradient(135deg, rgba(var(--n1), .55), rgba(var(--n2), .28) 48%, rgba(var(--n3), .55));
   background-origin: border-box;
   background-clip: padding-box, border-box;
-  transition: box-shadow .25s ease;
+  transition: box-shadow .25s ease, transform .2s ease;
 }
-html.dark :is(#tab-new, #tab-dash) .card:not([class*="bg-"]):not([data-tx]):not([data-st17]):not(.f16-disc):not(.f16-cmt), html.dark .dx-card {
+html.dark #app .card:not([class*="bg-"]):not([data-tx]):not([data-st17]):not(.f16-disc):not(.f16-cmt),
+html.dark #app .mobile-card:not([data-st17]),
+html.dark #app .hm-nav-card,
+html.dark #app .hm-emp-card,
+html.dark .dx-card {
   background-image:
     linear-gradient(var(--cardbg), var(--cardbg)),
     linear-gradient(135deg, rgba(var(--n1), .38), rgba(var(--n2), .18) 48%, rgba(var(--n3), .38));
 }
 @media (hover: hover) {
-  :is(#tab-new, #tab-dash) .card:not([class*="bg-"]):not([data-tx]):not([data-st17]):not(.f16-disc):not(.f16-cmt):hover, .dx-card:hover {
+  #app .card:not([class*="bg-"]):not([data-tx]):not([data-st17]):not(.f16-disc):not(.f16-cmt):hover,
+  #app .mobile-card:not([data-st17]):hover,
+  #app .hm-nav-card:hover,
+  #app .hm-emp-card:hover,
+  .dx-card:hover {
     box-shadow: 0 0 0 1px rgba(var(--n1), .22), 0 12px 30px -14px rgba(var(--n2), .45);
   }
 }

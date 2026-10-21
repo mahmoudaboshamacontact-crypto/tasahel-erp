@@ -3,147 +3,85 @@
 .field{width:100%;border-radius:.75rem;border:1px solid #e2e8f0;background:#fff;padding:.625rem .875rem;font-size:14px;color:#0f172a;box-shadow:0 1px 2px rgba(0,0,0,.05);transition:border-color .2s,box-shadow .2s;outline:none}
 .dark .field{border-color:#334155;background:#1e293b;color:#f8fafc}
 .field:focus{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.15)}
-.card{border-radius:1rem;border:1px solid rgba(226,232,240,.8);background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.03),0 8px 20px -8px rgba(15,23,42,.06);transition:box-shadow .25s,border-color .25s}
+.card{border-radius:1rem;border:1px solid rgba(226,232,240,.8);background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.03),0 8px 20px -8px rgba(15,23,42,.06);transition:box-shadow .25s,border-color .25s,transform .2s}
 .dark .card{border-color:#1e293b;background:#0f172a}
 .step{display:flex;height:1.75rem;width:1.75rem;align-items:center;justify-content:center;border-radius:9999px;background:#0b1b33;font-size:.75rem;font-weight:700;color:#fff;flex-shrink:0}
 .dark .step{background:#0d9488}
-.tab-btn{border-radius:.75rem;padding:.5rem .875rem;font-size:.75rem;font-weight:600;transition:background-color .2s,color .2s;white-space:nowrap;display:flex;align-items:center;gap:.375rem;flex-shrink:0}
-.th{padding:.875rem .75rem;text-align:right}
-.mono{font-variant-numeric:tabular-nums}
-::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:9999px}.dark ::-webkit-scrollbar-thumb{background:#334155}
-#printArea{display:none}
-@page{size:A4 portrait;margin:8mm}
-@media print{body>*:not(#printArea){display:none!important}#printArea{display:block!important;font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;direction:rtl;color:#000;background:#fff}.receipt-box{border:2px solid #0b1b33;padding:18px;border-radius:10px;background:#fff}.no-print{display:none!important}*,*::before,*::after{animation:none!important;transition:none!important;opacity:1!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}#printArea tr{opacity:1!important;transform:none!important}}
-/* ===== حركات ===== */
-@keyframes aTab{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-@keyframes aPop{from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:none}}
-@keyframes aFade{from{opacity:0}to{opacity:1}}
-@keyframes aRow{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
-@keyframes aAur{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(40px,-30px) scale(1.15)}}
-@keyframes aShine{from{background-position:200% 0}to{background-position:-200% 0}}
-main>div[id^="tab-"]:not(.hidden){animation:aTab .38s cubic-bezier(.2,.8,.2,1) both}
-tbody tr:nth-child(-n+10),#recent-cards-container>*:nth-child(-n+10),#search-results-cards>*:nth-child(-n+10),#sheet-cards-container>*:nth-child(-n+10){animation:aRow .3s cubic-bezier(.2,.8,.2,1) both}
-tbody tr:nth-child(n+2),#recent-cards-container>*:nth-child(n+2){animation-delay:.05s}tbody tr:nth-child(n+4),#recent-cards-container>*:nth-child(n+4){animation-delay:.1s}tbody tr:nth-child(n+7){animation-delay:.15s}
-.modal:not(.hidden){animation:aFade .2s both}.modal:not(.hidden)>div{animation:aPop .3s cubic-bezier(.2,.8,.2,1) both}
-#login{position:relative;overflow:hidden;background:radial-gradient(1200px 600px at 80% -10%,#134e4a 0,#0b1b33 60%)!important}
-#login::before,#login::after{content:"";position:absolute;border-radius:50%;filter:blur(60px);opacity:.45}
-#login::before{width:420px;height:420px;background:#0d9488;top:-120px;right:-80px}
-#login::after{width:360px;height:360px;background:#2563eb;bottom:-140px;left:-60px}
-#login>div{position:relative;z-index:1;animation:aPop .6s cubic-bezier(.2,.8,.2,1) both}
-#dash-kpis>*{animation:aPop .5s cubic-bezier(.2,.8,.2,1) both}#dash-kpis>*:nth-child(2){animation-delay:.07s}#dash-kpis>*:nth-child(3){animation-delay:.14s}#dash-kpis>*:nth-child(4){animation-delay:.21s}
-#save-btn:not(:disabled):hover{background-image:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.22) 50%,transparent 70%);background-size:200% 100%;animation:aShine 1.2s linear 1}
-button:not(:disabled):active{transform:scale(.97)}
-.lift{transition:transform .2s,border-color .2s}.lift:hover{transform:translateY(-2px);border-color:#0d9488}
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}}
+.tab-btn{border-radius:.75rem;padding:.45rem .75rem;font-size:.75rem;font-weight:700;transition:background-color .2s,color .2s,box-shadow .2s;white-space:nowrap;display:inline-flex;align-items:center;gap:.375rem;flex-shrink:0;position:relative}
+.th{padding:.875rem .75rem;text-align:right;white-space:nowrap}
 
-#nav-menu .tab-btn{width:100%;justify-content:flex-start;padding:.6rem .85rem;font-size:.8rem}
-
-/* ===== ضبط شريط التابات والهيدر والموبايل ===== */
-header .min-h-\[4\.25rem\] { min-height: 3.5rem !important; }
-header { padding-top: 0 !important; padding-bottom: 0 !important; }
-header nav { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
-header nav .tab-btn { padding: 0.375rem 0.625rem !important; font-size: 0.7rem !important; }
-
-/* ===== ضبط شكل أيقونات التنبيهات (+99) عشان متبوظش الهيدر ===== */
-#chat-badge, #tk-badge, #late-badge, #nt-count, #menu-dot { 
-    font-size: 9px !important; 
-    padding: 0 4px !important; 
-    min-width: 14px !important; 
-    height: 14px !important; 
-    line-height: 14px !important; 
-    top: -2px !important; 
-    right: -2px !important; 
-    position: absolute !important;
-    border-radius: 9999px;
-}
-/* إخفاء الإشعار من زرار الداش بورد لو ظهر برة القائمة عشان ميبوظش شكل زرار الثلاث نقاط */
-#menu-wrap #late-badge { display: none !important; }
-#nav-menu #late-badge { display: inline-block !important; position: static !important; margin-right: auto; }
-
-@media(max-width:639px){
-  header nav .tab-btn>span:not([class*="rounded-full"]){display:none}
-  header nav .tab-btn{padding:.4rem .5rem !important}
-}
-
-/* ===== كروت الموبايل ===== */
-.mobile-card{background:#fff;border:1px solid #e2e8f0;border-radius:1rem;padding:.75rem;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-.dark .mobile-card{background:#0f172a;border-color:#1e293b}
-body{overflow-x:hidden;overflow-x:clip}
-
-
-/* ===== تحسينات الخط العربي وعرض آخر المعاملات والمودالات ===== */
+/* توحيد الخط العربي والأرقام لمنع تقطع الحروف أو تباعدها في التواريخ والمبالغ */
 .font-mono, .mono {
   font-family: 'IBM Plex Sans Arabic', 'JetBrains Mono', sans-serif !important;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0 !important;
 }
 
-/* تنسيق خدمات العميل في جدول وكروت آخر المعاملات (مع الحفاظ التام على ألوان الحالات والنيون) */
+/* ===== تصميم موحّد ومريح بصرياً لعرض الخدمات والبيانات في جميع التابات ===== */
 .rc-svc-list {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  min-width: 230px;
+  gap: 0.375rem;
+  min-width: 220px;
   max-width: 390px;
 }
 .rc-svc-pill {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.35rem 0.65rem;
-  border-radius: 0.6rem;
-  background: rgba(255, 255, 255, 0.76);
+  border-radius: 0.65rem;
+  background: rgba(241, 245, 249, 0.9);
   border: 1px solid rgba(203, 213, 225, 0.75);
   font-size: 12.5px;
   line-height: 1.45;
   color: #0f172a;
+  font-weight: 600;
+  transition: border-color .2s, background-color .2s;
 }
 .dark .rc-svc-pill {
-  background: rgba(15, 23, 42, 0.68);
+  background: rgba(30, 41, 59, 0.85);
   border-color: rgba(51, 65, 85, 0.85);
   color: #f1f5f9;
 }
 .rc-svc-name {
-  font-weight: 600;
   word-break: break-word;
+  overflow-wrap: anywhere;
   text-align: right;
+  flex: 1;
 }
 .rc-svc-qty {
-  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1rem 0.48rem;
   border-radius: 0.45rem;
-  padding: 0.1rem 0.45rem;
+  background: #0d9488;
+  color: #ffffff;
   font-size: 11px;
   font-weight: 700;
-  background: rgba(13, 148, 136, 0.13);
-  color: #0f766e;
   white-space: nowrap;
+  flex-shrink: 0;
 }
-.dark .rc-svc-qty {
-  background: rgba(20, 184, 166, 0.22);
-  color: #5eead4;
-}
-
 .rc-phone-pill {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.25rem 0.6rem;
+  padding: 0.25rem 0.55rem;
   border-radius: 0.55rem;
   background: rgba(241, 245, 249, 0.85);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 600;
   color: #334155;
-  white-space: nowrap;
-  direction: ltr;
 }
 .dark .rc-phone-pill {
-  background: rgba(30, 41, 59, 0.8);
-  border-color: rgba(51, 65, 85, 0.8);
+  background: rgba(30, 41, 59, 0.75);
+  border-color: rgba(51, 65, 85, 0.85);
   color: #e2e8f0;
 }
-
 .rc-tx-pill {
   display: inline-flex;
   align-items: center;
@@ -151,45 +89,195 @@ body{overflow-x:hidden;overflow-x:clip}
   padding: 0.25rem 0.6rem;
   border-radius: 0.55rem;
   background: rgba(13, 148, 136, 0.1);
-  border: 1px solid rgba(13, 148, 136, 0.28);
   color: #0f766e;
+  border: 1px solid rgba(13, 148, 136, 0.28);
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
-  direction: ltr;
-  transition: background-color 0.15s, border-color 0.15s;
+  transition: background-color .15s, transform .15s;
 }
 .rc-tx-pill:hover {
   background: rgba(13, 148, 136, 0.18);
-  border-color: rgba(13, 148, 136, 0.45);
 }
 .dark .rc-tx-pill {
-  background: rgba(20, 184, 166, 0.15);
-  border-color: rgba(20, 184, 166, 0.35);
+  background: rgba(13, 148, 136, 0.2);
   color: #5eead4;
+  border-color: rgba(45, 212, 191, 0.3);
 }
-
+.rc-exec-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.55rem;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.dark .rc-exec-pill {
+  background: rgba(37, 99, 235, 0.18);
+  color: #93c5fd;
+  border-color: rgba(96, 165, 250, 0.3);
+}
+.rc-rn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.5rem;
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.dark .rc-rn-pill {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.3);
+}
 .rc-date-box {
   display: flex;
   flex-direction: column;
-  gap: 0.12rem;
+  gap: 0.1rem;
   white-space: nowrap;
   line-height: 1.35;
 }
 
-/* فرض ظهور نافذة تحديد المندوب ونافذة تفصيل خدمات الموظف في أقصى المقدمة مع سكرول داخلي */
+/* تأكيد ظهور نافذة اختيار مندوب التسليم ونافذة تفصيل خدمات الكوميشن فوق جميع النوافذ */
 #courier-ask-modal, #emp-svc-modal {
-  position: fixed !important;
-  inset: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
   z-index: 999999 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  background-color: rgba(15, 23, 42, 0.75) !important;
 }
-#courier-ask-modal > div, #emp-svc-modal > div {
-  position: relative !important;
-  z-index: 1000000 !important;
+
+/* ===== الشاشة الرئيسية (Home Hub) وحالة تواجد الموظفين ===== */
+.hm-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  padding: 1.35rem 1.5rem;
+  color: #fff;
+  background: linear-gradient(125deg, #0b1b33 0%, #115e59 58%, #0d9488 100%);
+  box-shadow: 0 14px 34px -12px rgba(13, 148, 136, 0.45);
 }
+.hm-nav-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 1.1rem;
+  border-radius: 1rem;
+  text-align: right;
+  width: 100%;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  transition: transform 0.2s ease, box-shadow 0.25s ease;
+}
+.dark .hm-nav-card {
+  background: #0f172a;
+  border-color: #1e293b;
+}
+.hm-nav-card:hover {
+  transform: translateY(-2px);
+}
+.hm-nav-icon {
+  display: flex;
+  height: 2.85rem;
+  width: 2.85rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+  font-size: 1.15rem;
+  color: #fff;
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.25);
+}
+.hm-emp-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.9rem;
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+.dark .hm-emp-card {
+  background: rgba(15, 23, 42, 0.75);
+  border-color: rgba(51, 65, 85, 0.8);
+}
+
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:9999px}.dark ::-webkit-scrollbar-thumb{background:#334155}
+#printArea{display:none}
+@page{size:A4 portrait;margin:8mm}
+@media print{body>*:not(#printArea){display:none!important}#printArea{display:block!important;font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;direction:rtl;color:#000;background:#fff}.receipt-box{border:2px solid #0b1b33;padding:18px;border-radius:10px;background:#fff}.no-print{display:none!important}*,*::before,*::after{animation:none!important;transition:none!important;opacity:1!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}#printArea tr{opacity:1!important;transform:none!important}}
+
+/* ===== حركات هادئة وخفيفة (مرة واحدة عند الفتح فقط بدون أي ثقل) ===== */
+@keyframes aTab{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes aPop{from{opacity:0;transform:scale(.96) translateY(8px)}to{opacity:1;transform:none}}
+@keyframes aFade{from{opacity:0}to{opacity:1}}
+@keyframes aRow{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+@keyframes aShine{from{background-position:200% 0}to{background-position:-200% 0}}
+main>div[id^="tab-"]:not(.hidden){animation:aTab .32s cubic-bezier(.2,.8,.2,1) both}
+tbody tr:nth-child(-n+12),#recent-cards-container>*:nth-child(-n+10),#search-results-cards>*:nth-child(-n+10),#sheet-cards-container>*:nth-child(-n+10),#cash-cards-container>*:nth-child(-n+10){animation:aRow .28s cubic-bezier(.2,.8,.2,1) both}
+.modal:not(.hidden){animation:aFade .2s both}.modal:not(.hidden)>div{animation:aPop .28s cubic-bezier(.2,.8,.2,1) both}
+#login{position:relative;overflow:hidden;background:radial-gradient(1200px 600px at 80% -10%,#134e4a 0,#0b1b33 60%)!important}
+#login::before,#login::after{content:"";position:absolute;border-radius:50%;filter:blur(60px);opacity:.45}
+#login::before{width:420px;height:420px;background:#0d9488;top:-120px;right:-80px}
+#login::after{width:360px;height:360px;background:#2563eb;bottom:-140px;left:-60px}
+#login>div{position:relative;z-index:1;animation:aPop .5s cubic-bezier(.2,.8,.2,1) both}
+#save-btn:not(:disabled):hover{background-image:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.22) 50%,transparent 70%);background-size:200% 100%;animation:aShine 1.2s linear 1}
+button:not(:disabled):active{transform:scale(.97)}
+.lift{transition:transform .2s,border-color .2s,box-shadow .2s}.lift:hover{transform:translateY(-2px);border-color:#0d9488}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}}
+
+#nav-menu .tab-btn{width:100%;justify-content:flex-start;padding:.6rem .85rem;font-size:.8rem}
+
+/* ===== ضبط شريط التابات والهيدر للكمبيوتر والموبايل (إظهار العناوين دائماً بدون الحاجة لقلب الموبايل) ===== */
+header { padding-top: 0 !important; padding-bottom: 0 !important; }
+header nav { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; scrollbar-width: none; }
+header nav::-webkit-scrollbar { display: none; }
+header nav .tab-btn { padding: 0.4rem 0.7rem !important; font-size: 0.74rem !important; }
+header nav .tab-btn > span:not([class*="rounded-full"]) { display: inline !important; }
+
+/* ===== ضبط شكل أيقونات التنبيهات (+99) عشان متبوظش الهيدر ===== */
+#chat-badge, #tk-badge, #late-badge, #hdr-late-badge, #nt-count, #menu-dot {
+    font-size: 9px !important;
+    padding: 0 4px !important;
+    min-width: 15px !important;
+    height: 15px !important;
+    line-height: 15px !important;
+    top: -3px !important;
+    right: -3px !important;
+    position: absolute !important;
+    border-radius: 9999px;
+}
+#menu-wrap #late-badge { display: none !important; }
+#nav-menu #late-badge, #nav-menu #tk-badge { display: inline-block !important; position: static !important; margin-right: auto; }
+
+/* عنوان التاب الحالي مع زر العودة السريعة للشاشة الرئيسية */
+#cur-tab-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+}
+.dark #cur-tab-title {
+  background: rgba(15, 23, 42, 0.75);
+  border-color: rgba(30, 41, 59, 0.9);
+}
+
+/* ===== كروت الموبايل ===== */
+.mobile-card{background:#fff;border:1px solid #e2e8f0;border-radius:1rem;padding:.85rem;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.dark .mobile-card{background:#0f172a;border-color:#1e293b}
+body{overflow-x:hidden;overflow-x:clip}
