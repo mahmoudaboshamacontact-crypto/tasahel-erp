@@ -1,4 +1,3 @@
-
 const DEFAULT_SB_URL='https://avehvjqifswsyayckpvx.supabase.co';
 let sbClient=null,allRequestLines=[],allServices=[],groupedOrders=[],chartInstances={},currentDashboardRange='all',recentMode='all',currentTab='new',serviceLineCounter=0,clientSelectedReceiptLines=[];
 const PAY_DEFAULT=['كاش','انستا باي','فودافون كاش','POS','تحويل بنكي'];
@@ -79,11 +78,29 @@ async function handleLogin(e){
 async function handleLogout(){if(sbClient)await sbClient.auth.signOut();currentUser=null;resetLinesCache();myProfile=null;profiles=[];avatarUrls={};renderHeaderAvatar();teardownChat();showToast('تم تسجيل الخروج','info');showLoginScreen();}
 
 /* ---------- تحميل البيانات ---------- */
+let receivedAtManual=false,receivedAtTimer=null;
+function nowLocalIso(){const n=new Date();n.setMinutes(n.getMinutes()-n.getTimezoneOffset());return n.toISOString().slice(0,16);}
+function syncReceivedAt(force){
+  const el=$('received-at');if(!el)return;
+  if(force)receivedAtManual=false;
+  if(!receivedAtManual&&document.activeElement!==el)el.value=nowLocalIso();
+}
+function initReceivedAtClock(){
+  const el=$('received-at');
+  if(el&&!el.dataset.liveBound){
+    el.dataset.liveBound='1';
+    el.addEventListener('input',()=>{receivedAtManual=true;});
+    el.addEventListener('change',()=>{receivedAtManual=true;});
+  }
+  syncReceivedAt(true);
+  if(!receivedAtTimer)receivedAtTimer=setInterval(()=>syncReceivedAt(false),15000);
+}
+window.syncReceivedAt=syncReceivedAt;
 async function loadInitialData(){
   await Promise.all([loadServices(),loadRecentRequests(),loadProfiles()]);
   renderPaymentMethodButtons();
   if(!$('tx-id').value)generateNewTxId();
-  const n=new Date();n.setMinutes(n.getMinutes()-n.getTimezoneOffset());$('received-at').value=n.toISOString().slice(0,16);
+  initReceivedAtClock();
   initChat();
 }
 async function loadServices(){
@@ -231,14 +248,29 @@ function removeServiceLine(id){
   if($('lines-container').children.length<=1)return showToast('يجب أن تحتوي المعاملة على خدمة واحدة على الأقل','error');
   const el=$(id);if(el)el.remove();calculateTotals();
 }
+function findCatalogService(name){
+  const k=normName(name);if(!k)return null;
+  return allServices.find(s=>normName(s.name)===k)||null;
+}
+function getServiceCommRate(svcObjOrName){
+  const f=typeof svcObjOrName==='object'?svcObjOrName:findCatalogService(svcObjOrName);
+  if(!f)return null;
+  const raw=f.commission_per_unit!=null&&f.commission_per_unit!==''?f.commission_per_unit:(f.commission!=null&&f.commission!==''?f.commission:null);
+  if(raw==null)return null;
+  const num=Number(String(raw).replace(/[^\d.-]/g,''));
+  return Number.isFinite(num)?num:null;
+}
+window.findCatalogService=findCatalogService;
+window.getServiceCommRate=getServiceCommRate;
 function onServiceSelected(id,name){
-  const f=allServices.find(s=>(s.name||'').trim().toLowerCase()===name.trim().toLowerCase());
+  const f=findCatalogService(name);
   const el=$(id);
   if(f&&el){
     el.querySelector('.svc-price').value=f.unit_price!=null?f.unit_price:0;
     el.querySelector('.svc-cost').value=f.exec_cost!=null?f.exec_cost:0;
     el.querySelector('.svc-executor').value=f.executor||'';
-    el.dataset.comm=f.commission_per_unit!=null?f.commission_per_unit:'';el.dataset.dur=f.duration_days!=null?f.duration_days:'';
+    const cr=getServiceCommRate(f);
+    el.dataset.comm=cr!=null?cr:'';el.dataset.dur=f.duration_days!=null?f.duration_days:'';
   }else if(el){delete el.dataset.comm;delete el.dataset.dur;}
   calculateTotals();
 }
@@ -296,6 +328,7 @@ async function handleSaveOrder(e){
   e.preventDefault();if(!sbClient&&!initSupabase())return;
   const els=Array.from($('lines-container').children);
   if(!els.length)return showToast('أضف خدمة واحدة على الأقل','error');
+  if(!receivedAtManual)$('received-at').value=nowLocalIso();
   const base={client_name:$('client-name').value.trim(),phone:$('phone').value.trim()||null,transaction_id:$('tx-id').value.trim(),address:$('address').value.trim()||null,
     employee:$('employee').value.trim(),payment_method:$('payment-method-val').value,receiver:$('receiver').value.trim()||null,
     received_at:$('received-at').value+':00',rn_nm:$('rn-nm').value.trim()||null};
@@ -308,8 +341,10 @@ async function handleSaveOrder(e){
     const service=el.querySelector('.svc-name').value.trim();
     if(!service)return showToast('اكتب اسم الخدمة في كل البنود','error');
     const ln=el.querySelector('.svc-notes').value.trim();
+    const catComm=getServiceCommRate(service);
+    const commVal=(el.dataset.comm!==''&&el.dataset.comm!=null)?Number(el.dataset.comm):(catComm!=null?catComm:0);
     rows.push(Object.assign({},base,disc>0?{discount_pct:disc,list_price:parseFloat(el.querySelector('.svc-price').value)||0}:{},{service:service,qty:parseFloat(el.querySelector('.svc-qty').value)||1,unit_price:unitAfter(parseFloat(el.querySelector('.svc-price').value)||0,disc),
-      exec_unit_cost:parseFloat(el.querySelector('.svc-cost').value)||0,commission_per_unit:el.dataset.comm===''||el.dataset.comm==null?null:Number(el.dataset.comm),
+      exec_unit_cost:parseFloat(el.querySelector('.svc-cost').value)||0,commission_per_unit:commVal,
       executor:el.querySelector('.svc-executor').value.trim()||null,duration_days:el.dataset.dur===''||el.dataset.dur==null?null:Number(el.dataset.dur),
       notes:(ln?(gen?gen+' - '+ln:ln):gen)||null}));
   }
@@ -320,6 +355,7 @@ async function handleSaveOrder(e){
     showToast('تم حفظ المعاملة بنجاح ('+base.transaction_id+')');
     ['client-name','phone','address','rn-nm','notes','discount-pct'].forEach(id=>$(id).value='');
     $('client-whatsapp-box').classList.add('hidden');$('s-client').textContent='—';
+    syncReceivedAt(true);
     generateNewTxId();$('lines-container').innerHTML='';serviceLineCounter=0;addServiceLine();
     await loadRecentRequests();
   }catch(err){showError(/discount_pct|list_price/.test((err&&err.message)||'')?'شغّل ملف phase16-discount.sql في Supabase الأول (عمود الخصم)':'فشل الحفظ',err);}
@@ -343,18 +379,55 @@ function openTxModal(tx){
   $('tx-modal-actions-left').innerHTML='<button id="tx-save-btn" type="button" onclick="saveTxChanges()" disabled class="px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold flex items-center gap-1.5 opacity-50"><i class="fa-solid fa-floppy-disk"></i><span>حفظ التغييرات</span></button>'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5"><i class="fa-brands fa-whatsapp"></i><span>واتساب</span></a>':'')+
   (o.phone?'<a href="tel:'+escapeHtml(o.phone)+'" class="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-phone"></i><span>اتصال</span></a>':'')+
   '<button data-tx="'+escapeHtml(o.transaction_id)+'" onclick="printTxReceipt(this.dataset.tx)" class="px-3.5 py-2 rounded-xl bg-ink dark:bg-brand-600 text-white text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-print"></i><span>إيصال رسمي</span></button>'+
-  (canEditTx()?'<button data-tx="'+escapeHtml(o.transaction_id)+'" onclick="openTxEdit(this.dataset.tx)" class="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-pen-to-square"></i><span>تعديل</span></button>':'');
+  (canStaffEditTx()?'<button data-tx="'+escapeHtml(o.transaction_id)+'" onclick="openTxEdit(this.dataset.tx)" class="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-pen-to-square"></i><span>تعديل</span></button>':'');
   $('tx-modal').classList.remove('hidden');$('tx-modal').classList.add('flex');
 }
 function closeTxModal(){if(txDirty&&!confirm('فيه تغييرات لسه ماتحفظتش. تقفل من غير حفظ؟'))return;txDirty=false;$('tx-modal').classList.add('hidden');$('tx-modal').classList.remove('flex');}
 
-/* ---------- تعديل المعاملة (للمدير بس) ---------- */
+/* ---------- تعديل المعاملة (متاح لكل الموظفين المسجلين مع التسجيل في سجل التغييرات) ---------- */
 function canEditTx(){return window.__role?window.__role==='manager':['mahmoud.aboshama@tasahel.com.eg','mahmoud.aboshama.contact@gmail.com'].includes(String((currentUser&&currentUser.email)||'').toLowerCase());}
+function canStaffEditTx(){return !!currentUser&&window.__role!=='partner';}
 const toLocalInput=v=>v?String(v).replace(' ','T').slice(0,16):'';
 let txEditState=null;
 function closeTxEdit(){const m=$('tx-edit-modal');if(m){m.classList.add('hidden');m.classList.remove('flex');}txEditState=null;}
+function onTeServiceInput(inpEl){
+  const blk=inpEl&&inpEl.closest('[data-lid],[data-new-line]');if(!blk)return;
+  const f=findCatalogService(inpEl.value);if(!f)return;
+  const pr=blk.querySelector('.te-l-price'),co=blk.querySelector('.te-l-cost'),ex=blk.querySelector('.te-l-executor');
+  if(pr&&f.unit_price!=null)pr.value=f.unit_price;
+  if(co&&f.exec_cost!=null)co.value=f.exec_cost;
+  if(ex&&f.executor)ex.value=f.executor;
+}
+window.onTeServiceInput=onTeServiceInput;
+function addTxEditLine(){
+  const box=$('te-lines-list');if(!box)return;
+  const idx=box.children.length+1;
+  const num='type="number" step="any" min="0" inputmode="decimal"';
+  const lf=(cls,label,val,extra,span)=>'<div class="min-w-0'+(span?' '+span:'')+'"><label class="label">'+label+'</label><input class="field '+cls+'" value="'+escapeHtml(val==null?'':val)+'" '+(extra||'')+'></div>';
+  const div=document.createElement('div');
+  div.className='space-y-2 rounded-xl border border-brand-300 bg-brand-50/20 p-3 dark:border-brand-800 dark:bg-brand-950/20';
+  div.setAttribute('data-new-line','1');
+  div.innerHTML='<div class="flex items-center justify-between text-[11px] font-bold text-brand-700 dark:text-brand-300"><span>بند جديد #'+idx+'</span><button type="button" onclick="removeTxEditLine(this)" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash-can ms-1"></i>إلغاء البند</button></div><div class="grid grid-cols-2 gap-2 sm:grid-cols-4">'+
+    lf('te-l-service','الخدمة','','list="svc-datalist" oninput="onTeServiceInput(this)"','col-span-2')+
+    lf('te-l-qty','الكمية',1,num)+lf('te-l-price','سعر الوحدة',0,num)+
+    lf('te-l-cost','تكلفة التنفيذ للوحدة',0,num)+
+    lf('te-l-executor','المنفذ','','list="exec-datalist"','col-span-2')+
+    lf('te-l-notes','ملاحظات البند','','','col-span-2 sm:col-span-4')+'</div>';
+  box.appendChild(div);
+}
+function removeTxEditLine(btn){
+  const blk=btn&&btn.closest('[data-lid],[data-new-line]');if(!blk)return;
+  const box=$('te-lines-list');
+  const activeCount=box?box.querySelectorAll('[data-lid]:not([data-deleted="1"]),[data-new-line]').length:0;
+  if(activeCount<=1)return showToast('لازم المعاملة تحتوي على بند واحد على الأقل','error');
+  if(blk.hasAttribute('data-new-line')){blk.remove();return;}
+  blk.setAttribute('data-deleted','1');
+  blk.classList.add('hidden');
+}
+window.addTxEditLine=addTxEditLine;
+window.removeTxEditLine=removeTxEditLine;
 async function openTxEdit(tx){
-  if(!canEditTx())return;
+  if(!canStaffEditTx())return;
   const o=groupedOrders.find(x=>String(x.transaction_id)===String(tx));if(!o||!o.lines||!o.lines.length)return;
   let trips=[];
   try{const r=await sbClient.from('courier_trips').select('id,kind,courier,fee').eq('transaction_id',tx);if(!r.error)trips=r.data||[];}catch(e){}
@@ -365,8 +438,8 @@ async function openTxEdit(tx){
   const inp=(id,label,val,extra)=>'<div class="min-w-0"><label class="label" for="'+id+'">'+label+'</label><input id="'+id+'" class="field" value="'+esc(val==null?'':val)+'" '+(extra||'')+'></div>';
   const lf=(cls,label,val,extra,span)=>'<div class="min-w-0'+(span?' '+span:'')+'"><label class="label">'+label+'</label><input class="field '+cls+'" value="'+esc(val==null?'':val)+'" '+(extra||'')+'></div>';
   const num='type="number" step="any" min="0" inputmode="decimal"';
-  const linesH=o.lines.map((l,i)=>'<div class="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700" data-lid="'+esc(l.id)+'"><div class="text-[11px] font-bold text-slate-500">بند '+(i+1)+'</div><div class="grid grid-cols-2 gap-2 sm:grid-cols-4">'+
-    lf('te-l-service','الخدمة',l.service,'list="svc-datalist"','col-span-2')+
+  const linesH=o.lines.map((l,i)=>'<div class="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700" data-lid="'+esc(l.id)+'"><div class="flex items-center justify-between text-[11px] font-bold text-slate-500"><span>بند '+(i+1)+'</span><button type="button" onclick="removeTxEditLine(this)" class="text-rose-500 hover:text-rose-700" title="حذف البند"><i class="fa-solid fa-trash-can ms-1"></i>حذف البند</button></div><div class="grid grid-cols-2 gap-2 sm:grid-cols-4">'+
+    lf('te-l-service','الخدمة',l.service,'list="svc-datalist" oninput="onTeServiceInput(this)"','col-span-2')+
     lf('te-l-qty','الكمية',l.qty,num)+lf('te-l-price','سعر الوحدة',l.unit_price,num)+
     lf('te-l-cost','تكلفة التنفيذ للوحدة',l.exec_unit_cost,num)+
     lf('te-l-executor','المنفذ',l.executor,'list="exec-datalist"','col-span-2')+
@@ -382,16 +455,19 @@ async function openTxEdit(tx){
     inp('te-recv','المستلم',first.receiver,'list="rec-datalist"')+inp('te-date','تاريخ ووقت الاستلام',toLocalInput(first.received_at),'type="datetime-local"')+
     inp('te-rn','رقم الإيصال',first.rn_nm,'dir="ltr"')+inp('te-addr','العنوان',first.address)+
     '<datalist id="te-pay-dl">'+pays.map(p=>'<option value="'+esc(p)+'"></option>').join('')+'</datalist></div>'+
-    '<div><h4 class="mb-2 text-xs font-bold text-slate-500">بنود الخدمات</h4><div class="space-y-2">'+linesH+'</div></div>'+tripsH+
-    '<p class="text-[11px] text-slate-400">التعديل بيتسجّل في سجل التغييرات. تعديل الكمية أو السعر بيغيّر إجمالي المعاملة والكوميشن والكاش بأثر رجعي.</p></div>'+
+    '<div><div class="mb-2 flex items-center justify-between"><h4 class="text-xs font-bold text-slate-500">بنود الخدمات</h4><button type="button" onclick="addTxEditLine()" class="rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700 hover:bg-brand-100 dark:bg-brand-950/50 dark:text-brand-300"><i class="fa-solid fa-plus ms-1"></i>إضافة بند</button></div><div id="te-lines-list" class="space-y-2">'+linesH+'</div></div>'+tripsH+
+    '<p class="text-[11px] text-slate-400">كل تعديل بيتسجّل تلقائياً في سجل التغييرات باسم الموظف اللي قام بالتعديل ووقت العملية.</p></div>'+
     '<div class="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3 dark:border-slate-800"><button type="button" onclick="closeTxEdit()" class="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">إلغاء</button><button id="te-save" type="button" onclick="saveTxEdit()" class="rounded-xl bg-brand-600 px-5 py-2 text-xs font-bold text-white hover:bg-brand-700">حفظ التعديلات</button></div></div>';
 }
 function st_trips_html(trips,esc){
-  if(!trips.length)return '';
-  return '<div><h4 class="mb-2 text-xs font-bold text-slate-500">مشاوير المندوب</h4><div class="grid grid-cols-1 gap-2 sm:grid-cols-2">'+trips.map(t=>'<div class="min-w-0" data-tid="'+esc(t.id)+'"><label class="label">'+(t.kind==='pickup'?'مندوب الاستلام':'مندوب التسليم')+'</label><input class="field te-t-courier" list="courier-dl" placeholder="بدون مندوب" value="'+esc(t.courier==='—'?'':t.courier)+'"></div>').join('')+'</div></div>';
+  const pk=trips.find(t=>t.kind==='pickup'),dl=trips.find(t=>t.kind==='delivery');
+  return '<div><h4 class="mb-2 text-xs font-bold text-slate-500">مشاوير المندوب</h4><div class="grid grid-cols-1 gap-2 sm:grid-cols-2">'+
+    '<div class="min-w-0" data-tkind="pickup" data-tid="'+esc(pk?pk.id:'')+'"><label class="label">مندوب الاستلام</label><input class="field te-t-courier" list="courier-dl" placeholder="بدون مندوب" value="'+esc(pk&&pk.courier!=='—'?pk.courier:'')+'"></div>'+
+    '<div class="min-w-0" data-tkind="delivery" data-tid="'+esc(dl?dl.id:'')+'"><label class="label">مندوب التسليم</label><input class="field te-t-courier" list="courier-dl" placeholder="بدون مندوب" value="'+esc(dl&&dl.courier!=='—'?dl.courier:'')+'"></div>'+
+  '</div></div>';
 }
 async function saveTxEdit(){
-  if(!canEditTx()||!txEditState)return;
+  if(!canStaffEditTx()||!txEditState)return;
   const st=txEditState,o=st.o,first=o.lines[0],root=$('tx-edit-modal'),V=id=>String($(id).value||'').trim(),nul=s=>s===''?null:s;
   const num=(s,def)=>{const t=String(s).trim().replace(',','.');if(t==='')return def;const n=Number(t);return Number.isFinite(n)?n:NaN;};
   const client=V('te-client'),emp=V('te-emp'),pay=V('te-pay'),dt=$('te-date').value;
@@ -402,16 +478,21 @@ async function saveTxEdit(){
   const patchTx={},cmp=(k,v,req)=>{const old=first[k]==null?'':String(first[k]).trim();if(v!==old)patchTx[k]=req?v:nul(v);};
   cmp('client_name',client,true);cmp('phone',V('te-phone'));cmp('address',V('te-addr'));cmp('employee',emp,true);cmp('payment_method',pay,true);cmp('receiver',V('te-recv'));cmp('rn_nm',V('te-rn'));
   if(dt!==toLocalInput(first.received_at))patchTx.received_at=dt+':00';
-  const linePatches=[];
+  const linePatches=[],deletedIds=[],newLines=[];
   for(const blk of root.querySelectorAll('[data-lid]')){
     const l=o.lines.find(x=>String(x.id)===blk.dataset.lid);if(!l)continue;
+    if(blk.getAttribute('data-deleted')==='1'){deletedIds.push(l.id);continue;}
     const g=c=>String(blk.querySelector('.'+c).value||'').trim();
     const svc=g('te-l-service'),q=num(g('te-l-qty'),NaN),pr=num(g('te-l-price'),0),co=num(g('te-l-cost'),0);
     if(!svc)return showToast('اكتب اسم الخدمة في كل البنود','error');
     if(!(q>0))return showToast('الكمية لازم تكون رقم أكبر من صفر','error');
     if(!(pr>=0)||!(co>=0))return showToast('السعر والتكلفة لازم يكونوا أرقام صحيحة','error');
     const p={},ex=g('te-l-executor'),nt=g('te-l-notes');
-    if(svc!==String(l.service||'').trim())p.service=svc;
+    if(svc!==String(l.service||'').trim()){
+      p.service=svc;
+      const cr=getServiceCommRate(svc);
+      if(cr!=null)p.commission_per_unit=cr;
+    }
     if(q!==Number(l.qty))p.qty=q;
     if(pr!==Number(l.unit_price||0))p.unit_price=pr;
     if(co!==Number(l.exec_unit_cost||0))p.exec_unit_cost=co;
@@ -419,34 +500,68 @@ async function saveTxEdit(){
     if(nt!==String(l.notes||'').trim())p.notes=nul(nt);
     if(Object.keys(p).length)linePatches.push({id:l.id,p:p});
   }
-  const tripPatches=[];
-  for(const blk of root.querySelectorAll('[data-tid]')){
-    const t=st.trips.find(x=>String(x.id)===blk.dataset.tid);if(!t)continue;
-    const c=String(blk.querySelector('.te-t-courier').value||'').trim(),old=t.courier==='—'?'':String(t.courier||'').trim();
-    if(c!==old)tripPatches.push({id:t.id,p:{courier:c||'—',fee:c?(Number(t.fee)>0?Number(t.fee):(window.__courierFee||40)):0}});
+  const baseRow={client_name:client,phone:nul(V('te-phone')),transaction_id:st.tx,address:nul(V('te-addr')),employee:emp,payment_method:pay,receiver:nul(V('te-recv')),received_at:dt+':00',rn_nm:nul(V('te-rn'))};
+  for(const blk of root.querySelectorAll('[data-new-line]')){
+    const g=c=>String(blk.querySelector('.'+c).value||'').trim();
+    const svc=g('te-l-service'),q=num(g('te-l-qty'),NaN),pr=num(g('te-l-price'),0),co=num(g('te-l-cost'),0);
+    if(!svc)return showToast('اكتب اسم الخدمة في كل البنود الجديدة','error');
+    if(!(q>0))return showToast('الكمية لازم تكون رقم أكبر من صفر','error');
+    if(!(pr>=0)||!(co>=0))return showToast('السعر والتكلفة لازم يكونوا أرقام صحيحة','error');
+    const cat=findCatalogService(svc),cr=getServiceCommRate(cat||svc);
+    newLines.push(Object.assign({},baseRow,{service:svc,qty:q,unit_price:pr,exec_unit_cost:co,commission_per_unit:cr!=null?cr:0,executor:nul(g('te-l-executor')),duration_days:cat&&cat.duration_days!=null?Number(cat.duration_days):null,notes:nul(g('te-l-notes'))}));
   }
-  if(!Object.keys(patchTx).length&&!linePatches.length&&!tripPatches.length){closeTxEdit();return showToast('مفيش تغيير للحفظ');}
+  const tripOps=[];
+  for(const blk of root.querySelectorAll('[data-tkind]')){
+    const kind=blk.dataset.tkind,tid=blk.dataset.tid;
+    const t=st.trips.find(x=>String(x.id)===String(tid)||x.kind===kind);
+    const c=String(blk.querySelector('.te-t-courier').value||'').trim(),old=t&&t.courier!=='—'?String(t.courier||'').trim():'';
+    if(c!==old){
+      tripOps.push({id:t?t.id:null,kind:kind,oldCourier:old||'—',newCourier:c||'—',fee:c?(t&&Number(t.fee)>0?Number(t.fee):(window.__courierFee||40)):0});
+    }
+  }
+  if(!Object.keys(patchTx).length&&!linePatches.length&&!deletedIds.length&&!newLines.length&&!tripOps.length){closeTxEdit();return showToast('مفيش تغيير للحفظ');}
   const btn=$('te-save');btn.disabled=true;btn.textContent='جارٍ الحفظ...';
   let did=false;
+  const editorName=(myProfile&&myProfile.full_name)||(currentUser&&currentUser.email)||'موظف';
   try{
     if(Object.keys(patchTx).length){
       const r=await sbClient.from('request_lines').update(patchTx).eq('transaction_id',st.tx).select('id');
       if(r.error)throw r.error;
-      if(!r.data||!r.data.length)throw new Error('التعديل ماتحفظش: غالباً صلاحية التعديل (UPDATE) مش مفعّلة في Supabase');
+      if(!r.data||!r.data.length)throw new Error('التعديل ماتحفظش: شغّل ملف phase22-fixes-and-permissions.sql في Supabase لتفعيل صلاحية التعديل لكل الموظفين');
       did=true;
     }
     for(const x of linePatches){
       const r=await sbClient.from('request_lines').update(x.p).eq('id',x.id).select('id');
       if(r.error)throw r.error;
-      if(!r.data||!r.data.length)throw new Error('تعديل بند ماتحفظش (صلاحية التعديل)');
+      if(!r.data||!r.data.length)throw new Error('تعديل بند ماتحفظش: تأكد من تفعيل صلاحية التعديل في Supabase');
       did=true;
     }
-    for(const x of tripPatches){
-      const r=await sbClient.from('courier_trips').update(x.p).eq('id',x.id).select('id');
+    if(deletedIds.length){
+      const r=await sbClient.from('request_lines').delete().in('id',deletedIds);
       if(r.error)throw r.error;
       did=true;
     }
-    showToast('تم حفظ التعديلات');
+    if(newLines.length){
+      const r=await sbClient.from('request_lines').insert(newLines);
+      if(r.error)throw r.error;
+      did=true;
+    }
+    for(const op of tripOps){
+      const day=(dt||toLocalInput(first.received_at)||'').slice(0,10)||new Date().toLocaleDateString('en-CA');
+      if(op.id){
+        const r=await sbClient.from('courier_trips').update({courier:op.newCourier,fee:op.fee}).eq('id',op.id);
+        if(r.error)throw r.error;
+      }else{
+        const r=await sbClient.from('courier_trips').upsert({transaction_id:st.tx,kind:op.kind,courier:op.newCourier,fee:op.fee,trip_day:day,created_by:editorName},{onConflict:'transaction_id,kind'});
+        if(r.error)throw r.error;
+      }
+      try{
+        const label=op.kind==='pickup'?'مندوب الاستلام':'مندوب التسليم';
+        await sbClient.from('audit_log').insert({transaction_id:st.tx,action:'updated',service:label,user_name:editorName,details:{[label]:{old:op.oldCourier,new:op.newCourier}}});
+      }catch(e){}
+      did=true;
+    }
+    showToast('تم حفظ التعديلات وتسجيلها في اللوج');
     closeTxEdit();
   }catch(err){showError('تعذّر حفظ التعديلات',err);btn.disabled=false;btn.textContent='حفظ التعديلات';}
   if(did){
