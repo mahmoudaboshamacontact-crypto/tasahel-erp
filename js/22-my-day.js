@@ -20,6 +20,7 @@
   const BTN_ON = 'tab-btn bg-ink text-white dark:bg-brand-600 shadow-sm';
   const BTN_OFF = 'tab-btn text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800';
   let who = '', rt = 0;
+  const NOTICE = 'إعلان للفريق: السيستم بيقيس الشغل جوه السيستم بس: أول وآخر عملية في اليوم (بوقت الحفظ)، وعدد المعاملات والتعديلات، وسرعة الإنجاز، ولوحة الأداء بيشوفها المدير بس. مفيش أي مراقبة للشاشة أو الوش أو حركة الماوس.';
 
   const norm = s => { const t = String(s == null ? '' : s); return (typeof normName === 'function' ? String(normName(t)) : t).trim().toLowerCase().replace(/\s+/g, ' '); };
   const dnum = s => {
@@ -146,6 +147,7 @@
     h += '<div class="md-note">اتسلّم النهاردة: ' + r.deliv + ' بند</div>';
     h += section('متأخرة', r.late, 'مفيش بنود متأخرة', 'md-sec-late');
     h += section('مفتوحة', r.open, 'مفيش بنود مفتوحة');
+    h += '<div class="md-note">' + eh(NOTICE) + '</div>';
     p.innerHTML = h;
   }
   const schedule = () => { if (currentTab !== 'myday') return; clearTimeout(rt); rt = setTimeout(safe('render', render), 120); };
