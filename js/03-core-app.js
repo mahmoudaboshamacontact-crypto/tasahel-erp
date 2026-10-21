@@ -1,5 +1,5 @@
 const DEFAULT_SB_URL='https://avehvjqifswsyayckpvx.supabase.co';
-let sbClient=null,allRequestLines=[],allServices=[],groupedOrders=[],chartInstances={},currentDashboardRange='all',recentMode='all',currentTab='new',serviceLineCounter=0,clientSelectedReceiptLines=[];
+let sbClient=null,allRequestLines=[],allServices=[],groupedOrders=[],chartInstances={},currentDashboardRange='all',recentMode='all',currentTab='home',serviceLineCounter=0,clientSelectedReceiptLines=[];
 const PAY_DEFAULT=['كاش','انستا باي','فودافون كاش','POS','تحويل بنكي'];
 const STATUS_AR={'Delivered':'تم التسليم','Complete':'مكتمل','Under Review':'قيد المراجعة','In Progress':'قيد التنفيذ'};
 const STATUS_CLS={'Delivered':'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300','Complete':'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300','Under Review':'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300','In Progress':'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'};
@@ -136,9 +136,12 @@ function mergeLines(fresh,win){
 }
 function refreshLineViews(){
   groupRequestsByTransaction();renderRecentRequests();renderClientDatalists();updateExecutorsFilterOptions();
+  if(typeof window.updateHeaderLateBadge==='function')window.updateHeaderLateBadge();
+  if(currentTab==='home'&&typeof renderHomeTab==='function')renderHomeTab();
   if(currentTab==='dash')renderDashboardMetrics();
   if(currentTab==='exec')filterExecSheet();
   if(currentTab==='cash')filterCashSheet();
+  if(currentTab==='team')renderTeam();
   if(currentTab==='search'&&($('search-key').value||'').trim())executeSearch();
 }
 async function loadArchive(){
@@ -628,9 +631,9 @@ function openClientModal(name){
   const wa=waLink(s.phone,'أهلاً '+s.client_name+'، معك تساهيل | قسم الخدمات الحكومية');
   $('client-modal-wa-slot').innerHTML=wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5"><i class="fa-brands fa-whatsapp"></i><span>واتساب للعميل</span></a>':'';
   $('client-modal-body').innerHTML=
-  '<div class="grid grid-cols-3 gap-3">'+[['إجمالي الإنفاق',formatCurrency(spent),'text-brand-600'],['عدد المعاملات',txs.size,'text-ink dark:text-white'],['إجمالي الخدمات',ls.length,'text-ink dark:text-white']].map(c=>'<div class="card p-3.5 bg-slate-50 dark:bg-slate-800/40"><span class="text-slate-400 text-xs block">'+c[0]+'</span><span class="text-sm sm:text-lg font-bold font-mono '+c[2]+'">'+c[1]+'</span></div>').join('')+'</div>'+
+  '<div class="grid grid-cols-3 gap-3">'+[['إجمالي الإنفاق',formatCurrency(spent),'text-brand-600'],['عدد المعاملات',txs.size,'text-ink dark:text-white'],['إجمالي الخدمات',ls.length,'text-ink dark:text-white']].map(c=>'<div class="card p-3.5 bg-slate-50 dark:bg-slate-800/40"><span class="text-slate-400 text-xs block">'+c[0]+'</span><span class="text-sm sm:text-lg font-bold font-mono whitespace-nowrap '+c[2]+'">'+c[1]+'</span></div>').join('')+'</div>'+
   '<div><h4 class="font-bold text-xs text-slate-500 mb-2">سجل كل المعاملات والخدمات</h4><div class="space-y-2">'+
-  ls.map(l=>'<button type="button" data-tx="'+escapeHtml(l.transaction_id)+'" onclick="closeClientModal();openTxModal(this.dataset.tx)" class="lift w-full flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-start"><div class="min-w-0"><div class="font-semibold text-ink dark:text-white truncate">'+escapeHtml(l.service)+' <span class="text-slate-400">×'+l.qty+'</span></div><div class="text-[11px] text-slate-500 font-mono" dir="ltr">'+escapeHtml(l.transaction_id)+' · '+formatDateOnly(lineDate(l))+'</div></div><div class="shrink-0 font-bold font-mono">'+formatCurrency(l.total)+'</div></button>').join('')+'</div></div>';
+  ls.map(l=>'<button type="button" data-st17="'+escapeHtml(l.status||'In Progress')+'" data-tx="'+escapeHtml(l.transaction_id)+'" onclick="closeClientModal();openTxModal(this.dataset.tx)" class="card lift w-full flex flex-wrap items-center justify-between gap-3 p-3.5 text-start"><div class="min-w-0 space-y-1.5"><div class="rc-svc-pill"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div><div class="flex flex-wrap items-center gap-2 text-[11px] text-slate-500"><span class="rc-tx-pill !py-0.5 !px-2 !text-[11px]" dir="ltr">'+escapeHtml(l.transaction_id)+'</span><span>'+formatDateOnly(lineDate(l))+'</span>'+badge(l.status)+'</div></div><div class="shrink-0 font-bold text-sm text-brand-600 dark:text-brand-400 whitespace-nowrap">'+formatCurrency(l.total)+'</div></button>').join('')+'</div></div>';
   $('client-modal').classList.remove('hidden');$('client-modal').classList.add('flex');
 }
 function closeClientModal(){$('client-modal').classList.add('hidden');$('client-modal').classList.remove('flex');}
@@ -652,33 +655,57 @@ function filterExecSheet(){
   const cost=f.reduce((s,l)=>s+execCostOf(l),0);
   $('x-count').textContent=f.length;$('x-total').textContent=formatCurrency(cost);$('x-label').textContent=(ex==='all'?'كل المنفذين':ex)+(dt?' ('+formatDateOnly(dt)+')':'');
   
-  // 1. تعبئة الجدول (للكمبيوتر)
-  $('sheet-body').innerHTML=f.map(l=>'<tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"><td class="px-5 py-3 font-semibold text-ink dark:text-white"><button '+ac(l.client_name)+' class="hover:text-brand-600 hover:underline">'+escapeHtml(l.client_name)+'</button></td><td class="px-3 py-3 font-mono text-xs" dir="ltr">'+escapeHtml(l.phone||'—')+'</td><td class="px-3 py-3 font-mono text-xs font-semibold text-brand-600" dir="ltr"><button '+at(l.transaction_id)+' class="hover:underline">'+escapeHtml(l.transaction_id)+'</button></td><td class="px-3 py-3 text-xs font-medium">'+escapeHtml(l.service)+'</td><td class="px-3 py-3 text-center font-mono font-bold">'+l.qty+'</td><td class="px-3 py-3 text-xs text-brand-700 dark:text-brand-300 font-semibold">'+escapeHtml(l.executor||'—')+'</td><td class="px-3 py-3 font-mono font-bold">'+formatCurrency(execCostOf(l))+'</td><td class="px-3 py-3 font-mono text-xs text-slate-500">'+formatDateOnly(l.exec_start_date)+'</td><td class="px-3 py-3 text-xs max-w-[240px] whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">'+(l.notes?escapeHtml(l.notes):'<span class="text-slate-300">—</span>')+'</td></tr>').join('')||'<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400">لا توجد مهام مطابقة</td></tr>';
+  // 1. تعبئة الجدول (للكمبيوتر) بنفس التصميم المريح لآخر المعاملات
+  $('sheet-body').innerHTML=f.map(function(l){
+    const st=l.status||'In Progress';
+    const wa=waLink(l.phone,'أهلاً '+(l.client_name||'')+'، بخصوص معاملتك رقم '+(l.transaction_id||'')+' — تساهيل');
+    const phHtml=l.phone?'<div class="rc-phone-pill"><span>'+escapeHtml(l.phone)+'</span>'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="text-emerald-600 hover:text-emerald-700 text-sm leading-none" title="مراسلة واتساب"><i class="fa-brands fa-whatsapp"></i></a>':'')+'</div>':'<span class="text-slate-300">—</span>';
+    const svcHtml='<div class="rc-svc-list"><div class="rc-svc-pill"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div></div>';
+    const execHtml=l.executor?'<span class="rc-exec-pill"><i class="fa-solid fa-user-gear text-[10px]"></i><span>'+escapeHtml(l.executor)+'</span></span>':'<span class="text-slate-300">—</span>';
+    const startDt=l.exec_start_date?formatDateOnly(l.exec_start_date):formatDateOnly(lineDate(l));
+    return '<tr data-st17="'+escapeHtml(st)+'" class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 align-middle">'+
+      '<td class="px-4 py-3.5 font-bold text-ink dark:text-white min-w-[175px] max-w-[240px]"><button '+ac(l.client_name)+' class="text-right text-start leading-snug hover:text-brand-600 hover:underline block w-full">'+escapeHtml(l.client_name)+'</button><div class="mt-1">'+badge(st)+'</div></td>'+
+      '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr">'+phHtml+'</td>'+
+      '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr"><button '+at(l.transaction_id)+' class="rc-tx-pill">'+escapeHtml(l.transaction_id)+'</button></td>'+
+      '<td class="px-3 py-3.5">'+svcHtml+'</td>'+
+      '<td class="px-3 py-3.5 text-center whitespace-nowrap"><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></td>'+
+      '<td class="px-3 py-3.5 whitespace-nowrap">'+execHtml+'</td>'+
+      '<td class="px-3 py-3.5 font-bold text-ink dark:text-white whitespace-nowrap text-sm">'+formatCurrency(execCostOf(l))+'</td>'+
+      '<td class="px-3 py-3.5 whitespace-nowrap"><span class="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap"><i class="fa-regular fa-calendar text-[10px] text-slate-400"></i><span>'+escapeHtml(startDt)+'</span></span></td>'+
+      '<td class="px-3 py-3.5 text-xs min-w-[150px] max-w-[250px] whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">'+(l.notes?'<div class="rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/60 px-2.5 py-1.5 text-amber-900 dark:text-amber-200">'+escapeHtml(l.notes)+'</div>':'<span class="text-slate-300">—</span>')+'</td></tr>';
+  }).join('')||'<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400">لا توجد مهام مطابقة</td></tr>';
   
   // 2. تعبئة الكروت (للموبايل)
-  $('sheet-cards-container').innerHTML=f.map(l=>`
-    <div class="mobile-card space-y-2 text-xs">
-      <div class="flex items-center justify-between gap-2">
-        <span class="font-bold text-ink dark:text-white truncate">${escapeHtml(l.client_name)}</span>
-        <span class="font-mono text-brand-600 font-bold shrink-0" dir="ltr">${escapeHtml(l.transaction_id)}</span>
-      </div>
-      <div class="font-medium text-slate-700 dark:text-slate-300">${escapeHtml(l.service)} <span class="text-slate-400">(×${l.qty})</span> ${badge(l.status)}</div>
-      ${l.notes?`<div class="rounded-lg bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] text-amber-900 dark:text-amber-200 whitespace-pre-wrap break-words"><i class="fa-solid fa-note-sticky ms-1"></i>${escapeHtml(l.notes)}</div>`:''}
-      <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
-        <span class="text-slate-500">المنفذ: <b class="text-brand-700 dark:text-brand-300">${escapeHtml(l.executor||'—')}</b></span>
-        <span class="font-mono font-bold text-ink dark:text-white">${formatCurrency(execCostOf(l))}</span>
-      </div>
-      <div class="flex items-center justify-between text-[11px] text-slate-400">
-        <span>البداية: ${formatDateOnly(l.exec_start_date)}</span>
-        <button ${at(l.transaction_id)} class="text-brand-600 font-semibold px-2 py-1 rounded">تفاصيل</button>
-      </div>
-    </div>
-  `).join('')||'<div class="card p-6 text-center text-slate-400 text-xs">لا توجد مهام مطابقة</div>';
+  $('sheet-cards-container').innerHTML=f.map(function(l){
+    const st=l.status||'In Progress';
+    const wa=waLink(l.phone,'أهلاً '+(l.client_name||'')+'، بخصوص معاملتك رقم '+(l.transaction_id||'')+' — تساهيل');
+    return '<div data-st17="'+escapeHtml(st)+'" class="card lift p-4 space-y-2.5 text-xs">'+
+      '<div class="flex items-start justify-between gap-2">'+
+        '<div class="min-w-0"><button '+ac(l.client_name)+' class="font-bold text-ink dark:text-white leading-snug text-start hover:text-brand-600">'+escapeHtml(l.client_name)+'</button>'+
+          '<div class="mt-1 flex flex-wrap items-center gap-1.5" dir="ltr">'+
+            '<button '+at(l.transaction_id)+' class="rc-tx-pill !py-0.5 !px-2 !text-[11px]">'+escapeHtml(l.transaction_id)+'</button>'+
+            (l.phone?'<span class="rc-phone-pill !py-0.5 !px-2 !text-[11px]"><span>'+escapeHtml(l.phone)+'</span>'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="text-emerald-600"><i class="fa-brands fa-whatsapp"></i></a>':'')+'</span>':'')+
+          '</div>'+
+        '</div>'+
+        '<div class="shrink-0">'+badge(st)+'</div>'+
+      '</div>'+
+      '<div class="rc-svc-pill w-full"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div>'+
+      (l.notes?'<div class="rounded-lg bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1.5 text-[11px] text-amber-900 dark:text-amber-200 whitespace-pre-wrap break-words"><i class="fa-solid fa-note-sticky ms-1"></i>'+escapeHtml(l.notes)+'</div>':'')+
+      '<div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">'+
+        '<span class="text-slate-500">المنفذ: <b class="rc-exec-pill !py-0.5 !px-2">'+escapeHtml(l.executor||'—')+'</b></span>'+
+        '<span class="font-bold text-sm text-ink dark:text-white whitespace-nowrap">'+formatCurrency(execCostOf(l))+'</span>'+
+      '</div>'+
+      '<div class="flex items-center justify-between text-[11px] text-slate-400">'+
+        '<span>البداية: '+formatDateOnly(l.exec_start_date||lineDate(l))+'</span>'+
+        '<button '+at(l.transaction_id)+' class="text-brand-600 font-bold px-2 py-1 rounded hover:underline">عرض التفاصيل</button>'+
+      '</div>'+
+    '</div>';
+  }).join('')||'<div class="card p-6 text-center text-slate-400 text-xs">لا توجد مهام مطابقة</div>';
 }
 function clearExecFilters(){$('f-exec').value='all';$('f-date').value='';filterExecSheet();}
 function printExecSheet(){
   const ex=$('f-exec').value||'all',dt=$('f-date').value,f=getFilteredExecLines(),cost=f.reduce((s,l)=>s+execCostOf(l),0);
-  $('print-content').innerHTML='<div class="receipt-box" style="font-size:12px"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b1b33;padding-bottom:8px;margin-bottom:10px"><div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">'+logoImg(38,8)+'<div><div style="font-size:15px;font-weight:bold">قسم الخدمات الحكومية</div><div style="font-size:11px">شيت متابعة المنفذين</div></div></div><div style="font-size:11px"><div>المنفذ: <b>'+escapeHtml(ex==='all'?'كل المنفذين':ex)+'</b></div><div>التاريخ: '+escapeHtml(dt||'كل التواريخ')+'</div></div></div><div style="background:#f1f5f9;border:1px solid #ccc;padding:8px;margin-bottom:10px">إجمالي المهام: <b>'+f.length+'</b> &nbsp;|&nbsp; إجمالي التكلفة: <b>'+formatCurrency(cost)+'</b></div><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#0b1b33;color:#fff">'+['العميل','الهاتف','المعاملة','الخدمة','العدد','المنفذ','التكلفة'].map(h=>'<th style="padding:6px;border:1px solid #555">'+h+'</th>').join('')+'</tr></thead><tbody>'+f.map(l=>'<tr>'+[l.client_name,l.phone||'—',l.transaction_id,l.service,l.qty,l.executor||'—',formatCurrency(execCostOf(l))].map(v=>'<td style="padding:5px;border:1px solid #888">'+escapeHtml(v)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+  $('print-content').innerHTML='<div class="receipt-box" style="font-size:12px"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b1b33;padding-bottom:8px;margin-bottom:10px"><div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">'+logoImg(38,8)+'<div><div style="font-size:15px;font-weight:bold">قسم الخدمات الحكومية</div><div style="font-size:11px">متابعة المنفذين</div></div></div><div style="font-size:11px"><div>المنفذ: <b>'+escapeHtml(ex==='all'?'كل المنفذين':ex)+'</b></div><div>التاريخ: '+escapeHtml(dt||'كل التواريخ')+'</div></div></div><div style="background:#f1f5f9;border:1px solid #ccc;padding:8px;margin-bottom:10px">إجمالي المهام: <b>'+f.length+'</b> &nbsp;|&nbsp; إجمالي التكلفة: <b>'+formatCurrency(cost)+'</b></div><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#0b1b33;color:#fff">'+['العميل','الهاتف','المعاملة','الخدمة','العدد','المنفذ','التكلفة'].map(h=>'<th style="padding:6px;border:1px solid #555">'+h+'</th>').join('')+'</tr></thead><tbody>'+f.map(l=>'<tr>'+[l.client_name,l.phone||'—',l.transaction_id,l.service,l.qty,l.executor||'—',formatCurrency(execCostOf(l))].map(v=>'<td style="padding:5px;border:1px solid #888">'+escapeHtml(v)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
   window.print();
 }
 function csvCell(v){return '"'+String(v==null?'':v).replace(/"/g,'""')+'"';}
@@ -688,7 +715,7 @@ function downloadCsvFile(name,headers,rows){
 }
 function exportExecSheetCsv(){
   const f=getFilteredExecLines();if(!f.length)return showToast('لا توجد بيانات للتصدير','info');
-  downloadCsvFile('شيت_المنفذين_'+new Date().toISOString().slice(0,10)+'.csv',['العميل','الهاتف','رقم المعاملة','الخدمة','العدد','المنفذ','تكلفة التنفيذ','تاريخ البدء','الحالة','ملاحظات'],f.map(l=>[l.client_name,l.phone,l.transaction_id,l.service,l.qty,l.executor,execCostOf(l),l.exec_start_date,statusLabel(l.status),l.notes]));
+  downloadCsvFile('المنفذين_'+new Date().toISOString().slice(0,10)+'.csv',['العميل','الهاتف','رقم المعاملة','الخدمة','العدد','المنفذ','تكلفة التنفيذ','تاريخ البدء','الحالة','ملاحظات'],f.map(l=>[l.client_name,l.phone,l.transaction_id,l.service,l.qty,l.executor,execCostOf(l),l.exec_start_date,statusLabel(l.status),l.notes]));
 }
 
 /* ---------- البحث ---------- */
@@ -704,15 +731,46 @@ function executeSearch(){
   if(!q&&st==='all'){const m='اكتب في خانة البحث لعرض المعاملات المطابقة...';$('search-results-table').innerHTML='<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400">'+m+'</td></tr>';$('search-results-cards').innerHTML='<div class="card p-6 text-center text-slate-400 text-xs">'+m+'</div>';$('search-results-count').textContent='أدخل كلمة البحث للبدء...';return;}
   const r=searchResults();$('search-results-count').textContent='تم العثور على '+r.length+' نتيجة';
   const none='لم يتم العثور على نتائج مطابقة';
-  $('search-results-table').innerHTML=r.map(l=>{const wa=waLink(l.phone);return '<tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"><td class="px-5 py-3 font-semibold text-ink dark:text-white"><button '+ac(l.client_name)+' class="hover:text-brand-600 hover:underline">'+escapeHtml(l.client_name)+'</button></td><td class="px-3 py-3 font-mono text-xs" dir="ltr">'+escapeHtml(l.phone||'—')+'</td><td class="px-3 py-3 font-mono text-xs text-brand-600 font-semibold" dir="ltr"><button '+at(l.transaction_id)+' class="hover:underline">'+escapeHtml(l.transaction_id)+'</button></td><td class="px-3 py-3 text-xs font-medium">'+escapeHtml(l.service)+' (×'+l.qty+')</td><td class="px-3 py-3 font-mono font-bold">'+formatCurrency(l.total)+'</td><td class="px-3 py-3 text-xs">'+escapeHtml(l.employee||'—')+'</td><td class="px-3 py-3">'+badge(l.status)+'</td><td class="px-3 py-3 text-xs text-slate-500 max-w-[160px] truncate">'+escapeHtml(l.notes||'—')+'</td><td class="px-3 py-3 text-center"><div class="flex items-center justify-center gap-2">'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="text-emerald-600"><i class="fa-brands fa-whatsapp"></i></a>':'')+'<button '+at(l.transaction_id)+' class="text-slate-400 hover:text-ink dark:hover:text-white"><i class="fa-solid fa-eye text-xs"></i></button></div></td></tr>';}).join('')||'<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400">'+none+'</td></tr>';
-  $('search-results-cards').innerHTML=r.map(l=>'<div class="card p-4 space-y-2 text-xs"><div class="flex items-center justify-between"><button '+ac(l.client_name)+' class="font-bold text-ink dark:text-white">'+escapeHtml(l.client_name)+'</button><span class="font-mono text-brand-600 font-bold" dir="ltr">'+escapeHtml(l.transaction_id)+'</span></div><div>'+escapeHtml(l.service)+' (×'+l.qty+') — <b>'+formatCurrency(l.total)+'</b> '+badge(l.status)+'</div><div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500"><span>الموظف: '+escapeHtml(l.employee||'—')+'</span><button '+at(l.transaction_id)+' class="text-brand-600 font-semibold">تفاصيل</button></div></div>').join('')||'<div class="card p-6 text-center text-slate-400 text-xs">'+none+'</div>';
+  $('search-results-table').innerHTML=r.map(l=>{
+    const stVal=l.status||'In Progress';
+    const wa=waLink(l.phone,'أهلاً '+(l.client_name||'')+'، بخصوص معاملتك رقم '+(l.transaction_id||'')+' — تساهيل');
+    const phHtml=l.phone?'<div class="rc-phone-pill"><span>'+escapeHtml(l.phone)+'</span>'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="text-emerald-600 hover:text-emerald-700 text-sm leading-none" title="مراسلة واتساب"><i class="fa-brands fa-whatsapp"></i></a>':'')+'</div>':'<span class="text-slate-300">—</span>';
+    const svcHtml='<div class="rc-svc-list"><div class="rc-svc-pill"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div></div>';
+    return '<tr data-st17="'+escapeHtml(stVal)+'" class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 align-middle">'+
+      '<td class="px-4 py-3.5 font-bold text-ink dark:text-white min-w-[175px] max-w-[240px]"><button '+ac(l.client_name)+' class="text-right text-start leading-snug hover:text-brand-600 hover:underline block w-full">'+escapeHtml(l.client_name)+'</button></td>'+
+      '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr">'+phHtml+'</td>'+
+      '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr"><button '+at(l.transaction_id)+' class="rc-tx-pill">'+escapeHtml(l.transaction_id)+'</button></td>'+
+      '<td class="px-3 py-3.5">'+svcHtml+'</td>'+
+      '<td class="px-3 py-3.5 font-bold text-ink dark:text-white whitespace-nowrap text-sm">'+formatCurrency(l.total)+'</td>'+
+      '<td class="px-3 py-3.5 text-xs whitespace-nowrap font-medium">'+empCell(l.employee)+'</td>'+
+      '<td class="px-3 py-3.5 whitespace-nowrap">'+badge(stVal)+'</td>'+
+      '<td class="px-3 py-3.5 text-xs text-slate-600 dark:text-slate-300 max-w-[200px] break-words">'+(l.notes?escapeHtml(l.notes):'<span class="text-slate-300">—</span>')+'</td>'+
+      '<td class="px-3 py-3.5 text-center whitespace-nowrap"><div class="inline-flex items-center justify-center gap-1.5">'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 hover:bg-emerald-100 transition"><i class="fa-brands fa-whatsapp text-xs"></i></a>':'')+'<button '+at(l.transaction_id)+' class="p-2 rounded-lg bg-slate-100/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 transition" title="التفاصيل"><i class="fa-solid fa-eye text-xs"></i></button></div></td></tr>';
+  }).join('')||'<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400">'+none+'</td></tr>';
+
+  $('search-results-cards').innerHTML=r.map(l=>{
+    const stVal=l.status||'In Progress';
+    return '<div data-st17="'+escapeHtml(stVal)+'" class="card lift p-4 space-y-2.5 text-xs">'+
+      '<div class="flex items-start justify-between gap-2"><button '+ac(l.client_name)+' class="font-bold text-ink dark:text-white leading-snug text-start hover:text-brand-600">'+escapeHtml(l.client_name)+'</button><button '+at(l.transaction_id)+' class="rc-tx-pill !py-0.5 !px-2 !text-[11px]" dir="ltr">'+escapeHtml(l.transaction_id)+'</button></div>'+
+      '<div class="rc-svc-pill w-full"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div>'+
+      '<div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500"><span>'+empCell(l.employee)+'</span><div class="flex items-center gap-2">'+badge(stVal)+'<span class="font-bold text-sm text-brand-600 dark:text-brand-400 whitespace-nowrap">'+formatCurrency(l.total)+'</span></div></div></div>';
+  }).join('')||'<div class="card p-6 text-center text-slate-400 text-xs">'+none+'</div>';
 }
 function exportSearchResultsCsv(){
   const r=searchResults();if(!r.length)return showToast('لا توجد نتائج للتصدير','info');
   downloadCsvFile('نتائج_البحث_'+new Date().toISOString().slice(0,10)+'.csv',['العميل','الهاتف','رقم المعاملة','الخدمة','العدد','سعر الوحدة','الإجمالي','الموظف','طريقة الدفع','الحالة','التاريخ'],r.map(l=>[l.client_name,l.phone,l.transaction_id,l.service,l.qty,l.unit_price,l.total,l.employee,l.payment_method,statusLabel(l.status),lineDate(l)]));
 }
 
-/* ---------- الإيصالات ---------- */
+/* ---------- الإيصالات (مع إصلاح تكرار الخدمات عند الطباعة وتوحيد العرض البصري) ---------- */
+function syncReceiptItemCb(el){
+  if(!el)return;
+  const val=String(el.value),chk=!!el.checked;
+  document.querySelectorAll('.receipt-item-cb').forEach(cb=>{if(String(cb.value)===val)cb.checked=chk;});
+  const desktopCbs=document.querySelectorAll('#receipt-lines-body .receipt-item-cb');
+  const selAll=$('select-all-receipt');
+  if(selAll&&desktopCbs.length)selAll.checked=Array.from(desktopCbs).every(cb=>cb.checked);
+}
+window.syncReceiptItemCb=syncReceiptItemCb;
 function loadClientReceiptLines(){
   const q=$('receipt-client-input').value.trim().toLowerCase();
   if(!q)return showToast('اكتب اسم العميل أو رقم الهاتف','error');
@@ -722,32 +780,46 @@ function loadClientReceiptLines(){
   $('receipt-client-meta').textContent='العميل: '+s.client_name+' · الهاتف: '+(s.phone||'—')+' · عدد البنود: '+clientSelectedReceiptLines.length;
   
   // 1. تعبئة الجدول (للكمبيوتر)
-  $('receipt-lines-body').innerHTML=clientSelectedReceiptLines.map((l,i)=>'<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40"><td class="p-3 text-center"><input type="checkbox" checked value="'+i+'" class="receipt-item-cb"></td><td class="p-3 font-mono text-xs text-brand-600 font-semibold" dir="ltr">'+escapeHtml(l.transaction_id)+'</td><td class="p-3 font-medium text-ink dark:text-white">'+escapeHtml(l.service)+'</td><td class="p-3 text-center font-mono">'+l.qty+'</td><td class="p-3 font-mono">'+fmtNum(l.unit_price)+' ج.م</td><td class="p-3 font-mono font-bold">'+formatCurrency(l.total)+'</td><td class="p-3 text-xs text-slate-500">'+escapeHtml(l.employee||'—')+'</td></tr>').join('');
+  $('receipt-lines-body').innerHTML=clientSelectedReceiptLines.map((l,i)=>{
+    const stVal=l.status||'In Progress';
+    return '<tr data-st17="'+escapeHtml(stVal)+'" class="hover:bg-slate-50 dark:hover:bg-slate-800/40 align-middle">'+
+      '<td class="p-3.5 text-center"><input type="checkbox" checked value="'+i+'" onchange="syncReceiptItemCb(this)" class="receipt-item-cb h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"></td>'+
+      '<td class="p-3.5 whitespace-nowrap" dir="ltr"><button type="button" '+at(l.transaction_id)+' class="rc-tx-pill">'+escapeHtml(l.transaction_id)+'</button></td>'+
+      '<td class="p-3.5"><div class="rc-svc-list"><div class="rc-svc-pill"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div></div></td>'+
+      '<td class="p-3.5 text-center whitespace-nowrap"><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></td>'+
+      '<td class="p-3.5 whitespace-nowrap font-semibold text-slate-700 dark:text-slate-200">'+formatCurrency(l.unit_price)+'</td>'+
+      '<td class="p-3.5 whitespace-nowrap font-bold text-sm text-brand-600 dark:text-brand-400">'+formatCurrency(l.total)+'</td>'+
+      '<td class="p-3.5 text-xs whitespace-nowrap font-medium">'+empCell(l.employee)+'</td></tr>';
+  }).join('');
   
   // 2. تعبئة الكروت (للموبايل)
-  $('receipt-cards-container').innerHTML=clientSelectedReceiptLines.map((l,i)=>`
-    <label class="mobile-card flex items-start gap-3 cursor-pointer">
-      <input type="checkbox" checked value="${i}" class="receipt-item-cb mt-1 h-5 w-5 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
-      <div class="min-w-0 flex-1 text-xs space-y-1">
-        <div class="flex justify-between gap-2">
-          <span class="font-bold text-ink dark:text-white truncate">${escapeHtml(l.service)}</span>
-          <span class="font-mono font-bold text-brand-600 shrink-0">${formatCurrency(l.total)}</span>
-        </div>
-        <div class="flex justify-between text-slate-500">
-          <span class="truncate">${escapeHtml(l.transaction_id)}</span>
-          <span>عدد: ${l.qty} × ${fmtNum(l.unit_price)}</span>
-        </div>
-      </div>
-    </label>
-  `).join('');
+  $('receipt-cards-container').innerHTML=clientSelectedReceiptLines.map((l,i)=>{
+    const stVal=l.status||'In Progress';
+    return '<label data-st17="'+escapeHtml(stVal)+'" class="card lift p-4 flex items-start gap-3 cursor-pointer">'+
+      '<input type="checkbox" checked value="'+i+'" onchange="syncReceiptItemCb(this)" class="receipt-item-cb mt-1 h-5 w-5 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500">'+
+      '<div class="min-w-0 flex-1 text-xs space-y-2">'+
+        '<div class="rc-svc-pill w-full"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div>'+
+        '<div class="flex items-center justify-between gap-2">'+
+          '<span class="rc-tx-pill !py-0.5 !px-2 !text-[11px]" dir="ltr">'+escapeHtml(l.transaction_id)+'</span>'+
+          '<span class="font-bold text-sm text-brand-600 dark:text-brand-400 whitespace-nowrap">'+formatCurrency(l.total)+'</span>'+
+        '</div>'+
+        '<div class="flex items-center justify-between text-[11px] text-slate-500">'+
+          '<span>سعر الوحدة: '+formatCurrency(l.unit_price)+'</span>'+
+          '<span>'+empCell(l.employee)+'</span>'+
+        '</div>'+
+      '</div>'+
+    '</label>';
+  }).join('');
 
   $('select-all-receipt').checked=true;$('receipt-container').classList.remove('hidden');
 }
-function toggleSelectAllReceipt(c){document.querySelectorAll('.receipt-item-cb').forEach(cb=>cb.checked=c);}
+function toggleSelectAllReceipt(c){document.querySelectorAll('.receipt-item-cb').forEach(cb=>{cb.checked=c;});}
 function selectedReceiptLines(){
   const cbs=document.querySelectorAll('.receipt-item-cb:checked');
   if(!cbs.length){showToast('حدد خدمة واحدة على الأقل','error');return null;}
-  return Array.from(cbs).map(cb=>clientSelectedReceiptLines[parseInt(cb.value)]);
+  const uniqueIdx=[...new Set(Array.from(cbs).map(cb=>parseInt(cb.value,10)).filter(n=>Number.isFinite(n)))];
+  if(!uniqueIdx.length){showToast('حدد خدمة واحدة على الأقل','error');return null;}
+  return uniqueIdx.map(i=>clientSelectedReceiptLines[i]).filter(Boolean);
 }
 function printOfficialReceipt(){const ls=selectedReceiptLines();if(ls)buildOfficialReceipt(ls);}
 function printThermalSlip(){const ls=selectedReceiptLines();if(ls)buildThermalSlip(ls);}
@@ -865,6 +937,161 @@ function renderHeaderAvatar(){
   if(!currentUser){b.innerHTML='';return;}
   b.innerHTML=avatarHtml(myProfile||{id:currentUser.id,full_name:(currentUser.email||'').split('@')[0]},34);
 }
+/* ---------- متابعة حالة تواجد ونشاط الموظفين المباشرة (بدون أي استعلامات إضافية على Supabase أو ضغط على Vercel) ---------- */
+let presenceMap={},myLastActiveAt=Date.now(),myActivityState='working',lastPresenceTrackAt=0,presenceTimer=null,presenceListenersBound=false;
+const TAB_LABELS_AR={
+  home:'الشاشة الرئيسية',
+  new:'طلب جديد',
+  myday:'شغلي النهاردة والمتأخرات',
+  comm:'الكوميشن والتارجت',
+  exec:'المنفذين',
+  cash:'الكاش',
+  couriers:'المناديب',
+  receipt:'الإيصالات',
+  search:'البحث الشامل',
+  chat:'الشات الداخلي',
+  dash:'الداش بورد',
+  tasks:'المهام',
+  team:'فريق العمل',
+  hr:'الموارد البشرية',
+  notes:'ملاحظاتي',
+  perf:'أداء الموظفين',
+  partners:'المنفذون الخارجيون'
+};
+function syncMyPresence(force){
+  if(!chatPresCh||!currentUser)return;
+  const now=Date.now();
+  if(!force&&(now-lastPresenceTrackAt)<45000)return;
+  lastPresenceTrackAt=now;
+  const idle=(now-myLastActiveAt)>5*60*1000||(document.hidden&&(now-myLastActiveAt)>2*60*1000);
+  myActivityState=idle?'idle':'working';
+  try{
+    chatPresCh.track({
+      at:now,
+      lastActive:myLastActiveAt,
+      state:myActivityState,
+      tab:currentTab||'home'
+    });
+  }catch(e){}
+}
+function onUserInteract(){
+  const now=Date.now();
+  const wasIdle=myActivityState==='idle'||(now-myLastActiveAt)>5*60*1000;
+  myLastActiveAt=now;
+  if(wasIdle){
+    myActivityState='working';
+    syncMyPresence(true);
+    if(currentTab==='home')renderHomeTab();
+    else if(currentTab==='team')renderTeam();
+  }
+}
+function bindPresenceActivity(){
+  if(presenceListenersBound)return;
+  presenceListenersBound=true;
+  ['pointerdown','keydown','input','change'].forEach(ev=>{
+    document.addEventListener(ev,onUserInteract,{passive:true});
+  });
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden){
+      myLastActiveAt=Date.now();
+      myActivityState='working';
+      syncMyPresence(true);
+    }else{
+      syncMyPresence(false);
+    }
+  });
+  if(!presenceTimer){
+    presenceTimer=setInterval(function(){
+      if(!currentUser||!chatPresCh)return;
+      const now=Date.now();
+      const shouldIdle=(now-myLastActiveAt)>5*60*1000||(document.hidden&&(now-myLastActiveAt)>2*60*1000);
+      const nextState=shouldIdle?'idle':'working';
+      if(nextState!==myActivityState||(now-lastPresenceTrackAt)>4*60*1000){
+        myActivityState=nextState;
+        syncMyPresence(true);
+      }
+      if(currentTab==='home')renderHomeTab();
+      else if(currentTab==='team')renderTeam();
+    },60000);
+  }
+}
+function getEmpLiveStatus(p){
+  if(!p||!p.id)return{online:false,working:false,statusKey:'offline',label:'قافل السيستم',sub:'غير متصل حالياً',dotCls:'bg-slate-400',badgeCls:'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',todayTx:0,todayLines:0,lastWorkAt:0};
+  const tk=new Date().toLocaleDateString('en-CA');
+  const pNorm=normName(p.full_name||'');
+  const todayTxSet=new Set();
+  let todayLines=0,lastWorkAt=0;
+  allRequestLines.forEach(l=>{
+    if(!l.employee)return;
+    const match=normName(l.employee)===pNorm;
+    if(!match)return;
+    const ts=new Date(lineDate(l)).getTime();
+    if(Number.isFinite(ts)&&ts>lastWorkAt)lastWorkAt=ts;
+    if(dayKey(lineDate(l))===tk){
+      todayLines++;
+      if(l.transaction_id)todayTxSet.add(l.transaction_id);
+    }
+  });
+  const todayTx=todayTxSet.size;
+  const presList=presenceMap&&presenceMap[p.id];
+  const isMe=currentUser&&String(p.id)===String(currentUser.id);
+  const isOnline=isMe||onlineIds.includes(p.id)||(Array.isArray(presList)&&presList.length>0);
+  if(!isOnline){
+    const lastStr=lastWorkAt?('آخر معاملة: '+new Intl.DateTimeFormat('ar-EG',{hour:'numeric',minute:'2-digit',hour12:true}).format(new Date(lastWorkAt))):'غير متصل حالياً';
+    return{
+      online:false,
+      working:false,
+      statusKey:'offline',
+      label:'قافل السيستم',
+      sub:lastStr,
+      dotCls:'bg-slate-400 dark:bg-slate-600',
+      badgeCls:'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700',
+      todayTx:todayTx,
+      todayLines:todayLines,
+      lastWorkAt:lastWorkAt
+    };
+  }
+  let best=null;
+  if(Array.isArray(presList)&&presList.length){
+    best=presList.reduce((a,b)=>((b.lastActive||b.at||0)>(a.lastActive||a.at||0)?b:a),presList[0]);
+  }
+  const lastAct=isMe?myLastActiveAt:((best&&(best.lastActive||best.at))||Date.now());
+  const stateVal=isMe?myActivityState:((best&&best.state)||'working');
+  const tabKey=isMe?currentTab:((best&&best.tab)||'home');
+  const idleMs=Math.max(0,Date.now()-lastAct);
+  const recentOrder=(Date.now()-lastWorkAt)<5*60*1000;
+  const isWorking=(stateVal!=='idle'&&idleMs<6*60*1000)||recentOrder;
+  const tabName=TAB_LABELS_AR[tabKey]||'الشاشة الرئيسية';
+  if(isWorking){
+    return{
+      online:true,
+      working:true,
+      statusKey:'working',
+      label:'فاتح وشغال الآن',
+      sub:'نشط الآن في: '+tabName,
+      dotCls:'bg-emerald-500 ring-4 ring-emerald-500/20 animate-pulse',
+      badgeCls:'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800',
+      todayTx:todayTx,
+      todayLines:todayLines,
+      lastWorkAt:lastWorkAt
+    };
+  }
+  const mins=Math.max(1,Math.round(idleMs/60000));
+  return{
+    online:true,
+    working:false,
+    statusKey:'idle',
+    label:'فاتح السيستم (غير نشط)',
+    sub:'خامل منذ '+(mins<60?mins+' د':Math.floor(mins/60)+' س')+' · على: '+tabName,
+    dotCls:'bg-amber-500 ring-4 ring-amber-500/20',
+    badgeCls:'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800',
+    todayTx:todayTx,
+    todayLines:todayLines,
+    lastWorkAt:lastWorkAt
+  };
+}
+window.getEmpLiveStatus=getEmpLiveStatus;
+
 function renderTeam(){
   const grid=$('team-grid');if(!grid)return;
   if(!profilesReady){
@@ -874,19 +1101,36 @@ function renderTeam(){
   }
   const q=($('team-q').value||'').trim().toLowerCase(),qd=q.replace(/\D/g,'');
   const list=profiles.filter(p=>!q||(p.full_name||'').toLowerCase().includes(q)||(p.job_title||'').toLowerCase().includes(q)||(qd&&(p.phone||'').replace(/\D/g,'').includes(qd)));
-  $('team-count').textContent=profiles.length+' موظف'+(q?' · '+list.length+' نتيجة':'');
+  const statuses=profiles.map(p=>getEmpLiveStatus(p));
+  const wCnt=statuses.filter(s=>s.statusKey==='working').length;
+  const iCnt=statuses.filter(s=>s.statusKey==='idle').length;
+  const oCnt=statuses.filter(s=>s.statusKey==='offline').length;
+  $('team-count').textContent=profiles.length+' موظف · شغال الآن: '+wCnt+' · فاتح غير نشط: '+iCnt+' · قافل: '+oCnt;
   if(!list.length){grid.innerHTML='<div class="card p-8 text-center text-xs text-slate-400 sm:col-span-2 lg:col-span-3">لا يوجد موظفين مطابقين</div>';return;}
   grid.innerHTML=list.map(function(p){
     const me=currentUser&&p.id===currentUser.id,ph=(p.phone||'').trim(),wa=waLink(ph),tel=ph.replace(/[^\d+]/g,'');
-    return '<div class="card lift p-5 flex flex-col gap-4"><div class="flex items-center gap-3.5">'+avatarHtml(p,60)+
-    '<div class="min-w-0"><div class="font-bold text-ink dark:text-white truncate">'+escapeHtml(p.full_name||'بدون اسم')+(me?' <span class="rounded-full bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 px-2 py-0.5 text-[10px] font-semibold">أنت</span>':'')+'</div>'+
-    '<div class="text-xs text-slate-500 truncate">'+escapeHtml(p.job_title||'—')+'</div></div></div>'+
-    '<div class="font-mono text-sm text-slate-600 dark:text-slate-300" dir="ltr">'+(ph?escapeHtml(ph):'<span class="text-xs text-slate-400 font-sans">لم يُضَف رقم بعد</span>')+'</div>'+
-    '<div class="flex items-center gap-2 mt-auto">'+(!me&&chatReady?'<button type="button" data-u="'+escapeHtml(p.id)+'" onclick="startChatWith(this.dataset.u)" class="rounded-xl bg-ink dark:bg-brand-600 hover:opacity-90 px-3 py-2 text-xs font-bold text-white" title="مراسلة"><i class="fa-solid fa-comment-dots ms-1"></i> مراسلة</button>':'')+
-    (ph?'<a href="tel:'+escapeHtml(tel)+'" class="flex-1 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-2 text-center text-xs font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-phone ms-1"></i> اتصال</a>'+
-      '<a href="'+wa+'" target="_blank" rel="noopener" class="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 py-2 text-center text-xs font-bold text-white"><i class="fa-brands fa-whatsapp ms-1"></i> واتساب</a>':'')+
-    (me?'<button type="button" onclick="openMeModal()" class="flex-1 rounded-xl bg-brand-600 hover:bg-brand-700 py-2 text-xs font-bold text-white"><i class="fa-solid fa-user-pen ms-1"></i> تعديل</button>':'')+
-    '</div></div>';
+    const st=getEmpLiveStatus(p);
+    return '<div class="card lift p-5 flex flex-col gap-4">'+
+      '<div class="flex items-start justify-between gap-2">'+
+        '<div class="flex items-center gap-3.5 min-w-0">'+
+          '<span class="relative shrink-0">'+avatarHtml(p,56)+'<span class="absolute bottom-0 end-0 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-slate-900 '+st.dotCls+'"></span></span>'+
+          '<div class="min-w-0">'+
+            '<div class="font-bold text-ink dark:text-white truncate">'+escapeHtml(p.full_name||'بدون اسم')+(me?' <span class="rounded-full bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 px-2 py-0.5 text-[10px] font-semibold">أنت</span>':'')+'</div>'+
+            '<div class="text-xs text-slate-500 truncate">'+escapeHtml(p.job_title||'مسؤول خدمات حكومية')+'</div>'+
+            '<div class="mt-1.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-bold '+st.badgeCls+'"><span class="h-2 w-2 rounded-full '+st.dotCls+'"></span><span>'+escapeHtml(st.label)+'</span></div>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-2.5 text-xs flex items-center justify-between gap-2">'+
+        '<span class="text-slate-500 truncate">'+escapeHtml(st.sub)+'</span>'+
+        '<span class="shrink-0 font-bold text-brand-600 dark:text-brand-400">اليوم: '+st.todayTx+' معاملة ('+st.todayLines+' بند)</span>'+
+      '</div>'+
+      '<div class="font-mono text-sm text-slate-600 dark:text-slate-300" dir="ltr">'+(ph?'<span class="rc-phone-pill"><i class="fa-solid fa-phone text-xs text-brand-600"></i><span>'+escapeHtml(ph)+'</span></span>':'<span class="text-xs text-slate-400 font-sans">لم يُضَف رقم هاتف بعد</span>')+'</div>'+
+      '<div class="flex items-center gap-2 mt-auto">'+(!me&&chatReady?'<button type="button" data-u="'+escapeHtml(p.id)+'" onclick="startChatWith(this.dataset.u)" class="rounded-xl bg-ink dark:bg-brand-600 hover:opacity-90 px-3 py-2 text-xs font-bold text-white" title="مراسلة"><i class="fa-solid fa-comment-dots ms-1"></i> مراسلة</button>':'')+
+      (ph?'<a href="tel:'+escapeHtml(tel)+'" class="flex-1 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-2 text-center text-xs font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-phone ms-1"></i> اتصال</a>'+
+        '<a href="'+wa+'" target="_blank" rel="noopener" class="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 py-2 text-center text-xs font-bold text-white"><i class="fa-brands fa-whatsapp ms-1"></i> واتساب</a>':'')+
+      (me?'<button type="button" onclick="openMeModal()" class="flex-1 rounded-xl bg-brand-600 hover:bg-brand-700 py-2 text-xs font-bold text-white"><i class="fa-solid fa-user-pen ms-1"></i> تعديل</button>':'')+
+      '</div></div>';
   }).join('');
 }
 
@@ -983,12 +1227,13 @@ function chatFormat(body){
 function teardownChat(){
   try{if(chatMsgCh&&sbClient)sbClient.removeChannel(chatMsgCh);}catch(e){}
   try{if(chatPresCh&&sbClient)sbClient.removeChannel(chatPresCh);}catch(e){}
-  chatMsgCh=null;chatPresCh=null;chatReady=false;chatItems=[];chatActive=null;chatMsgs={};chatHasMore={};chatReplyTo=null;onlineIds=[];
+  chatMsgCh=null;chatPresCh=null;chatReady=false;chatItems=[];chatActive=null;chatMsgs={};chatHasMore={};chatReplyTo=null;onlineIds=[];presenceMap={};
   updateChatBadges();
 }
 async function initChat(){
   teardownChat();
   if(!sbClient||!currentUser)return;
+  bindPresenceActivity();
   if(!chatBound){
     chatBound=true;
     document.addEventListener('visibilitychange',function(){if(chatVisible()&&chatActive)markChatRead(chatActive);});
@@ -1001,10 +1246,23 @@ async function initChat(){
     .on('postgres_changes',{event:'DELETE',schema:'public',table:'messages'},function(p){onChatDelete(p.old);})
     .subscribe();
   const pc=sbClient.channel('chat-presence',{config:{presence:{key:currentUser.id}}});
-  pc.on('presence',{event:'sync'},function(){onlineIds=Object.keys(pc.presenceState());renderChatList();renderChatHead();});
-  pc.subscribe(function(st){if(st==='SUBSCRIBED')pc.track({at:Date.now()});});
+  pc.on('presence',{event:'sync'},function(){
+    presenceMap=pc.presenceState()||{};
+    onlineIds=Object.keys(presenceMap);
+    renderChatList();renderChatHead();
+    if(currentTab==='home')renderHomeTab();
+    if(currentTab==='team')renderTeam();
+  });
+  pc.subscribe(function(st){
+    if(st==='SUBSCRIBED'){
+      lastPresenceTrackAt=0;
+      syncMyPresence(true);
+    }
+  });
   chatPresCh=pc;
-  renderChatList();if(currentTab==='team')renderTeam();
+  renderChatList();
+  if(currentTab==='team')renderTeam();
+  if(currentTab==='home')renderHomeTab();
 }
 async function loadChatOverview(){
   const r=await sbClient.rpc('chat_overview');
@@ -1022,6 +1280,8 @@ async function loadChatOverview(){
 function updateChatBadges(){
   const n=chatItems.reduce((s,i)=>s+(i.unread||0),0),b=$('chat-badge');
   if(b){b.textContent=n>99?'99+':String(n);b.classList.toggle('hidden',!n);}
+  const hmChat=$('hm-chat-badge');
+  if(hmChat){hmChat.textContent=n>99?'99+':String(n);hmChat.classList.toggle('hidden',!n);}
   document.title=(n?'('+n+') ':'')+BASE_TITLE;
 }
 function chatBeep(){
@@ -1119,7 +1379,11 @@ async function startChatWith(uid){
 function renderChatHead(){
   const it=chatItem(chatActive);if(!it||!$('chat-head-name'))return;
   $('chat-head-avatar').innerHTML=chatAvatar(it,38);$('chat-head-name').textContent=chatName(it);
-  if(it.ch_kind==='dm'){const p=profileById(it.other_user);$('chat-head-sub').textContent=onlineIds.includes(it.other_user)?'متصل الآن':((p&&p.job_title)||'غير متصل');}
+  if(it.ch_kind==='dm'){
+    const p=profileById(it.other_user);
+    const st=p?getEmpLiveStatus(p):null;
+    $('chat-head-sub').textContent=st?st.label+' · '+st.sub:((p&&p.job_title)||'غير متصل');
+  }
   else $('chat-head-sub').textContent=onlineIds.length?onlineIds.length+' متصل الآن':'قناة الشركة العامة';
   paintMuteBtn();
 }
@@ -1228,10 +1492,10 @@ function onChatDelete(old){
 async function onChatInsert(m){
   if(!m||!m.channel_id||!currentUser)return;
   const cached=chatMsgs[m.channel_id];
-  if(cached&&cached.some(x=>x.id===m.id))return;   // وصلت قبل كده (رسالتي أنا أو حدث مكرر)
+  if(cached&&cached.some(x=>x.id===m.id))return;
   const mine=m.sender_id===currentUser.id;
   let it=chatItem(m.channel_id),fresh=false;
-  if(!it){await loadChatOverview();it=chatItem(m.channel_id);fresh=true;if(!it)return;}   // محادثة جديدة: العدّاد جاي من السيرفر
+  if(!it){await loadChatOverview();it=chatItem(m.channel_id);fresh=true;if(!it)return;}
   addChatMessage(m);touchChatItem(m);
   const active=chatActive===m.channel_id;
   if(active)renderChatThread(mine);
@@ -1250,13 +1514,186 @@ async function markChatRead(cid){
   try{await sbClient.rpc('mark_channel_read',{cid:cid});}catch(e){console.warn('mark read',e);}
 }
 
+/* ---------- الشاشة الرئيسية (Home Hub) ---------- */
+function renderHomeTab(){
+  const box=$('tab-home');if(!box)return;
+  const eh=escapeHtml;
+  const mgr=canEditTx();
+  const meName=(myProfile&&myProfile.full_name)||((currentUser&&currentUser.email)||'').split('@')[0]||'مرحباً بك';
+  const todayStr=new Intl.DateTimeFormat('ar-EG',{weekday:'long',year:'numeric',month:'long',day:'numeric'}).format(new Date());
+  const tk=new Date().toLocaleDateString('en-CA');
+  const todayOrders=groupedOrders.filter(o=>dayKey(o.received_at||o.created_at)===tk);
+  const todaySales=todayOrders.reduce((s,o)=>s+(Number(o.grand_total)||0),0);
+  const openLines=allRequestLines.filter(l=>(l.status||'In Progress')!=='Delivered').length;
+  const lateCnt=typeof window.getMyDayLateCount==='function'?window.getMyDayLateCount():0;
+  const unreadChat=chatItems.reduce((s,i)=>s+(i.unread||0),0);
+  const cashTodayCnt=allRequestLines.filter(l=>(l.payment_method||'').trim()==='كاش'&&dayKey(lineDate(l))===tk).length;
+
+  // حالة تواجد ونشاط الموظفين
+  const staffList=profiles.filter(p=>p.id&&p.role!=='partner');
+  const empCards=staffList.map(p=>({p:p,st:getEmpLiveStatus(p)}));
+  empCards.sort((a,b)=>{
+    const rank={working:0,idle:1,offline:2};
+    return (rank[a.st.statusKey]-rank[b.st.statusKey])||(b.st.todayTx-a.st.todayTx);
+  });
+  const wCount=empCards.filter(x=>x.st.statusKey==='working').length;
+  const iCount=empCards.filter(x=>x.st.statusKey==='idle').length;
+  const oCount=empCards.filter(x=>x.st.statusKey==='offline').length;
+
+  const navCard=(title,sub,icon,bgGrad,actionJs,badgeHtml)=>
+    '<button type="button" onclick="'+actionJs+'" class="hm-nav-card lift group">'+
+      '<span class="hm-nav-icon" style="background:'+bgGrad+'"><i class="fa-solid '+icon+'"></i></span>'+
+      '<div class="min-w-0 flex-1">'+
+        '<div class="flex items-center justify-between gap-2">'+
+          '<span class="font-bold text-sm sm:text-base text-ink dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition">'+eh(title)+'</span>'+
+          (badgeHtml||'<i class="fa-solid fa-chevron-left text-[11px] text-slate-300 group-hover:text-brand-500 transition"></i>')+
+        '</div>'+
+        '<p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">'+eh(sub)+'</p>'+
+      '</div>'+
+    '</button>';
+
+  const bPill=(txt,cls)=>txt?'<span class="rounded-full px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap '+cls+'">'+txt+'</span>':'';
+
+  let h=
+    /* 1. البانر الترحيبي وملخص اليوم السريع */
+    '<div class="hm-hero">'+
+      '<div class="flex flex-wrap items-center justify-between gap-4">'+
+        '<div>'+
+          '<div class="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-teal-100 backdrop-blur-xs"><i class="fa-solid fa-sparkles"></i><span>الشاشة الرئيسية · بوابة تساهيل الذكية</span></div>'+
+          '<h1 class="text-xl sm:text-2xl font-bold mt-2">أهلاً بك، '+eh(meName)+' 👋</h1>'+
+          '<p class="text-xs text-teal-100/85 mt-1">'+eh(todayStr)+' — اختر أي قسم بالأسفل للدخول السريع والمباشر</p>'+
+        '</div>'+
+        '<div class="flex flex-wrap items-center gap-2">'+
+          '<button type="button" onclick="switchTab(\'new\')" class="rounded-xl bg-white text-slate-900 hover:bg-teal-50 px-4 py-2.5 text-xs sm:text-sm font-bold shadow-md flex items-center gap-2"><i class="fa-solid fa-plus text-brand-600"></i><span>طلب جديد</span></button>'+
+          '<button type="button" onclick="if(window.qkOpen)qkOpen();else switchTab(\'search\')" class="rounded-xl bg-white/15 hover:bg-white/25 text-white px-4 py-2.5 text-xs sm:text-sm font-bold backdrop-blur-xs flex items-center gap-2"><i class="fa-solid fa-magnifying-glass"></i><span>بحث سريع</span></button>'+
+        '</div>'+
+      '</div>'+
+      '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">'+
+        '<button type="button" onclick="switchTab(\'new\')" class="rounded-xl bg-white/12 hover:bg-white/20 p-3.5 text-right backdrop-blur-xs transition">'+
+          '<div class="text-[11px] text-teal-100">مبيعات اليوم</div>'+
+          '<div class="text-lg sm:text-xl font-bold mt-1 whitespace-nowrap">'+eh(formatCurrency(todaySales))+'</div>'+
+        '</button>'+
+        '<button type="button" onclick="openMyDayTab(\'today\')" class="rounded-xl bg-white/12 hover:bg-white/20 p-3.5 text-right backdrop-blur-xs transition">'+
+          '<div class="text-[11px] text-teal-100">معاملات اليوم</div>'+
+          '<div class="text-lg sm:text-xl font-bold mt-1 whitespace-nowrap">'+todayOrders.length+' معاملة</div>'+
+        '</button>'+
+        '<button type="button" onclick="openMyDayTab(\'open\')" class="rounded-xl bg-white/12 hover:bg-white/20 p-3.5 text-right backdrop-blur-xs transition">'+
+          '<div class="text-[11px] text-teal-100">بنود مفتوحة قيد التنفيذ</div>'+
+          '<div class="text-lg sm:text-xl font-bold mt-1 whitespace-nowrap">'+openLines+' بند</div>'+
+        '</button>'+
+        '<button type="button" onclick="openMyDayTab(\'late\')" class="rounded-xl '+(lateCnt>0?'bg-rose-600/90 hover:bg-rose-600 ring-2 ring-rose-300':'bg-white/12 hover:bg-white/20')+' p-3.5 text-right backdrop-blur-xs transition">'+
+          '<div class="text-[11px] text-white/90 flex items-center justify-between"><span>المتأخرات</span><i class="fa-solid fa-triangle-exclamation"></i></div>'+
+          '<div class="text-lg sm:text-xl font-bold mt-1 whitespace-nowrap">'+(lateCnt>0?lateCnt+' بند متأخر':'0 متأخرات ✓')+'</div>'+
+        '</button>'+
+      '</div>'+
+    '</div>'+
+
+    /* 2. الأقسام اليومية الأساسية (بوابة الدخول السريع) */
+    '<div class="space-y-3">'+
+      '<div class="flex items-center justify-between px-1">'+
+        '<h2 class="font-bold text-sm sm:text-base text-ink dark:text-white flex items-center gap-2"><i class="fa-solid fa-compass text-brand-600"></i><span>الأقسام اليومية الأساسية</span></h2>'+
+        '<span class="text-xs text-slate-400">اضغط على أي كارت للانتقال الفوري</span>'+
+      '</div>'+
+      '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">'+
+        navCard('طلب جديد وآخر المعاملات','تسجيل معاملة جديدة للعميل ومتابعة أحدث المعاملات المسجلة','fa-plus','linear-gradient(135deg,#0d9488,#115e59)',"switchTab('new')",bPill(todayOrders.length+' اليوم','bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300'))+
+        navCard('شغلي النهاردة','متابعة معاملاتك اليوم، البنود المفتوحة، وتحقيق تارجت الشهر','fa-sun','linear-gradient(135deg,#0284c7,#1d4ed8)',"openMyDayTab('all')",bPill('شغلي','bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300'))+
+        navCard('المتأخرات','عرض ومتابعة الطلبات التي تجاوزت مدة التنفيذ المحددة فوراً','fa-triangle-exclamation','linear-gradient(135deg,#e11d48,#be123c)',"openMyDayTab('late')",lateCnt>0?bPill(lateCnt+' متأخر','bg-rose-600 text-white'):bPill('لا يوجد متأخر','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
+        navCard('الكوميشن والتارجت','حساب الكوميشن الشهري وتارجت المبلغ وعدد الخدمات والطباعة','fa-bullseye','linear-gradient(135deg,#059669,#047857)',"switchTab('comm')",bPill('الشهر الحالي','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
+        navCard('المنفذين','متابعة بنود التنفيذ، تصفية بالمنفذ والتاريخ، وطباعة وتصدير PDF/Excel','fa-user-gear','linear-gradient(135deg,#4f46e5,#3730a3)',"switchTab('exec')",bPill(allRequestLines.length+' بند','bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'))+
+        navCard('الكاش','متابعة تحصيلات الكاش اليومية وتقفيل الكاش وطباعة التقارير','fa-wallet','linear-gradient(135deg,#d97706,#b45309)',"switchTab('cash')",bPill(cashTodayCnt+' اليوم','bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300'))+
+        navCard('المناديب','كروت المناديب ومشاوير الاستلام والتسليم وعهدة الكاش والطباعة','fa-motorcycle','linear-gradient(135deg,#0f766e,#134e4a)',"switchTab('couriers')",bPill('المشاوير','bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300'))+
+        navCard('الإيصالات','إصدار وطباعة إيصال استلام وتسليم رسمي A5 أو إيصال حراري 80mm','fa-receipt','linear-gradient(135deg,#7c3aed,#5b21b6)',"switchTab('receipt')",'')+
+        navCard('البحث الشامل','بحث فوري باسم العميل أو رقم التليفون أو رقم المعاملة أو الخدمة','fa-magnifying-glass','linear-gradient(135deg,#2563eb,#1e40af)',"switchTab('search')",'')+
+        navCard('الشات الداخلي','مراسلة الزملاء وقناة الشركة العامة مع إشعارات القراءة والمنشن','fa-comments','linear-gradient(135deg,#0891b2,#155e75)',"switchTab('chat')",unreadChat>0?bPill(unreadChat+' رسالة جديدة','bg-rose-600 text-white'):bPill('متصل','bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300'))+
+        navCard('الداش بورد والتقارير','لوحة الإحصائيات الشاملة والرسوم البيانية وتحليل الأداء','fa-chart-pie','linear-gradient(135deg,#0b1b33,#1e293b)',"switchTab('dash')",'')+
+        navCard('المهام والتنبيهات','متابعة المهام اليومية المسندة والمواعيد النهائية','fa-list-check','linear-gradient(135deg,#0d9488,#0f766e)',"switchTab('tasks')",'')+
+        navCard('فريق العمل','أرقام التواصل المباشر وواتساب وحالة اتصال ونشاط الزملاء','fa-user-group','linear-gradient(135deg,#6366f1,#4338ca)',"switchTab('team')",bPill(wCount+' شغال الآن','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
+        navCard('الموارد البشرية (HR)','تسجيل بصمة الحضور والانصراف وجدول الشيفتات والإجازات والرواتب','fa-fingerprint','linear-gradient(135deg,#db2777,#9d174d)',"switchTab('hr')",'')+
+        navCard('ملاحظاتي الخاصة','تدوين وحفظ الملاحظات الشخصية المحمية بكلمة سر','fa-note-sticky','linear-gradient(135deg,#eab308,#ca8a04)',"switchTab('notes')",'')+
+        (mgr?navCard('أداء الموظفين (للمدير)','متابعة أول وآخر عملية باليوم، التعديلات، الفجوات الزمنية، وسرعة الإنجاز','fa-gauge-high','linear-gradient(135deg,#dc2626,#991b1b)',"switchTab('perf')",bPill('للمدير','bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300')):'')+
+        (mgr&&$('tab-partners-btn')?navCard('المنفذون الخارجيون','إدارة حسابات وتسويات المنفذين الخارجيين','fa-handshake','linear-gradient(135deg,#475569,#1e293b)',"switchTab('partners')",bPill('للمدير','bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300')):'')+
+      '</div>'+
+    '</div>'+
+
+    /* 3. لوحة حالة تواجد ونشاط الموظفين المباشرة (مين فاتح وشغال ومين خامل ومين قافل) */
+    '<div class="card p-5 space-y-4">'+
+      '<div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3.5">'+
+        '<div class="flex items-center gap-2.5">'+
+          '<span class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white"><i class="fa-solid fa-signal"></i></span>'+
+          '<div>'+
+            '<h3 class="font-bold text-sm sm:text-base text-ink dark:text-white">حالة تواجد ونشاط الموظفين الآن (مباشر)</h3>'+
+            '<p class="text-[11px] text-slate-500">تحديث لحظي خفيف يوضح الموظف الفاتح والشغال فعلياً أو الخامل أو القافل بدون أي استهلاك لقاعدة البيانات</p>'+
+          '</div>'+
+        '</div>'+
+        '<div class="flex flex-wrap items-center gap-2 text-xs font-bold">'+
+          '<span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-3 py-1 text-emerald-700 dark:text-emerald-300"><span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>شغال الآن: '+wCount+'</span>'+
+          '<span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-3 py-1 text-amber-700 dark:text-amber-300"><span class="h-2 w-2 rounded-full bg-amber-500"></span>فاتح (خامل): '+iCount+'</span>'+
+          '<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1 text-slate-600 dark:text-slate-400"><span class="h-2 w-2 rounded-full bg-slate-400"></span>قافل السيستم: '+oCount+'</span>'+
+        '</div>'+
+      '</div>'+
+      (empCards.length
+        ?'<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">'+empCards.map(function(item){
+            const p=item.p,st=item.st,isMe=currentUser&&String(p.id)===String(currentUser.id);
+            return '<div class="hm-emp-card">'+
+              '<div class="flex items-center gap-3 min-w-0">'+
+                '<span class="relative shrink-0">'+avatarHtml(p,42)+'<span class="absolute bottom-0 end-0 h-3 w-3 rounded-full border-2 border-white dark:border-slate-900 '+st.dotCls+'"></span></span>'+
+                '<div class="min-w-0">'+
+                  '<div class="font-bold text-xs sm:text-sm text-ink dark:text-white truncate">'+eh(p.full_name||'موظف')+(isMe?' <span class="text-[10px] text-brand-600 font-bold">(أنت)</span>':'')+'</div>'+
+                  '<div class="text-[11px] text-slate-500 truncate mt-0.5">'+eh(st.sub)+'</div>'+
+                '</div>'+
+              '</div>'+
+              '<div class="text-left shrink-0 flex flex-col items-end gap-1">'+
+                '<span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap '+st.badgeCls+'"><span class="h-1.5 w-1.5 rounded-full '+st.dotCls+'"></span><span>'+eh(st.label)+'</span></span>'+
+                '<span class="text-[11px] font-semibold text-slate-500">اليوم: <b class="text-ink dark:text-white">'+st.todayTx+' معاملة</b></span>'+
+              '</div>'+
+            '</div>';
+          }).join('')+'</div>'
+        :'<div class="text-center py-6 text-xs text-slate-400">جارٍ تحميل بيانات الفريق...</div>')+
+    '</div>';
+
+  box.innerHTML=h;
+}
+window.renderHomeTab=renderHomeTab;
+
+/* ---------- شريط عنوان التاب الحالي مع زر العودة للشاشة الرئيسية ---------- */
+window.__phase15=true;
+function paintCurrentTabBanner(id){
+  const main=document.querySelector('main');if(!main)return;
+  let t=$('cur-tab-title');
+  if(!t){
+    main.insertAdjacentHTML('afterbegin',
+      '<div id="cur-tab-title" class="hidden text-ink dark:text-white">'+
+        '<div class="flex items-center gap-2.5"><span class="flex h-8 w-8 items-center justify-center rounded-xl bg-ink text-white dark:bg-brand-600"><i id="cur-tab-ic"></i></span><span id="cur-tab-nm" class="font-bold text-sm sm:text-base"></span></div>'+
+        '<button type="button" onclick="switchTab(\'home\')" class="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 hover:bg-brand-50 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-brand-700 dark:text-slate-200 transition"><i class="fa-solid fa-house text-brand-600 dark:text-brand-400"></i><span>الشاشة الرئيسية</span></button>'+
+      '</div>');
+    t=$('cur-tab-title');
+  }
+  if(!t)return;
+  if(id==='home'){t.classList.add('hidden');return;}
+  const b=$('tab-'+id+'-btn');
+  const ic=b&&b.querySelector('i');
+  const nm=TAB_LABELS_AR[id]||(b&&b.querySelector('span:not([class*="rounded-full"])')&&b.querySelector('span:not([class*="rounded-full"])').textContent)||'';
+  t.classList.remove('hidden');
+  if($('cur-tab-ic'))$('cur-tab-ic').className=ic?ic.className:'fa-solid fa-layer-group';
+  if($('cur-tab-nm'))$('cur-tab-nm').textContent=nm;
+}
+
 /* ---------- تنقل وثيم ---------- */
 function switchTab(id){
   currentTab=id;
-  ['new','exec','cash','search','receipt','dash','comm','team','chat','tasks','notes'].forEach(t=>{
-    $('tab-'+t).classList.toggle('hidden',t!==id);
-    $('tab-'+t+'-btn').className='tab-btn '+(t===id?'bg-ink text-white dark:bg-brand-600 shadow-sm':'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800');
+  const baseTabs=['home','new','exec','cash','search','receipt','dash','comm','team','chat','tasks','notes'];
+  baseTabs.forEach(t=>{
+    const pane=$('tab-'+t);if(pane)pane.classList.toggle('hidden',t!==id);
+    const btn=$('tab-'+t+'-btn');
+    if(btn)btn.className='tab-btn '+(t===id?'bg-ink text-white dark:bg-brand-600 shadow-sm':'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800');
   });
+  document.querySelectorAll('[data-tab-target]').forEach(el=>{
+    const on=el.getAttribute('data-tab-target')===id;
+    el.className='tab-btn '+(on?'bg-ink text-white dark:bg-brand-600 shadow-sm':'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800');
+  });
+  try{paintCurrentTabBanner(id);}catch(e){}
+  syncMyPresence(false);
+  if(id==='home')renderHomeTab();
   if(id==='dash')renderDashboardMetrics();
   if(id==='exec')filterExecSheet();
   if(id==='cash')filterCashSheet();
@@ -1282,4 +1719,4 @@ function tafqeetArabic(num){
   return 'فقط '+res+' جنيه مصري'+(piasters?' و'+piasters+' قرشاً':'')+' لا غير';
 }
 
-window.addEventListener('DOMContentLoaded',()=>{initTheme();styleDashButtons();switchTab('new');addServiceLine();checkSession();});
+window.addEventListener('DOMContentLoaded',()=>{initTheme();styleDashButtons();switchTab('home');addServiceLine();checkSession();});

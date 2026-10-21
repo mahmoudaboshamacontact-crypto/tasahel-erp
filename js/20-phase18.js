@@ -14,7 +14,7 @@
      --------------------------------------------------------------- */
   document.addEventListener('pointerdown', function (e) {
     if (reduce || !e.target || !e.target.closest) return;
-    const c = e.target.closest('#tab-new .card, #tab-dash .card, #tab-dash .dx-card, #dsh-kpis > div');
+    const c = e.target.closest('#app .card, #app .mobile-card, #app .dx-card, #app .hm-nav-card, #app .hm-emp-card, #dsh-kpis > div, #comm-totals > div, #today-strip > div');
     if (!c || c.classList.contains('p18-ring')) return;
     const fix = getComputedStyle(c).position === 'static';
     if (fix) c.style.position = 'relative';
