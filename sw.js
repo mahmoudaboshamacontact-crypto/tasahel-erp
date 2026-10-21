@@ -2,7 +2,7 @@
 // - ملفات التطبيق: من النت الأول (عشان التحديثات توصل)، ولو النت اتأخر أكتر من 4 ثواني يفتح من النسخة المحفوظة.
 // - مكتبات الـ CDN (supabase / chart.js / خطوط / أيقونات): من الكاش فوراً وتتحدث في الخلفية.
 // - Supabase وأي API تاني: مش بنكاشه.
-const CACHE = 'tasahel-shell-v20261030';
+const CACHE = 'tasahel-shell-v20261034';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'css/style.css?v=20261029', 'css/phase17.css?v=20261029', 'css/phase18.css?v=20261029', 'css/phase19.css?v=20261030', 'css/tailwind.css?v=20261029'];
 const CDN = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
