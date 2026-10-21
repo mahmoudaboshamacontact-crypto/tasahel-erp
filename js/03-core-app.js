@@ -13,6 +13,7 @@ function formatCurrency(n){return new Intl.NumberFormat('ar-EG',{maximumFraction
 function fmtNum(n){return Number(n||0).toLocaleString('en-US',{maximumFractionDigits:2});}
 function formatDateTime(s){if(!s)return '—';const d=new Date(s);return isNaN(d)?s:new Intl.DateTimeFormat('ar-EG',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(d);}
 function formatDateOnly(s){if(!s)return '—';const d=new Date(String(s).length===10?s+'T00:00':s);return isNaN(d)?s:new Intl.DateTimeFormat('ar-EG',{year:'numeric',month:'short',day:'numeric'}).format(d);}
+function formatDateSplit(s){if(!s)return '<span class="text-slate-400">—</span>';const d=new Date(s);if(isNaN(d))return escapeHtml(s);const dt=new Intl.DateTimeFormat('ar-EG',{year:'numeric',month:'short',day:'numeric'}).format(d);const tm=new Intl.DateTimeFormat('ar-EG',{hour:'2-digit',minute:'2-digit'}).format(d);return '<div class="rc-date-box"><span class="font-semibold text-slate-700 dark:text-slate-200 text-xs">'+escapeHtml(dt)+'</span><span class="text-[11px] text-slate-400">'+escapeHtml(tm)+'</span></div>';}
 function dayKey(d){return d?new Date(d).toLocaleDateString('en-CA'):'';}
 function lineDate(l){return l.received_at||l.created_at;}
 function statusLabel(s){return STATUS_AR[s]||s||'قيد التنفيذ';}
@@ -205,25 +206,31 @@ function renderRecentRequests(){
   }
   const sts=o=>[...new Set(o.lines.map(l=>l.status))].slice(0,2).map(badge).join(' ');
   $('recent-table-body').innerHTML=shown.map(function(o){
-    const svc=o.lines.map(l=>escapeHtml(l.service)+' (×'+l.qty+')').join(' + ');
+    const svcHtml='<div class="rc-svc-list">'+o.lines.map(l=>
+      '<div class="rc-svc-pill">'+
+        '<span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span>'+
+        '<span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span>'+
+      '</div>'
+    ).join('')+'</div>';
     const wa=waLink(o.phone,'أهلاً '+o.client_name+'، بخصوص معاملتك رقم '+o.transaction_id+' — تساهيل');
-    return '<tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">'+
-    '<td class="px-5 py-3 font-semibold text-ink dark:text-white"><button '+ac(o.client_name)+' class="hover:text-brand-600 hover:underline">'+escapeHtml(o.client_name)+'</button></td>'+
-    '<td class="px-3 py-3 font-mono text-xs text-slate-600 dark:text-slate-300" dir="ltr">'+escapeHtml(o.phone||'—')+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="text-emerald-600 ms-1.5"><i class="fa-brands fa-whatsapp"></i></a>':'')+'</td>'+
-    '<td class="px-3 py-3 font-mono text-xs text-brand-600 dark:text-brand-400 font-semibold" dir="ltr"><button '+at(o.transaction_id)+' class="hover:underline">'+escapeHtml(o.transaction_id)+'</button></td>'+
-    '<td class="px-3 py-3 text-xs max-w-[220px] truncate" title="'+escapeHtml(svc.replace(/&[^;]+;/g,''))+'">'+svc+'</td>'+
-    '<td class="px-3 py-3 font-mono font-bold text-ink dark:text-white">'+formatCurrency(o.grand_total)+'</td>'+
-    '<td class="px-3 py-3 text-xs">'+empCell(o.employee)+'</td><td class="px-3 py-3">'+sts(o)+'</td>'+
-    '<td class="px-3 py-3 text-xs text-slate-500 font-mono">'+formatDateTime(o.received_at||o.created_at)+'</td>'+
-    '<td class="px-3 py-3 text-center"><div class="flex items-center justify-center gap-1"><button '+at(o.transaction_id)+' class="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" title="التفاصيل"><i class="fa-solid fa-eye text-xs"></i></button>'+
-    '<button data-tx="'+escapeHtml(o.transaction_id)+'" onclick="printTxReceipt(this.dataset.tx)" class="p-1.5 rounded-lg text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-950/40" title="طباعة إيصال"><i class="fa-solid fa-print text-xs"></i></button></div></td></tr>';
+    return '<tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 align-middle">'+
+    '<td class="px-4 py-3.5 font-bold text-ink dark:text-white min-w-[175px] max-w-[250px]"><button '+ac(o.client_name)+' class="text-right text-start leading-snug hover:text-brand-600 hover:underline block w-full">'+escapeHtml(o.client_name)+'</button></td>'+
+    '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr"><div class="rc-phone-pill"><span>'+escapeHtml(o.phone||'—')+'</span>'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="text-emerald-600 hover:text-emerald-700 text-sm leading-none" title="مراسلة واتساب"><i class="fa-brands fa-whatsapp"></i></a>':'')+'</div></td>'+
+    '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr"><button '+at(o.transaction_id)+' class="rc-tx-pill">'+escapeHtml(o.transaction_id)+'</button></td>'+
+    '<td class="px-3 py-3.5">'+svcHtml+'</td>'+
+    '<td class="px-3 py-3.5 font-bold text-ink dark:text-white whitespace-nowrap text-sm">'+formatCurrency(o.grand_total)+'</td>'+
+    '<td class="px-3 py-3.5 text-xs whitespace-nowrap font-medium">'+empCell(o.employee)+'</td>'+
+    '<td class="px-3 py-3.5 whitespace-nowrap"><div class="flex flex-col items-start gap-1">'+sts(o)+'</div></td>'+
+    '<td class="px-3 py-3.5 whitespace-nowrap">'+formatDateSplit(o.received_at||o.created_at)+'</td>'+
+    '<td class="px-3 py-3.5 text-center whitespace-nowrap"><div class="inline-flex items-center justify-center gap-1.5"><button '+at(o.transaction_id)+' class="p-2 rounded-lg bg-slate-100/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 transition" title="التفاصيل"><i class="fa-solid fa-eye text-xs"></i></button>'+
+    '<button data-tx="'+escapeHtml(o.transaction_id)+'" onclick="printTxReceipt(this.dataset.tx)" class="p-2 rounded-lg bg-brand-50/80 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 hover:bg-brand-100 transition" title="طباعة إيصال"><i class="fa-solid fa-print text-xs"></i></button></div></td></tr>';
   }).join('');
   $('recent-cards-container').innerHTML=shown.map(function(o){
-    const chips=o.lines.slice(0,3).map(l=>'<span class="rounded-lg bg-slate-100 dark:bg-slate-700 px-2 py-1 text-[11px]">'+escapeHtml(l.service)+' ×'+l.qty+'</span>').join('')+(o.lines.length>3?'<span class="rounded-lg bg-slate-100 dark:bg-slate-700 px-2 py-1 text-[11px]">+'+(o.lines.length-3)+'</span>':'');
+    const chips=o.lines.map(l=>'<div class="rc-svc-pill w-full"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div>').join('');
     return '<button type="button" '+at(o.transaction_id)+' class="card lift w-full p-4 text-start block">'+
-    '<div class="flex items-start justify-between gap-2"><div class="min-w-0"><div class="truncate font-bold text-ink dark:text-white">'+escapeHtml(o.client_name)+'</div><div class="font-mono text-[11px] text-slate-400" dir="ltr">'+escapeHtml(o.transaction_id)+'</div></div><div class="flex shrink-0 flex-wrap justify-end gap-1">'+sts(o)+'</div></div>'+
-    '<div class="mt-3 flex flex-wrap gap-1.5">'+chips+'</div>'+
-    '<div class="mt-3 flex items-end justify-between gap-2 border-t border-slate-100 dark:border-slate-700 pt-3"><div class="min-w-0 text-[11px] text-slate-500"><div class="truncate">'+escapeHtml(o.employee||'—')+(o.receiver?' ← '+escapeHtml(o.receiver):'')+'</div><div>'+formatDateOnly(o.received_at||o.created_at)+'</div></div><div class="shrink-0 font-bold text-brand-600 dark:text-brand-400">'+formatCurrency(o.grand_total)+'</div></div></button>';
+    '<div class="flex items-start justify-between gap-2"><div class="min-w-0"><div class="font-bold text-ink dark:text-white leading-snug">'+escapeHtml(o.client_name)+'</div><div class="mt-1 flex items-center gap-2 text-[11px] text-slate-400" dir="ltr"><span class="rc-tx-pill !py-0.5 !px-2 !text-[11px]">'+escapeHtml(o.transaction_id)+'</span>'+(o.phone?'<span>'+escapeHtml(o.phone)+'</span>':'')+'</div></div><div class="flex shrink-0 flex-wrap justify-end gap-1">'+sts(o)+'</div></div>'+
+    '<div class="mt-3 flex flex-col gap-1.5">'+chips+'</div>'+
+    '<div class="mt-3 flex items-end justify-between gap-2 border-t border-slate-100 dark:border-slate-700 pt-3"><div class="min-w-0 text-[11px] text-slate-500"><div class="truncate font-medium">'+escapeHtml(o.employee||'—')+(o.receiver?' ← '+escapeHtml(o.receiver):'')+'</div><div>'+formatDateTime(o.received_at||o.created_at)+'</div></div><div class="shrink-0 font-bold text-sm text-brand-600 dark:text-brand-400 whitespace-nowrap">'+formatCurrency(o.grand_total)+'</div></div></button>';
   }).join('');
 }
 
