@@ -646,22 +646,48 @@ function updateExecutorsFilterOptions(){
   $('f-exec').innerHTML='<option value="all">كل المنفذين</option>'+list.map(e=>'<option value="'+escapeHtml(e)+'">'+escapeHtml(e)+'</option>').join('');
   $('f-exec').value=list.includes(cur)?cur:'all';
 }
+const EXEC_PAGE_SIZE=50;
+let execSheetLimit=EXEC_PAGE_SIZE,lastExecFilterSig='';
 function getFilteredExecLines(){
-  const ex=$('f-exec').value||'all',dt=$('f-date').value;
-  return allRequestLines.filter(l=>!((ex!=='all'&&(l.executor||'').trim()!==ex)||(dt&&String(l.exec_start_date||'').slice(0,10)!==dt)));
+  const ex=$('f-exec')?$('f-exec').value||'all':'all',dt=$('f-date')?$('f-date').value:'';
+  const q=($('f-exec-q')?$('f-exec-q').value:'').trim().toLowerCase();
+  return allRequestLines.filter(l=>{
+    if(ex!=='all'&&(l.executor||'').trim()!==ex)return false;
+    if(dt&&String(l.exec_start_date||'').slice(0,10)!==dt)return false;
+    if(q){
+      const hit=(l.client_name||'').toLowerCase().includes(q)||(l.phone||'').includes(q)||String(l.transaction_id||'').toLowerCase().includes(q)||(l.service||'').toLowerCase().includes(q)||(l.executor||'').toLowerCase().includes(q);
+      if(!hit)return false;
+    }
+    return true;
+  });
 }
-function filterExecSheet(){
-  const ex=$('f-exec').value||'all',dt=$('f-date').value,f=getFilteredExecLines();
+function loadMoreExecLines(){
+  execSheetLimit+=EXEC_PAGE_SIZE;
+  filterExecSheet(true);
+}
+window.loadMoreExecLines=loadMoreExecLines;
+function filterExecSheet(keepLimit){
+  const ex=$('f-exec')?$('f-exec').value||'all':'all',dt=$('f-date')?$('f-date').value:'';
+  const q=($('f-exec-q')?$('f-exec-q').value:'').trim().toLowerCase();
+  const sig=ex+'|'+dt+'|'+q;
+  if(!keepLimit&&sig!==lastExecFilterSig){
+    execSheetLimit=EXEC_PAGE_SIZE;
+    lastExecFilterSig=sig;
+  }
+  const f=getFilteredExecLines();
   const cost=f.reduce((s,l)=>s+execCostOf(l),0);
-  $('x-count').textContent=f.length;$('x-total').textContent=formatCurrency(cost);$('x-label').textContent=(ex==='all'?'كل المنفذين':ex)+(dt?' ('+formatDateOnly(dt)+')':'');
-  
-  // 1. تعبئة الجدول (للكمبيوتر) بنفس التصميم المريح لآخر المعاملات
-  $('sheet-body').innerHTML=f.map(function(l){
+  const shown=f.slice(0,execSheetLimit);
+  $('x-count').textContent=f.length+(f.length>shown.length?' (معروض أحدث '+shown.length+')':'');
+  $('x-total').textContent=formatCurrency(cost);
+  $('x-label').textContent=(ex==='all'?'كل المنفذين':ex)+(dt?' ('+formatDateOnly(dt)+')':'');
+
+  // 1. تعبئة الجدول (للكمبيوتر) - يعرض أحدث 50 معاملة فقط لسرعة الفتح الفورية
+  $('sheet-body').innerHTML=shown.map(function(l){
     const st=l.status||'In Progress';
     const wa=waLink(l.phone,'أهلاً '+(l.client_name||'')+'، بخصوص معاملتك رقم '+(l.transaction_id||'')+' — تساهيل');
     const phHtml=l.phone?'<div class="rc-phone-pill"><span>'+escapeHtml(l.phone)+'</span>'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="text-emerald-600 hover:text-emerald-700 text-sm leading-none" title="مراسلة واتساب"><i class="fa-brands fa-whatsapp"></i></a>':'')+'</div>':'<span class="text-slate-300">—</span>';
     const svcHtml='<div class="rc-svc-list"><div class="rc-svc-pill"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div></div>';
-    const execHtml=l.executor?'<span class="rc-exec-pill"><i class="fa-solid fa-user-gear text-[10px]"></i><span>'+escapeHtml(l.executor)+'</span></span>':'<span class="text-slate-300">—</span>';
+    const execHtml=l.executor?'<span class="rc-exec-pill"><i class="fa-solid fa-gear text-[10px]"></i><span>'+escapeHtml(l.executor)+'</span></span>':'<span class="text-slate-300">—</span>';
     const startDt=l.exec_start_date?formatDateOnly(l.exec_start_date):formatDateOnly(lineDate(l));
     return '<tr data-st17="'+escapeHtml(st)+'" class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 align-middle">'+
       '<td class="px-4 py-3.5 font-bold text-ink dark:text-white min-w-[175px] max-w-[240px]"><button '+ac(l.client_name)+' class="text-right text-start leading-snug hover:text-brand-600 hover:underline block w-full">'+escapeHtml(l.client_name)+'</button><div class="mt-1">'+badge(st)+'</div></td>'+
@@ -674,9 +700,9 @@ function filterExecSheet(){
       '<td class="px-3 py-3.5 whitespace-nowrap"><span class="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap"><i class="fa-regular fa-calendar text-[10px] text-slate-400"></i><span>'+escapeHtml(startDt)+'</span></span></td>'+
       '<td class="px-3 py-3.5 text-xs min-w-[150px] max-w-[250px] whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">'+(l.notes?'<div class="rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/60 px-2.5 py-1.5 text-amber-900 dark:text-amber-200">'+escapeHtml(l.notes)+'</div>':'<span class="text-slate-300">—</span>')+'</td></tr>';
   }).join('')||'<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400">لا توجد مهام مطابقة</td></tr>';
-  
-  // 2. تعبئة الكروت (للموبايل)
-  $('sheet-cards-container').innerHTML=f.map(function(l){
+
+  // 2. تعبئة الكروت (للموبايل) - أحدث 50 معاملة فقط
+  $('sheet-cards-container').innerHTML=shown.map(function(l){
     const st=l.status||'In Progress';
     const wa=waLink(l.phone,'أهلاً '+(l.client_name||'')+'، بخصوص معاملتك رقم '+(l.transaction_id||'')+' — تساهيل');
     return '<div data-st17="'+escapeHtml(st)+'" class="card lift p-4 space-y-2.5 text-xs">'+
@@ -701,8 +727,35 @@ function filterExecSheet(){
       '</div>'+
     '</div>';
   }).join('')||'<div class="card p-6 text-center text-slate-400 text-xs">لا توجد مهام مطابقة</div>';
+
+  // 3. شريط تحميل المزيد أسفل شيت المنفذين
+  let moreBar=$('exec-more-bar');
+  if(!moreBar&&$('sheet-cards-container')){
+    $('sheet-cards-container').insertAdjacentHTML('afterend','<div id="exec-more-bar" class="card p-4 text-center"></div>');
+    moreBar=$('exec-more-bar');
+  }
+  if(moreBar){
+    const rem=f.length-shown.length;
+    if(rem>0){
+      moreBar.className='card p-4 flex flex-wrap items-center justify-between gap-3';
+      moreBar.innerHTML='<span class="text-xs font-semibold text-slate-500">يتم عرض أحدث <b class="text-ink dark:text-white">'+shown.length+'</b> معاملة تنفيذ من إجمالي <b class="text-ink dark:text-white">'+f.length+'</b> لسرعة التصفح</span>'+
+        '<button type="button" onclick="loadMoreExecLines()" class="rounded-xl bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 text-xs font-bold shadow-sm transition flex items-center gap-1.5 mx-auto sm:mx-0"><i class="fa-solid fa-angles-down"></i><span>تحميل المزيد (عرض '+Math.min(EXEC_PAGE_SIZE,rem)+' كمان — متبقي '+rem+')</span></button>';
+    }else if(f.length>0){
+      moreBar.className='card p-3 text-center text-xs text-slate-400';
+      moreBar.innerHTML='تم عرض كل المعاملات المطابقة ('+f.length+' بند تنفيذ)';
+    }else{
+      moreBar.className='hidden';
+      moreBar.innerHTML='';
+    }
+  }
 }
-function clearExecFilters(){$('f-exec').value='all';$('f-date').value='';filterExecSheet();}
+function clearExecFilters(){
+  if($('f-exec'))$('f-exec').value='all';
+  if($('f-date'))$('f-date').value='';
+  if($('f-exec-q'))$('f-exec-q').value='';
+  execSheetLimit=EXEC_PAGE_SIZE;
+  filterExecSheet();
+}
 function printExecSheet(){
   const ex=$('f-exec').value||'all',dt=$('f-date').value,f=getFilteredExecLines(),cost=f.reduce((s,l)=>s+execCostOf(l),0);
   $('print-content').innerHTML='<div class="receipt-box" style="font-size:12px"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b1b33;padding-bottom:8px;margin-bottom:10px"><div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">'+logoImg(38,8)+'<div><div style="font-size:15px;font-weight:bold">قسم الخدمات الحكومية</div><div style="font-size:11px">متابعة المنفذين</div></div></div><div style="font-size:11px"><div>المنفذ: <b>'+escapeHtml(ex==='all'?'كل المنفذين':ex)+'</b></div><div>التاريخ: '+escapeHtml(dt||'كل التواريخ')+'</div></div></div><div style="background:#f1f5f9;border:1px solid #ccc;padding:8px;margin-bottom:10px">إجمالي المهام: <b>'+f.length+'</b> &nbsp;|&nbsp; إجمالي التكلفة: <b>'+formatCurrency(cost)+'</b></div><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#0b1b33;color:#fff">'+['العميل','الهاتف','المعاملة','الخدمة','العدد','المنفذ','التكلفة'].map(h=>'<th style="padding:6px;border:1px solid #555">'+h+'</th>').join('')+'</tr></thead><tbody>'+f.map(l=>'<tr>'+[l.client_name,l.phone||'—',l.transaction_id,l.service,l.qty,l.executor||'—',formatCurrency(execCostOf(l))].map(v=>'<td style="padding:5px;border:1px solid #888">'+escapeHtml(v)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
@@ -1662,18 +1715,23 @@ function paintCurrentTabBanner(id){
   let t=$('cur-tab-title');
   if(!t){
     main.insertAdjacentHTML('afterbegin',
-      '<div id="cur-tab-title" class="hidden text-ink dark:text-white">'+
+      '<div id="cur-tab-title" class="hidden text-ink dark:text-white" style="display:none">'+
         '<div class="flex items-center gap-2.5"><span class="flex h-8 w-8 items-center justify-center rounded-xl bg-ink text-white dark:bg-brand-600"><i id="cur-tab-ic"></i></span><span id="cur-tab-nm" class="font-bold text-sm sm:text-base"></span></div>'+
         '<button type="button" onclick="switchTab(\'home\')" class="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 hover:bg-brand-50 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-brand-700 dark:text-slate-200 transition"><i class="fa-solid fa-house text-brand-600 dark:text-brand-400"></i><span>الشاشة الرئيسية</span></button>'+
       '</div>');
     t=$('cur-tab-title');
   }
   if(!t)return;
-  if(id==='home'){t.classList.add('hidden');return;}
+  if(id==='home'){
+    t.classList.add('hidden');
+    t.style.display='none';
+    return;
+  }
   const b=$('tab-'+id+'-btn');
   const ic=b&&b.querySelector('i');
   const nm=TAB_LABELS_AR[id]||(b&&b.querySelector('span:not([class*="rounded-full"])')&&b.querySelector('span:not([class*="rounded-full"])').textContent)||'';
   t.classList.remove('hidden');
+  t.style.display='flex';
   if($('cur-tab-ic'))$('cur-tab-ic').className=ic?ic.className:'fa-solid fa-layer-group';
   if($('cur-tab-nm'))$('cur-tab-nm').textContent=nm;
 }

@@ -1,4 +1,4 @@
-/* ===== المرحلة 4 (محدّثة): الكوميشن والتارجت (خصوصية كوميشن الموظف + تارجت المبلغ وتارجت عدد الخدمات + فلترة بالتاريخ + طباعة وPDF وExcel + إصلاح نافذة تفصيل الخدمات) ===== */
+/* ===== المرحلة 4 (محدّثة): الكوميشن والتارجت (عرض طلبات الكوميشن بالتفصيل: اسم العميل + رقم الريكوست + التليفون + الخدمة + كوميشن ولا لأ + حالة الطلب + خصوصية الكوميشن + تارجت المبلغ والخدمات + فلترة وطباعة وPDF وExcel) ===== */
 (function () {
   if (window.__phase4) return;
   window.__phase4 = true;
@@ -6,6 +6,7 @@
   const isMgr = () => window.__role ? window.__role === 'manager' : !!(currentUser && ['mahmoud.aboshama@tasahel.com.eg', 'mahmoud.aboshama.contact@gmail.com'].includes(String(currentUser.email || '').toLowerCase()));
   let closures = [], snaps = [], targets = [], svcTargetsFallback = {}, live = null, rawMonthLines = [], viewMonth = null, setupNeeded = false, busy = false, seq = 0;
   let filterFrom = '', filterTo = '', filterEmpId = 'all';
+  let modalState = { uid: null, mode: 'all', q: '' };
 
   const nextM = m => { const a = m.split('-').map(Number); return a[1] === 12 ? (a[0] + 1) + '-01' : a[0] + '-' + String(a[1] + 1).padStart(2, '0'); };
   const monthLabel = m => {
@@ -52,6 +53,28 @@
     return 0;
   }
 
+  function resolveLineStatus(l) {
+    if (!l) return 'In Progress';
+    if (l.status) return l.status;
+    if (l.delivered) return 'Delivered';
+    if (l.complete) return 'Complete';
+    if (l.under_review) return 'Under Review';
+    if (typeof allRequestLines !== 'undefined' && Array.isArray(allRequestLines)) {
+      const cached = allRequestLines.find(x => String(x.id) === String(l.id));
+      if (cached && cached.status) return cached.status;
+    }
+    return 'In Progress';
+  }
+
+  function resolveLinePhone(l) {
+    if (l && l.phone) return l.phone;
+    if (typeof allRequestLines !== 'undefined' && Array.isArray(allRequestLines)) {
+      const cached = allRequestLines.find(x => String(x.id) === String(l.id) || (l.transaction_id && String(x.transaction_id) === String(l.transaction_id)));
+      if (cached && cached.phone) return cached.phone;
+    }
+    return '';
+  }
+
   const lineComm = l => {
     const q = Math.max(0, Number(l && l.qty) || 0);
     const rate = unitCommOf(l);
@@ -61,7 +84,7 @@
 
   const missing = err => /42P01|PGRST205|PGRST202|does not exist|schema cache/i.test(((err && err.message) || '') + ' ' + ((err && err.code) || ''));
 
-  /* جلب البنود حسب الفترة المحددة (الشهر أو الفترة من - إلى) */
+  /* جلب البنود حسب الفترة المحددة (مع رقم التليفون وحالة الطلب) */
   async function fetchRangeLines(startDay, endDay) {
     const a0 = startDay + 'T00:00:00', a = a0 > DATA_FROM_TS ? a0 : DATA_FROM_TS;
     const endDateObj = new Date(endDay + 'T00:00:00');
@@ -71,9 +94,9 @@
     if (b <= DATA_FROM_TS) return out;
     for (let from = 0; ; from += 1000) {
       const r = await sbClient.from('request_lines')
-        .select('id,employee,qty,total,commission,commission_per_unit,transaction_id,received_at,client_name,service')
+        .select('id,employee,qty,total,commission,commission_per_unit,transaction_id,received_at,client_name,phone,service,status,delivered,complete,under_review')
         .gte('received_at', a).lt('received_at', b)
-        .order('id', { ascending: true }).range(from, from + 999);
+        .order('id', { ascending: false }).range(from, from + 999);
       if (r.error) throw r.error;
       out.push.apply(out, r.data || []);
       if ((r.data || []).length < 1000) break;
@@ -85,8 +108,10 @@
     const by = new Map(), lost = new Map(), lostLines = [];
     lines.forEach(l => {
       const p = profileByName(l.employee), sales = Number(l.total) || 0, q = Math.max(0, Number(l.qty) || 0), rate = unitCommOf(l), c = rate * q;
-      if (!p) { const k = (l.employee || 'بدون موظف').trim(); lost.set(k, (lost.get(k) || 0) + 1); lostLines.push(l); return; }
-      if (!by.has(p.id)) by.set(p.id, { sales: 0, comm: 0, lines: 0, units: 0, commUnits: 0, tx: new Set(), bySvc: new Map() });
+      const st = resolveLineStatus(l), ph = resolveLinePhone(l);
+      const richLine = Object.assign({}, l, { _rate: rate, _comm: c, _qty: q, _sales: sales, _status: st, _phone: ph });
+      if (!p) { const k = (l.employee || 'بدون موظف').trim(); lost.set(k, (lost.get(k) || 0) + 1); lostLines.push(richLine); return; }
+      if (!by.has(p.id)) by.set(p.id, { sales: 0, comm: 0, lines: 0, units: 0, commUnits: 0, tx: new Set(), bySvc: new Map(), reqLines: [] });
       const d = by.get(p.id);
       d.sales += sales;
       d.comm += c;
@@ -94,6 +119,7 @@
       d.units += q;
       if (rate > 0) d.commUnits += q;
       if (l.transaction_id) d.tx.add(l.transaction_id);
+      d.reqLines.push(richLine);
       const sn = (l.service || 'خدمة غير مسماة').trim();
       if (!d.bySvc.has(sn)) d.bySvc.set(sn, { name: sn, lines: 0, units: 0, rate: rate, sales: 0, comm: 0 });
       const sv = d.bySvc.get(sn);
@@ -105,7 +131,6 @@
     return { by: by, lost: lost, lostLines: lostLines };
   }
 
-  /* تحميل تارجت عدد الخدمات الاحتياطي من localStorage + audit_log لضمان عمله حتى قبل ترقية جدول emp_targets */
   async function loadSvcTargetsFallback(m) {
     const map = {};
     try {
@@ -152,7 +177,6 @@
     return true;
   }
 
-  /* استخراج بيانات كل الموظفين (لحساب متوسط الفريق والإنذارات بدقة) */
   function allRowsForPeriod() {
     const bounds = monthBounds(viewMonth);
     const customRange = (filterFrom && filterTo) && (filterFrom !== bounds[0] || filterTo !== bounds[1]);
@@ -172,7 +196,8 @@
           tx: s ? s.tx_count : 0,
           target: s ? Number(s.target) : 0,
           svcTarget: (s && s.services_target != null) ? Number(s.services_target) : getEmpSvcTarget(p.id, t),
-          bySvc: new Map()
+          bySvc: new Map(),
+          reqLines: []
         };
       }
       const d = live && live.by.get(p.id);
@@ -186,14 +211,12 @@
         tx: d ? d.tx.size : 0,
         target: t ? Number(t.target) : 0,
         svcTarget: getEmpSvcTarget(p.id, t),
-        bySvc: d ? d.bySvc : new Map()
+        bySvc: d ? d.bySvc : new Map(),
+        reqLines: d ? d.reqLines : []
       };
     }).sort((a, b) => b.sales - a.sales);
   }
 
-  /* الصفوف المسموح بعرضها حسب الصلاحية والفلتر:
-     - الموظف العادي يرى الكوميشن والكارت الخاص به هو فقط!
-     - المدير يرى كل الموظفين أو الموظف المختار في الفلتر. */
   function visibleRows(allRows) {
     const mgr = isMgr();
     if (!mgr) {
@@ -205,7 +228,6 @@
     return allRows;
   }
 
-  /* تحديد الموظفين المتأخرين في التارجت (المالي أو عدد الخدمات) أو الكوميشن */
   function evaluateLagging(rows) {
     if (!rows.length) return { laggingIds: new Set(), list: [], expectedPct: 50 };
     const now = new Date();
@@ -301,6 +323,8 @@
         '</div>'
       : '';
 
+    const reqCount = (r.reqLines && r.reqLines.length) || r.lines || 0;
+
     return '<div class="card lift p-5 space-y-4 ' + (isLagging && !closed ? 'ring-2 ring-rose-400/70 dark:ring-rose-600/70' : '') + '">' +
       lagBanner +
       '<div class="flex items-center gap-3.5">' + avatarHtml(r.p, 48) +
@@ -338,8 +362,8 @@
       '</div>' +
       targetInputsBlock +
       '<div class="flex flex-wrap items-center gap-2 pt-1">' +
-        (r.bySvc && r.bySvc.size ? '<button type="button" onclick="commShowEmpServices(\'' + eh(r.p.id) + '\')" class="flex-1 rounded-xl border border-brand-200 dark:border-brand-800 bg-brand-50/50 dark:bg-brand-950/30 py-2 px-3 text-xs font-bold text-brand-700 dark:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-900/50 transition"><i class="fa-solid fa-list-check ms-1.5"></i>عرض تفصيل الخدمات (' + r.bySvc.size + ' خدمة)</button>' : '') +
-        '<button type="button" onclick="commPrintEmp(\'' + eh(r.p.id) + '\')" class="rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 py-2 px-3 text-xs font-bold text-slate-700 dark:text-slate-200" title="طباعة كشف كوميشن الموظف"><i class="fa-solid fa-print"></i></button>' +
+        (reqCount > 0 ? '<button type="button" onclick="commShowEmpServices(\'' + eh(r.p.id) + '\')" class="flex-1 rounded-xl border border-brand-200 dark:border-brand-800 bg-brand-50/50 dark:bg-brand-950/30 py-2 px-3 text-xs font-bold text-brand-700 dark:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-900/50 transition"><i class="fa-solid fa-list-check ms-1.5"></i>عرض طلبات الكوميشن والخدمات (' + reqCount + ' طلب)</button>' : '') +
+        '<button type="button" onclick="commPrintEmp(\'' + eh(r.p.id) + '\')" class="rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 py-2 px-3 text-xs font-bold text-slate-700 dark:text-slate-200" title="طباعة كشف طلبات وكوميشن الموظف"><i class="fa-solid fa-print"></i></button>' +
         '<button type="button" onclick="commExportEmpPdf(\'' + eh(r.p.id) + '\')" class="rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 py-2 px-3 text-xs font-bold text-rose-600 dark:text-rose-300" title="تصدير PDF للموظف"><i class="fa-solid fa-file-pdf"></i></button>' +
         '<button type="button" onclick="commExportEmpCsv(\'' + eh(r.p.id) + '\')" class="rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 py-2 px-3 text-xs font-bold text-emerald-600 dark:text-emerald-300" title="تصدير Excel للموظف"><i class="fa-solid fa-file-excel"></i></button>' +
       '</div>' +
@@ -436,7 +460,6 @@
     if (mgr && live && live.lost.size) {
       warnHtml += '<div class="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 mb-3"><i class="fa-solid fa-triangle-exclamation ms-1"></i><b>بنود مش مربوطة بموظف مسجّل (مش داخلة في الحساب):</b> ' + [...live.lost.entries()].map(e => '<button type="button" data-n="' + eh(e[0]) + '" onclick="commLost(this.dataset.n)" class="mx-0.5 rounded-lg bg-amber-200/70 px-2 py-0.5 font-bold underline dark:bg-amber-900/50">' + eh(e[0]) + ' (' + e[1] + ') ← اعرض وصلّح</button>').join(' ') + '</div>';
     }
-    /* الإنذار الأحمر يظهر للجميع حتى يعرف الفريق من المتأخر في التارجت/الكوميشن، ولكن بدون كشف مبالغ كوميشن الزملاء لغير المدير */
     if (!closed && lag.list.length) {
       warnHtml += '<div class="rounded-2xl border-2 border-rose-300 dark:border-rose-800 bg-rose-50/90 dark:bg-rose-950/40 p-4 text-xs text-rose-900 dark:text-rose-200 shadow-xs">' +
         '<div class="flex flex-wrap items-center justify-between gap-2 mb-2">' +
@@ -483,7 +506,7 @@
       : '<div class="card p-8 text-center text-xs text-slate-400 sm:col-span-2 lg:col-span-3">لا توجد بيانات لعرضها</div>';
   }
 
-  /* إغلاق نافذة تفصيل خدمات الموظف وإعادة تفعيل سكرول الصفحة */
+  /* إغلاق نافذة تفصيل طلبات وخدمات الموظف وإعادة تفعيل سكرول الصفحة */
   window.commCloseEmpServices = function () {
     const m = $('emp-svc-modal');
     if (m) m.remove();
@@ -494,64 +517,178 @@
     }
   };
 
-  /* نافذة تفصيل خدمات وكوميشن الموظف — مع إصلاح السكرول الداخلي وزر الإغلاق والطباعة */
+  window.commSetModalFilter = function (mode) {
+    modalState.mode = mode || 'all';
+    paintEmpServicesModalBody();
+  };
+
+  window.commSetModalSearch = function (q) {
+    modalState.q = String(q || '');
+    paintEmpServicesModalBody();
+  };
+
+  function commPillHtml(rate, commVal) {
+    if (rate > 0) {
+      return '<span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-[11px] font-bold whitespace-nowrap"><i class="fa-solid fa-circle-check text-[10px]"></i><span>نعم · بكوميشن (' + eh(formatCurrency(commVal)) + ')</span></span>';
+    }
+    return '<span class="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"><i class="fa-solid fa-circle-minus text-[10px]"></i><span>لا · بدون كوميشن</span></span>';
+  }
+
+  function paintEmpServicesModalBody() {
+    const uid = modalState.uid;
+    if (!uid) return;
+    const allRows = allRowsForPeriod();
+    const r = allRows.find(x => String(x.p.id) === String(uid));
+    if (!r) return;
+
+    const reqLines = r.reqLines || [];
+    const commLinesCount = reqLines.filter(l => l._rate > 0).length;
+    const noCommLinesCount = reqLines.length - commLinesCount;
+    const svcs = [...(r.bySvc ? r.bySvc.values() : [])].sort((a, b) => b.comm - a.comm || b.units - a.units);
+
+    const tabsBox = $('emp-svc-modal-tabs');
+    if (tabsBox) {
+      const chip = (m, lbl, cnt, ic) => {
+        const on = modalState.mode === m;
+        return '<button type="button" onclick="commSetModalFilter(\'' + m + '\')" class="rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 border transition ' +
+          (on ? 'bg-ink text-white border-ink dark:bg-brand-600 dark:border-brand-600 shadow-2xs' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50') + '">' +
+          '<i class="fa-solid ' + ic + '"></i><span>' + lbl + '</span><span class="rounded-full px-1.5 py-0.2 text-[10px] ' + (on ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800') + '">' + cnt + '</span></button>';
+      };
+      tabsBox.innerHTML =
+        chip('all', 'كل الطلبات بالتفصيل', reqLines.length, 'fa-list-ul') +
+        chip('comm', 'طلبات بكوميشن فقط', commLinesCount, 'fa-circle-check') +
+        chip('nocomm', 'طلبات بدون كوميشن', noCommLinesCount, 'fa-circle-minus') +
+        chip('summary', 'ملخص الخدمات المجمع', svcs.length, 'fa-layer-group');
+    }
+
+    const contentBox = $('emp-svc-modal-content');
+    if (!contentBox) return;
+
+    const q = (modalState.q || '').trim().toLowerCase();
+
+    if (modalState.mode === 'summary') {
+      const filteredSvcs = q ? svcs.filter(s => s.name.toLowerCase().includes(q)) : svcs;
+      const trs = filteredSvcs.map((s, idx) =>
+        '<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">' +
+          '<td class="px-3 py-2.5 text-slate-400 text-center">' + (idx + 1) + '</td>' +
+          '<td class="px-3 py-2.5 font-bold text-ink dark:text-white">' + eh(s.name) + '</td>' +
+          '<td class="px-3 py-2.5 text-center font-semibold">' + s.lines + '</td>' +
+          '<td class="px-3 py-2.5 text-center font-bold text-sky-700 dark:text-sky-300">' + s.units + '</td>' +
+          '<td class="px-3 py-2.5 text-center">' + commPillHtml(s.rate, s.rate) + '</td>' +
+          '<td class="px-3 py-2.5 font-semibold whitespace-nowrap">' + formatCurrency(s.sales) + '</td>' +
+          '<td class="px-3 py-2.5 font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">' + formatCurrency(s.comm) + '</td>' +
+        '</tr>'
+      ).join('') || '<tr><td colspan="7" class="p-8 text-center text-slate-400">لا توجد خدمات مطابقة</td></tr>';
+
+      contentBox.innerHTML =
+        '<table class="w-full text-right text-xs border-collapse">' +
+          '<thead class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 sticky top-0 z-10">' +
+            '<tr>' +
+              '<th class="px-3 py-2.5 text-center">#</th>' +
+              '<th class="px-3 py-2.5">الخدمة</th>' +
+              '<th class="px-3 py-2.5 text-center">عدد البنود</th>' +
+              '<th class="px-3 py-2.5 text-center">إجمالي العدد</th>' +
+              '<th class="px-3 py-2.5 text-center">حالة الكوميشن للوحدة</th>' +
+              '<th class="px-3 py-2.5">إجمالي المبيعات</th>' +
+              '<th class="px-3 py-2.5">إجمالي الكوميشن</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody class="divide-y divide-slate-100 dark:divide-slate-800">' + trs + '</tbody>' +
+        '</table>';
+      return;
+    }
+
+    let list = reqLines.slice();
+    if (modalState.mode === 'comm') list = list.filter(l => l._rate > 0);
+    else if (modalState.mode === 'nocomm') list = list.filter(l => !(l._rate > 0));
+
+    if (q) {
+      list = list.filter(l =>
+        String(l.client_name || '').toLowerCase().includes(q) ||
+        String(l.transaction_id || '').toLowerCase().includes(q) ||
+        String(l._phone || '').includes(q) ||
+        String(l.service || '').toLowerCase().includes(q) ||
+        String(statusLabel(l._status) || '').toLowerCase().includes(q)
+      );
+    }
+
+    const reqTrs = list.map((l, idx) => {
+      const st = l._status || 'In Progress';
+      const ph = l._phone || '';
+      const tx = l.transaction_id || ('TX-' + l.id);
+      const wa = typeof waLink === 'function' ? waLink(ph, 'أهلاً ' + (l.client_name || '') + '، بخصوص معاملتك رقم ' + tx + ' — تساهيل') : '';
+      const phHtml = ph
+        ? '<div class="rc-phone-pill"><span>' + eh(ph) + '</span>' + (wa ? '<a href="' + wa + '" target="_blank" rel="noopener" class="text-emerald-600 hover:text-emerald-700 text-sm leading-none" title="واتساب"><i class="fa-brands fa-whatsapp"></i></a>' : '') + '</div>'
+        : '<span class="text-slate-300">—</span>';
+      const svcHtml = '<div class="rc-svc-pill"><span class="rc-svc-name">' + eh(l.service || '—') + '</span><span class="rc-svc-qty" dir="ltr">×' + fmtNum(l._qty) + '</span></div>';
+      const stBadge = typeof badge === 'function' ? badge(st) : '<span class="rounded-full px-2.5 py-1 text-[11px] font-bold">' + eh(statusLabel(st)) + '</span>';
+
+      return '<tr data-st17="' + eh(st) + '" class="hover:bg-slate-50/90 dark:hover:bg-slate-800/50 align-middle">' +
+        '<td class="px-3 py-3 text-slate-400 text-center font-semibold">' + (idx + 1) + '</td>' +
+        '<td class="px-3 py-3 font-bold text-ink dark:text-white min-w-[155px]"><button type="button" data-c="' + eh(l.client_name || '') + '" onclick="commCloseEmpServices();openClientModal(this.dataset.c)" class="text-right text-start leading-snug hover:text-brand-600 hover:underline block w-full">' + eh(l.client_name || '—') + '</button></td>' +
+        '<td class="px-3 py-3 whitespace-nowrap" dir="ltr"><button type="button" data-tx="' + eh(tx) + '" onclick="commCloseEmpServices();openTxModal(this.dataset.tx)" class="rc-tx-pill">' + eh(tx) + '</button></td>' +
+        '<td class="px-3 py-3 whitespace-nowrap" dir="ltr">' + phHtml + '</td>' +
+        '<td class="px-3 py-3 min-w-[190px]">' + svcHtml + '</td>' +
+        '<td class="px-3 py-3 whitespace-nowrap text-center">' + commPillHtml(l._rate, l._comm) + '</td>' +
+        '<td class="px-3 py-3 whitespace-nowrap text-center">' + stBadge + '</td>' +
+        '<td class="px-3 py-3 whitespace-nowrap text-[11px] text-slate-500">' + eh(formatDateOnly(l.received_at)) + '</td>' +
+      '</tr>';
+    }).join('') || '<tr><td colspan="8" class="p-8 text-center text-slate-400">لا توجد طلبات مطابقة للبحث أو الفلتر</td></tr>';
+
+    contentBox.innerHTML =
+      '<table class="w-full text-right text-xs border-collapse">' +
+        '<thead class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 sticky top-0 z-10">' +
+          '<tr>' +
+            '<th class="px-3 py-2.5 text-center">#</th>' +
+            '<th class="px-3 py-2.5">اسم العميل</th>' +
+            '<th class="px-3 py-2.5">رقم الريكوست</th>' +
+            '<th class="px-3 py-2.5">رقم التليفون</th>' +
+            '<th class="px-3 py-2.5">الخدمة والعدد</th>' +
+            '<th class="px-3 py-2.5 text-center">هل الخدمة بكوميشن؟</th>' +
+            '<th class="px-3 py-2.5 text-center">حالة الطلب</th>' +
+            '<th class="px-3 py-2.5">التاريخ</th>' +
+          '</tr>' +
+        '</thead>' +
+        '<tbody class="divide-y divide-slate-100 dark:divide-slate-800">' + reqTrs + '</tbody>' +
+      '</table>';
+  }
+
+  /* نافذة تفصيل طلبات وخدمات وكوميشن الموظف */
   window.commShowEmpServices = function (uid) {
     if (!isMgr() && (!currentUser || String(uid) !== String(currentUser.id))) {
       return showToast('يسمح بعرض تفصيل الكوميشن الخاص بحسابك فقط', 'error');
     }
     const allRows = allRowsForPeriod();
     const r = allRows.find(x => String(x.p.id) === String(uid));
-    if (!r || !r.bySvc) return;
-    const svcs = [...r.bySvc.values()].sort((a, b) => b.comm - a.comm || b.units - a.units);
+    if (!r) return;
 
     window.commCloseEmpServices();
-
-    const trs = svcs.map((s, idx) =>
-      '<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">' +
-        '<td class="px-3 py-2.5 text-slate-400 text-center">' + (idx + 1) + '</td>' +
-        '<td class="px-3 py-2.5 font-bold text-ink dark:text-white">' + eh(s.name) + '</td>' +
-        '<td class="px-3 py-2.5 text-center font-semibold">' + s.lines + '</td>' +
-        '<td class="px-3 py-2.5 text-center font-bold text-sky-700 dark:text-sky-300">' + s.units + '</td>' +
-        '<td class="px-3 py-2.5 text-center">' + (s.rate > 0 ? '<span class="rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 font-bold">' + formatCurrency(s.rate) + '</span>' : '<span class="text-slate-400">بدون كوميشن (0 ج)</span>') + '</td>' +
-        '<td class="px-3 py-2.5 font-semibold whitespace-nowrap">' + formatCurrency(s.sales) + '</td>' +
-        '<td class="px-3 py-2.5 font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">' + formatCurrency(s.comm) + '</td>' +
-      '</tr>'
-    ).join('');
+    modalState = { uid: uid, mode: 'all', q: '' };
 
     const modal = document.createElement('div');
     modal.id = 'emp-svc-modal';
-    modal.style.cssText = 'position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100vh!important;z-index:999999!important;display:flex!important;align-items:center!important;justify-content:center!important;background-color:rgba(15,23,42,0.75)!important;padding:1rem!important;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);';
+    modal.style.cssText = 'position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100vh!important;z-index:999999!important;display:flex!important;align-items:center!important;justify-content:center!important;background-color:rgba(15,23,42,0.75)!important;padding:0.75rem!important;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);';
     modal.innerHTML =
-      '<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl text-slate-800 dark:text-slate-100" style="position:relative!important;z-index:1000000!important;width:100%!important;max-width:54rem!important;max-height:86vh!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;border-radius:1rem!important;">' +
-        '<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-5 py-4 bg-slate-50 dark:bg-slate-800/60" style="flex-shrink:0!important;">' +
+      '<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl text-slate-800 dark:text-slate-100" style="position:relative!important;z-index:1000000!important;width:100%!important;max-width:68rem!important;max-height:90vh!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;border-radius:1rem!important;">' +
+        '<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-5 py-3.5 bg-slate-50 dark:bg-slate-800/60" style="flex-shrink:0!important;">' +
           '<div>' +
-            '<div class="font-bold text-base text-ink dark:text-white flex items-center gap-2"><i class="fa-solid fa-bullseye text-brand-600"></i><span>تفصيل خدمات وكوميشن: ' + eh(r.p.full_name) + '</span></div>' +
-            '<div class="text-xs text-slate-500 mt-0.5">الفترة: ' + eh(formatDateOnly(filterFrom)) + ' إلى ' + eh(formatDateOnly(filterTo)) + ' · المعاملات: <b>' + r.tx + '</b> · البنود: <b>' + r.lines + '</b> · إجمالي الخدمات: <b>' + r.units + ' خدمة</b> · الكوميشن: <b class="text-emerald-600">' + formatCurrency(r.comm) + '</b></div>' +
+            '<div class="font-bold text-sm sm:text-base text-ink dark:text-white flex items-center gap-2"><i class="fa-solid fa-bullseye text-brand-600"></i><span>طلبات وخدمات الكوميشن للموظف: ' + eh(r.p.full_name) + '</span></div>' +
+            '<div class="text-xs text-slate-500 mt-0.5">الفترة: ' + eh(formatDateOnly(filterFrom)) + ' إلى ' + eh(formatDateOnly(filterTo)) + ' · المعاملات: <b>' + r.tx + '</b> · الطلبات: <b>' + r.lines + '</b> · إجمالي الخدمات: <b>' + r.units + ' خدمة</b> · الكوميشن: <b class="text-emerald-600">' + formatCurrency(r.comm) + '</b></div>' +
           '</div>' +
-          '<div class="flex items-center gap-2">' +
+          '<div class="flex flex-wrap items-center gap-1.5">' +
             '<button type="button" onclick="commPrintEmp(\'' + eh(r.p.id) + '\')" class="rounded-xl bg-ink hover:bg-slate-800 dark:bg-brand-600 text-white px-3 py-1.5 text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-print"></i><span>طباعة</span></button>' +
+            '<button type="button" onclick="commExportEmpPdf(\'' + eh(r.p.id) + '\')" class="rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-file-pdf"></i><span>PDF</span></button>' +
             '<button type="button" onclick="commExportEmpCsv(\'' + eh(r.p.id) + '\')" class="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-file-excel"></i><span>Excel</span></button>' +
             '<button type="button" onclick="commCloseEmpServices()" class="rounded-xl bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 px-3 py-1.5 text-xs font-bold flex items-center gap-1" title="إغلاق النافذة"><i class="fa-solid fa-xmark text-sm"></i><span>إغلاق</span></button>' +
           '</div>' +
         '</div>' +
-        '<div style="flex:1 1 auto!important;overflow-y:auto!important;overflow-x:auto!important;max-height:calc(86vh - 135px)!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important;padding:1rem!important;">' +
-          '<table class="w-full text-right text-xs border-collapse">' +
-            '<thead class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 sticky top-0 z-10">' +
-              '<tr>' +
-                '<th class="px-3 py-2.5 text-center">#</th>' +
-                '<th class="px-3 py-2.5">الخدمة</th>' +
-                '<th class="px-3 py-2.5 text-center">عدد البنود</th>' +
-                '<th class="px-3 py-2.5 text-center">مجموع العدد بالبنود</th>' +
-                '<th class="px-3 py-2.5 text-center">كوميشن الوحدة</th>' +
-                '<th class="px-3 py-2.5">إجمالي المبيعات</th>' +
-                '<th class="px-3 py-2.5">إجمالي الكوميشن</th>' +
-              '</tr>' +
-            '</thead>' +
-            '<tbody class="divide-y divide-slate-100 dark:divide-slate-800">' + trs + '</tbody>' +
-          '</table>' +
+        '<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 px-4 sm:px-5 py-2.5 bg-white dark:bg-slate-900" style="flex-shrink:0!important;">' +
+          '<div id="emp-svc-modal-tabs" class="flex flex-wrap items-center gap-1.5"></div>' +
+          '<input type="text" oninput="commSetModalSearch(this.value)" placeholder="ابحث باسم العميل أو الريكوست أو التليفون أو الخدمة..." class="field !w-64 max-w-full !py-1.5 text-xs">' +
         '</div>' +
-        '<div class="flex items-center justify-between border-t border-slate-200 dark:border-slate-800 px-5 py-3 bg-slate-50 dark:bg-slate-800/60 text-xs" style="flex-shrink:0!important;">' +
-          '<div class="font-bold text-slate-700 dark:text-slate-200">إجمالي المبيعات: <span class="text-brand-600">' + formatCurrency(r.sales) + '</span> · إجمالي الكوميشن: <span class="text-emerald-600">' + formatCurrency(r.comm) + '</span></div>' +
+        '<div id="emp-svc-modal-content" style="flex:1 1 auto!important;overflow-y:auto!important;overflow-x:auto!important;max-height:calc(90vh - 185px)!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important;padding:0.75rem 1rem!important;"></div>' +
+        '<div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-800 px-4 sm:px-5 py-3 bg-slate-50 dark:bg-slate-800/60 text-xs" style="flex-shrink:0!important;">' +
+          '<div class="font-bold text-slate-700 dark:text-slate-200">إجمالي المبيعات: <span class="text-brand-600">' + formatCurrency(r.sales) + '</span> · إجمالي الكوميشن المستحق: <span class="text-emerald-600">' + formatCurrency(r.comm) + '</span></div>' +
           '<button type="button" onclick="commCloseEmpServices()" class="rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 px-5 py-2 font-bold text-slate-800 dark:text-white">إغلاق النافذة</button>' +
         '</div>' +
       '</div>';
@@ -565,6 +702,7 @@
     document.addEventListener('keydown', window.__empSvcEscHandler);
     document.body.style.overflow = 'hidden';
     document.body.appendChild(modal);
+    paintEmpServicesModalBody();
   };
 
   /* ---------- الطباعة وتصدير PDF و Excel للكوميشن ---------- */
@@ -572,21 +710,44 @@
     const periodText = 'الفترة: من ' + formatDateOnly(filterFrom) + ' إلى ' + formatDateOnly(filterTo);
     if (singleEmp && targetRows.length === 1) {
       const r = targetRows[0];
-      const svcs = [...(r.bySvc ? r.bySvc.values() : [])].sort((a, b) => b.comm - a.comm || b.units - a.units);
+      const reqs = r.reqLines || [];
       return {
-        title: 'تقرير كوميشن وتارجت الموظف: ' + (r.p.full_name || 'موظف'),
+        title: 'كشف طلبات وكوميشن الموظف: ' + (r.p.full_name || 'موظف'),
         meta: [periodText, 'تارجت المبلغ: ' + (r.target > 0 ? formatCurrency(r.target) : 'غير محدد') + ' | تارجت الخدمات: ' + (r.svcTarget > 0 ? r.svcTarget + ' خدمة' : 'غير محدد')],
         stats: [
-          ['عدد المعاملات والبنود', r.tx + ' معاملة (' + r.lines + ' بند)'],
+          ['عدد المعاملات والطلبات', r.tx + ' معاملة (' + r.lines + ' طلب)'],
           ['إجمالي الخدمات المنفذة', r.units + ' خدمة (' + r.commUnits + ' بكوميشن)'],
           ['إجمالي المبيعات (Amount)', formatCurrency(r.sales)],
           ['إجمالي الكوميشن المستحق', formatCurrency(r.comm)]
         ],
-        headers: ['#', 'الخدمة', 'عدد البنود', 'مجموع الأعداد بالبنود', 'كوميشن الوحدة', 'إجمالي المبيعات', 'إجمالي الكوميشن'],
-        rows: svcs.map((s, i) => [i + 1, s.name, s.lines, s.units, s.rate > 0 ? formatCurrency(s.rate) : '0 ج (بدون كوميشن)', formatCurrency(s.sales), formatCurrency(s.comm)]),
-        csvHeaders: ['الموظف', 'الخدمة', 'عدد البنود', 'مجموع الأعداد بالبنود', 'كوميشن الوحدة', 'إجمالي المبيعات', 'إجمالي الكوميشن'],
-        csvRows: svcs.map(s => [r.p.full_name, s.name, s.lines, s.units, s.rate, s.sales, s.comm]),
-        filename: 'كوميشن_' + String(r.p.full_name || 'موظف').replace(/\s+/g, '_') + '_' + filterFrom + '_' + filterTo
+        headers: ['#', 'اسم العميل', 'رقم الريكوست', 'رقم التليفون', 'الخدمة', 'العدد', 'هل بكوميشن؟', 'قيمة الكوميشن', 'حالة الطلب', 'التاريخ'],
+        rows: reqs.map((l, i) => [
+          i + 1,
+          l.client_name || '—',
+          l.transaction_id || ('TX-' + l.id),
+          l._phone || '—',
+          l.service || '—',
+          l._qty,
+          l._rate > 0 ? 'نعم بكوميشن' : 'بدون كوميشن',
+          formatCurrency(l._comm),
+          statusLabel(l._status),
+          formatDateOnly(l.received_at)
+        ]),
+        csvHeaders: ['الموظف', 'اسم العميل', 'رقم الريكوست', 'رقم التليفون', 'الخدمة', 'العدد', 'هل بكوميشن؟', 'قيمة الكوميشن', 'إجمالي البند', 'حالة الطلب', 'التاريخ'],
+        csvRows: reqs.map(l => [
+          r.p.full_name,
+          l.client_name || '',
+          l.transaction_id || ('TX-' + l.id),
+          l._phone || '',
+          l.service || '',
+          l._qty,
+          l._rate > 0 ? 'نعم بكوميشن' : 'بدون كوميشن',
+          l._comm,
+          l._sales,
+          statusLabel(l._status),
+          String(l.received_at || '').slice(0, 10)
+        ]),
+        filename: 'طلبات_وكوميشن_' + String(r.p.full_name || 'موظف').replace(/\s+/g, '_') + '_' + filterFrom + '_' + filterTo
       };
     }
     const totSales = targetRows.reduce((s, r) => s + r.sales, 0);
@@ -733,10 +894,29 @@
     const ls = live.lostLines.filter(l => (l.employee || 'بدون موظف').trim() === name), ps = profiles.filter(p => p.id);
     const sel = ps.map(p => '<option value="' + eh(p.full_name) + '">' + eh(p.full_name) + '</option>').join('');
     let m = $('lost-modal'); if (m) m.remove();
-    document.body.insertAdjacentHTML('beforeend', '<div id="lost-modal" class="fixed inset-0 z-[130] flex items-end justify-center bg-black/60 sm:items-center sm:p-4"><div class="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-slate-900 sm:rounded-2xl">' +
+    document.body.insertAdjacentHTML('beforeend', '<div id="lost-modal" class="fixed inset-0 z-[130] flex items-end justify-center bg-black/60 sm:items-center sm:p-4"><div class="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-slate-900 sm:rounded-2xl">' +
       '<div class="flex items-center justify-between border-b border-slate-100 px-5 py-3 dark:border-slate-800"><div><div class="font-bold text-ink dark:text-white">بنود مسجّلة باسم: ' + eh(name) + '</div><div class="text-[11px] text-slate-500">' + ls.length + ' بند — اربطها بموظف مسجّل علشان تدخل في الكوميشن</div></div><button type="button" onclick="document.getElementById(\'lost-modal\').remove()" class="h-8 w-8 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><i class="fa-solid fa-xmark"></i></button></div>' +
       '<div class="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50 px-5 py-3 text-xs dark:border-slate-800 dark:bg-slate-800/40"><span class="font-semibold">اربط كل البنود دي بـ:</span><select id="lost-all" class="field !w-48 !py-2 text-xs">' + sel + '</select><button type="button" data-n="' + eh(name) + '" onclick="commLostFix(this.dataset.n)" class="rounded-xl bg-brand-600 px-4 py-2 font-bold text-white">حفظ الربط</button></div>' +
-      '<div class="space-y-2 overflow-y-auto p-4">' + ls.map(l => '<div class="flex items-center justify-between gap-2 rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-700"><div class="min-w-0"><div class="truncate font-bold text-ink dark:text-white">' + eh(l.client_name) + '</div><div class="truncate text-slate-500">' + eh(l.service) + ' ×' + eh(l.qty) + '</div></div><div class="shrink-0 text-end"><div class="font-mono text-brand-600" dir="ltr">' + eh(l.transaction_id) + '</div><div class="text-slate-400">' + eh(String(l.received_at || '').slice(0, 10)) + '</div></div></div>').join('') + '</div></div></div>');
+      '<div class="space-y-2 overflow-y-auto p-4">' + ls.map(l => {
+        const st = l._status || resolveLineStatus(l);
+        const ph = l._phone || resolveLinePhone(l);
+        const tx = l.transaction_id || ('TX-' + l.id);
+        return '<div data-st17="' + eh(st) + '" class="card flex flex-wrap items-center justify-between gap-3 p-3.5 text-xs">' +
+          '<div class="min-w-0 space-y-1.5">' +
+            '<div class="flex flex-wrap items-center gap-2">' +
+              '<button type="button" data-c="' + eh(l.client_name || '') + '" onclick="document.getElementById(\'lost-modal\').remove();openClientModal(this.dataset.c)" class="font-bold text-sm text-ink dark:text-white hover:text-brand-600 hover:underline">' + eh(l.client_name || '—') + '</button>' +
+              '<button type="button" data-tx="' + eh(tx) + '" onclick="document.getElementById(\'lost-modal\').remove();openTxModal(this.dataset.tx)" class="rc-tx-pill !py-0.5 !px-2 !text-[11px]" dir="ltr">' + eh(tx) + '</button>' +
+              (ph ? '<span class="rc-phone-pill !py-0.5 !px-2 !text-[11px]" dir="ltr">' + eh(ph) + '</span>' : '') +
+            '</div>' +
+            '<div class="flex flex-wrap items-center gap-2">' +
+              '<div class="rc-svc-pill"><span class="rc-svc-name">' + eh(l.service || '—') + '</span><span class="rc-svc-qty" dir="ltr">×' + fmtNum(l.qty) + '</span></div>' +
+              commPillHtml(l._rate, l._comm) +
+              (typeof badge === 'function' ? badge(st) : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="shrink-0 text-end font-semibold text-slate-400">' + eh(formatDateOnly(l.received_at)) + '</div>' +
+        '</div>';
+      }).join('') + '</div></div></div>');
   };
 
   window.commLostFix = async function (name) {
