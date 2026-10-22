@@ -238,27 +238,141 @@ button:not(:disabled):active{transform:scale(.97)}
 
 #nav-menu .tab-btn{width:100%;justify-content:flex-start;padding:.6rem .85rem;font-size:.8rem}
 
-/* ===== ضبط شريط التابات والهيدر للكمبيوتر والموبايل (إظهار العناوين دائماً بدون الحاجة لقلب الموبايل) ===== */
-header { padding-top: 0 !important; padding-bottom: 0 !important; }
-header nav { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; scrollbar-width: none; }
-header nav::-webkit-scrollbar { display: none; }
-header nav .tab-btn { padding: 0.4rem 0.7rem !important; font-size: 0.74rem !important; }
-header nav .tab-btn > span:not([class*="rounded-full"]) { display: inline !important; }
+/* ===== ضبط شريط الهيدر والاختصارات العلوية للكمبيوتر والموبايل (عمودي وأفقي) ===== */
+.ts-header {
+  padding: 0 !important;
+}
+.ts-hdr-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 0.4rem 0.85rem;
+  min-height: 3.6rem;
+}
+.ts-hdr-start {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.ts-brand-box {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.75rem;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+.ts-brand-box:hover {
+  background: rgba(148, 163, 184, 0.1);
+}
+.ts-hdr-nav {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  padding: 0.15rem 0.25rem;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.ts-hdr-nav::-webkit-scrollbar {
+  display: none;
+}
+.ts-hdr-nav .tab-btn {
+  padding: 0.42rem 0.68rem !important;
+  font-size: 0.75rem !important;
+  border-radius: 0.7rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+.ts-hdr-nav .tab-btn > i {
+  font-size: 0.82rem;
+}
+.ts-hdr-nav .tab-btn > span:not([class*="rounded-full"]) {
+  display: inline !important;
+}
+.ts-hdr-end {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+/* تصميم الموبايل الطولي (Portrait) والتابلت الصغير بدون الحاجة لقلب الشاشة */
+@media (max-width: 960px) {
+  .ts-hdr-inner {
+    flex-wrap: wrap;
+    padding: 0.35rem 0.6rem;
+    gap: 0.3rem 0.4rem;
+  }
+  .ts-hdr-start {
+    order: 1;
+  }
+  .ts-hdr-end {
+    order: 2;
+    margin-right: auto;
+  }
+  .ts-hdr-nav {
+    order: 3;
+    width: 100%;
+    flex: 0 0 100%;
+    justify-content: flex-start;
+    border-top: 1px solid rgba(226, 232, 240, 0.75);
+    padding-top: 0.35rem;
+    padding-bottom: 0.1rem;
+    gap: 0.28rem;
+  }
+  .dark .ts-hdr-nav {
+    border-top-color: rgba(30, 41, 59, 0.85);
+  }
+  .ts-hdr-nav .tab-btn {
+    padding: 0.36rem 0.58rem !important;
+    font-size: 0.71rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .ts-brand-sub {
+    display: none !important;
+  }
+  #user-display {
+    max-width: 64px !important;
+    font-size: 11px !important;
+  }
+}
 
 /* ===== ضبط شكل أيقونات التنبيهات (+99) عشان متبوظش الهيدر ===== */
 #chat-badge, #tk-badge, #late-badge, #hdr-late-badge, #nt-count, #menu-dot {
-    font-size: 9px !important;
-    padding: 0 4px !important;
-    min-width: 15px !important;
-    height: 15px !important;
-    line-height: 15px !important;
-    top: -3px !important;
-    right: -3px !important;
-    position: absolute !important;
-    border-radius: 9999px;
+  font-size: 9px !important;
+  padding: 0 4px !important;
+  min-width: 15px !important;
+  height: 15px !important;
+  line-height: 15px !important;
+  top: -3px !important;
+  right: -3px !important;
+  position: absolute !important;
+  border-radius: 9999px;
+}
+#chat-badge.hidden, #tk-badge.hidden, #late-badge.hidden, #hdr-late-badge.hidden, #nt-count.hidden, #menu-dot.hidden, #menu-late-badge.hidden {
+  display: none !important;
 }
 #menu-wrap #late-badge { display: none !important; }
-#nav-menu #late-badge, #nav-menu #tk-badge { display: inline-block !important; position: static !important; margin-right: auto; }
+#nav-menu #late-badge, #nav-menu #tk-badge, #nav-menu #menu-late-badge {
+  position: static !important;
+  margin-right: auto;
+}
+#nav-menu #late-badge:not(.hidden), #nav-menu #tk-badge:not(.hidden), #nav-menu #menu-late-badge:not(.hidden) {
+  display: inline-block !important;
+}
 
 /* عنوان التاب الحالي مع زر العودة السريعة للشاشة الرئيسية */
 #cur-tab-title {
@@ -269,12 +383,15 @@ header nav .tab-btn > span:not([class*="rounded-full"]) { display: inline !impor
   margin-bottom: 1rem;
   padding: 0.55rem 0.85rem;
   border-radius: 0.9rem;
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.85);
   border: 1px solid rgba(226, 232, 240, 0.85);
 }
 .dark #cur-tab-title {
-  background: rgba(15, 23, 42, 0.75);
+  background: rgba(15, 23, 42, 0.82);
   border-color: rgba(30, 41, 59, 0.9);
+}
+#cur-tab-title.hidden {
+  display: none !important;
 }
 
 /* ===== كروت الموبايل ===== */
