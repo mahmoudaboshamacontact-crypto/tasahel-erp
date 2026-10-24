@@ -290,21 +290,13 @@ function updateOrderProgressBar(){
 
   const titleEl=$('nop-status-title'),subEl=$('nop-status-sub'),icEl=$('nop-icon');
   if(pct>=100){
-    if(titleEl)titleEl.textContent='الطلب مكتمل وجاهز للحفظ والطباعة 100% ✓';
-    if(subEl)subEl.textContent='اضغط «حفظ الطلب» أو «حفظ وطباعة إيصال» أو «حفظ وطلب جديد» من الملخص';
-    if(icEl)icEl.className='flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs';
-  }else if(!step1Done){
-    if(titleEl)titleEl.textContent='الخطوة 1 من 4: سجّل اسم العميل ورقم الموبايل ('+pct+'%)';
-    if(subEl)subEl.textContent='اكتب اسم العميل أو رقمه ليقترح السيستم بياناته وآخر معاملاته تلقائياً';
-    if(icEl)icEl.className='flex h-8 w-8 items-center justify-center rounded-xl bg-violet-600 text-white text-xs font-bold shadow-xs';
-  }else if(!step2Done){
-    if(titleEl)titleEl.textContent='الخطوة 2 من 4: اختر الخدمات المطلوبة للعميل ('+pct+'%)';
-    if(subEl)subEl.textContent='اضغط على أي كارت خدمة سريعة بالأسفل لإضافتها بضغطة واحدة';
-    if(icEl)icEl.className='flex h-8 w-8 items-center justify-center rounded-xl bg-violet-600 text-white text-xs font-bold shadow-xs';
+    if(titleEl)titleEl.textContent='مكتمل وجاهز للحفظ ✓';
+    if(subEl)subEl.textContent='';
+    if(icEl)icEl.className='flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-600 text-white text-[11px] font-bold';
   }else{
-    if(titleEl)titleEl.textContent='الخطوة الأخيرة: راجع طريقة الدفع والمنفذ ثم احفظ الطلب ('+pct+'%)';
-    if(subEl)subEl.textContent='تأكد من اسم الموظف المسؤول وطريقة الدفع قبل الحفظ';
-    if(icEl)icEl.className='flex h-8 w-8 items-center justify-center rounded-xl bg-violet-600 text-white text-xs font-bold shadow-xs';
+    if(titleEl)titleEl.textContent='خطوات التسجيل';
+    if(subEl)subEl.textContent='';
+    if(icEl)icEl.className='flex h-6 w-6 items-center justify-center rounded-lg bg-violet-600 text-white text-[11px] font-bold';
   }
 }
 window.updateOrderProgressBar=updateOrderProgressBar;
@@ -498,16 +490,43 @@ function openTxInTransactionsTab(tx){
 }
 window.openTxInTransactionsTab=openTxInTransactionsTab;
 
+function syncTxInspectorLayout(){
+  const wrap=$('tx-split-wrap'),aside=$('tx-inspector-aside');
+  const isOpen=!!selectedInspectorTx;
+  if(wrap)wrap.classList.toggle('has-inspector',isOpen);
+  if(aside)aside.classList.toggle('hidden',!isOpen);
+}
+
+function closeTxInspector(){
+  selectedInspectorTx=null;
+  syncTxInspectorLayout();
+  document.querySelectorAll('#recent-table-body tr').forEach(tr=>tr.classList.remove('tx-row-selected'));
+  document.querySelectorAll('#recent-cards-container > [data-tx]').forEach(c=>c.classList.remove('ring-2','ring-violet-500'));
+}
+window.closeTxInspector=closeTxInspector;
+
 function selectTxForInspector(tx,openModalOnMobile){
-  selectedInspectorTx=String(tx||'');
+  const tStr=String(tx||'');
+  if(!tStr){closeTxInspector();return;}
+  if(selectedInspectorTx===tStr&&!openModalOnMobile){
+    closeTxInspector();
+    return;
+  }
+  selectedInspectorTx=tStr;
+  syncTxInspectorLayout();
   document.querySelectorAll('#recent-table-body tr').forEach(tr=>{
     const b=tr.querySelector('[data-tx]');
     tr.classList.toggle('tx-row-selected',!!(b&&String(b.dataset.tx)===selectedInspectorTx));
   });
+  document.querySelectorAll('#recent-cards-container > [data-tx]').forEach(c=>{
+    const on=String(c.dataset.tx)===selectedInspectorTx;
+    c.classList.toggle('ring-2',on);
+    c.classList.toggle('ring-violet-500',on);
+  });
   renderTxInspector(selectedInspectorTx);
-  if(openModalOnMobile&&window.innerWidth<1024){
+  if(window.innerWidth<1024){
     const el=$('tx-inspector-aside');
-    if(el)el.scrollIntoView({behavior:'smooth',block:'nearest'});
+    if(el)setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'nearest'}),60);
   }
 }
 window.selectTxForInspector=selectTxForInspector;
@@ -515,24 +534,24 @@ window.selectTxForInspector=selectTxForInspector;
 /* معلومات مرحلة الطلب للشريط التفاعلي والحلقة الدائرية */
 function getStageMeta(st,isLateFlag){
   if(st==='Delivered'){
-    return {step:4,pct:100,barW:100,title:'تم التسليم',sub:'اكتملت المعاملة وتم تسليمها للعميل',color:'#10b981',icon:'fa-circle-check',nextStatus:'In Progress',nextLabel:'إعادة لقيد التنفيذ'};
+    return {step:4,pct:100,barW:100,title:'تم التسليم',sub:'تم تسليم المعاملة للعميل',color:'#10b981',icon:'fa-circle-check',nextStatus:'In Progress',nextLabel:'قيد التنفيذ'};
   }
   if(st==='Complete'){
-    return {step:3,pct:90,barW:78,title:'جاهزة للتسليم',sub:'الخدمة مكتملة ومستنية تسليم العميل',color:'#14b8a6',icon:'fa-box-open',nextStatus:'Delivered',nextLabel:'تحويل إلى تم التسليم'};
+    return {step:3,pct:90,barW:78,title:'جاهزة للتسليم',sub:'مكتملة وفي انتظار التسليم',color:'#14b8a6',icon:'fa-box-open',nextStatus:'Delivered',nextLabel:'تم التسليم'};
   }
   if(st==='Under Review'){
-    return {step:2,pct:50,barW:36,title:'قيد المراجعة',sub:'مراجعة المستندات والبيانات قبل التنفيذ',color:'#f59e0b',icon:'fa-magnifying-glass',nextStatus:'In Progress',nextLabel:'تحويل إلى قيد التنفيذ'};
+    return {step:2,pct:50,barW:36,title:'قيد المراجعة',sub:'مراجعة المستندات والبيانات',color:'#f59e0b',icon:'fa-magnifying-glass',nextStatus:'In Progress',nextLabel:'قيد التنفيذ'};
   }
   if(isLateFlag){
-    return {step:3,pct:65,barW:66,title:'متأخرة · قيد التنفيذ',sub:'تجاوزت موعد التسليم وتحتاج متابعة فورية',color:'#f43f5e',icon:'fa-clock',nextStatus:'Complete',nextLabel:'تحويل إلى جاهز للتسليم'};
+    return {step:3,pct:65,barW:66,title:'متأخرة',sub:'تجاوزت موعد التسليم المحدد',color:'#f43f5e',icon:'fa-clock',nextStatus:'Complete',nextLabel:'جاهز للتسليم'};
   }
-  return {step:3,pct:75,barW:68,title:'قيد التنفيذ',sub:'جاري تنفيذ المعاملة لدى المنفذ المختص',color:'#8b5cf6',icon:'fa-gears',nextStatus:'Complete',nextLabel:'تحويل إلى جاهز للتسليم'};
+  return {step:3,pct:75,barW:68,title:'قيد التنفيذ',sub:'جاري التنفيذ لدى المنفذ',color:'#8b5cf6',icon:'fa-gears',nextStatus:'Complete',nextLabel:'جاهز للتسليم'};
 }
 
-/* بناء شريط حالة الطلب الأفقي التفاعلي + الحلقة الدائرية (يُستخدم في لوحة المعاملات ونافذة المعاملة) */
+/* بناء شريط مراحل المعاملة والحلقة الدائرية */
 function buildInteractiveStatusWidgets(tx,currentSt,isLateFlag,mode){
   const m=getStageMeta(currentSt,isLateFlag);
-  const r=52,circ=Math.round(2*Math.PI*r);
+  const r=44,circ=Math.round(2*Math.PI*r);
   const offset=Math.round(circ*(1-m.pct/100));
   const clickFn=stVal=>mode==='modal'
     ?("stageTxStatus('"+stVal+"')")
@@ -551,45 +570,42 @@ function buildInteractiveStatusWidgets(tx,currentSt,isLateFlag,mode){
     return '<i class="fa-solid '+defIc+'"></i>';
   };
 
-  return '<div class="space-y-4" data-status-widget-tx="'+escapeHtml(tx)+'">'+
-    /* 1. الدائرة التفاعلية لحالة الطلب (مثل image_6fc8c5.png) */
-    '<div onclick="'+cycleFn+'" class="tx-ring-gauge-box" title="اضغط لتحديث الحالة للمرحلة التالية ('+escapeHtml(m.nextLabel)+')">'+
-      '<div class="relative flex items-center justify-center" style="width:132px;height:132px">'+
-        '<svg class="tx-ring-svg" width="132" height="132" viewBox="0 0 132 132">'+
-          '<circle class="tx-ring-bg" cx="66" cy="66" r="'+r+'"></circle>'+
-          '<circle class="tx-ring-fg" cx="66" cy="66" r="'+r+'" stroke="'+m.color+'" stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'"></circle>'+
+  return '<div class="space-y-3" data-status-widget-tx="'+escapeHtml(tx)+'">'+
+    '<div onclick="'+cycleFn+'" class="tx-ring-gauge-box" title="تحديث الحالة">'+
+      '<div class="relative flex items-center justify-center" style="width:110px;height:110px">'+
+        '<svg class="tx-ring-svg" width="110" height="110" viewBox="0 0 110 110">'+
+          '<circle class="tx-ring-bg" cx="55" cy="55" r="'+r+'"></circle>'+
+          '<circle class="tx-ring-fg" cx="55" cy="55" r="'+r+'" stroke="'+m.color+'" stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'"></circle>'+
         '</svg>'+
         '<div class="absolute inset-0 flex flex-col items-center justify-center text-center px-2">'+
-          '<i class="fa-solid '+m.icon+' text-xl mb-1" style="color:'+m.color+'"></i>'+
-          '<span class="font-bold text-sm text-white leading-tight">'+escapeHtml(m.title)+'</span>'+
-          '<span class="text-[10px] text-slate-400 mt-0.5">تحديث الحالة ('+m.pct+'%)</span>'+
+          '<i class="fa-solid '+m.icon+' text-base mb-0.5" style="color:'+m.color+'"></i>'+
+          '<span class="font-bold text-xs text-white leading-tight">'+escapeHtml(m.title)+'</span>'+
+          '<span class="text-[9.5px] text-slate-400 mt-0.5">تحديث الحالة</span>'+
         '</div>'+
       '</div>'+
-      '<div class="mt-2 text-[11px] text-slate-300 text-center">'+escapeHtml(m.sub)+'</div>'+
     '</div>'+
 
-    /* 2. شريط المراحل الأفقي التفاعلي (4 مراحل مثل image_6fc8de.png) */
-    '<div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-black/25 p-3.5">'+
-      '<div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mb-1 px-1">'+
-        '<span class="font-bold text-ink dark:text-white"><i class="fa-solid fa-sliders ms-1 text-violet-500"></i>شريط حالة الريكوست التفاعلي</span>'+
-        '<span class="font-mono font-bold" style="color:'+m.color+'">'+m.pct+'% مكتمل</span>'+
+    '<div class="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-black/25 p-3">'+
+      '<div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mb-0.5 px-1">'+
+        '<span class="font-bold text-ink dark:text-white">مراحل المعاملة</span>'+
+        '<span class="font-mono font-bold" style="color:'+m.color+'">'+m.pct+'%</span>'+
       '</div>'+
       '<div class="tx-stepper-wrap">'+
         '<div class="tx-stepper-track"><div class="tx-stepper-fill" style="width:'+m.barW+'%"></div></div>'+
         '<div class="tx-stepper-nodes">'+
-          '<button type="button" onclick="'+clickFn('In Progress')+'" class="tx-step-node done" title="المرحلة 1: تسجيل الطلب">'+
+          '<button type="button" onclick="'+clickFn('In Progress')+'" class="tx-step-node done">'+
             '<span class="tx-step-circle"><i class="fa-solid fa-check"></i></span>'+
             '<span class="tx-step-label">تسجيل الطلب</span>'+
           '</button>'+
-          '<button type="button" onclick="'+clickFn('Under Review')+'" class="'+nodeCls(2)+'" title="اضغط لتحويل الطلب إلى مراجعة المستندات">'+
+          '<button type="button" onclick="'+clickFn('Under Review')+'" class="'+nodeCls(2)+'">'+
             '<span class="tx-step-circle">'+nodeIcon(2,'fa-magnifying-glass')+'</span>'+
             '<span class="tx-step-label">مراجعة المستندات</span>'+
           '</button>'+
-          '<button type="button" onclick="'+clickFn(currentSt==='In Progress'?'Complete':'In Progress')+'" class="'+nodeCls(3)+'" title="اضغط للتبديل بين قيد التنفيذ وجاهز للتسليم">'+
+          '<button type="button" onclick="'+clickFn(currentSt==='In Progress'?'Complete':'In Progress')+'" class="'+nodeCls(3)+'">'+
             '<span class="tx-step-circle">'+nodeIcon(3,'fa-gears')+'</span>'+
             '<span class="tx-step-label">'+(currentSt==='Complete'?'جاهز للتسليم':'التنفيذ')+'</span>'+
           '</button>'+
-          '<button type="button" onclick="'+clickFn('Delivered')+'" class="'+nodeCls(4)+'" title="اضغط لتحويل الطلب إلى تم التسليم">'+
+          '<button type="button" onclick="'+clickFn('Delivered')+'" class="'+nodeCls(4)+'">'+
             '<span class="tx-step-circle">'+nodeIcon(4,'fa-flag-checkered')+'</span>'+
             '<span class="tx-step-label">التسليم</span>'+
           '</button>'+
@@ -599,71 +615,68 @@ function buildInteractiveStatusWidgets(tx,currentSt,isLateFlag,mode){
   '</div>';
 }
 
-/* تحديث وتفاعل لوحة المعاينة الجانبية في شاشة المعاملات (#tx-inspector-panel) */
+/* تحديث لوحة المعاينة الجانبية في شاشة المعاملات (#tx-inspector-panel) */
 async function renderTxInspector(tx){
   const panel=$('tx-inspector-panel');if(!panel)return;
-  const o=groupedOrders.find(x=>String(x.transaction_id)===String(tx))||groupedOrders[0];
+  if(!tx){
+    closeTxInspector();
+    return;
+  }
+  const o=groupedOrders.find(x=>String(x.transaction_id)===String(tx));
   if(!o){
-    panel.innerHTML='<div class="py-10 text-center text-xs text-slate-400">لا توجد معاملات لعرضها</div>';
+    closeTxInspector();
     return;
   }
   selectedInspectorTx=String(o.transaction_id);
+  syncTxInspectorLayout();
   const st=getOrderStatus(o);
   const late=isOrderLate(o);
   const svcs=o.lines.map(l=>l.service+' (×'+fmtNum(l.qty)+')').join(' + ');
   const wa=waLink(o.phone,'أهلاً '+o.client_name+'، بخصوص معاملتك رقم '+o.transaction_id+' — تساهيل');
 
   panel.innerHTML=
-    '<div class="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-white/10 pb-3.5">'+
-      '<div>'+
+    '<div class="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-white/10 pb-3">'+
+      '<div class="min-w-0">'+
         '<div class="flex items-center gap-2">'+
-          '<span class="font-bold text-base text-ink dark:text-white font-mono" dir="ltr">معاملة #'+escapeHtml(o.transaction_id)+'</span>'+
+          '<span class="font-bold text-sm text-ink dark:text-white font-mono" dir="ltr">معاملة #'+escapeHtml(o.transaction_id)+'</span>'+
+          badge(st)+
         '</div>'+
-        '<button type="button" '+ac(o.client_name)+' class="mt-1 font-bold text-sm text-brand-600 dark:text-violet-300 hover:underline block text-right">'+escapeHtml(o.client_name||'—')+(o.phone?' · <span class="font-mono" dir="ltr">'+escapeHtml(o.phone)+'</span>':'')+'</button>'+
+        '<button type="button" '+ac(o.client_name)+' class="mt-1 font-bold text-xs sm:text-sm text-brand-600 dark:text-violet-300 hover:underline block text-right truncate">'+escapeHtml(o.client_name||'—')+(o.phone?' · <span class="font-mono" dir="ltr">'+escapeHtml(o.phone)+'</span>':'')+'</button>'+
       '</div>'+
-      '<div class="shrink-0">'+badge(st)+'</div>'+
+      '<button type="button" onclick="closeTxInspector()" class="h-7 w-7 shrink-0 rounded-lg bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-300 hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center transition" title="إغلاق"><i class="fa-solid fa-xmark text-xs"></i></button>'+
     '</div>'+
 
-    /* شريط الحالة التفاعلي والحلقة الدائرية */
     buildInteractiveStatusWidgets(o.transaction_id,st,late,'inspector')+
 
-    /* تفاصيل المعاملة المختصرة */
-    '<div class="rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 p-3.5 space-y-2 text-xs">'+
+    '<div class="rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 p-3 space-y-1.5 text-xs">'+
       '<div class="flex justify-between gap-2"><span class="text-slate-400">الخدمات</span><span class="font-bold text-ink dark:text-white text-left">'+escapeHtml(svcs||'—')+'</span></div>'+
-      '<div class="flex justify-between gap-2"><span class="text-slate-400">الإجمالي</span><span class="font-bold text-sm text-brand-600 dark:text-violet-300 font-mono">'+escapeHtml(formatCurrency(o.grand_total))+' · '+escapeHtml(o.payment_method||'كاش')+'</span></div>'+
-      '<div class="flex justify-between gap-2"><span class="text-slate-400">الموظف المسؤول</span><span class="font-bold text-ink dark:text-white">'+empCell(o.employee)+'</span></div>'+
+      '<div class="flex justify-between gap-2"><span class="text-slate-400">الإجمالي</span><span class="font-bold text-brand-600 dark:text-violet-300 font-mono">'+escapeHtml(formatCurrency(o.grand_total))+' · '+escapeHtml(o.payment_method||'كاش')+'</span></div>'+
+      '<div class="flex justify-between gap-2"><span class="text-slate-400">الموظف</span><span class="font-bold text-ink dark:text-white">'+empCell(o.employee)+'</span></div>'+
     '</div>'+
 
-    /* أزرار الأكشن التفاعلية الفورية (كل زر يتفاعل مع شريط الحالة وسجل الإجراءات) */
     '<div class="space-y-2">'+
-      '<div class="text-[11px] font-bold text-slate-400">تغيير سريع للحالة (يتفاعل فوراً مع الشريط):</div>'+
       '<div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">'+
         Object.keys(STATUS_PATCH).map(s=>
-          '<button type="button" onclick="inspectorChangeStatus(\''+escapeHtml(o.transaction_id)+'\',\''+s+'\')" class="rounded-xl py-2 px-2 text-[11px] font-bold border transition '+(s===st?'ring-2 ring-violet-400 border-violet-400 ':'border-transparent ')+(STATUS_CLS[s]||'')+'">'+escapeHtml(statusLabel(s))+'</button>'
+          '<button type="button" onclick="inspectorChangeStatus(\''+escapeHtml(o.transaction_id)+'\',\''+s+'\')" class="rounded-lg py-1.5 px-2 text-[11px] font-bold border transition '+(s===st?'ring-2 ring-violet-400 border-violet-400 ':'border-transparent ')+(STATUS_CLS[s]||'')+'">'+escapeHtml(statusLabel(s))+'</button>'
         ).join('')+
       '</div>'+
-      '<div class="grid grid-cols-2 gap-2 pt-1">'+
-        '<button type="button" onclick="openTxModal(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-pri text-xs py-2.5"><i class="fa-solid fa-up-right-and-down-left-from-center"></i><span>فتح التفاصيل الكاملة</span></button>'+
-        '<button type="button" onclick="printTxReceipt(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-sec text-xs py-2.5"><i class="fa-solid fa-print"></i><span>طباعة إيصال</span></button>'+
-        (canStaffEditTx()?'<button type="button" onclick="openTxEdit(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-sec text-xs py-2.5"><i class="fa-solid fa-pen-to-square text-amber-400"></i><span>تعديل المعاملة</span></button>':'')+
-        (wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="btn-neo-sec text-xs py-2.5 text-emerald-500"><i class="fa-brands fa-whatsapp"></i><span>مراسلة واتساب</span></a>':'')+
+      '<div class="grid grid-cols-2 gap-1.5 pt-0.5">'+
+        '<button type="button" onclick="openTxModal(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-pri text-xs py-2"><i class="fa-solid fa-up-right-and-down-left-from-center"></i><span>التفاصيل</span></button>'+
+        '<button type="button" onclick="printTxReceipt(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-sec text-xs py-2"><i class="fa-solid fa-print"></i><span>طباعة</span></button>'+
+        (canStaffEditTx()?'<button type="button" onclick="openTxEdit(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-sec text-xs py-2"><i class="fa-solid fa-pen-to-square text-amber-400"></i><span>تعديل</span></button>':'')+
+        (wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="btn-neo-sec text-xs py-2 text-emerald-400"><i class="fa-brands fa-whatsapp"></i><span>واتساب</span></a>':'')+
       '</div>'+
     '</div>'+
 
-    /* إضافة تعليق متابعة سريع من داخل لوحة المعاملات */
-    '<form onsubmit="inspectorAddComment(event,\''+escapeHtml(o.transaction_id)+'\')" class="flex gap-2 pt-1">'+
-      '<input id="insp-cmt-in" type="text" required maxlength="500" placeholder="أضف تعليق أو إجراء متابعة على المعاملة..." class="field !py-2 text-xs flex-1">'+
-      '<button id="insp-cmt-btn" type="submit" class="btn-neo-pri !py-2 !px-3.5 text-xs shrink-0"><i class="fa-solid fa-paper-plane"></i><span>إضافة</span></button>'+
+    '<form onsubmit="inspectorAddComment(event,\''+escapeHtml(o.transaction_id)+'\')" class="flex gap-1.5 pt-0.5">'+
+      '<input id="insp-cmt-in" type="text" required maxlength="500" placeholder="أضف تعليق..." class="field !py-1.5 text-xs flex-1">'+
+      '<button id="insp-cmt-btn" type="submit" class="btn-neo-pri !py-1.5 !px-3 text-xs shrink-0"><i class="fa-solid fa-paper-plane"></i><span>إضافة</span></button>'+
     '</form>'+
 
-    /* سجل الإجراءات والتغييرات الزمني (مثل image_6fc8c7.png) */
-    '<div class="pt-2 border-t border-slate-100 dark:border-white/10 space-y-3">'+
-      '<div class="flex items-center justify-between">'+
-        '<h4 class="font-bold text-sm text-ink dark:text-white">سجل الإجراءات والتغييرات</h4>'+
-        '<span class="text-[10.5px] text-slate-400">تحديث لحظي</span>'+
-      '</div>'+
-      '<div id="insp-timeline-box" class="tx-timeline max-h-64 overflow-y-auto pr-4 py-1">'+
-        '<div class="text-xs text-slate-400">جارٍ تحميل السجل...</div>'+
+    '<div class="pt-2 border-t border-slate-100 dark:border-white/10 space-y-2.5">'+
+      '<h4 class="font-bold text-xs text-ink dark:text-white">سجل الإجراءات</h4>'+
+      '<div id="insp-timeline-box" class="tx-timeline max-h-56 overflow-y-auto pr-3.5 py-0.5">'+
+        '<div class="text-xs text-slate-400">جارٍ التحميل...</div>'+
       '</div>'+
     '</div>';
 
@@ -675,7 +688,6 @@ async function loadInspectorTimeline(o){
   const tx=String(o.transaction_id);
   const events=[];
 
-  // جلب سجل التغييرات والتعليقات لهذه المعاملة
   if(sbClient){
     try{
       const [audRes,cmtRes]=await Promise.all([
@@ -684,7 +696,7 @@ async function loadInspectorTimeline(o){
       ]);
       if(!audRes.error&&Array.isArray(audRes.data)){
         audRes.data.forEach(a=>{
-          let title='تحديث على '+tx,desc='';
+          let title='تحديث '+tx,desc='';
           if(a.action==='created'){
             title='طلب جديد '+tx;
             desc=(a.user_name||'موظف')+' سجّل طلب '+(a.service||'');
@@ -695,7 +707,7 @@ async function loadInspectorTimeline(o){
             const det=a.details||{};
             if(det.delivered&&det.delivered.new===true){
               title='تم التسليم '+tx;
-              desc='تم تسليم '+(a.service||'المعاملة')+' للعميل بواسطة '+(a.user_name||'موظف');
+              desc='تم تسليم '+(a.service||'المعاملة')+' بواسطة '+(a.user_name||'موظف');
             }else if(det.complete||det.under_review||det.delivered){
               title='تغيير حالة '+tx;
               desc='تحديث حالة '+(a.service||'المعاملة')+' بواسطة '+(a.user_name||'موظف');
@@ -711,21 +723,20 @@ async function loadInspectorTimeline(o){
         cmtRes.data.forEach(c=>{
           events.push({
             at:c.created_at,
-            title:'تحديث ومتابعة '+tx,
-            desc:(c.author_name||'موظف')+' أضاف تعليق: «'+c.body+'»'
+            title:'تعليق '+tx,
+            desc:(c.author_name||'موظف')+': «'+c.body+'»'
           });
         });
       }
     }catch(e){}
   }
 
-  // إضافة حدث إنشاء الطلب الأساسي دائماً في نهاية السجل
   const initAt=o.received_at||o.created_at;
   if(!events.some(x=>x.title.indexOf('طلب جديد')===0)){
     events.push({
       at:initAt,
-      title:'تم إنشاء الطلب '+tx,
-      desc:'تسجيل الطلب للعميل '+(o.client_name||'')+' بواسطة '+(o.employee||'موظف')
+      title:'تم إنشاء الطلب',
+      desc:'تسجيل الطلب بواسطة '+(o.employee||'موظف')
     });
   }
 
@@ -739,8 +750,8 @@ async function loadInspectorTimeline(o){
     return '<div class="tx-tl-item">'+
       '<span class="tx-tl-dot"></span>'+
       '<div class="font-bold text-ink dark:text-white text-xs">'+escapeHtml(ev.title)+'</div>'+
-      '<div class="text-slate-500 dark:text-slate-300 text-[11.5px] mt-0.5">'+escapeHtml(ev.desc)+'</div>'+
-      '<div class="text-[10.5px] text-slate-400 mt-0.5 font-mono">'+escapeHtml(tStr)+'</div>'+
+      '<div class="text-slate-500 dark:text-slate-300 text-[11px] mt-0.5">'+escapeHtml(ev.desc)+'</div>'+
+      '<div class="text-[10px] text-slate-400 mt-0.5 font-mono">'+escapeHtml(tStr)+'</div>'+
     '</div>';
   }).join('');
 }
@@ -764,7 +775,7 @@ async function inspectorAddComment(e,tx){
     const r=await sbClient.from('tx_comments').insert({transaction_id:tx,author_id:currentUser.id,author_name:author,body:body});
     if(r.error)throw r.error;
     inp.value='';
-    showToast('تم إضافة التعليق وتحديث سجل الإجراءات');
+    showToast('تم إضافة التعليق');
     renderTxInspector(tx);
   }catch(err){showError('تعذّر حفظ التعليق',err);}
   finally{if(btn)btn.disabled=false;}
@@ -778,10 +789,8 @@ function renderRecentRequests(){
   setT('t-sales',formatCurrency(tsum));setT('t-orders',String(td.length));
   setT('t-lines',String(td.reduce((s,o)=>s+o.lines.length,0)));setT('t-avg',formatCurrency(td.length?tsum/td.length:0));
 
-  // تحديث قائمة آخر معاملاتك اليوم المصغرة في شاشة طلب جديد
   renderMyTodayMiniList(td);
 
-  // تحديث كروت KPI الـ 4 في شاشة المعاملات المستقلة
   const openOrders=groupedOrders.filter(o=>getOrderStatus(o)!=='Delivered');
   const lateOrders=groupedOrders.filter(o=>isOrderLate(o));
   const readyOrders=groupedOrders.filter(o=>getOrderStatus(o)==='Complete');
@@ -790,7 +799,6 @@ function renderRecentRequests(){
   setT('tx-kpi-ready',String(readyOrders.length));
   setT('tx-kpi-today',String(td.length));
 
-  // تحديث عداد المعاملات المفتوحة في الهيدر والقائمة
   ['hdr-tx-badge','menu-tx-badge'].forEach(id=>{
     const b=$(id);if(!b)return;
     b.textContent=openOrders.length>99?'99+':String(openOrders.length);
@@ -810,18 +818,21 @@ function renderRecentRequests(){
   const on='rounded-lg px-2.5 py-1 text-xs font-semibold bg-white dark:bg-violet-600 text-brand-700 dark:text-white shadow-xs',off='rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-500';
   if($('rm-all'))$('rm-all').className=recentMode==='all'?on:off;
   if($('rm-today'))$('rm-today').className=recentMode==='today'?on:off;
-  if($('recent-count'))$('recent-count').textContent=list.length+' معاملة'+(list.length>RLIM()?' (عرض أحدث '+RLIM()+')':'')+' · اضغط على أي معاملة لعرض شريط حالتها التفاعلي على اليسار';
+  if($('recent-count'))$('recent-count').textContent=list.length+' معاملة'+(list.length>RLIM()?' (أحدث '+RLIM()+')':'');
 
   const shown=list.slice(0,RLIM());
   if(!shown.length){
+    closeTxInspector();
     if($('recent-table-body'))$('recent-table-body').innerHTML='<tr><td colspan="8" class="px-6 py-10 text-center text-slate-400">لا توجد معاملات مطابقة</td></tr>';
     if($('recent-cards-container'))$('recent-cards-container').innerHTML='<div class="card p-8 text-center text-slate-400 text-xs">لا توجد معاملات مطابقة</div>';
     return;
   }
 
-  if(!selectedInspectorTx||!list.some(o=>String(o.transaction_id)===String(selectedInspectorTx))){
-    selectedInspectorTx=String(shown[0].transaction_id);
+  /* لا نفتح الكارت الجانبي تلقائياً؛ يظل مغلقاً إلا إذا اختار المستخدم معاملة موجودة في القائمة */
+  if(selectedInspectorTx&&!list.some(o=>String(o.transaction_id)===String(selectedInspectorTx))){
+    selectedInspectorTx=null;
   }
+  syncTxInspectorLayout();
 
   const sts=o=>isOrderLate(o)
     ?'<span class="st17-b" style="--sc:244,63,94;--sct:253,164,175">متأخر</span>'
@@ -829,7 +840,7 @@ function renderRecentRequests(){
 
   if($('recent-table-body')){
     $('recent-table-body').innerHTML=shown.map(function(o){
-      const isSel=String(o.transaction_id)===String(selectedInspectorTx);
+      const isSel=!!selectedInspectorTx&&String(o.transaction_id)===String(selectedInspectorTx);
       const svcHtml='<div class="rc-svc-list">'+o.lines.map(l=>
         '<div class="rc-svc-pill">'+
           '<span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span>'+
@@ -838,18 +849,18 @@ function renderRecentRequests(){
       ).join('')+'</div>';
       const wa=waLink(o.phone,'أهلاً '+o.client_name+'، بخصوص معاملتك رقم '+o.transaction_id+' — تساهيل');
       return '<tr onclick="selectTxForInspector(\''+escapeHtml(o.transaction_id)+'\',false)" class="cursor-pointer hover:bg-slate-50/80 dark:hover:bg-white/5 align-middle '+(isSel?'tx-row-selected':'')+'">'+
-      '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr"><button type="button" '+at(o.transaction_id)+' class="rc-tx-pill">'+escapeHtml(o.transaction_id)+'</button></td>'+
-      '<td class="px-3 py-3.5 font-bold text-ink dark:text-white min-w-[160px] max-w-[230px]">'+
+      '<td class="px-3 py-3 whitespace-nowrap" dir="ltr"><button type="button" '+at(o.transaction_id)+' class="rc-tx-pill">'+escapeHtml(o.transaction_id)+'</button></td>'+
+      '<td class="px-3 py-3 font-bold text-ink dark:text-white min-w-[155px] max-w-[220px]">'+
         '<button type="button" '+ac(o.client_name)+' class="text-right text-start leading-snug hover:text-brand-600 hover:underline block w-full">'+escapeHtml(o.client_name)+'</button>'+
         (o.phone?'<div class="mt-1 rc-phone-pill !py-0.5 !px-2 !text-[11px]" dir="ltr"><span>'+escapeHtml(o.phone)+'</span>'+(wa?'<a href="'+wa+'" onclick="event.stopPropagation()" target="_blank" rel="noopener" class="text-emerald-500 hover:text-emerald-400"><i class="fa-brands fa-whatsapp"></i></a>':'')+'</div>':'')+
       '</td>'+
-      '<td class="px-3 py-3.5">'+svcHtml+'</td>'+
-      '<td class="px-3 py-3.5 text-xs whitespace-nowrap font-medium">'+empCell(o.employee)+'</td>'+
-      '<td class="px-3 py-3.5 font-bold text-ink dark:text-white whitespace-nowrap text-sm">'+formatCurrency(o.grand_total)+'</td>'+
-      '<td class="px-3 py-3.5 whitespace-nowrap"><div class="flex flex-col items-start gap-1">'+sts(o)+'</div></td>'+
-      '<td class="px-3 py-3.5 whitespace-nowrap">'+formatDateSplit(o.received_at||o.created_at)+'</td>'+
-      '<td class="px-3 py-3.5 text-center whitespace-nowrap"><div class="inline-flex items-center justify-center gap-1.5">'+
-        '<button type="button" '+at(o.transaction_id)+' class="p-2 rounded-lg bg-slate-100/80 dark:bg-white/10 text-slate-600 dark:text-slate-200 hover:bg-violet-500/20 hover:text-violet-300 transition" title="فتح النافذة الكاملة"><i class="fa-solid fa-eye text-xs"></i></button>'+
+      '<td class="px-3 py-3">'+svcHtml+'</td>'+
+      '<td class="px-3 py-3 text-xs whitespace-nowrap font-medium">'+empCell(o.employee)+'</td>'+
+      '<td class="px-3 py-3 font-bold text-ink dark:text-white whitespace-nowrap text-xs sm:text-sm">'+formatCurrency(o.grand_total)+'</td>'+
+      '<td class="px-3 py-3 whitespace-nowrap"><div class="flex flex-col items-start gap-1">'+sts(o)+'</div></td>'+
+      '<td class="px-3 py-3 whitespace-nowrap">'+formatDateSplit(o.received_at||o.created_at)+'</td>'+
+      '<td class="px-3 py-3 text-center whitespace-nowrap"><div class="inline-flex items-center justify-center gap-1.5">'+
+        '<button type="button" '+at(o.transaction_id)+' class="p-2 rounded-lg bg-slate-100/80 dark:bg-white/10 text-slate-600 dark:text-slate-200 hover:bg-violet-500/20 hover:text-violet-300 transition" title="التفاصيل"><i class="fa-solid fa-eye text-xs"></i></button>'+
         '<button type="button" data-tx="'+escapeHtml(o.transaction_id)+'" onclick="event.stopPropagation();printTxReceipt(this.dataset.tx)" class="p-2 rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-300 hover:bg-violet-500/25 transition" title="طباعة إيصال"><i class="fa-solid fa-print text-xs"></i></button>'+
       '</div></td></tr>';
     }).join('');
@@ -857,16 +868,16 @@ function renderRecentRequests(){
 
   if($('recent-cards-container')){
     $('recent-cards-container').innerHTML=shown.map(function(o){
-      const isSel=String(o.transaction_id)===String(selectedInspectorTx);
+      const isSel=!!selectedInspectorTx&&String(o.transaction_id)===String(selectedInspectorTx);
       const chips=o.lines.map(l=>'<div class="rc-svc-pill w-full"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div>').join('');
-      return '<div data-tx="'+escapeHtml(o.transaction_id)+'" onclick="selectTxForInspector(\''+escapeHtml(o.transaction_id)+'\',true)" class="card lift w-full p-4 text-start block cursor-pointer '+(isSel?'ring-2 ring-violet-500':'')+'">'+
+      return '<div data-tx="'+escapeHtml(o.transaction_id)+'" onclick="selectTxForInspector(\''+escapeHtml(o.transaction_id)+'\',true)" class="card lift w-full p-3.5 text-start block cursor-pointer '+(isSel?'ring-2 ring-violet-500':'')+'">'+
       '<div class="flex items-start justify-between gap-2"><div class="min-w-0"><div class="font-bold text-ink dark:text-white leading-snug">'+escapeHtml(o.client_name)+'</div><div class="mt-1 flex items-center gap-2 text-[11px] text-slate-400" dir="ltr"><span class="rc-tx-pill !py-0.5 !px-2 !text-[11px]">'+escapeHtml(o.transaction_id)+'</span>'+(o.phone?'<span>'+escapeHtml(o.phone)+'</span>':'')+'</div></div><div class="flex shrink-0 flex-wrap justify-end gap-1">'+sts(o)+'</div></div>'+
-      '<div class="mt-3 flex flex-col gap-1.5">'+chips+'</div>'+
-      '<div class="mt-3 flex items-end justify-between gap-2 border-t border-slate-100 dark:border-white/10 pt-3"><div class="min-w-0 text-[11px] text-slate-400"><div class="truncate font-medium">'+escapeHtml(o.employee||'—')+(o.receiver?' ← '+escapeHtml(o.receiver):'')+'</div><div>'+formatDateTime(o.received_at||o.created_at)+'</div></div><div class="flex items-center gap-2"><span class="font-bold text-sm text-brand-600 dark:text-violet-300 whitespace-nowrap">'+formatCurrency(o.grand_total)+'</span><button type="button" '+at(o.transaction_id)+' class="px-2.5 py-1 rounded-lg bg-violet-600 text-white text-[11px] font-bold">التفاصيل</button></div></div></div>';
+      '<div class="mt-2.5 flex flex-col gap-1.5">'+chips+'</div>'+
+      '<div class="mt-2.5 flex items-end justify-between gap-2 border-t border-slate-100 dark:border-white/10 pt-2.5"><div class="min-w-0 text-[11px] text-slate-400"><div class="truncate font-medium">'+escapeHtml(o.employee||'—')+(o.receiver?' ← '+escapeHtml(o.receiver):'')+'</div><div>'+formatDateTime(o.received_at||o.created_at)+'</div></div><div class="flex items-center gap-2"><span class="font-bold text-xs sm:text-sm text-brand-600 dark:text-violet-300 whitespace-nowrap">'+formatCurrency(o.grand_total)+'</span><button type="button" '+at(o.transaction_id)+' class="px-2.5 py-1 rounded-lg bg-violet-600 text-white text-[11px] font-bold">التفاصيل</button></div></div></div>';
     }).join('');
   }
 
-  renderTxInspector(selectedInspectorTx);
+  if(selectedInspectorTx)renderTxInspector(selectedInspectorTx);
 }
 
 /* ---------- نموذج الخدمات ---------- */
@@ -1032,7 +1043,7 @@ async function handleSaveOrder(e){
     renderQuickServicesGrid();
     updateOrderProgressBar();
     await loadRecentRequests();
-    selectedInspectorTx=base.transaction_id;
+    
 
     if(saveMode==='print'){
       setTimeout(()=>buildOfficialReceipt(printableRows),180);
@@ -1063,7 +1074,7 @@ function openTxModal(tx){
   (o.notes?'<div class="p-3 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 rounded-xl text-xs"><i class="fa-solid fa-note-sticky ms-1"></i><b>ملاحظات:</b> '+escapeHtml(o.notes)+'</div>':'')+
   '<div><h4 class="font-bold text-xs text-slate-500 mb-2">بنود الخدمات ('+o.lines.length+')</h4><div class="space-y-2">'+
   o.lines.map(l=>'<div class="flex items-start justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-3"><div class="min-w-0"><div class="font-semibold text-ink dark:text-white">'+escapeHtml(l.service)+'</div><div class="mt-1 text-xs text-slate-500">'+fmtNum(l.qty)+' × '+fmtNum(l.unit_price)+' ج.م'+(Number(l.discount_pct)>0?' <span class="text-violet-600 dark:text-violet-300">(بعد خصم '+fmtNum(l.discount_pct)+'% من '+fmtNum(l.list_price)+')</span>':'')+' · المنفذ: '+escapeHtml(l.executor||'—')+' · تكلفة التنفيذ: '+formatCurrency(execCostOf(l))+'</div><div class="mt-2 flex flex-wrap items-center gap-2">'+badge(l.status)+(l.exec_start_date?'<span class="text-[11px] text-slate-400">بداية التنفيذ: '+formatDateOnly(l.exec_start_date)+'</span>':'')+'</div>'+statusSelect(l)+'</div><div class="shrink-0 font-bold font-mono text-brand-600 dark:text-violet-300">'+formatCurrency(l.total)+'</div></div>').join('')+'</div></div>'+
-  '<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><div class="text-[11px] text-slate-500 mb-2">تغيير حالة كل بنود المعاملة دفعة واحدة (يتفاعل مع الشريط بالأعلى ثم اضغط «حفظ التغييرات»)</div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">'+Object.keys(STATUS_PATCH).map(s=>'<button type="button" data-tx="'+escapeHtml(o.transaction_id)+'" data-s="'+s+'" onclick="stageTxStatus(this.dataset.s)" class="rounded-lg py-2 text-xs font-bold '+(STATUS_CLS[s]||'')+'">'+statusLabel(s)+'</button>').join('')+'</div></div>'+
+  '<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><div class="text-[11px] text-slate-500 mb-2">تغيير حالة كل البنود</div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">'+Object.keys(STATUS_PATCH).map(s=>'<button type="button" data-tx="'+escapeHtml(o.transaction_id)+'" data-s="'+s+'" onclick="stageTxStatus(this.dataset.s)" class="rounded-lg py-2 text-xs font-bold '+(STATUS_CLS[s]||'')+'">'+statusLabel(s)+'</button>').join('')+'</div></div>'+
   '<div class="flex items-center justify-between p-3.5 bg-slate-900 text-white rounded-xl"><span class="text-xs font-semibold text-slate-300">الإجمالي النهائي:</span><span class="text-lg font-bold font-mono">'+formatCurrency(o.grand_total)+'</span></div>';
   $('tx-modal-actions-left').innerHTML='<button id="tx-save-btn" type="button" onclick="saveTxChanges()" disabled class="px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold flex items-center gap-1.5 opacity-50"><i class="fa-solid fa-floppy-disk"></i><span>حفظ التغييرات</span></button>'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5"><i class="fa-brands fa-whatsapp"></i><span>واتساب</span></a>':'')+
   (o.phone?'<a href="tel:'+escapeHtml(o.phone)+'" class="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-phone"></i><span>اتصال</span></a>':'')+
@@ -2245,7 +2256,7 @@ async function markChatRead(cid){
   try{await sbClient.rpc('mark_channel_read',{cid:cid});}catch(e){console.warn('mark read',e);}
 }
 
-/* ---------- الشاشة الرئيسية (Home Hub + منصة الكروت المتطايرة التفاعلية) ---------- */
+/* ---------- الشاشة الرئيسية (Home Hub) ---------- */
 function selectHomeFloatingTx(tx){
   window.__homeFloatingTxId=String(tx||'');
   renderHomeTab();
@@ -2261,7 +2272,6 @@ function renderFloatingCardsStage(eh,todayOrders,lateCnt){
   const selStatus=selOrder?getOrderStatus(selOrder):'In Progress';
   const selStage=getStageMeta(selStatus,selOrder?isOrderLate(selOrder):false);
 
-  // إحصائيات آخر 7 أيام للرسم البياني التفاعلي داخل الكارت الطائر
   const WDAYS=['أحد','اثنين','ثلاثاء','أربعاء','خميس','جمعة','سبت'];
   const dayBars=[];
   let maxDayRev=1;
@@ -2274,7 +2284,6 @@ function renderFloatingCardsStage(eh,todayOrders,lateCnt){
     dayBars.push({day:WDAYS[d.getDay()],cnt:dayOrds.length,rev:rev,isToday:i===0});
   }
 
-  // عميل متكرر لزر "كرّر آخر طلب"
   const clientCounts=new Map();
   groupedOrders.forEach(o=>{
     const k=normName(o.client_name||'');
@@ -2284,88 +2293,72 @@ function renderFloatingCardsStage(eh,todayOrders,lateCnt){
   });
   const topRepeatClient=[...clientCounts.values()].sort((a,b)=>b.cnt-a.cnt)[0]||(selOrder?{name:selOrder.client_name,cnt:1,lastOrder:selOrder}:null);
 
-  // حساب نسبة تحقيق هدف الشهر للكارت الدائري
   const curYm=new Date().toLocaleDateString('en-CA').slice(0,7);
   const monthSales=allRequestLines.filter(l=>dayKey(lineDate(l)).slice(0,7)===curYm).reduce((s,l)=>s+(Number(l.total)||0),0);
   const targetGoal=Math.max(120000,Math.ceil((monthSales||85000)/50000)*50000);
   const goalPct=Math.min(100,Math.round((monthSales/targetGoal)*100))||0;
-  const rRing=36,cRing=Math.round(2*Math.PI*rRing),oRing=Math.round(cRing*(1-goalPct/100));
+  const rRing=32,cRing=Math.round(2*Math.PI*rRing),oRing=Math.round(cRing*(1-goalPct/100));
 
   const lateOrder=groupedOrders.find(o=>isOrderLate(o));
   const delivOrder=groupedOrders.find(o=>getOrderStatus(o)==='Delivered');
 
   return '<div class="fl-stage-wrap">'+
-    '<div class="flex flex-wrap items-center justify-between gap-2 mb-4">'+
-      '<div class="flex items-center gap-2.5">'+
-        '<span class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-md"><i class="fa-solid fa-wand-magic-sparkles"></i></span>'+
-        '<div>'+
-          '<h2 class="font-bold text-sm sm:text-base text-white">لوحة الكروت المتطايرة التفاعلية · نظرة حية على القسم</h2>'+
-          '<p class="text-[11px] text-violet-200/80">مرّر الماوس أو اضغط على أي كارت أو معاملة للتفاعل المباشر</p>'+
-        '</div>'+
-      '</div>'+
-      '<div class="flex items-center gap-2">'+
-        '<button type="button" onclick="switchTab(\'new\')" class="btn-neo-pri !py-1.5 !px-3.5 text-xs"><i class="fa-solid fa-plus"></i><span>طلب جديد</span></button>'+
-        '<button type="button" onclick="switchTab(\'tx\')" class="btn-neo-sec !py-1.5 !px-3.5 text-xs text-white"><span>كل المعاملات</span></button>'+
-      '</div>'+
-    '</div>'+
-
     '<div class="fl-deck-grid">'+
-      /* الكارت المتطاير الأيمن: قائمة المعاملات السريعة */
-      '<div class="fl-card fl-tilt-r flex flex-col justify-between gap-3">'+
+      /* الكارت الأيمن: آخر المعاملات */
+      '<div class="fl-card fl-tilt-r flex flex-col justify-between gap-2.5">'+
         '<div>'+
-          '<div class="flex items-center justify-between mb-3">'+
-            '<span class="font-bold text-base text-white">المعاملات</span>'+
-            '<span class="text-[11px] text-violet-300">دوس على معاملة للمعاينة</span>'+
+          '<div class="flex items-center justify-between mb-2.5">'+
+            '<span class="font-bold text-sm text-white">المعاملات</span>'+
+            '<button type="button" onclick="switchTab(\'tx\')" class="text-[11px] font-semibold text-violet-300 hover:underline">عرض الكل</button>'+
           '</div>'+
-          '<div class="space-y-1.5">'+
+          '<div class="space-y-1">'+
             (recent5.length?recent5.map(o=>{
               const isSel=selOrder&&String(o.transaction_id)===String(selOrder.transaction_id);
               const init=Array.from(String(o.client_name||'؟').trim())[0]||'؟';
               const svcTxt=o.lines.map(l=>l.service).filter(Boolean).slice(0,2).join(' + ');
               const st=getOrderStatus(o);
               return '<button type="button" onclick="selectHomeFloatingTx(\''+eh(o.transaction_id)+'\')" class="fl-tx-item '+(isSel?'sel':'')+'">'+
-                '<span class="flex items-center gap-2.5 min-w-0">'+
+                '<span class="flex items-center gap-2 min-w-0">'+
                   '<span class="fl-av">'+eh(init)+'</span>'+
                   '<span class="min-w-0">'+
-                    '<span class="block font-bold text-xs sm:text-sm text-white truncate">'+eh(o.client_name||'—')+'</span>'+
-                    '<span class="block text-[11px] text-slate-400 truncate mt-0.5">'+eh(svcTxt||'—')+'</span>'+
+                    '<span class="block font-bold text-xs text-white truncate">'+eh(o.client_name||'—')+'</span>'+
+                    '<span class="block text-[10.5px] text-slate-400 truncate mt-0.5">'+eh(svcTxt||'—')+'</span>'+
                   '</span>'+
                 '</span>'+
                 '<span class="shrink-0">'+badge(st)+'</span>'+
               '</button>';
-            }).join(''):'<div class="py-8 text-center text-xs text-slate-400">لا توجد معاملات بعد</div>')+
+            }).join(''):'<div class="py-6 text-center text-xs text-slate-400">لا توجد معاملات بعد</div>')+
           '</div>'+
         '</div>'+
-        /* كارت العميل المتكرر وتكرار آخر طلب */
         (topRepeatClient&&topRepeatClient.lastOrder?
-          '<div class="mt-2 pt-3 border-t border-white/10">'+
+          '<div class="mt-2 pt-2.5 border-t border-white/10">'+
             '<div class="flex items-center justify-between gap-2">'+
               '<div class="min-w-0">'+
                 '<div class="font-bold text-xs text-white truncate">'+eh(topRepeatClient.name)+'</div>'+
-                '<div class="text-[11px] text-violet-300">عميل مسجّل · '+topRepeatClient.cnt+' معاملات</div>'+
+                '<div class="text-[10.5px] text-violet-300">عميل مسجّل · '+topRepeatClient.cnt+' معاملات</div>'+
               '</div>'+
               '<span class="fl-av">'+eh(Array.from(String(topRepeatClient.name||'أ'))[0])+'</span>'+
             '</div>'+
-            '<button type="button" data-qk-repeat="'+eh(topRepeatClient.lastOrder.transaction_id)+'" onclick="switchTab(\'new\')" class="mt-2.5 w-full rounded-xl bg-violet-500/20 hover:bg-violet-500/35 border border-violet-400/35 px-3 py-2 text-xs font-bold text-violet-200 flex items-center justify-between transition">'+
+            '<button type="button" data-qk-repeat="'+eh(topRepeatClient.lastOrder.transaction_id)+'" onclick="switchTab(\'new\')" class="mt-2 w-full rounded-xl bg-violet-500/20 hover:bg-violet-500/35 border border-violet-400/30 px-2.5 py-1.5 text-[11px] font-bold text-violet-200 flex items-center justify-between transition">'+
               '<span class="truncate">آخر طلب: '+eh((topRepeatClient.lastOrder.lines[0]&&topRepeatClient.lastOrder.lines[0].service)||'خدمة')+' · '+eh(formatCurrency(topRepeatClient.lastOrder.grand_total))+'</span>'+
               '<span class="shrink-0 underline">كرّر</span>'+
             '</button>'+
           '</div>':'')+
       '</div>'+
 
-      /* الكارت المتطاير الأوسط المرتفع: ملخص الطلب / المعاملة المختارة + هدف الشهر */
-      '<div class="flex flex-col gap-4">'+
-        '<div class="fl-card fl-dark fl-tilt-center space-y-3.5">'+
+      /* الكارت الأوسط: ملخص المعاملة + هدف الشهر */
+      '<div class="flex flex-col gap-3.5">'+
+        '<div class="fl-card fl-dark fl-tilt-center space-y-3">'+
           (selOrder?
             '<div class="flex items-center justify-between">'+
-              '<span class="rounded-full bg-violet-500/20 border border-violet-400/35 px-3 py-0.5 text-[11px] font-bold text-violet-200" dir="ltr">● معاملة #'+eh(selOrder.transaction_id)+'</span>'+
-              '<span class="font-bold text-base text-white">ملخص الطلب</span>'+
+              '<span class="rounded-full bg-violet-500/20 border border-violet-400/30 px-2.5 py-0.5 text-[10.5px] font-bold text-violet-200" dir="ltr">● #'+eh(selOrder.transaction_id)+'</span>'+
+              '<span class="font-bold text-sm text-white">ملخص الطلب</span>'+
             '</div>'+
             '<div class="text-xs text-slate-300 flex items-center justify-between">'+
-              '<span class="font-bold text-sm text-white">'+eh(selOrder.client_name||'—')+'</span>'+
+              '<span class="font-bold text-white truncate">'+eh(selOrder.client_name||'—')+'</span>'+
               '<span class="font-mono text-violet-300" dir="ltr">'+eh(selOrder.phone||'')+'</span>'+
             '</div>'+
-            '<div class="space-y-1.5 border-y border-white/10 py-2.5 text-xs">'+
+            '<div class="space-y-1.5 border-y border-white/10 py-2 text-xs">'+
               selOrder.lines.slice(0,3).map(l=>
                 '<div class="flex items-center justify-between gap-2">'+
                   '<span class="text-slate-200 truncate">'+eh(l.service||'—')+(Number(l.qty)>1?' ×'+fmtNum(l.qty):'')+'</span>'+
@@ -2376,49 +2369,47 @@ function renderFloatingCardsStage(eh,todayOrders,lateCnt){
             '</div>'+
             '<div class="flex items-baseline justify-between">'+
               '<span class="text-xs text-slate-400">الإجمالي</span>'+
-              '<div class="text-3xl font-bold font-mono text-white">'+fmtNum(selOrder.grand_total)+' <small class="text-xs font-normal text-slate-300">ج.م</small></div>'+
+              '<div class="text-2xl font-bold font-mono text-white">'+fmtNum(selOrder.grand_total)+' <small class="text-xs font-normal text-slate-300">ج.م</small></div>'+
             '</div>'+
-            /* شريط حالة المعاملة المصغر داخل الكارت الطائر */
             '<div class="space-y-1">'+
-              '<div class="flex items-center justify-between text-[11px]">'+
-                '<span class="text-slate-300">حالة الطلب: <b style="color:'+selStage.color+'">'+eh(selStage.title)+'</b></span>'+
+              '<div class="flex items-center justify-between text-[10.5px]">'+
+                '<span class="text-slate-300">'+eh(selStage.title)+'</span>'+
                 '<span class="font-mono font-bold" style="color:'+selStage.color+'">'+selStage.pct+'%</span>'+
               '</div>'+
               '<div class="h-1.5 rounded-full bg-white/10 overflow-hidden"><div class="h-full rounded-full transition-all duration-500" style="width:'+selStage.barW+'%;background:'+selStage.color+'"></div></div>'+
             '</div>'+
-            '<div class="pt-1 space-y-2">'+
-              '<button type="button" onclick="openTxInTransactionsTab(\''+eh(selOrder.transaction_id)+'\')" class="btn-neo-pri w-full py-2.5 text-xs">فتح في شاشة المعاملات وتغيير الحالة</button>'+
-              '<div class="grid grid-cols-2 gap-2">'+
-                '<button type="button" onclick="printTxReceipt(\''+eh(selOrder.transaction_id)+'\')" class="btn-neo-sec !text-white !border-white/15 !bg-white/5 py-2 text-xs">حفظ وطباعة</button>'+
-                '<button type="button" onclick="switchTab(\'new\')" class="btn-neo-sec !text-white !border-white/15 !bg-white/5 py-2 text-xs">طلب جديد +</button>'+
+            '<div class="pt-1 space-y-1.5">'+
+              '<button type="button" onclick="openTxInTransactionsTab(\''+eh(selOrder.transaction_id)+'\')" class="btn-neo-pri w-full py-2 text-xs">فتح المعاملة</button>'+
+              '<div class="grid grid-cols-2 gap-1.5">'+
+                '<button type="button" onclick="printTxReceipt(\''+eh(selOrder.transaction_id)+'\')" class="btn-neo-sec !text-white !border-white/15 !bg-white/5 py-1.5 text-xs">طباعة</button>'+
+                '<button type="button" onclick="switchTab(\'new\')" class="btn-neo-sec !text-white !border-white/15 !bg-white/5 py-1.5 text-xs">طلب جديد</button>'+
               '</div>'+
             '</div>'
-          :'<div class="py-10 text-center text-xs text-slate-400">سجّل أول معاملة لتظهر هنا</div>')+
+          :'<div class="py-8 text-center text-xs text-slate-400">لا توجد معاملات بعد</div>')+
         '</div>'+
 
-        /* كارت هدف الشهر الدائري المتطاير */
-        '<div onclick="switchTab(\'comm\')" class="fl-card fl-tilt-b2 cursor-pointer flex items-center justify-between gap-4">'+
+        /* كارت هدف الشهر */
+        '<div onclick="switchTab(\'comm\')" class="fl-card fl-tilt-b2 cursor-pointer flex items-center justify-between gap-3 !p-3.5">'+
           '<div>'+
-            '<div class="font-bold text-sm text-white">هدف الشهر</div>'+
-            '<div class="text-xs text-slate-400 font-mono mt-1" dir="ltr">'+fmtNum(monthSales)+' / '+fmtNum(targetGoal)+' ج.م</div>'+
-            '<div class="text-[11px] text-violet-300 mt-1">اضغط لفتح الكوميشن والتارجت ←</div>'+
+            '<div class="font-bold text-xs sm:text-sm text-white">هدف الشهر</div>'+
+            '<div class="text-xs text-slate-400 font-mono mt-1" dir="ltr">'+fmtNum(monthSales)+' / '+fmtNum(targetGoal)+'</div>'+
           '</div>'+
-          '<div class="relative flex items-center justify-center shrink-0" style="width:86px;height:86px">'+
-            '<svg class="tx-ring-svg" width="86" height="86" viewBox="0 0 86 86">'+
-              '<circle class="tx-ring-bg" cx="43" cy="43" r="'+rRing+'"></circle>'+
-              '<circle class="tx-ring-fg" cx="43" cy="43" r="'+rRing+'" stroke="#a855f7" stroke-dasharray="'+cRing+'" stroke-dashoffset="'+oRing+'"></circle>'+
+          '<div class="relative flex items-center justify-center shrink-0" style="width:74px;height:74px">'+
+            '<svg class="tx-ring-svg" width="74" height="74" viewBox="0 0 74 74">'+
+              '<circle class="tx-ring-bg" cx="37" cy="37" r="'+rRing+'"></circle>'+
+              '<circle class="tx-ring-fg" cx="37" cy="37" r="'+rRing+'" stroke="#a855f7" stroke-dasharray="'+cRing+'" stroke-dashoffset="'+oRing+'"></circle>'+
             '</svg>'+
-            '<span class="absolute font-bold text-base font-mono text-white">'+goalPct+'%</span>'+
+            '<span class="absolute font-bold text-xs font-mono text-white">'+goalPct+'%</span>'+
           '</div>'+
         '</div>'+
       '</div>'+
 
-      /* الكارت المتطاير الأيسر: إيراد الأسبوع التفاعلي + كروت التنبيهات الطائرة */
-      '<div class="flex flex-col justify-between gap-4">'+
+      /* الكارت الأيسر: إيراد الأسبوع + التنبيهات */
+      '<div class="flex flex-col justify-between gap-3.5">'+
         '<div class="fl-card fl-tilt-l">'+
           '<div class="flex items-center justify-between">'+
-            '<span class="font-bold text-base text-white">إيراد الأسبوع</span>'+
-            '<span class="rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 text-xs font-bold font-mono">'+todayOrders.length+' اليوم</span>'+
+            '<span class="font-bold text-sm text-white">إيراد الأسبوع</span>'+
+            '<span class="rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-bold font-mono">'+todayOrders.length+' اليوم</span>'+
           '</div>'+
           '<div class="fl-bars-wrap">'+
             dayBars.map(b=>{
@@ -2429,27 +2420,26 @@ function renderFloatingCardsStage(eh,todayOrders,lateCnt){
               '</div>';
             }).join('')+
           '</div>'+
-          '<div class="flex gap-1.5 mt-2.5 text-[11px] text-slate-400">'+
+          '<div class="flex gap-1 mt-2 text-[10.5px] text-slate-400">'+
             dayBars.map(b=>'<span class="flex-1 text-center truncate '+(b.isToday?'text-violet-300 font-bold':'')+'">'+eh(b.day)+'</span>').join('')+
           '</div>'+
         '</div>'+
 
-        /* كروت التنبيهات الطائرة (المتأخرات + آخر تسليم) */
-        '<div class="space-y-3">'+
-          '<div onclick="openMyDayTab(\'late\')" class="fl-card fl-tilt-b1 cursor-pointer !p-4 flex items-center justify-between gap-3" style="background:rgba(76,17,39,0.55);border-color:rgba(244,63,94,0.38)">'+
+        '<div class="space-y-2.5">'+
+          '<div onclick="openMyDayTab(\'late\')" class="fl-card fl-tilt-b1 cursor-pointer !p-3.5 flex items-center justify-between gap-2.5" style="background:rgba(76,17,39,0.48);border-color:rgba(244,63,94,0.32)">'+
             '<div class="min-w-0">'+
-              '<div class="font-bold text-xs sm:text-sm text-rose-200 truncate">'+(lateOrder?('معاملة #'+eh(lateOrder.transaction_id)+' متأخرة'):(lateCnt>0?lateCnt+' معاملات متأخرة':'0 معاملات متأخرة حالياً ✓'))+'</div>'+
-              '<div class="text-[11px] text-rose-300/80 truncate mt-0.5">'+(lateOrder?(eh(lateOrder.client_name)+' · '+eh((lateOrder.lines[0]&&lateOrder.lines[0].service)||'')):'كل المعاملات في موعدها المحدد')+'</div>'+
+              '<div class="font-bold text-xs text-rose-200 truncate">'+(lateOrder?('معاملة #'+eh(lateOrder.transaction_id)+' متأخرة'):(lateCnt>0?lateCnt+' معاملات متأخرة':'لا توجد متأخرات ✓'))+'</div>'+
+              '<div class="text-[10.5px] text-rose-300/80 truncate mt-0.5">'+(lateOrder?(eh(lateOrder.client_name)+' · '+eh((lateOrder.lines[0]&&lateOrder.lines[0].service)||'')):'كل المعاملات في موعدها')+'</div>'+
             '</div>'+
-            '<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-500/25 text-rose-300"><i class="fa-regular fa-clock"></i></span>'+
+            '<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/25 text-rose-300 text-xs"><i class="fa-regular fa-clock"></i></span>'+
           '</div>'+
 
-          '<div onclick="switchTab(\'tx\')" class="fl-card fl-tilt-b2 cursor-pointer !p-4 flex items-center justify-between gap-3" style="background:rgba(13,58,46,0.55);border-color:rgba(16,185,129,0.38)">'+
+          '<div onclick="switchTab(\'tx\')" class="fl-card fl-tilt-b2 cursor-pointer !p-3.5 flex items-center justify-between gap-2.5" style="background:rgba(13,58,46,0.48);border-color:rgba(16,185,129,0.32)">'+
             '<div class="min-w-0">'+
-              '<div class="font-bold text-xs sm:text-sm text-emerald-200 truncate">'+(delivOrder?('تم تسليم #'+eh(delivOrder.transaction_id)):'جاهزية التسليم السريع')+'</div>'+
-              '<div class="text-[11px] text-emerald-300/80 truncate mt-0.5">'+(delivOrder?(eh(delivOrder.client_name)+' · '+eh((delivOrder.lines[0]&&delivOrder.lines[0].service)||'')):'اضغط لمتابعة المعاملات المسلمة')+'</div>'+
+              '<div class="font-bold text-xs text-emerald-200 truncate">'+(delivOrder?('تم تسليم #'+eh(delivOrder.transaction_id)):'المعاملات المسلمة')+'</div>'+
+              '<div class="text-[10.5px] text-emerald-300/80 truncate mt-0.5">'+(delivOrder?(eh(delivOrder.client_name)+' · '+eh((delivOrder.lines[0]&&delivOrder.lines[0].service)||'')):'متابعة التسليمات')+'</div>'+
             '</div>'+
-            '<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/25 text-emerald-300"><i class="fa-solid fa-check"></i></span>'+
+            '<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/25 text-emerald-300 text-xs"><i class="fa-solid fa-check"></i></span>'+
           '</div>'+
         '</div>'+
       '</div>'+
@@ -2486,147 +2476,121 @@ function renderHomeTab(){
       '<span class="hm-nav-icon" style="background:'+bgGrad+'"><i class="fa-solid '+icon+'"></i></span>'+
       '<div class="min-w-0 flex-1">'+
         '<div class="flex items-center justify-between gap-2">'+
-          '<span class="font-bold text-sm sm:text-base text-ink dark:text-white group-hover:text-violet-500 dark:group-hover:text-violet-300 transition">'+eh(title)+'</span>'+
-          (badgeHtml||'<i class="fa-solid fa-chevron-left text-[11px] text-slate-300 group-hover:text-violet-400 transition"></i>')+
+          '<span class="font-bold text-xs sm:text-sm text-ink dark:text-white group-hover:text-violet-400 transition truncate">'+eh(title)+'</span>'+
+          (badgeHtml||'<i class="fa-solid fa-chevron-left text-[10px] text-slate-400 group-hover:text-violet-400 transition"></i>')+
         '</div>'+
-        '<p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">'+eh(sub)+'</p>'+
+        '<p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">'+eh(sub)+'</p>'+
       '</div>'+
     '</button>';
 
-  const bPill=(txt,cls)=>txt?'<span class="rounded-full px-2.5 py-0.5 text-[11px] font-bold whitespace-nowrap '+cls+'">'+txt+'</span>':'';
+  const bPill=(txt,cls)=>txt?'<span class="rounded-full border px-2 py-0.5 text-[10px] font-bold whitespace-nowrap '+cls+'">'+txt+'</span>':'';
 
   let h=
-    /* 1. البانر الترحيبي وملخص اليوم السريع */
+    /* 1. الهيدر العلوي المتناسق للشاشة الرئيسية (بدون ألوان بيضاء أو نصوص ضخمة) */
     '<div class="hm-hero">'+
-      '<div class="flex flex-wrap items-center justify-between gap-4">'+
+      '<div class="flex flex-wrap items-center justify-between gap-3">'+
         '<div>'+
-          '<div class="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-violet-100 backdrop-blur-xs"><i class="fa-solid fa-sparkles"></i><span>الشاشة الرئيسية · بوابة تساهيل الذكية</span></div>'+
-          '<h1 class="text-xl sm:text-2xl font-bold mt-2">أهلاً بك، '+eh(meName)+' 👋</h1>'+
-          '<p class="text-xs text-violet-100/85 mt-1">'+eh(todayStr)+' — اختر أي قسم أو تفاعل مباشرة مع الكروت المتطايرة بالأسفل</p>'+
+          '<h1 class="text-base sm:text-lg font-bold text-white">أهلاً، '+eh(meName)+'</h1>'+
+          '<p class="text-[11px] text-slate-400 mt-0.5">'+eh(todayStr)+'</p>'+
         '</div>'+
         '<div class="flex flex-wrap items-center gap-2">'+
-          '<button type="button" onclick="switchTab(\'new\')" class="rounded-xl bg-white text-slate-900 hover:bg-violet-50 px-4 py-2.5 text-xs sm:text-sm font-bold shadow-md flex items-center gap-2"><i class="fa-solid fa-plus text-violet-600"></i><span>طلب جديد</span></button>'+
-          '<button type="button" onclick="switchTab(\'tx\')" class="rounded-xl bg-white/15 hover:bg-white/25 text-white px-4 py-2.5 text-xs sm:text-sm font-bold backdrop-blur-xs flex items-center gap-2"><i class="fa-solid fa-list-ul"></i><span>المعاملات</span></button>'+
-          '<button type="button" onclick="if(window.qkOpen)qkOpen();else switchTab(\'search\')" class="rounded-xl bg-white/15 hover:bg-white/25 text-white px-4 py-2.5 text-xs sm:text-sm font-bold backdrop-blur-xs flex items-center gap-2"><i class="fa-solid fa-magnifying-glass"></i><span>بحث سريع</span></button>'+
+          '<button type="button" onclick="switchTab(\'new\')" class="btn-neo-pri text-xs"><i class="fa-solid fa-plus"></i><span>طلب جديد</span></button>'+
+          '<button type="button" onclick="switchTab(\'tx\')" class="btn-neo-sec text-xs"><i class="fa-solid fa-list-ul"></i><span>المعاملات</span></button>'+
+          '<button type="button" onclick="if(window.qkOpen)qkOpen();else switchTab(\'search\')" class="btn-neo-sec text-xs"><i class="fa-solid fa-magnifying-glass"></i><span>بحث</span></button>'+
         '</div>'+
       '</div>'+
-      '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">'+
-        '<button type="button" onclick="switchTab(\'tx\')" class="rounded-xl bg-white/12 hover:bg-white/20 p-3.5 text-right backdrop-blur-xs transition">'+
-          '<div class="text-[11px] text-violet-100">إيراد اليوم</div>'+
-          '<div class="text-lg sm:text-xl font-bold mt-1 whitespace-nowrap">'+eh(formatCurrency(todaySales))+'</div>'+
+      '<div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mt-3.5">'+
+        '<button type="button" onclick="switchTab(\'tx\')" class="hm-kpi-box">'+
+          '<div class="text-[11px] text-slate-400">إيراد اليوم</div>'+
+          '<div class="text-base sm:text-lg font-bold font-mono text-white mt-0.5 whitespace-nowrap">'+eh(formatCurrency(todaySales))+'</div>'+
         '</button>'+
-        '<button type="button" onclick="switchTab(\'tx\')" class="rounded-xl bg-white/12 hover:bg-white/20 p-3.5 text-right backdrop-blur-xs transition">'+
-          '<div class="text-[11px] text-violet-100">معاملات اليوم</div>'+
-          '<div class="text-lg sm:text-xl font-bold mt-1 whitespace-nowrap">'+todayOrders.length+' معاملة</div>'+
+        '<button type="button" onclick="switchTab(\'tx\')" class="hm-kpi-box">'+
+          '<div class="text-[11px] text-slate-400">معاملات اليوم</div>'+
+          '<div class="text-base sm:text-lg font-bold font-mono text-white mt-0.5 whitespace-nowrap">'+todayOrders.length+' معاملة</div>'+
         '</button>'+
-        '<button type="button" onclick="switchTab(\'tx\')" class="rounded-xl bg-white/12 hover:bg-white/20 p-3.5 text-right backdrop-blur-xs transition">'+
-          '<div class="text-[11px] text-violet-100">بنود مفتوحة قيد التنفيذ</div>'+
-          '<div class="text-lg sm:text-xl font-bold mt-1 whitespace-nowrap">'+openLines+' بند</div>'+
+        '<button type="button" onclick="switchTab(\'tx\')" class="hm-kpi-box">'+
+          '<div class="text-[11px] text-slate-400">بنود قيد التنفيذ</div>'+
+          '<div class="text-base sm:text-lg font-bold font-mono text-violet-300 mt-0.5 whitespace-nowrap">'+openLines+' بند</div>'+
         '</button>'+
-        '<button type="button" onclick="openMyDayTab(\'late\')" class="rounded-xl '+(lateCnt>0?'bg-rose-600/90 hover:bg-rose-600 ring-2 ring-rose-300':'bg-white/12 hover:bg-white/20')+' p-3.5 text-right backdrop-blur-xs transition">'+
-          '<div class="text-[11px] text-white/90 flex items-center justify-between"><span>المتأخرات</span><i class="fa-solid fa-triangle-exclamation"></i></div>'+
-          '<div class="text-lg sm:text-xl font-bold mt-1 whitespace-nowrap">'+(lateCnt>0?lateCnt+' بند متأخر':'0 متأخرات ✓')+'</div>'+
+        '<button type="button" onclick="openMyDayTab(\'late\')" class="hm-kpi-box" style="'+(lateCnt>0?'background:rgba(244,63,94,0.16);border-color:rgba(251,113,133,0.35)':'')+'">'+
+          '<div class="text-[11px] text-slate-300 flex items-center justify-between"><span>المتأخرات</span><i class="fa-solid fa-triangle-exclamation text-rose-400"></i></div>'+
+          '<div class="text-base sm:text-lg font-bold font-mono '+(lateCnt>0?'text-rose-300':'text-emerald-300')+' mt-0.5 whitespace-nowrap">'+(lateCnt>0?lateCnt+' متأخر':'0 متأخرات ✓')+'</div>'+
         '</button>'+
       '</div>'+
     '</div>'+
 
-    /* 2. منصة الكروت المتطايرة التفاعلية (مثل الصورة المرفقة و Interactive.dc.html) */
+    /* 2. الكروت التفاعلية */
     renderFloatingCardsStage(eh,todayOrders,lateCnt)+
 
-    /* 3. الأقسام اليومية الأساسية (مع فصل طلب جديد عن المعاملات) */
-    '<div class="space-y-3">'+
+    /* 3. الأقسام */
+    '<div class="space-y-2.5">'+
       '<div class="flex items-center justify-between px-1">'+
-        '<h2 class="font-bold text-sm sm:text-base text-ink dark:text-white flex items-center gap-2"><i class="fa-solid fa-compass text-violet-500"></i><span>جميع أقسام وشاشات السيستم</span></h2>'+
-        '<span class="text-xs text-slate-400">اضغط على أي كارت للانتقال الفوري</span>'+
+        '<h2 class="font-bold text-xs sm:text-sm text-ink dark:text-white">الأقسام</h2>'+
       '</div>'+
-      '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">'+
-        navCard('طلب جديد','تسجيل معاملة جديدة للعميل في 3 خطوات مع شريط التقدم والكروت السريعة','fa-plus','linear-gradient(135deg,#7c3aed,#a855f7)',"switchTab('new')",bPill('إنشاء سريع +','bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300'))+
-        navCard('المعاملات','شاشة مستقلة لمتابعة كل المعاملات وشريط حالة الطلب التفاعلي وسجل الإجراءات','fa-list-ul','linear-gradient(135deg,#6366f1,#4338ca)',"switchTab('tx')",bPill(groupedOrders.length+' معاملة','bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'))+
-        navCard('شغلي النهاردة','متابعة معاملاتك اليوم، البنود المفتوحة، وتحقيق تارجت الشهر','fa-sun','linear-gradient(135deg,#0284c7,#1d4ed8)',"openMyDayTab('all')",bPill('شغلي','bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300'))+
-        navCard('المتأخرات','عرض ومتابعة الطلبات التي تجاوزت مدة التنفيذ المحددة فوراً','fa-triangle-exclamation','linear-gradient(135deg,#e11d48,#be123c)',"openMyDayTab('late')",lateCnt>0?bPill(lateCnt+' متأخر','bg-rose-600 text-white'):bPill('لا يوجد متأخر','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
-        navCard('الكوميشن والتارجت','حساب الكوميشن الشهري وتارجت المبلغ وعدد الخدمات والطباعة','fa-bullseye','linear-gradient(135deg,#059669,#047857)',"switchTab('comm')",bPill('الشهر الحالي','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
-        navCard('المنفذين','متابعة أحدث 50 بند تنفيذ فوراً مع البحث وتحميل المزيد وPDF/Excel','fa-user-gear','linear-gradient(135deg,#4f46e5,#3730a3)',"switchTab('exec')",bPill(allRequestLines.length+' بند','bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'))+
-        navCard('الكاش','متابعة تحصيلات الكاش اليومية وتقفيل الكاش وطباعة التقارير','fa-wallet','linear-gradient(135deg,#d97706,#b45309)',"switchTab('cash')",bPill(cashTodayCnt+' اليوم','bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300'))+
-        navCard('المناديب','كروت المناديب ومشاوير الاستلام والتسليم وعهدة الكاش والطباعة','fa-motorcycle','linear-gradient(135deg,#0f766e,#134e4a)',"switchTab('couriers')",bPill('المشاوير','bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300'))+
-        navCard('الإيصالات','إصدار وطباعة إيصال استلام وتسليم رسمي A5 أو إيصال حراري 80mm','fa-receipt','linear-gradient(135deg,#9333ea,#6b21a8)',"switchTab('receipt')",'')+
-        navCard('البحث الشامل','بحث فوري باسم العميل أو رقم التليفون أو رقم المعاملة أو الخدمة','fa-magnifying-glass','linear-gradient(135deg,#2563eb,#1e40af)',"switchTab('search')",'')+
-        navCard('الشات الداخلي','مراسلة الزملاء وقناة الشركة العامة مع إشعارات القراءة والمنشن','fa-comments','linear-gradient(135deg,#0891b2,#155e75)',"switchTab('chat')",unreadChat>0?bPill(unreadChat+' رسالة جديدة','bg-rose-600 text-white'):bPill('متصل','bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300'))+
-        navCard('الداش بورد والتقارير','لوحة الإحصائيات الشاملة والرسوم البيانية وتحليل الأداء','fa-chart-pie','linear-gradient(135deg,#3b0764,#1e1b4b)',"switchTab('dash')",'')+
-        navCard('المهام والتنبيهات','متابعة المهام اليومية المسندة والمواعيد النهائية','fa-list-check','linear-gradient(135deg,#0d9488,#0f766e)',"switchTab('tasks')",'')+
-        navCard('فريق العمل','أرقام التواصل المباشر وواتساب وحالة اتصال ونشاط الزملاء','fa-user-group','linear-gradient(135deg,#6366f1,#4338ca)',"switchTab('team')",bPill(wCount+' شغال الآن','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
-        navCard('الموارد البشرية (HR)','تسجيل بصمة الحضور والانصراف وجدول الشيفتات والإجازات والرواتب','fa-fingerprint','linear-gradient(135deg,#db2777,#9d174d)',"switchTab('hr')",'')+
-        navCard('ملاحظاتي الخاصة','تدوين وحفظ الملاحظات الشخصية المحمية بكلمة سر','fa-note-sticky','linear-gradient(135deg,#eab308,#ca8a04)',"switchTab('notes')",'')+
-        (mgr?navCard('أداء الموظفين (للمدير)','متابعة أول وآخر عملية باليوم، التعديلات، الفجوات الزمنية، وسرعة الإنجاز','fa-gauge-high','linear-gradient(135deg,#dc2626,#991b1b)',"switchTab('perf')",bPill('للمدير','bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300')):'')+
-        (mgr&&$('tab-partners-btn')?navCard('المنفذون الخارجيون','إدارة حسابات وتسويات المنفذين الخارجيين','fa-handshake','linear-gradient(135deg,#475569,#1e293b)',"switchTab('partners')",bPill('للمدير','bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300')):'')+
+      '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">'+
+        navCard('طلب جديد','تسجيل معاملة جديدة للعميل','fa-plus','linear-gradient(135deg,#7c3aed,#a855f7)',"switchTab('new')",bPill('جديد +','bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300'))+
+        navCard('المعاملات','متابعة كل المعاملات وتحديث الحالات','fa-list-ul','linear-gradient(135deg,#6366f1,#4338ca)',"switchTab('tx')",bPill(groupedOrders.length+' معاملة','bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'))+
+        navCard('شغلي النهاردة','معاملاتك اليوم والبنود المفتوحة','fa-sun','linear-gradient(135deg,#0284c7,#1d4ed8)',"openMyDayTab('all')",bPill('اليوم','bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300'))+
+        navCard('المتأخرات','الطلبات المتجاوزة لموعد التسليم','fa-triangle-exclamation','linear-gradient(135deg,#e11d48,#be123c)',"openMyDayTab('late')",lateCnt>0?bPill(lateCnt+' متأخر','bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300'):bPill('0 متأخر','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
+        navCard('الكوميشن والتارجت','حساب الكوميشن وتارجت الموظفين','fa-bullseye','linear-gradient(135deg,#059669,#047857)',"switchTab('comm')",bPill('الشهر الحالي','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
+        navCard('المنفذين','متابعة بنود وتكلفة التنفيذ','fa-user-gear','linear-gradient(135deg,#4f46e5,#3730a3)',"switchTab('exec')",bPill(allRequestLines.length+' بند','bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'))+
+        navCard('الكاش','تحصيلات الكاش اليومية والتقارير','fa-wallet','linear-gradient(135deg,#d97706,#b45309)',"switchTab('cash')",bPill(cashTodayCnt+' اليوم','bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300'))+
+        navCard('المناديب','مشاوير الاستلام والتسليم والعهدة','fa-motorcycle','linear-gradient(135deg,#0f766e,#134e4a)',"switchTab('couriers')",bPill('المشاوير','bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300'))+
+        navCard('الإيصالات','إصدار وطباعة الإيصالات الرسمية','fa-receipt','linear-gradient(135deg,#9333ea,#6b21a8)',"switchTab('receipt')",'')+
+        navCard('البحث الشامل','بحث بالعميل أو التليفون أو المعاملة','fa-magnifying-glass','linear-gradient(135deg,#2563eb,#1e40af)',"switchTab('search')",'')+
+        navCard('المحادثة','مراسلة الزملاء وقناة القسم','fa-comments','linear-gradient(135deg,#0891b2,#155e75)',"switchTab('chat')",unreadChat>0?bPill(unreadChat+' جديد','bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300'):bPill('متصل','bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300'))+
+        navCard('الداش بورد','إحصائيات وتقارير الأداء','fa-chart-pie','linear-gradient(135deg,#3b0764,#1e1b4b)',"switchTab('dash')",'')+
+        navCard('المهام','متابعة المهام المسندة','fa-list-check','linear-gradient(135deg,#0d9488,#0f766e)',"switchTab('tasks')",'')+
+        navCard('فريق العمل','بيانات التواصل وحالة الزملاء','fa-user-group','linear-gradient(135deg,#6366f1,#4338ca)',"switchTab('team')",bPill(wCount+' نشط','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
+        navCard('الموارد البشرية','الحضور والانصراف والشيفتات','fa-fingerprint','linear-gradient(135deg,#db2777,#9d174d)',"switchTab('hr')",'')+
+        navCard('ملاحظاتي','الملاحظات الشخصية المحمية','fa-note-sticky','linear-gradient(135deg,#eab308,#ca8a04)',"switchTab('notes')",'')+
+        (mgr?navCard('أداء الموظفين','سرعة الإنجاز والنشاط اليومي','fa-gauge-high','linear-gradient(135deg,#dc2626,#991b1b)',"switchTab('perf')",bPill('للمدير','bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300')):'')+
+        (mgr&&$('tab-partners-btn')?navCard('المنفذون الخارجيون','إدارة وتسويات الشركاء','fa-handshake','linear-gradient(135deg,#475569,#1e293b)',"switchTab('partners')",bPill('للمدير','bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300')):'')+
       '</div>'+
     '</div>'+
 
-    /* 4. لوحة حالة تواجد ونشاط الموظفين المباشرة */
-    '<div class="card lift p-5 space-y-4">'+
-      '<div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3.5">'+
-        '<div class="flex items-center gap-2.5">'+
-          '<span class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white"><i class="fa-solid fa-signal"></i></span>'+
-          '<div>'+
-            '<h3 class="font-bold text-sm sm:text-base text-ink dark:text-white">حالة تواجد ونشاط الموظفين الآن (مباشر)</h3>'+
-            '<p class="text-[11px] text-slate-500">تحديث لحظي خفيف يوضح الموظف الفاتح والشغال فعلياً أو الخامل أو القافل بدون أي استهلاك لقاعدة البيانات</p>'+
-          '</div>'+
+    /* 4. حالة الفريق الآن (بدون نصوص إنشائية) */
+    '<div class="card p-4 space-y-3">'+
+      '<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">'+
+        '<div class="flex items-center gap-2">'+
+          '<span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white text-xs"><i class="fa-solid fa-signal"></i></span>'+
+          '<h3 class="font-bold text-xs sm:text-sm text-ink dark:text-white">حالة الفريق</h3>'+
         '</div>'+
-        '<div class="flex flex-wrap items-center gap-2 text-xs font-bold">'+
-          '<span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-3 py-1 text-emerald-700 dark:text-emerald-300"><span class="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>شغال الآن: '+wCount+'</span>'+
-          '<span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-3 py-1 text-amber-700 dark:text-amber-300"><span class="h-2 w-2 rounded-full bg-amber-500"></span>فاتح (خامل): '+iCount+'</span>'+
-          '<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1 text-slate-600 dark:text-slate-400"><span class="h-2 w-2 rounded-full bg-slate-400"></span>قافل السيستم: '+oCount+'</span>'+
+        '<div class="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">'+
+          '<span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 text-emerald-700 dark:text-emerald-300"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>شغال الآن: '+wCount+'</span>'+
+          '<span class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2.5 py-0.5 text-amber-700 dark:text-amber-300"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>خامل: '+iCount+'</span>'+
+          '<span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 text-slate-600 dark:text-slate-400"><span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>قافل: '+oCount+'</span>'+
         '</div>'+
       '</div>'+
       (empCards.length
-        ?'<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">'+empCards.map(function(item){
+        ?'<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">'+empCards.map(function(item){
             const p=item.p,st=item.st,isMe=currentUser&&String(p.id)===String(currentUser.id);
             return '<div class="hm-emp-card">'+
-              '<div class="flex items-center gap-3 min-w-0">'+
-                '<span class="relative shrink-0">'+avatarHtml(p,42)+'<span class="absolute bottom-0 end-0 h-3 w-3 rounded-full border-2 border-white dark:border-slate-900 '+st.dotCls+'"></span></span>'+
+              '<div class="flex items-center gap-2.5 min-w-0">'+
+                '<span class="relative shrink-0">'+avatarHtml(p,36)+'<span class="absolute bottom-0 end-0 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900 '+st.dotCls+'"></span></span>'+
                 '<div class="min-w-0">'+
-                  '<div class="font-bold text-xs sm:text-sm text-ink dark:text-white truncate">'+eh(p.full_name||'موظف')+(isMe?' <span class="text-[10px] text-violet-400 font-bold">(أنت)</span>':'')+'</div>'+
-                  '<div class="text-[11px] text-slate-500 truncate mt-0.5">'+eh(st.sub)+'</div>'+
+                  '<div class="font-bold text-xs text-ink dark:text-white truncate">'+eh(p.full_name||'موظف')+(isMe?' <span class="text-[10px] text-violet-400 font-bold">(أنت)</span>':'')+'</div>'+
+                  '<div class="text-[10.5px] text-slate-500 truncate mt-0.5">'+eh(st.sub)+'</div>'+
                 '</div>'+
               '</div>'+
-              '<div class="text-left shrink-0 flex flex-col items-end gap-1">'+
-                '<span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10.5px] font-bold whitespace-nowrap '+st.badgeCls+'"><span class="h-1.5 w-1.5 rounded-full '+st.dotCls+'"></span><span>'+eh(st.label)+'</span></span>'+
-                '<span class="text-[11px] font-semibold text-slate-500">اليوم: <b class="text-ink dark:text-white">'+st.todayTx+' معاملة</b></span>'+
+              '<div class="text-left shrink-0 flex flex-col items-end gap-0.5">'+
+                '<span class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold whitespace-nowrap '+st.badgeCls+'"><span class="h-1.5 w-1.5 rounded-full '+st.dotCls+'"></span><span>'+eh(st.label)+'</span></span>'+
+                '<span class="text-[10.5px] font-semibold text-slate-500">اليوم: <b class="text-ink dark:text-white">'+st.todayTx+' معاملة</b></span>'+
               '</div>'+
             '</div>';
           }).join('')+'</div>'
-        :'<div class="text-center py-6 text-xs text-slate-400">جارٍ تحميل بيانات الفريق...</div>')+
+        :'<div class="text-center py-5 text-xs text-slate-400">جارٍ تحميل بيانات الفريق...</div>')+
     '</div>';
 
   box.innerHTML=h;
 }
 window.renderHomeTab=renderHomeTab;
 
-/* ---------- شريط عنوان التاب الحالي مع زر العودة للشاشة الرئيسية ---------- */
+/* إيقاف شريط العنوان المكرر أسفل الهيدر */
 window.__phase15=true;
 function paintCurrentTabBanner(id){
-  const main=document.querySelector('main');if(!main)return;
-  let t=$('cur-tab-title');
-  if(!t){
-    main.insertAdjacentHTML('afterbegin',
-      '<div id="cur-tab-title" class="hidden text-ink dark:text-white" style="display:none">'+
-        '<div class="flex items-center gap-2.5"><span class="flex h-8 w-8 items-center justify-center rounded-xl bg-ink text-white dark:bg-brand-600"><i id="cur-tab-ic"></i></span><span id="cur-tab-nm" class="font-bold text-sm sm:text-base"></span></div>'+
-        '<button type="button" onclick="switchTab(\'home\')" class="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 hover:bg-brand-50 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-brand-700 dark:text-slate-200 transition"><i class="fa-solid fa-house text-brand-600 dark:text-violet-400"></i><span>الشاشة الرئيسية</span></button>'+
-      '</div>');
-    t=$('cur-tab-title');
-  }
-  if(!t)return;
-  if(id==='home'){
-    t.classList.add('hidden');
-    t.style.display='none';
-    return;
-  }
-  const b=$('tab-'+id+'-btn');
-  const ic=b&&b.querySelector('i');
-  const nm=TAB_LABELS_AR[id]||(b&&b.querySelector('span:not([class*="rounded-full"])')&&b.querySelector('span:not([class*="rounded-full"])').textContent)||'';
-  t.classList.remove('hidden');
-  t.style.display='flex';
-  if($('cur-tab-ic'))$('cur-tab-ic').className=ic?ic.className:'fa-solid fa-layer-group';
-  if($('cur-tab-nm'))$('cur-tab-nm').textContent=nm;
+  const t=$('cur-tab-title');
+  if(t){t.classList.add('hidden');t.style.display='none';}
 }
 
 /* ---------- تنقل وثيم ---------- */
