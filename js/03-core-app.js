@@ -1,8 +1,11 @@
 const DEFAULT_SB_URL='https://avehvjqifswsyayckpvx.supabase.co';
 let sbClient=null,allRequestLines=[],allServices=[],groupedOrders=[],chartInstances={},currentDashboardRange='all',recentMode='all',currentTab='home',serviceLineCounter=0,clientSelectedReceiptLines=[];
+let txStatusFilter='all',selectedInspectorTx=null,showAllQuickServices=false;
+window.__saveOrderMode='normal';
+window.__homeFloatingTxId=null;
 const PAY_DEFAULT=['كاش','انستا باي','فودافون كاش','POS','تحويل بنكي'];
-const STATUS_AR={'Delivered':'تم التسليم','Complete':'مكتمل','Under Review':'قيد المراجعة','In Progress':'قيد التنفيذ'};
-const STATUS_CLS={'Delivered':'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300','Complete':'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300','Under Review':'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300','In Progress':'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'};
+const STATUS_AR={'Delivered':'تم التسليم','Complete':'جاهز للتسليم','Under Review':'قيد المراجعة','In Progress':'قيد التنفيذ'};
+const STATUS_CLS={'Delivered':'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300','Complete':'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300','Under Review':'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300','In Progress':'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300'};
 const $=id=>document.getElementById(id);
 let currentUser=null,profiles=[],myProfile=null,avatarUrls={},profilesReady=true,pendingAvatarBlob=null,pendingAvatarUrl=null,avatarRemoved=false;
 let chatReady=false,chatSetupNeeded=false,chatItems=[],chatActive=null,chatMsgs={},chatHasMore={},chatReplyTo=null,chatMsgCh=null,chatPresCh=null,onlineIds=[],chatSending=false,chatAudio=null,chatBound=false;
@@ -13,6 +16,7 @@ function formatCurrency(n){return new Intl.NumberFormat('ar-EG',{maximumFraction
 function fmtNum(n){return Number(n||0).toLocaleString('en-US',{maximumFractionDigits:2});}
 function formatDateTime(s){if(!s)return '—';const d=new Date(s);return isNaN(d)?s:new Intl.DateTimeFormat('ar-EG',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(d);}
 function formatDateOnly(s){if(!s)return '—';const d=new Date(String(s).length===10?s+'T00:00':s);return isNaN(d)?s:new Intl.DateTimeFormat('ar-EG',{year:'numeric',month:'short',day:'numeric'}).format(d);}
+function formatTimeOnly(s){if(!s)return '';const d=new Date(s);return isNaN(d)?'':new Intl.DateTimeFormat('ar-EG',{hour:'2-digit',minute:'2-digit'}).format(d);}
 function formatDateSplit(s){if(!s)return '<span class="text-slate-400">—</span>';const d=new Date(s);if(isNaN(d))return escapeHtml(s);const dt=new Intl.DateTimeFormat('ar-EG',{year:'numeric',month:'short',day:'numeric'}).format(d);const tm=new Intl.DateTimeFormat('ar-EG',{hour:'2-digit',minute:'2-digit'}).format(d);return '<div class="rc-date-box"><span class="font-semibold text-slate-700 dark:text-slate-200 text-xs">'+escapeHtml(dt)+'</span><span class="text-[11px] text-slate-400">'+escapeHtml(tm)+'</span></div>';}
 function dayKey(d){return d?new Date(d).toLocaleDateString('en-CA'):'';}
 function lineDate(l){return l.received_at||l.created_at;}
@@ -20,18 +24,47 @@ function statusLabel(s){return STATUS_AR[s]||s||'قيد التنفيذ';}
 function badge(s){return '<span class="rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap '+(STATUS_CLS[s]||'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300')+'">'+escapeHtml(statusLabel(s))+'</span>';}
 function waNum(p){p=String(p||'').replace(/\D/g,'');if(!p)return '';return p.charAt(0)==='0'?'2'+p:p;}
 function waLink(p,msg){const n=waNum(p);return n?'https://wa.me/'+n+(msg?'?text='+encodeURIComponent(msg):''):'';}
-const ac=n=>'data-c="'+escapeHtml(n)+'" onclick="openClientModal(this.dataset.c)"';
-const at=t=>'data-tx="'+escapeHtml(t)+'" onclick="openTxModal(this.dataset.tx)"';
+const ac=n=>'data-c="'+escapeHtml(n)+'" onclick="event.stopPropagation();openClientModal(this.dataset.c)"';
+const at=t=>'data-tx="'+escapeHtml(t)+'" onclick="event.stopPropagation();openTxModal(this.dataset.tx)"';
 const execCostOf=l=>Number(l.exec_total)||((Number(l.exec_unit_cost)||0)*(Number(l.qty)||0))||0;
 function setT(id,v){const e=$(id);if(e&&e.textContent!==v)e.textContent=v;}
 function showToast(message,type,ms){
   type=type||'success';const t=$('toast');
-  t.className='fixed top-5 left-1/2 z-[150] -translate-x-1/2 rounded-xl px-4 py-3 text-xs sm:text-sm font-semibold shadow-xl border backdrop-blur-md transition-all duration-300 pointer-events-auto flex items-center gap-2 max-w-[92vw] '+(type==='error'?'bg-rose-900/95 text-white border-rose-700':type==='info'?'bg-slate-900/90 text-white border-slate-700':'bg-teal-900/90 text-white border-teal-700');
+  t.className='fixed top-5 left-1/2 z-[150] -translate-x-1/2 rounded-xl px-4 py-3 text-xs sm:text-sm font-semibold shadow-xl border backdrop-blur-md transition-all duration-300 pointer-events-auto flex items-center gap-2 max-w-[92vw] '+(type==='error'?'bg-rose-900/95 text-white border-rose-700':type==='info'?'bg-slate-900/90 text-white border-slate-700':'bg-violet-900/95 text-white border-violet-600');
   t.innerHTML='<i class="fa-solid '+(type==='error'?'fa-triangle-exclamation':type==='info'?'fa-circle-info':'fa-circle-check')+'"></i><span>'+escapeHtml(message)+'</span>';
   t.style.transform='translate(-50%,0)';t.style.opacity='1';
   clearTimeout(showToast.t);showToast.t=setTimeout(function(){t.style.transform='translate(-50%,-6rem)';t.style.opacity='0';},ms||(type==='error'?9000:3500));
 }
 function showError(prefix,err){console.error(prefix,err);showToast(prefix+': '+((err&&(err.message||err.details||err.hint))||err),'error');}
+
+/* ---------- حساب حالة المعاملة وتأخيرها ---------- */
+const ORDER_STATUS_RANK={'Under Review':0,'In Progress':1,'Complete':2,'Delivered':3};
+function getOrderStatus(o){
+  if(!o||!o.lines||!o.lines.length)return 'In Progress';
+  let best='In Progress',r=9;
+  o.lines.forEach(l=>{
+    const s=l.status||'In Progress',k=ORDER_STATUS_RANK[s];
+    if(k!=null&&k<r){r=k;best=s;}
+  });
+  return r===9?'In Progress':best;
+}
+function isLineLate(l){
+  if(!l)return false;
+  const st=l.status||'In Progress';
+  if(st==='Delivered'||st==='Complete')return false;
+  const dur=Number(l.duration_days)||0;
+  if(dur<=0)return false;
+  const baseStr=String(l.exec_start_date||lineDate(l)||'').slice(0,10);
+  if(!baseStr)return false;
+  const baseDate=new Date(baseStr+'T00:00:00');
+  if(isNaN(baseDate))return false;
+  const dueTime=baseDate.getTime()+dur*86400000;
+  const todayStart=new Date();todayStart.setHours(0,0,0,0);
+  return todayStart.getTime()>dueTime;
+}
+function isOrderLate(o){
+  return !!(o&&o.lines&&o.lines.some(isLineLate));
+}
 
 /* ---------- Supabase ---------- */
 function getSavedKeys(){return{url:localStorage.getItem('sb_url')||DEFAULT_SB_URL,key:localStorage.getItem('sb_key')||''};}
@@ -62,7 +95,6 @@ async function checkSession(){
 function showLoginScreen(){$('login').classList.remove('hidden');$('app').classList.add('hidden');}
 function showAppScreen(user){currentUser=user||null;
   $('login').classList.add('hidden');$('app').classList.remove('hidden');
-  // تم مسح سطر عرض الإيميل هنا لأننا هنعرض الاسم من جدول البروفايل
   loadInitialData();
 }
 async function handleLogin(e){
@@ -100,8 +132,10 @@ window.syncReceivedAt=syncReceivedAt;
 async function loadInitialData(){
   await Promise.all([loadServices(),loadRecentRequests(),loadProfiles()]);
   renderPaymentMethodButtons();
+  renderQuickServicesGrid();
   if(!$('tx-id').value)generateNewTxId();
   initReceivedAtClock();
+  updateOrderProgressBar();
   initChat();
 }
 async function loadServices(){
@@ -110,9 +144,11 @@ async function loadServices(){
   if(r.error)return showError('تعذّر تحميل الخدمات',r.error);
   allServices=r.data||[];
   $('svc-datalist').innerHTML=allServices.map(s=>'<option value="'+escapeHtml(s.name)+'">'+(s.unit_price!=null?fmtNum(s.unit_price)+' ج.م':'')+'</option>').join('');
+  renderQuickServicesGrid();
 }
-/* ---- تحميل المعاملات: آخر 600 بسرعة، وبعدها الأرشيف كله بالتدريج في الخلفية ---- */
-const DATA_FROM='2026-10-01'; /* أول يوم بيتحمّل منه النظام. البنود الأقدم مش بتتحمّل ولا بتظهر في أي شيت أو بحث. غيّر التاريخ ده لو عايز تبدأ من شهر تاني */
+
+/* ---- تحميل المعاملات: آخر 1000 بسرعة، وبعدها الأرشيف كله بالتدريج في الخلفية ---- */
+const DATA_FROM='2026-10-01';
 const DATA_FROM_TS=DATA_FROM+'T00:00:00';
 let archiveState={done:false,loading:false,failed:false,total:null},archiveRun=0;
 function paintArchiveBar(){
@@ -135,7 +171,7 @@ function mergeLines(fresh,win){
   allRequestLines=Array.from(map.values()).sort((a,b)=>Number(b.id)-Number(a.id));
 }
 function refreshLineViews(){
-  groupRequestsByTransaction();renderRecentRequests();renderClientDatalists();updateExecutorsFilterOptions();
+  groupRequestsByTransaction();renderRecentRequests();renderClientDatalists();updateExecutorsFilterOptions();renderQuickServicesGrid();
   if(typeof window.updateHeaderLateBadge==='function')window.updateHeaderLateBadge();
   if(currentTab==='home'&&typeof renderHomeTab==='function')renderHomeTab();
   if(currentTab==='dash')renderDashboardMetrics();
@@ -186,77 +222,673 @@ function groupRequestsByTransaction(){
   groupedOrders=Array.from(map.values());
 }
 
-/* ---------- آخر المعاملات ---------- */
+/* ---------- شريط تقدم تسجيل الطلب التفاعلي (#new-order-progress-wrap) ---------- */
+function updateOrderProgressBar(){
+  const wrap=$('new-order-progress-wrap');if(!wrap)return;
+  const clientName=(($('client-name')&&$('client-name').value)||'').trim();
+  const phone=(($('phone')&&$('phone').value)||'').replace(/\D/g,'');
+  const address=(($('address')&&$('address').value)||'').trim();
+  const emp=(($('employee')&&$('employee').value)||'').trim();
+  const pay=(($('payment-method-val')&&$('payment-method-val').value)||'').trim();
+  const lines=Array.from(($('lines-container')||{children:[]}).children);
+
+  let hasService=false,allPriced=false,hasExec=false,svcCount=0;
+  lines.forEach(el=>{
+    const sn=((el.querySelector('.svc-name')&&el.querySelector('.svc-name').value)||'').trim();
+    const pr=parseFloat((el.querySelector('.svc-price')&&el.querySelector('.svc-price').value)||0);
+    const q=parseFloat((el.querySelector('.svc-qty')&&el.querySelector('.svc-qty').value)||0);
+    const ex=((el.querySelector('.svc-executor')&&el.querySelector('.svc-executor').value)||'').trim();
+    const co=parseFloat((el.querySelector('.svc-cost')&&el.querySelector('.svc-cost').value)||0);
+    if(sn){
+      hasService=true;
+      svcCount++;
+      if(pr>0&&q>0)allPriced=true;
+      if(ex||co>0)hasExec=true;
+    }
+  });
+
+  // حساب النسبة من 100%
+  let pct=0;
+  const step1Done=clientName.length>=2&&phone.length>=8;
+  const step1Part=clientName.length>=2||phone.length>=4;
+  if(clientName.length>=2)pct+=18;
+  if(phone.length>=8)pct+=12;else if(phone.length>=4||address.length>=2)pct+=6;
+
+  const step2Done=hasService&&allPriced;
+  if(hasService)pct+=20;
+  if(allPriced)pct+=15;
+
+  const step3Done=hasService&&(hasExec||allPriced);
+  if(hasService&&hasExec)pct+=15;else if(hasService)pct+=8;
+
+  const step4Done=step1Done&&step2Done&&!!emp&&!!pay;
+  if(pay)pct+=10;
+  if(emp&&hasService)pct+=10;else if(emp)pct+=5;
+  if(step1Done&&step2Done&&step3Done&&step4Done)pct=100;
+  pct=Math.min(100,Math.max(0,Math.round(pct)));
+
+  const fill=$('nop-bar-fill'),badgeEl=$('nop-pct-badge'),sFill=$('s-prog-fill'),sPct=$('s-prog-pct');
+  if(fill)fill.style.width=pct+'%';
+  if(badgeEl)badgeEl.textContent=pct+'%';
+  if(sFill)sFill.style.width=pct+'%';
+  if(sPct)sPct.textContent=pct+'%';
+
+  const setStepState=(idx,done,active,subText)=>{
+    const el=$('nop-step-'+idx),sub=$('nop-step-'+idx+'-sub');
+    if(!el)return;
+    el.classList.toggle('done',!!done);
+    el.classList.toggle('active',!done&&!!active);
+    const dot=el.querySelector('.nop-step-dot');
+    if(dot)dot.innerHTML=done?'<i class="fa-solid fa-check text-[10px]"></i>':String(idx);
+    if(sub&&subText)sub.textContent=subText;
+  };
+
+  setStepState(1,step1Done,!step1Done,step1Done?(clientName+' · '+phone):(step1Part?'أكمل رقم الموبايل':'الاسم ورقم الموبايل'));
+  setStepState(2,step2Done,step1Done&&!step2Done,step2Done?(svcCount+' خدمة محددة'):(hasService?'حدد سعر الخدمة':'اختر من الكروت أو القائمة'));
+  setStepState(3,step3Done,step2Done&&!step3Done,hasExec?'تم تحديد المنفذ':'تحديد المنفذ والتكلفة');
+  setStepState(4,step4Done,step2Done&&!step4Done,step4Done?'جاهز للحفظ 100% ✓':('الدفع: '+(pay||'كاش')));
+
+  const titleEl=$('nop-status-title'),subEl=$('nop-status-sub'),icEl=$('nop-icon');
+  if(pct>=100){
+    if(titleEl)titleEl.textContent='الطلب مكتمل وجاهز للحفظ والطباعة 100% ✓';
+    if(subEl)subEl.textContent='اضغط «حفظ الطلب» أو «حفظ وطباعة إيصال» أو «حفظ وطلب جديد» من الملخص';
+    if(icEl)icEl.className='flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs';
+  }else if(!step1Done){
+    if(titleEl)titleEl.textContent='الخطوة 1 من 4: سجّل اسم العميل ورقم الموبايل ('+pct+'%)';
+    if(subEl)subEl.textContent='اكتب اسم العميل أو رقمه ليقترح السيستم بياناته وآخر معاملاته تلقائياً';
+    if(icEl)icEl.className='flex h-8 w-8 items-center justify-center rounded-xl bg-violet-600 text-white text-xs font-bold shadow-xs';
+  }else if(!step2Done){
+    if(titleEl)titleEl.textContent='الخطوة 2 من 4: اختر الخدمات المطلوبة للعميل ('+pct+'%)';
+    if(subEl)subEl.textContent='اضغط على أي كارت خدمة سريعة بالأسفل لإضافتها بضغطة واحدة';
+    if(icEl)icEl.className='flex h-8 w-8 items-center justify-center rounded-xl bg-violet-600 text-white text-xs font-bold shadow-xs';
+  }else{
+    if(titleEl)titleEl.textContent='الخطوة الأخيرة: راجع طريقة الدفع والمنفذ ثم احفظ الطلب ('+pct+'%)';
+    if(subEl)subEl.textContent='تأكد من اسم الموظف المسؤول وطريقة الدفع قبل الحفظ';
+    if(icEl)icEl.className='flex h-8 w-8 items-center justify-center rounded-xl bg-violet-600 text-white text-xs font-bold shadow-xs';
+  }
+}
+window.updateOrderProgressBar=updateOrderProgressBar;
+
+function focusOrderStep(stepNum){
+  const map={1:'client-name',2:'order-step-card-2',3:'lines-container',4:'order-step-card-3'};
+  const target=$(map[stepNum]);
+  if(!target)return;
+  target.scrollIntoView({behavior:'smooth',block:'center'});
+  if(stepNum===1&&$('client-name'))setTimeout(()=>$('client-name').focus(),220);
+}
+window.focusOrderStep=focusOrderStep;
+
+/* ---------- كروت الاختيار السريع للخدمات في شاشة طلب جديد ---------- */
+function getPopularCatalogServices(){
+  const counts=new Map();
+  allRequestLines.forEach(l=>{
+    const k=normName(l.service||'');
+    if(k)counts.set(k,(counts.get(k)||0)+1);
+  });
+  let list=allServices.slice();
+  if(!list.length){
+    const seen=new Map();
+    allRequestLines.forEach(l=>{
+      const nm=(l.service||'').trim();
+      const k=normName(nm);
+      if(nm&&!seen.has(k)){
+        seen.set(k,{name:nm,unit_price:l.unit_price||0,exec_cost:l.exec_unit_cost||0,executor:l.executor||''});
+      }
+    });
+    list=Array.from(seen.values());
+  }
+  list.sort((a,b)=>(counts.get(normName(b.name))||0)-(counts.get(normName(a.name))||0));
+  return list;
+}
+
+function getSelectedServicesSet(){
+  const s=new Set();
+  Array.from(($('lines-container')||{children:[]}).children).forEach(el=>{
+    const v=((el.querySelector('.svc-name')&&el.querySelector('.svc-name').value)||'').trim();
+    if(v)s.add(normName(v));
+  });
+  return s;
+}
+
+function renderQuickServicesGrid(){
+  const grid=$('quick-services-grid');if(!grid)return;
+  const list=getPopularCatalogServices();
+  if(!list.length){
+    grid.innerHTML='';
+    return;
+  }
+  const limit=showAllQuickServices?18:6;
+  const shown=list.slice(0,limit);
+  const selectedSet=getSelectedServicesSet();
+  const btn=$('quick-svc-toggle-btn');
+  if(btn){
+    btn.classList.toggle('hidden',list.length<=6);
+    btn.textContent=showAllQuickServices?'عرض أقل ('+6+')':'عرض المزيد ('+Math.min(18,list.length)+')';
+  }
+  grid.innerHTML=shown.map(s=>{
+    const isOn=selectedSet.has(normName(s.name));
+    const price=s.unit_price!=null?fmtNum(s.unit_price)+' ج.م':'—';
+    return '<button type="button" data-qsvc="'+escapeHtml(s.name)+'" onclick="toggleQuickService(this.dataset.qsvc)" class="qsvc-card '+(isOn?'on':'')+'">'+
+      '<div class="flex items-start justify-between gap-2 w-full">'+
+        '<span class="font-bold text-xs sm:text-sm text-ink dark:text-white leading-snug text-right">'+escapeHtml(s.name)+'</span>'+
+        '<span class="qsvc-check shrink-0"><i class="fa-solid fa-check"></i></span>'+
+      '</div>'+
+      '<div class="flex items-center justify-between gap-2 w-full mt-1 text-[11px] text-slate-500 dark:text-slate-400">'+
+        '<span class="font-bold font-mono text-brand-600 dark:text-violet-300">'+escapeHtml(price)+'</span>'+
+        (s.executor?'<span class="truncate max-w-[110px]">'+escapeHtml(s.executor)+'</span>':'')+
+      '</div>'+
+    '</button>';
+  }).join('');
+}
+window.renderQuickServicesGrid=renderQuickServicesGrid;
+
+function toggleAllQuickServices(){
+  showAllQuickServices=!showAllQuickServices;
+  renderQuickServicesGrid();
+}
+window.toggleAllQuickServices=toggleAllQuickServices;
+
+function toggleQuickService(svcName){
+  if(!svcName)return;
+  const targetNorm=normName(svcName);
+  const container=$('lines-container');if(!container)return;
+  const lines=Array.from(container.children);
+  const existing=lines.find(el=>normName((el.querySelector('.svc-name')&&el.querySelector('.svc-name').value)||'')===targetNorm);
+
+  if(existing){
+    if(lines.length>1){
+      existing.remove();
+    }else{
+      existing.querySelector('.svc-name').value='';
+      existing.querySelector('.svc-price').value=0;
+      existing.querySelector('.svc-cost').value=0;
+      existing.querySelector('.svc-executor').value='';
+      existing.querySelector('.svc-qty').value=1;
+    }
+    calculateTotals();
+    renderQuickServicesGrid();
+    return;
+  }
+
+  let targetLine=lines.find(el=>!((el.querySelector('.svc-name')&&el.querySelector('.svc-name').value)||'').trim());
+  if(!targetLine){
+    addServiceLine();
+    targetLine=container.lastElementChild;
+  }
+  if(targetLine){
+    const inp=targetLine.querySelector('.svc-name');
+    if(inp){
+      inp.value=svcName;
+      onServiceSelected(targetLine.id,svcName);
+    }
+  }
+  renderQuickServicesGrid();
+}
+window.toggleQuickService=toggleQuickService;
+
+function resetNewOrderForm(){
+  ['client-name','phone','address','rn-nm','notes','discount-pct'].forEach(id=>{if($(id))$(id).value='';});
+  if($('client-whatsapp-box'))$('client-whatsapp-box').classList.add('hidden');
+  if($('s-client'))$('s-client').textContent='—';
+  syncReceivedAt(true);
+  generateNewTxId();
+  if($('lines-container'))$('lines-container').innerHTML='';
+  serviceLineCounter=0;
+  addServiceLine();
+  renderQuickServicesGrid();
+  updateOrderProgressBar();
+  if($('client-name'))$('client-name').focus();
+}
+window.resetNewOrderForm=resetNewOrderForm;
+
+function submitOrderWithMode(mode){
+  window.__saveOrderMode=mode||'normal';
+  const form=$('req-form');
+  if(form){
+    if(typeof form.requestSubmit==='function')form.requestSubmit();
+    else form.dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}));
+  }
+}
+window.submitOrderWithMode=submitOrderWithMode;
+
+/* ---------- شاشة المعاملات المستقلة (#tab-tx) + شريط حالة الطلب التفاعلي ---------- */
 function RLIM(){return window.__recentLimit?window.__recentLimit():20;}
-function setRecentMode(m){recentMode=m;renderRecentRequests();}
+function setRecentMode(m){
+  recentMode=m;
+  renderRecentRequests();
+}
+function setTxStatusFilter(flt){
+  txStatusFilter=flt||'all';
+  if(flt!=='today'&&recentMode==='today'&&flt==='all')recentMode='all';
+  document.querySelectorAll('#tx-status-chips .tx-flt-chip').forEach(b=>{
+    b.classList.toggle('on',b.getAttribute('data-txf')===txStatusFilter);
+  });
+  renderRecentRequests();
+}
+window.setTxStatusFilter=setTxStatusFilter;
+
+function renderMyTodayMiniList(todayOrders){
+  const box=$('my-today-mini-list');if(!box)return;
+  const meName=normName((myProfile&&myProfile.full_name)||'');
+  let list=todayOrders.filter(o=>!meName||normName(o.employee||'')===meName);
+  if(!list.length)list=todayOrders;
+  const top=list.slice(0,4);
+  if(!top.length){
+    box.innerHTML='<div class="py-4 text-center text-xs text-slate-400">لا توجد معاملات مسجلة اليوم بعد</div>';
+    return;
+  }
+  box.innerHTML=top.map(o=>{
+    const st=getOrderStatus(o);
+    const svcs=o.lines.map(l=>l.service).filter(Boolean).slice(0,2).join(' + ');
+    const tm=formatTimeOnly(o.received_at||o.created_at);
+    return '<button type="button" data-tx="'+escapeHtml(o.transaction_id)+'" onclick="openTxInTransactionsTab(this.dataset.tx)" class="w-full flex items-center justify-between gap-2.5 p-2.5 rounded-xl border border-slate-100 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 text-right transition">'+
+      '<div class="min-w-0">'+
+        '<div class="font-bold text-xs text-ink dark:text-white truncate">'+escapeHtml(o.client_name||'—')+'</div>'+
+        '<div class="text-[11px] text-slate-400 truncate mt-0.5">'+escapeHtml(svcs||'—')+(tm?' · '+escapeHtml(tm):'')+'</div>'+
+      '</div>'+
+      '<div class="shrink-0">'+badge(st)+'</div>'+
+    '</button>';
+  }).join('');
+}
+
+function openTxInTransactionsTab(tx){
+  selectedInspectorTx=tx;
+  switchTab('tx');
+  renderRecentRequests();
+}
+window.openTxInTransactionsTab=openTxInTransactionsTab;
+
+function selectTxForInspector(tx,openModalOnMobile){
+  selectedInspectorTx=String(tx||'');
+  document.querySelectorAll('#recent-table-body tr').forEach(tr=>{
+    const b=tr.querySelector('[data-tx]');
+    tr.classList.toggle('tx-row-selected',!!(b&&String(b.dataset.tx)===selectedInspectorTx));
+  });
+  renderTxInspector(selectedInspectorTx);
+  if(openModalOnMobile&&window.innerWidth<1024){
+    const el=$('tx-inspector-aside');
+    if(el)el.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+}
+window.selectTxForInspector=selectTxForInspector;
+
+/* معلومات مرحلة الطلب للشريط التفاعلي والحلقة الدائرية */
+function getStageMeta(st,isLateFlag){
+  if(st==='Delivered'){
+    return {step:4,pct:100,barW:100,title:'تم التسليم',sub:'اكتملت المعاملة وتم تسليمها للعميل',color:'#10b981',icon:'fa-circle-check',nextStatus:'In Progress',nextLabel:'إعادة لقيد التنفيذ'};
+  }
+  if(st==='Complete'){
+    return {step:3,pct:90,barW:78,title:'جاهزة للتسليم',sub:'الخدمة مكتملة ومستنية تسليم العميل',color:'#14b8a6',icon:'fa-box-open',nextStatus:'Delivered',nextLabel:'تحويل إلى تم التسليم'};
+  }
+  if(st==='Under Review'){
+    return {step:2,pct:50,barW:36,title:'قيد المراجعة',sub:'مراجعة المستندات والبيانات قبل التنفيذ',color:'#f59e0b',icon:'fa-magnifying-glass',nextStatus:'In Progress',nextLabel:'تحويل إلى قيد التنفيذ'};
+  }
+  if(isLateFlag){
+    return {step:3,pct:65,barW:66,title:'متأخرة · قيد التنفيذ',sub:'تجاوزت موعد التسليم وتحتاج متابعة فورية',color:'#f43f5e',icon:'fa-clock',nextStatus:'Complete',nextLabel:'تحويل إلى جاهز للتسليم'};
+  }
+  return {step:3,pct:75,barW:68,title:'قيد التنفيذ',sub:'جاري تنفيذ المعاملة لدى المنفذ المختص',color:'#8b5cf6',icon:'fa-gears',nextStatus:'Complete',nextLabel:'تحويل إلى جاهز للتسليم'};
+}
+
+/* بناء شريط حالة الطلب الأفقي التفاعلي + الحلقة الدائرية (يُستخدم في لوحة المعاملات ونافذة المعاملة) */
+function buildInteractiveStatusWidgets(tx,currentSt,isLateFlag,mode){
+  const m=getStageMeta(currentSt,isLateFlag);
+  const r=52,circ=Math.round(2*Math.PI*r);
+  const offset=Math.round(circ*(1-m.pct/100));
+  const clickFn=stVal=>mode==='modal'
+    ?("stageTxStatus('"+stVal+"')")
+    :("inspectorChangeStatus('"+escapeHtml(tx)+"','"+stVal+"')");
+  const cycleFn=mode==='modal'
+    ?("stageTxStatus('"+m.nextStatus+"')")
+    :("inspectorChangeStatus('"+escapeHtml(tx)+"','"+m.nextStatus+"')");
+
+  const nodeCls=idx=>{
+    if(m.step>idx||(m.step===4&&idx===4))return 'tx-step-node done';
+    if(m.step===idx)return 'tx-step-node current';
+    return 'tx-step-node';
+  };
+  const nodeIcon=(idx,defIc)=>{
+    if(m.step>idx||(m.step===4&&idx===4))return '<i class="fa-solid fa-check"></i>';
+    return '<i class="fa-solid '+defIc+'"></i>';
+  };
+
+  return '<div class="space-y-4" data-status-widget-tx="'+escapeHtml(tx)+'">'+
+    /* 1. الدائرة التفاعلية لحالة الطلب (مثل image_6fc8c5.png) */
+    '<div onclick="'+cycleFn+'" class="tx-ring-gauge-box" title="اضغط لتحديث الحالة للمرحلة التالية ('+escapeHtml(m.nextLabel)+')">'+
+      '<div class="relative flex items-center justify-center" style="width:132px;height:132px">'+
+        '<svg class="tx-ring-svg" width="132" height="132" viewBox="0 0 132 132">'+
+          '<circle class="tx-ring-bg" cx="66" cy="66" r="'+r+'"></circle>'+
+          '<circle class="tx-ring-fg" cx="66" cy="66" r="'+r+'" stroke="'+m.color+'" stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'"></circle>'+
+        '</svg>'+
+        '<div class="absolute inset-0 flex flex-col items-center justify-center text-center px-2">'+
+          '<i class="fa-solid '+m.icon+' text-xl mb-1" style="color:'+m.color+'"></i>'+
+          '<span class="font-bold text-sm text-white leading-tight">'+escapeHtml(m.title)+'</span>'+
+          '<span class="text-[10px] text-slate-400 mt-0.5">تحديث الحالة ('+m.pct+'%)</span>'+
+        '</div>'+
+      '</div>'+
+      '<div class="mt-2 text-[11px] text-slate-300 text-center">'+escapeHtml(m.sub)+'</div>'+
+    '</div>'+
+
+    /* 2. شريط المراحل الأفقي التفاعلي (4 مراحل مثل image_6fc8de.png) */
+    '<div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-black/25 p-3.5">'+
+      '<div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mb-1 px-1">'+
+        '<span class="font-bold text-ink dark:text-white"><i class="fa-solid fa-sliders ms-1 text-violet-500"></i>شريط حالة الريكوست التفاعلي</span>'+
+        '<span class="font-mono font-bold" style="color:'+m.color+'">'+m.pct+'% مكتمل</span>'+
+      '</div>'+
+      '<div class="tx-stepper-wrap">'+
+        '<div class="tx-stepper-track"><div class="tx-stepper-fill" style="width:'+m.barW+'%"></div></div>'+
+        '<div class="tx-stepper-nodes">'+
+          '<button type="button" onclick="'+clickFn('In Progress')+'" class="tx-step-node done" title="المرحلة 1: تسجيل الطلب">'+
+            '<span class="tx-step-circle"><i class="fa-solid fa-check"></i></span>'+
+            '<span class="tx-step-label">تسجيل الطلب</span>'+
+          '</button>'+
+          '<button type="button" onclick="'+clickFn('Under Review')+'" class="'+nodeCls(2)+'" title="اضغط لتحويل الطلب إلى مراجعة المستندات">'+
+            '<span class="tx-step-circle">'+nodeIcon(2,'fa-magnifying-glass')+'</span>'+
+            '<span class="tx-step-label">مراجعة المستندات</span>'+
+          '</button>'+
+          '<button type="button" onclick="'+clickFn(currentSt==='In Progress'?'Complete':'In Progress')+'" class="'+nodeCls(3)+'" title="اضغط للتبديل بين قيد التنفيذ وجاهز للتسليم">'+
+            '<span class="tx-step-circle">'+nodeIcon(3,'fa-gears')+'</span>'+
+            '<span class="tx-step-label">'+(currentSt==='Complete'?'جاهز للتسليم':'التنفيذ')+'</span>'+
+          '</button>'+
+          '<button type="button" onclick="'+clickFn('Delivered')+'" class="'+nodeCls(4)+'" title="اضغط لتحويل الطلب إلى تم التسليم">'+
+            '<span class="tx-step-circle">'+nodeIcon(4,'fa-flag-checkered')+'</span>'+
+            '<span class="tx-step-label">التسليم</span>'+
+          '</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+}
+
+/* تحديث وتفاعل لوحة المعاينة الجانبية في شاشة المعاملات (#tx-inspector-panel) */
+async function renderTxInspector(tx){
+  const panel=$('tx-inspector-panel');if(!panel)return;
+  const o=groupedOrders.find(x=>String(x.transaction_id)===String(tx))||groupedOrders[0];
+  if(!o){
+    panel.innerHTML='<div class="py-10 text-center text-xs text-slate-400">لا توجد معاملات لعرضها</div>';
+    return;
+  }
+  selectedInspectorTx=String(o.transaction_id);
+  const st=getOrderStatus(o);
+  const late=isOrderLate(o);
+  const svcs=o.lines.map(l=>l.service+' (×'+fmtNum(l.qty)+')').join(' + ');
+  const wa=waLink(o.phone,'أهلاً '+o.client_name+'، بخصوص معاملتك رقم '+o.transaction_id+' — تساهيل');
+
+  panel.innerHTML=
+    '<div class="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-white/10 pb-3.5">'+
+      '<div>'+
+        '<div class="flex items-center gap-2">'+
+          '<span class="font-bold text-base text-ink dark:text-white font-mono" dir="ltr">معاملة #'+escapeHtml(o.transaction_id)+'</span>'+
+        '</div>'+
+        '<button type="button" '+ac(o.client_name)+' class="mt-1 font-bold text-sm text-brand-600 dark:text-violet-300 hover:underline block text-right">'+escapeHtml(o.client_name||'—')+(o.phone?' · <span class="font-mono" dir="ltr">'+escapeHtml(o.phone)+'</span>':'')+'</button>'+
+      '</div>'+
+      '<div class="shrink-0">'+badge(st)+'</div>'+
+    '</div>'+
+
+    /* شريط الحالة التفاعلي والحلقة الدائرية */
+    buildInteractiveStatusWidgets(o.transaction_id,st,late,'inspector')+
+
+    /* تفاصيل المعاملة المختصرة */
+    '<div class="rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 p-3.5 space-y-2 text-xs">'+
+      '<div class="flex justify-between gap-2"><span class="text-slate-400">الخدمات</span><span class="font-bold text-ink dark:text-white text-left">'+escapeHtml(svcs||'—')+'</span></div>'+
+      '<div class="flex justify-between gap-2"><span class="text-slate-400">الإجمالي</span><span class="font-bold text-sm text-brand-600 dark:text-violet-300 font-mono">'+escapeHtml(formatCurrency(o.grand_total))+' · '+escapeHtml(o.payment_method||'كاش')+'</span></div>'+
+      '<div class="flex justify-between gap-2"><span class="text-slate-400">الموظف المسؤول</span><span class="font-bold text-ink dark:text-white">'+empCell(o.employee)+'</span></div>'+
+    '</div>'+
+
+    /* أزرار الأكشن التفاعلية الفورية (كل زر يتفاعل مع شريط الحالة وسجل الإجراءات) */
+    '<div class="space-y-2">'+
+      '<div class="text-[11px] font-bold text-slate-400">تغيير سريع للحالة (يتفاعل فوراً مع الشريط):</div>'+
+      '<div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">'+
+        Object.keys(STATUS_PATCH).map(s=>
+          '<button type="button" onclick="inspectorChangeStatus(\''+escapeHtml(o.transaction_id)+'\',\''+s+'\')" class="rounded-xl py-2 px-2 text-[11px] font-bold border transition '+(s===st?'ring-2 ring-violet-400 border-violet-400 ':'border-transparent ')+(STATUS_CLS[s]||'')+'">'+escapeHtml(statusLabel(s))+'</button>'
+        ).join('')+
+      '</div>'+
+      '<div class="grid grid-cols-2 gap-2 pt-1">'+
+        '<button type="button" onclick="openTxModal(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-pri text-xs py-2.5"><i class="fa-solid fa-up-right-and-down-left-from-center"></i><span>فتح التفاصيل الكاملة</span></button>'+
+        '<button type="button" onclick="printTxReceipt(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-sec text-xs py-2.5"><i class="fa-solid fa-print"></i><span>طباعة إيصال</span></button>'+
+        (canStaffEditTx()?'<button type="button" onclick="openTxEdit(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-sec text-xs py-2.5"><i class="fa-solid fa-pen-to-square text-amber-400"></i><span>تعديل المعاملة</span></button>':'')+
+        (wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="btn-neo-sec text-xs py-2.5 text-emerald-500"><i class="fa-brands fa-whatsapp"></i><span>مراسلة واتساب</span></a>':'')+
+      '</div>'+
+    '</div>'+
+
+    /* إضافة تعليق متابعة سريع من داخل لوحة المعاملات */
+    '<form onsubmit="inspectorAddComment(event,\''+escapeHtml(o.transaction_id)+'\')" class="flex gap-2 pt-1">'+
+      '<input id="insp-cmt-in" type="text" required maxlength="500" placeholder="أضف تعليق أو إجراء متابعة على المعاملة..." class="field !py-2 text-xs flex-1">'+
+      '<button id="insp-cmt-btn" type="submit" class="btn-neo-pri !py-2 !px-3.5 text-xs shrink-0"><i class="fa-solid fa-paper-plane"></i><span>إضافة</span></button>'+
+    '</form>'+
+
+    /* سجل الإجراءات والتغييرات الزمني (مثل image_6fc8c7.png) */
+    '<div class="pt-2 border-t border-slate-100 dark:border-white/10 space-y-3">'+
+      '<div class="flex items-center justify-between">'+
+        '<h4 class="font-bold text-sm text-ink dark:text-white">سجل الإجراءات والتغييرات</h4>'+
+        '<span class="text-[10.5px] text-slate-400">تحديث لحظي</span>'+
+      '</div>'+
+      '<div id="insp-timeline-box" class="tx-timeline max-h-64 overflow-y-auto pr-4 py-1">'+
+        '<div class="text-xs text-slate-400">جارٍ تحميل السجل...</div>'+
+      '</div>'+
+    '</div>';
+
+  loadInspectorTimeline(o);
+}
+
+async function loadInspectorTimeline(o){
+  const box=$('insp-timeline-box');if(!box||!o)return;
+  const tx=String(o.transaction_id);
+  const events=[];
+
+  // جلب سجل التغييرات والتعليقات لهذه المعاملة
+  if(sbClient){
+    try{
+      const [audRes,cmtRes]=await Promise.all([
+        sbClient.from('audit_log').select('at,user_name,action,service,details').eq('transaction_id',tx).order('at',{ascending:false}).limit(30),
+        sbClient.from('tx_comments').select('id,author_name,body,created_at').eq('transaction_id',tx).order('created_at',{ascending:false}).limit(20)
+      ]);
+      if(!audRes.error&&Array.isArray(audRes.data)){
+        audRes.data.forEach(a=>{
+          let title='تحديث على '+tx,desc='';
+          if(a.action==='created'){
+            title='طلب جديد '+tx;
+            desc=(a.user_name||'موظف')+' سجّل طلب '+(a.service||'');
+          }else if(a.action==='deleted'){
+            title='حذف بند '+tx;
+            desc=(a.user_name||'موظف')+' حذف بند '+(a.service||'');
+          }else{
+            const det=a.details||{};
+            if(det.delivered&&det.delivered.new===true){
+              title='تم التسليم '+tx;
+              desc='تم تسليم '+(a.service||'المعاملة')+' للعميل بواسطة '+(a.user_name||'موظف');
+            }else if(det.complete||det.under_review||det.delivered){
+              title='تغيير حالة '+tx;
+              desc='تحديث حالة '+(a.service||'المعاملة')+' بواسطة '+(a.user_name||'موظف');
+            }else{
+              title='تعديل بيانات '+tx;
+              desc=(a.user_name||'موظف')+' عدّل بيانات في '+(a.service||'المعاملة');
+            }
+          }
+          events.push({at:a.at,title:title,desc:desc});
+        });
+      }
+      if(!cmtRes.error&&Array.isArray(cmtRes.data)){
+        cmtRes.data.forEach(c=>{
+          events.push({
+            at:c.created_at,
+            title:'تحديث ومتابعة '+tx,
+            desc:(c.author_name||'موظف')+' أضاف تعليق: «'+c.body+'»'
+          });
+        });
+      }
+    }catch(e){}
+  }
+
+  // إضافة حدث إنشاء الطلب الأساسي دائماً في نهاية السجل
+  const initAt=o.received_at||o.created_at;
+  if(!events.some(x=>x.title.indexOf('طلب جديد')===0)){
+    events.push({
+      at:initAt,
+      title:'تم إنشاء الطلب '+tx,
+      desc:'تسجيل الطلب للعميل '+(o.client_name||'')+' بواسطة '+(o.employee||'موظف')
+    });
+  }
+
+  events.sort((a,b)=>new Date(b.at||0)-new Date(a.at||0));
+
+  if($('insp-timeline-box')!==box||selectedInspectorTx!==tx)return;
+  box.innerHTML=events.slice(0,15).map(ev=>{
+    const d=new Date(ev.at);
+    const isRecent=(Date.now()-d.getTime())<120000;
+    const tStr=isNaN(d)?'':(isRecent?'الآن':formatDateTime(ev.at));
+    return '<div class="tx-tl-item">'+
+      '<span class="tx-tl-dot"></span>'+
+      '<div class="font-bold text-ink dark:text-white text-xs">'+escapeHtml(ev.title)+'</div>'+
+      '<div class="text-slate-500 dark:text-slate-300 text-[11.5px] mt-0.5">'+escapeHtml(ev.desc)+'</div>'+
+      '<div class="text-[10.5px] text-slate-400 mt-0.5 font-mono">'+escapeHtml(tStr)+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+async function inspectorChangeStatus(tx,newStatus){
+  if(!tx||!newStatus)return;
+  await setTxStatus(tx,newStatus);
+  renderTxInspector(tx);
+  if(currentTab==='home')renderHomeTab();
+}
+window.inspectorChangeStatus=inspectorChangeStatus;
+
+async function inspectorAddComment(e,tx){
+  e.preventDefault();
+  const inp=$('insp-cmt-in'),btn=$('insp-cmt-btn');
+  if(!inp||!tx||!sbClient||!currentUser)return;
+  const body=(inp.value||'').trim();if(!body)return;
+  const author=(myProfile&&myProfile.full_name)||currentUser.email||'موظف';
+  if(btn)btn.disabled=true;
+  try{
+    const r=await sbClient.from('tx_comments').insert({transaction_id:tx,author_id:currentUser.id,author_name:author,body:body});
+    if(r.error)throw r.error;
+    inp.value='';
+    showToast('تم إضافة التعليق وتحديث سجل الإجراءات');
+    renderTxInspector(tx);
+  }catch(err){showError('تعذّر حفظ التعليق',err);}
+  finally{if(btn)btn.disabled=false;}
+}
+window.inspectorAddComment=inspectorAddComment;
+
 function renderRecentRequests(){
   const today=new Date().toLocaleDateString('en-CA');
   const td=groupedOrders.filter(o=>dayKey(o.received_at||o.created_at)===today);
   const tsum=td.reduce((s,o)=>s+o.grand_total,0);
   setT('t-sales',formatCurrency(tsum));setT('t-orders',String(td.length));
   setT('t-lines',String(td.reduce((s,o)=>s+o.lines.length,0)));setT('t-avg',formatCurrency(td.length?tsum/td.length:0));
-  const q=($('recent-q').value||'').trim().toLowerCase();
+
+  // تحديث قائمة آخر معاملاتك اليوم المصغرة في شاشة طلب جديد
+  renderMyTodayMiniList(td);
+
+  // تحديث كروت KPI الـ 4 في شاشة المعاملات المستقلة
+  const openOrders=groupedOrders.filter(o=>getOrderStatus(o)!=='Delivered');
+  const lateOrders=groupedOrders.filter(o=>isOrderLate(o));
+  const readyOrders=groupedOrders.filter(o=>getOrderStatus(o)==='Complete');
+  setT('tx-kpi-open',String(openOrders.length));
+  setT('tx-kpi-late',String(lateOrders.length));
+  setT('tx-kpi-ready',String(readyOrders.length));
+  setT('tx-kpi-today',String(td.length));
+
+  // تحديث عداد المعاملات المفتوحة في الهيدر والقائمة
+  ['hdr-tx-badge','menu-tx-badge'].forEach(id=>{
+    const b=$(id);if(!b)return;
+    b.textContent=openOrders.length>99?'99+':String(openOrders.length);
+    b.classList.toggle('hidden',!openOrders.length);
+  });
+
+  const q=(($('recent-q')&&$('recent-q').value)||'').trim().toLowerCase();
   let list=recentMode==='today'?td:groupedOrders;
-  if(q)list=list.filter(o=>(o.client_name||'').toLowerCase().includes(q)||(o.phone||'').includes(q)||String(o.transaction_id).toLowerCase().includes(q));
+  if(txStatusFilter&&txStatusFilter!=='all'){
+    if(txStatusFilter==='open')list=list.filter(o=>getOrderStatus(o)!=='Delivered');
+    else if(txStatusFilter==='late')list=list.filter(o=>isOrderLate(o));
+    else list=list.filter(o=>getOrderStatus(o)===txStatusFilter);
+  }
+  if(q)list=list.filter(o=>(o.client_name||'').toLowerCase().includes(q)||(o.phone||'').includes(q)||String(o.transaction_id).toLowerCase().includes(q)||(o.lines||[]).some(l=>(l.service||'').toLowerCase().includes(q)));
   if(window.__recentFilter)list=window.__recentFilter(list);
-  const on='rounded-md px-3 py-1.5 text-xs font-semibold bg-white dark:bg-slate-700 text-brand-700 dark:text-brand-300 shadow-sm',off='rounded-md px-3 py-1.5 text-xs font-semibold text-slate-500';
-  $('rm-all').className=recentMode==='all'?on:off;$('rm-today').className=recentMode==='today'?on:off;
-  $('recent-count').textContent=list.length+' معاملة'+(list.length>RLIM()?' (عرض أحدث '+RLIM()+')':'')+' · البيانات من '+formatDateOnly(DATA_FROM)+' · اضغط على أي معاملة لعرض تفاصيلها';
+
+  const on='rounded-lg px-2.5 py-1 text-xs font-semibold bg-white dark:bg-violet-600 text-brand-700 dark:text-white shadow-xs',off='rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-500';
+  if($('rm-all'))$('rm-all').className=recentMode==='all'?on:off;
+  if($('rm-today'))$('rm-today').className=recentMode==='today'?on:off;
+  if($('recent-count'))$('recent-count').textContent=list.length+' معاملة'+(list.length>RLIM()?' (عرض أحدث '+RLIM()+')':'')+' · اضغط على أي معاملة لعرض شريط حالتها التفاعلي على اليسار';
+
   const shown=list.slice(0,RLIM());
   if(!shown.length){
-    $('recent-table-body').innerHTML='<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400">لا توجد معاملات مطابقة</td></tr>';
-    $('recent-cards-container').innerHTML='<div class="card p-8 text-center text-slate-400 text-xs">لا توجد معاملات مطابقة</div>';return;
+    if($('recent-table-body'))$('recent-table-body').innerHTML='<tr><td colspan="8" class="px-6 py-10 text-center text-slate-400">لا توجد معاملات مطابقة</td></tr>';
+    if($('recent-cards-container'))$('recent-cards-container').innerHTML='<div class="card p-8 text-center text-slate-400 text-xs">لا توجد معاملات مطابقة</div>';
+    return;
   }
-  const sts=o=>[...new Set(o.lines.map(l=>l.status))].slice(0,2).map(badge).join(' ');
-  $('recent-table-body').innerHTML=shown.map(function(o){
-    const svcHtml='<div class="rc-svc-list">'+o.lines.map(l=>
-      '<div class="rc-svc-pill">'+
-        '<span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span>'+
-        '<span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span>'+
-      '</div>'
-    ).join('')+'</div>';
-    const wa=waLink(o.phone,'أهلاً '+o.client_name+'، بخصوص معاملتك رقم '+o.transaction_id+' — تساهيل');
-    return '<tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 align-middle">'+
-    '<td class="px-4 py-3.5 font-bold text-ink dark:text-white min-w-[175px] max-w-[250px]"><button '+ac(o.client_name)+' class="text-right text-start leading-snug hover:text-brand-600 hover:underline block w-full">'+escapeHtml(o.client_name)+'</button></td>'+
-    '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr"><div class="rc-phone-pill"><span>'+escapeHtml(o.phone||'—')+'</span>'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="text-emerald-600 hover:text-emerald-700 text-sm leading-none" title="مراسلة واتساب"><i class="fa-brands fa-whatsapp"></i></a>':'')+'</div></td>'+
-    '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr"><button '+at(o.transaction_id)+' class="rc-tx-pill">'+escapeHtml(o.transaction_id)+'</button></td>'+
-    '<td class="px-3 py-3.5">'+svcHtml+'</td>'+
-    '<td class="px-3 py-3.5 font-bold text-ink dark:text-white whitespace-nowrap text-sm">'+formatCurrency(o.grand_total)+'</td>'+
-    '<td class="px-3 py-3.5 text-xs whitespace-nowrap font-medium">'+empCell(o.employee)+'</td>'+
-    '<td class="px-3 py-3.5 whitespace-nowrap"><div class="flex flex-col items-start gap-1">'+sts(o)+'</div></td>'+
-    '<td class="px-3 py-3.5 whitespace-nowrap">'+formatDateSplit(o.received_at||o.created_at)+'</td>'+
-    '<td class="px-3 py-3.5 text-center whitespace-nowrap"><div class="inline-flex items-center justify-center gap-1.5"><button '+at(o.transaction_id)+' class="p-2 rounded-lg bg-slate-100/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 transition" title="التفاصيل"><i class="fa-solid fa-eye text-xs"></i></button>'+
-    '<button data-tx="'+escapeHtml(o.transaction_id)+'" onclick="printTxReceipt(this.dataset.tx)" class="p-2 rounded-lg bg-brand-50/80 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 hover:bg-brand-100 transition" title="طباعة إيصال"><i class="fa-solid fa-print text-xs"></i></button></div></td></tr>';
-  }).join('');
-  $('recent-cards-container').innerHTML=shown.map(function(o){
-    const chips=o.lines.map(l=>'<div class="rc-svc-pill w-full"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div>').join('');
-    return '<button type="button" '+at(o.transaction_id)+' class="card lift w-full p-4 text-start block">'+
-    '<div class="flex items-start justify-between gap-2"><div class="min-w-0"><div class="font-bold text-ink dark:text-white leading-snug">'+escapeHtml(o.client_name)+'</div><div class="mt-1 flex items-center gap-2 text-[11px] text-slate-400" dir="ltr"><span class="rc-tx-pill !py-0.5 !px-2 !text-[11px]">'+escapeHtml(o.transaction_id)+'</span>'+(o.phone?'<span>'+escapeHtml(o.phone)+'</span>':'')+'</div></div><div class="flex shrink-0 flex-wrap justify-end gap-1">'+sts(o)+'</div></div>'+
-    '<div class="mt-3 flex flex-col gap-1.5">'+chips+'</div>'+
-    '<div class="mt-3 flex items-end justify-between gap-2 border-t border-slate-100 dark:border-slate-700 pt-3"><div class="min-w-0 text-[11px] text-slate-500"><div class="truncate font-medium">'+escapeHtml(o.employee||'—')+(o.receiver?' ← '+escapeHtml(o.receiver):'')+'</div><div>'+formatDateTime(o.received_at||o.created_at)+'</div></div><div class="shrink-0 font-bold text-sm text-brand-600 dark:text-brand-400 whitespace-nowrap">'+formatCurrency(o.grand_total)+'</div></div></button>';
-  }).join('');
+
+  if(!selectedInspectorTx||!list.some(o=>String(o.transaction_id)===String(selectedInspectorTx))){
+    selectedInspectorTx=String(shown[0].transaction_id);
+  }
+
+  const sts=o=>isOrderLate(o)
+    ?'<span class="st17-b" style="--sc:244,63,94;--sct:253,164,175">متأخر</span>'
+    :[...new Set(o.lines.map(l=>l.status))].slice(0,2).map(badge).join(' ');
+
+  if($('recent-table-body')){
+    $('recent-table-body').innerHTML=shown.map(function(o){
+      const isSel=String(o.transaction_id)===String(selectedInspectorTx);
+      const svcHtml='<div class="rc-svc-list">'+o.lines.map(l=>
+        '<div class="rc-svc-pill">'+
+          '<span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span>'+
+          '<span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span>'+
+        '</div>'
+      ).join('')+'</div>';
+      const wa=waLink(o.phone,'أهلاً '+o.client_name+'، بخصوص معاملتك رقم '+o.transaction_id+' — تساهيل');
+      return '<tr onclick="selectTxForInspector(\''+escapeHtml(o.transaction_id)+'\',false)" class="cursor-pointer hover:bg-slate-50/80 dark:hover:bg-white/5 align-middle '+(isSel?'tx-row-selected':'')+'">'+
+      '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr"><button type="button" '+at(o.transaction_id)+' class="rc-tx-pill">'+escapeHtml(o.transaction_id)+'</button></td>'+
+      '<td class="px-3 py-3.5 font-bold text-ink dark:text-white min-w-[160px] max-w-[230px]">'+
+        '<button type="button" '+ac(o.client_name)+' class="text-right text-start leading-snug hover:text-brand-600 hover:underline block w-full">'+escapeHtml(o.client_name)+'</button>'+
+        (o.phone?'<div class="mt-1 rc-phone-pill !py-0.5 !px-2 !text-[11px]" dir="ltr"><span>'+escapeHtml(o.phone)+'</span>'+(wa?'<a href="'+wa+'" onclick="event.stopPropagation()" target="_blank" rel="noopener" class="text-emerald-500 hover:text-emerald-400"><i class="fa-brands fa-whatsapp"></i></a>':'')+'</div>':'')+
+      '</td>'+
+      '<td class="px-3 py-3.5">'+svcHtml+'</td>'+
+      '<td class="px-3 py-3.5 text-xs whitespace-nowrap font-medium">'+empCell(o.employee)+'</td>'+
+      '<td class="px-3 py-3.5 font-bold text-ink dark:text-white whitespace-nowrap text-sm">'+formatCurrency(o.grand_total)+'</td>'+
+      '<td class="px-3 py-3.5 whitespace-nowrap"><div class="flex flex-col items-start gap-1">'+sts(o)+'</div></td>'+
+      '<td class="px-3 py-3.5 whitespace-nowrap">'+formatDateSplit(o.received_at||o.created_at)+'</td>'+
+      '<td class="px-3 py-3.5 text-center whitespace-nowrap"><div class="inline-flex items-center justify-center gap-1.5">'+
+        '<button type="button" '+at(o.transaction_id)+' class="p-2 rounded-lg bg-slate-100/80 dark:bg-white/10 text-slate-600 dark:text-slate-200 hover:bg-violet-500/20 hover:text-violet-300 transition" title="فتح النافذة الكاملة"><i class="fa-solid fa-eye text-xs"></i></button>'+
+        '<button type="button" data-tx="'+escapeHtml(o.transaction_id)+'" onclick="event.stopPropagation();printTxReceipt(this.dataset.tx)" class="p-2 rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-300 hover:bg-violet-500/25 transition" title="طباعة إيصال"><i class="fa-solid fa-print text-xs"></i></button>'+
+      '</div></td></tr>';
+    }).join('');
+  }
+
+  if($('recent-cards-container')){
+    $('recent-cards-container').innerHTML=shown.map(function(o){
+      const isSel=String(o.transaction_id)===String(selectedInspectorTx);
+      const chips=o.lines.map(l=>'<div class="rc-svc-pill w-full"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div>').join('');
+      return '<div data-tx="'+escapeHtml(o.transaction_id)+'" onclick="selectTxForInspector(\''+escapeHtml(o.transaction_id)+'\',true)" class="card lift w-full p-4 text-start block cursor-pointer '+(isSel?'ring-2 ring-violet-500':'')+'">'+
+      '<div class="flex items-start justify-between gap-2"><div class="min-w-0"><div class="font-bold text-ink dark:text-white leading-snug">'+escapeHtml(o.client_name)+'</div><div class="mt-1 flex items-center gap-2 text-[11px] text-slate-400" dir="ltr"><span class="rc-tx-pill !py-0.5 !px-2 !text-[11px]">'+escapeHtml(o.transaction_id)+'</span>'+(o.phone?'<span>'+escapeHtml(o.phone)+'</span>':'')+'</div></div><div class="flex shrink-0 flex-wrap justify-end gap-1">'+sts(o)+'</div></div>'+
+      '<div class="mt-3 flex flex-col gap-1.5">'+chips+'</div>'+
+      '<div class="mt-3 flex items-end justify-between gap-2 border-t border-slate-100 dark:border-white/10 pt-3"><div class="min-w-0 text-[11px] text-slate-400"><div class="truncate font-medium">'+escapeHtml(o.employee||'—')+(o.receiver?' ← '+escapeHtml(o.receiver):'')+'</div><div>'+formatDateTime(o.received_at||o.created_at)+'</div></div><div class="flex items-center gap-2"><span class="font-bold text-sm text-brand-600 dark:text-violet-300 whitespace-nowrap">'+formatCurrency(o.grand_total)+'</span><button type="button" '+at(o.transaction_id)+' class="px-2.5 py-1 rounded-lg bg-violet-600 text-white text-[11px] font-bold">التفاصيل</button></div></div></div>';
+    }).join('');
+  }
+
+  renderTxInspector(selectedInspectorTx);
 }
 
 /* ---------- نموذج الخدمات ---------- */
 function addServiceLine(){
   serviceLineCounter++;const id='line-'+serviceLineCounter;
   const d=document.createElement('div');d.id=id;
-  d.className='p-3.5 sm:p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-3';
-  d.innerHTML='<div class="flex items-center justify-between text-xs text-slate-500 font-medium"><span>بند خدمة #'+serviceLineCounter+'</span><button type="button" onclick="removeServiceLine(\''+id+'\')" class="text-rose-500 hover:text-rose-700 p-1" title="حذف"><i class="fa-solid fa-trash-can"></i></button></div>'+
+  d.className='p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/60 dark:bg-white/[0.03] space-y-3';
+  d.innerHTML='<div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-medium"><span>بند خدمة #'+serviceLineCounter+'</span><button type="button" onclick="removeServiceLine(\''+id+'\')" class="text-rose-500 hover:text-rose-400 p-1" title="حذف"><i class="fa-solid fa-trash-can"></i></button></div>'+
   '<div class="grid gap-3 sm:grid-cols-12 text-xs">'+
-  '<div class="sm:col-span-5"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-400">الخدمة المطلوبة</label><input list="svc-datalist" class="field svc-name" placeholder="اختر أو اكتب الخدمة..." oninput="onServiceSelected(\''+id+'\',this.value)" required></div>'+
-  '<div class="sm:col-span-2"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-400">العدد</label><input type="number" min="1" value="1" class="field svc-qty text-center font-mono" oninput="calculateTotals()" required></div>'+
-  '<div class="sm:col-span-2"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-400">سعر الوحدة</label><input type="number" min="0" step="any" value="0" class="field svc-price text-center font-mono" oninput="calculateTotals()" required></div>'+
-  '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-400">المنفذ</label><input list="exec-datalist" class="field svc-executor" placeholder="اسم المنفذ..."></div></div>'+
-  '<div class="grid gap-3 sm:grid-cols-12 pt-1 border-t border-slate-200/60 dark:border-slate-700/60 text-xs">'+
-  '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-500">تكلفة التنفيذ/وحدة</label><input type="number" min="0" step="any" value="0" class="field svc-cost text-center font-mono" oninput="calculateTotals()"><div class="mt-1 text-[11px] text-slate-500">إجمالي التنفيذ: <b class="svc-cost-total font-mono text-blue-600 dark:text-blue-400">0 ج.م</b></div></div>'+
-  '<div class="sm:col-span-5"><label class="block font-semibold mb-1 text-slate-500">ملاحظة خاصة بالبند</label><input class="field svc-notes" placeholder="تعليمات تنفيذ هذا البند..."></div>'+
-  '<div class="sm:col-span-4 flex items-end justify-end"><div class="text-xs text-slate-500">إجمالي البند: <span class="font-bold text-sm text-ink dark:text-white line-total-display">0 ج.م</span></div></div></div>';
+  '<div class="sm:col-span-5"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-300">الخدمة المطلوبة</label><input list="svc-datalist" class="field svc-name" placeholder="اختر أو اكتب الخدمة..." oninput="onServiceSelected(\''+id+'\',this.value)" required></div>'+
+  '<div class="sm:col-span-2"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-300">العدد</label><input type="number" min="1" value="1" class="field svc-qty text-center font-mono" oninput="calculateTotals()" required></div>'+
+  '<div class="sm:col-span-2"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-300">سعر الوحدة</label><input type="number" min="0" step="any" value="0" class="field svc-price text-center font-mono" oninput="calculateTotals()" required></div>'+
+  '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-300">المنفذ</label><input list="exec-datalist" class="field svc-executor" placeholder="اسم المنفذ..." oninput="updateOrderProgressBar()"></div></div>'+
+  '<div class="grid gap-3 sm:grid-cols-12 pt-1 border-t border-slate-200/60 dark:border-white/10 text-xs">'+
+  '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">تكلفة التنفيذ/وحدة</label><input type="number" min="0" step="any" value="0" class="field svc-cost text-center font-mono" oninput="calculateTotals()"><div class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">إجمالي التنفيذ: <b class="svc-cost-total font-mono text-violet-500 dark:text-violet-300">0 ج.م</b></div></div>'+
+  '<div class="sm:col-span-5"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">ملاحظة خاصة بالبند</label><input class="field svc-notes" placeholder="تعليمات تنفيذ هذا البند..."></div>'+
+  '<div class="sm:col-span-4 flex items-end justify-end"><div class="text-xs text-slate-500 dark:text-slate-400">إجمالي البند: <span class="font-bold text-sm text-ink dark:text-white line-total-display">0 ج.م</span></div></div></div>';
   $('lines-container').appendChild(d);calculateTotals();
 }
 function removeServiceLine(id){
   if($('lines-container').children.length<=1)return showToast('يجب أن تحتوي المعاملة على خدمة واحدة على الأقل','error');
-  const el=$(id);if(el)el.remove();calculateTotals();
+  const el=$(id);if(el)el.remove();calculateTotals();renderQuickServicesGrid();
 }
 function findCatalogService(name){
   const k=normName(name);if(!k)return null;
@@ -283,19 +915,42 @@ function onServiceSelected(id,name){
     el.dataset.comm=cr!=null?cr:'';el.dataset.dur=f.duration_days!=null?f.duration_days:'';
   }else if(el){delete el.dataset.comm;delete el.dataset.dur;}
   calculateTotals();
+  renderQuickServicesGrid();
 }
 function discountPct(){const el=$('discount-pct'),v=el?parseFloat(el.value):0;return v>0?Math.min(v,100):0;}
 function unitAfter(p,d){return d>0?Math.round(p*(1-d/100)*100)/100:p;}
 const txDisc=o=>Math.max(0,...o.lines.map(l=>Number(l.discount_pct)||0));
 function calculateTotals(){
-  const lines=$('lines-container').children,d=discountPct();let g=0,raw=0;
+  const lines=$('lines-container')?$('lines-container').children:[];
+  const d=discountPct();let g=0,raw=0;
+  const summaryRows=[];
   Array.from(lines).forEach(function(l){
+    const sn=((l.querySelector('.svc-name')&&l.querySelector('.svc-name').value)||'').trim();
     const q0=parseFloat(l.querySelector('.svc-qty').value)||0,p0=parseFloat(l.querySelector('.svc-price').value)||0,t=q0*unitAfter(p0,d);raw+=q0*p0;
     g+=t;l.querySelector('.line-total-display').textContent=formatCurrency(t);
     const ct=l.querySelector('.svc-cost-total');if(ct)ct.textContent=formatCurrency((parseFloat(l.querySelector('.svc-qty').value)||0)*(parseFloat(l.querySelector('.svc-cost').value)||0));
+    if(sn)summaryRows.push({name:sn,qty:q0,rawTotal:q0*p0});
   });
-  $('s-lines').textContent=lines.length;$('grand-total-display').textContent=g.toLocaleString('en-US');
-  const dr=$('s-disc-row');if(dr){dr.classList.toggle('hidden',!(d>0));if(d>0){$('s-disc-pct').textContent=fmtNum(d)+'%';$('s-disc-amt').textContent='-'+formatCurrency(raw-g);}}
+  if($('s-lines'))$('s-lines').textContent=summaryRows.length||lines.length;
+  if($('grand-total-display'))$('grand-total-display').textContent=g.toLocaleString('en-US');
+
+  // تحديث قائمة البنود التفصيلية داخل ملخص الطلب العائم
+  const sList=$('s-items-list');
+  if(sList){
+    if(summaryRows.length){
+      sList.innerHTML=summaryRows.map(item=>
+        '<div class="flex items-center justify-between gap-2 py-1 border-b border-white/5 last:border-0">'+
+          '<span class="truncate text-slate-200 font-medium">'+escapeHtml(item.name)+(item.qty>1?' <small class="text-violet-300 font-mono">×'+fmtNum(item.qty)+'</small>':'')+'</span>'+
+          '<span class="font-mono font-bold text-white shrink-0">'+fmtNum(item.rawTotal)+'</span>'+
+        '</div>'
+      ).join('');
+    }else{
+      sList.innerHTML='<div class="text-[11px] text-slate-400 py-1">اختر الخدمات لتظهر في الملخص...</div>';
+    }
+  }
+
+  const dr=$('s-disc-row');if(dr){dr.classList.toggle('hidden',!(d>0));if(d>0){$('s-disc-pct').textContent=fmtNum(d)+'%';$('s-disc-amt').textContent='− '+fmtNum(raw-g);}}
+  updateOrderProgressBar();
 }
 function renderPaymentMethodButtons(){
   const cur=$('payment-method-val').value;
@@ -303,10 +958,10 @@ function renderPaymentMethodButtons(){
   const methods=[...new Set([...PAY_DEFAULT,...used])].slice(0,8);
   $('pay-group').innerHTML=methods.map(function(m){
     const on=m===cur;
-    return '<button type="button" data-m="'+escapeHtml(m)+'" onclick="selectPaymentMethod(this.dataset.m)" class="p-3 rounded-xl border text-xs font-semibold transition-all '+(on?'border-brand-500 bg-brand-50/70 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 ring-2 ring-brand-500/20':'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50')+'">'+escapeHtml(m)+'</button>';
+    return '<button type="button" data-m="'+escapeHtml(m)+'" onclick="selectPaymentMethod(this.dataset.m)" class="p-3 rounded-xl border text-xs font-bold transition-all '+(on?'border-violet-400 bg-gradient-to-r from-violet-600/30 to-purple-600/20 text-violet-700 dark:text-white ring-2 ring-violet-500/30 shadow-xs':'border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10')+'">'+escapeHtml(m)+'</button>';
   }).join('');
 }
-function selectPaymentMethod(m){$('payment-method-val').value=m;$('s-pay').textContent=m;renderPaymentMethodButtons();}
+function selectPaymentMethod(m){$('payment-method-val').value=m;$('s-pay').textContent=m;renderPaymentMethodButtons();updateOrderProgressBar();}
 function uniq(key){return [...new Set(allRequestLines.map(l=>(l[key]||'').trim()).filter(Boolean))];}
 function opts(arr){return arr.map(n=>'<option value="'+escapeHtml(n)+'"></option>').join('');}
 function renderClientDatalists(){
@@ -324,18 +979,22 @@ function onClientNameInput(name){
     if(m.phone&&!$('phone').value){$('phone').value=m.phone;onPhoneInput(m.phone);}
     if(m.address&&!$('address').value)$('address').value=m.address;
   }
+  updateOrderProgressBar();
 }
 function onPhoneInput(phone){
   const link=waLink(phone);
   if(link&&String(phone).replace(/\D/g,'').length>=8){$('client-whatsapp-box').classList.remove('hidden');$('client-whatsapp-link').href=link;}else $('client-whatsapp-box').classList.add('hidden');
   const m=allRequestLines.find(l=>(l.phone||'').trim()===phone.trim());
   if(m&&!$('client-name').value){$('client-name').value=m.client_name;$('s-client').textContent=m.client_name;if(m.address&&!$('address').value)$('address').value=m.address;}
+  updateOrderProgressBar();
 }
 function generateNewTxId(){$('tx-id').value='TX-'+new Date().getFullYear()+'-'+Math.floor(1000+Math.random()*9000);}
 
-/* ---------- حفظ المعاملة (الأعمدة المحسوبة total / exec_total / status لا تُرسل) ---------- */
+/* ---------- حفظ المعاملة (مع دعم حفظ فقط / حفظ وطباعة إيصال / حفظ وطلب جديد / حفظ وواتساب) ---------- */
 async function handleSaveOrder(e){
   e.preventDefault();if(!sbClient&&!initSupabase())return;
+  const saveMode=window.__saveOrderMode||'normal';
+  window.__saveOrderMode='normal';
   const els=Array.from($('lines-container').children);
   if(!els.length)return showToast('أضف خدمة واحدة على الأقل','error');
   if(!receivedAtManual)$('received-at').value=nowLocalIso();
@@ -353,7 +1012,9 @@ async function handleSaveOrder(e){
     const ln=el.querySelector('.svc-notes').value.trim();
     const catComm=getServiceCommRate(service);
     const commVal=(el.dataset.comm!==''&&el.dataset.comm!=null)?Number(el.dataset.comm):(catComm!=null?catComm:0);
-    rows.push(Object.assign({},base,disc>0?{discount_pct:disc,list_price:parseFloat(el.querySelector('.svc-price').value)||0}:{},{service:service,qty:parseFloat(el.querySelector('.svc-qty').value)||1,unit_price:unitAfter(parseFloat(el.querySelector('.svc-price').value)||0,disc),
+    const qVal=parseFloat(el.querySelector('.svc-qty').value)||1;
+    const uPrice=unitAfter(parseFloat(el.querySelector('.svc-price').value)||0,disc);
+    rows.push(Object.assign({},base,disc>0?{discount_pct:disc,list_price:parseFloat(el.querySelector('.svc-price').value)||0}:{},{service:service,qty:qVal,unit_price:uPrice,
       exec_unit_cost:parseFloat(el.querySelector('.svc-cost').value)||0,commission_per_unit:commVal,
       executor:el.querySelector('.svc-executor').value.trim()||null,duration_days:el.dataset.dur===''||el.dataset.dur==null?null:Number(el.dataset.dur),
       notes:(ln?(gen?gen+' - '+ln:ln):gen)||null}));
@@ -363,28 +1024,46 @@ async function handleSaveOrder(e){
     const r=await sbClient.from('request_lines').insert(rows);
     if(r.error)throw r.error;
     showToast('تم حفظ المعاملة بنجاح ('+base.transaction_id+')');
+    const printableRows=rows.map(x=>Object.assign({},x,{total:(Number(x.qty)||1)*(Number(x.unit_price)||0)}));
     ['client-name','phone','address','rn-nm','notes','discount-pct'].forEach(id=>$(id).value='');
     $('client-whatsapp-box').classList.add('hidden');$('s-client').textContent='—';
     syncReceivedAt(true);
     generateNewTxId();$('lines-container').innerHTML='';serviceLineCounter=0;addServiceLine();
+    renderQuickServicesGrid();
+    updateOrderProgressBar();
     await loadRecentRequests();
+    selectedInspectorTx=base.transaction_id;
+
+    if(saveMode==='print'){
+      setTimeout(()=>buildOfficialReceipt(printableRows),180);
+    }else if(saveMode==='whatsapp'){
+      const svcsText=printableRows.map(x=>x.service+' (×'+x.qty+')').join('، ');
+      const totText=formatCurrency(printableRows.reduce((s,x)=>s+x.total,0));
+      const wUrl=waLink(base.phone,'أهلاً '+base.client_name+'، تم تسجيل معاملتك رقم '+base.transaction_id+' بنجاح في تساهيل ('+svcsText+') بإجمالي '+totText);
+      if(wUrl)window.open(wUrl,'_blank','noopener');
+      else showToast('تم الحفظ (لا يوجد رقم موبايل لفتح واتساب)','info');
+    }else if(saveMode==='new'){
+      setTimeout(()=>{if($('client-name')){$('client-name').focus();$('client-name').scrollIntoView({behavior:'smooth',block:'center'});}},120);
+    }
   }catch(err){showError(/discount_pct|list_price/.test((err&&err.message)||'')?'شغّل ملف phase16-discount.sql في Supabase الأول (عمود الخصم)':'فشل الحفظ',err);}
-  finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-check"></i><span>حفظ المعاملة</span>';}
+  finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-check ms-1.5"></i><span>حفظ الطلب</span>';}
 }
 
-/* ---------- نافذة تفاصيل المعاملة ---------- */
+/* ---------- نافذة تفاصيل المعاملة (مزودة أيضاً بشريط الحالة التفاعلي والحلقة الدائرية) ---------- */
 function openTxModal(tx){
   const o=groupedOrders.find(x=>x.transaction_id===tx);if(!o)return;
   openTxCurrent=tx;txDirty=false;
+  const curSt=getOrderStatus(o),late=isOrderLate(o);
   $('tx-modal-title').textContent='معاملة: '+o.client_name;$('tx-modal-subtitle').textContent=o.transaction_id;
   const wa=waLink(o.phone,'أهلاً '+o.client_name+'، بخصوص معاملتك رقم '+o.transaction_id+' — تساهيل | قسم الخدمات الحكومية');
   const info=[['العميل',o.client_name],['الهاتف',o.phone],['طريقة الدفع',o.payment_method],['الموظف',o.employee,empCell(o.employee)],['العنوان',o.address],['المستلم',o.receiver],['تاريخ الاستلام',formatDateTime(o.received_at||o.created_at)],['رقم الإيصال',o.rn_nm]].concat(txDisc(o)>0?[['خصم العميل',fmtNum(txDisc(o))+'%']]:[]);
   $('tx-modal-body').innerHTML=
+  '<div id="tx-modal-stepper-slot">'+buildInteractiveStatusWidgets(o.transaction_id,curSt,late,'modal')+'</div>'+
   '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl text-xs">'+info.map(i=>'<div class="min-w-0"><span class="text-slate-400 block mb-0.5">'+i[0]+'</span><span class="font-semibold text-ink dark:text-white break-words">'+(i[2]||escapeHtml(i[1]||'—'))+'</span></div>').join('')+'</div>'+
   (o.notes?'<div class="p-3 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 rounded-xl text-xs"><i class="fa-solid fa-note-sticky ms-1"></i><b>ملاحظات:</b> '+escapeHtml(o.notes)+'</div>':'')+
   '<div><h4 class="font-bold text-xs text-slate-500 mb-2">بنود الخدمات ('+o.lines.length+')</h4><div class="space-y-2">'+
-  o.lines.map(l=>'<div class="flex items-start justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-3"><div class="min-w-0"><div class="font-semibold text-ink dark:text-white">'+escapeHtml(l.service)+'</div><div class="mt-1 text-xs text-slate-500">'+fmtNum(l.qty)+' × '+fmtNum(l.unit_price)+' ج.م'+(Number(l.discount_pct)>0?' <span class="text-violet-600 dark:text-violet-300">(بعد خصم '+fmtNum(l.discount_pct)+'% من '+fmtNum(l.list_price)+')</span>':'')+' · المنفذ: '+escapeHtml(l.executor||'—')+' · تكلفة التنفيذ: '+formatCurrency(execCostOf(l))+'</div><div class="mt-2 flex flex-wrap items-center gap-2">'+badge(l.status)+(l.exec_start_date?'<span class="text-[11px] text-slate-400">بداية التنفيذ: '+formatDateOnly(l.exec_start_date)+'</span>':'')+'</div>'+statusSelect(l)+'</div><div class="shrink-0 font-bold font-mono text-brand-600">'+formatCurrency(l.total)+'</div></div>').join('')+'</div></div>'+
-  '<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><div class="text-[11px] text-slate-500 mb-2">تغيير حالة كل بنود المعاملة دفعة واحدة (بعدها اضغط «حفظ التغييرات»)</div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">'+Object.keys(STATUS_PATCH).map(s=>'<button type="button" data-tx="'+escapeHtml(o.transaction_id)+'" data-s="'+s+'" onclick="stageTxStatus(this.dataset.s)" class="rounded-lg py-2 text-xs font-bold '+(STATUS_CLS[s]||'')+'">'+statusLabel(s)+'</button>').join('')+'</div></div>'+
+  o.lines.map(l=>'<div class="flex items-start justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-3"><div class="min-w-0"><div class="font-semibold text-ink dark:text-white">'+escapeHtml(l.service)+'</div><div class="mt-1 text-xs text-slate-500">'+fmtNum(l.qty)+' × '+fmtNum(l.unit_price)+' ج.م'+(Number(l.discount_pct)>0?' <span class="text-violet-600 dark:text-violet-300">(بعد خصم '+fmtNum(l.discount_pct)+'% من '+fmtNum(l.list_price)+')</span>':'')+' · المنفذ: '+escapeHtml(l.executor||'—')+' · تكلفة التنفيذ: '+formatCurrency(execCostOf(l))+'</div><div class="mt-2 flex flex-wrap items-center gap-2">'+badge(l.status)+(l.exec_start_date?'<span class="text-[11px] text-slate-400">بداية التنفيذ: '+formatDateOnly(l.exec_start_date)+'</span>':'')+'</div>'+statusSelect(l)+'</div><div class="shrink-0 font-bold font-mono text-brand-600 dark:text-violet-300">'+formatCurrency(l.total)+'</div></div>').join('')+'</div></div>'+
+  '<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><div class="text-[11px] text-slate-500 mb-2">تغيير حالة كل بنود المعاملة دفعة واحدة (يتفاعل مع الشريط بالأعلى ثم اضغط «حفظ التغييرات»)</div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">'+Object.keys(STATUS_PATCH).map(s=>'<button type="button" data-tx="'+escapeHtml(o.transaction_id)+'" data-s="'+s+'" onclick="stageTxStatus(this.dataset.s)" class="rounded-lg py-2 text-xs font-bold '+(STATUS_CLS[s]||'')+'">'+statusLabel(s)+'</button>').join('')+'</div></div>'+
   '<div class="flex items-center justify-between p-3.5 bg-slate-900 text-white rounded-xl"><span class="text-xs font-semibold text-slate-300">الإجمالي النهائي:</span><span class="text-lg font-bold font-mono">'+formatCurrency(o.grand_total)+'</span></div>';
   $('tx-modal-actions-left').innerHTML='<button id="tx-save-btn" type="button" onclick="saveTxChanges()" disabled class="px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold flex items-center gap-1.5 opacity-50"><i class="fa-solid fa-floppy-disk"></i><span>حفظ التغييرات</span></button>'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5"><i class="fa-brands fa-whatsapp"></i><span>واتساب</span></a>':'')+
   (o.phone?'<a href="tel:'+escapeHtml(o.phone)+'" class="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-phone"></i><span>اتصال</span></a>':'')+
@@ -580,8 +1259,7 @@ async function saveTxEdit(){
   }
 }
 
-
-/* ---------- تغيير الحالة (الحالة تُحسب من delivered / complete / under_review) ---------- */
+/* ---------- تغيير الحالة (يتفاعل لحظياً مع شريط الحالة والحلقة الدائرية) ---------- */
 let openTxCurrent=null,txDirty=false;
 const STATUS_PATCH={'In Progress':{delivered:false,complete:false,under_review:false},'Under Review':{delivered:false,complete:false,under_review:true},'Complete':{delivered:false,complete:true,under_review:false},'Delivered':{delivered:true,complete:true,under_review:false}};
 function statusSelect(l){return '<select data-id="'+escapeHtml(l.id)+'" data-orig="'+escapeHtml(l.status||'In Progress')+'" onchange="markTxDirty()" class="field st-sel mt-2 !py-1.5 text-xs">'+Object.keys(STATUS_PATCH).map(s=>'<option value="'+s+'"'+(s===l.status?' selected':'')+'>'+statusLabel(s)+'</option>').join('')+'</select>';}
@@ -596,13 +1274,22 @@ async function applyStatus(ids,status){
 function afterStatusChange(){
   groupRequestsByTransaction();renderRecentRequests();
   if(!$('tx-modal').classList.contains('hidden')&&openTxCurrent)openTxModal(openTxCurrent);
+  if(currentTab==='home')renderHomeTab();
   if(currentTab==='dash')renderDashboardMetrics();
   if(currentTab==='exec')filterExecSheet();
   if(currentTab==='search')executeSearch();
 }
 function markTxDirty(){
-  txDirty=[...document.querySelectorAll('#tx-modal-body .st-sel')].some(s=>s.value!==s.dataset.orig);
+  const sels=[...document.querySelectorAll('#tx-modal-body .st-sel')];
+  txDirty=sels.some(s=>s.value!==s.dataset.orig);
   const b=$('tx-save-btn');if(b){b.disabled=!txDirty;b.classList.toggle('opacity-50',!txDirty);}
+  // تفاعل فوري لشريط الحالة داخل نافذة المعاملة عند تغيير أي قائمة
+  if(openTxCurrent&&$('tx-modal-stepper-slot')&&sels.length){
+    let best='In Progress',r=9;
+    sels.forEach(s=>{const k=ORDER_STATUS_RANK[s.value];if(k!=null&&k<r){r=k;best=s.value;}});
+    const o=groupedOrders.find(x=>String(x.transaction_id)===String(openTxCurrent));
+    $('tx-modal-stepper-slot').innerHTML=buildInteractiveStatusWidgets(openTxCurrent,best,isOrderLate(o),'modal');
+  }
 }
 function stageTxStatus(s){document.querySelectorAll('#tx-modal-body .st-sel').forEach(x=>{x.value=s;});markTxDirty();}
 async function saveTxChanges(){
@@ -613,13 +1300,13 @@ async function saveTxChanges(){
   let ok=true;
   for(const [st,ids] of by){if(!(await applyStatus(ids,st))){ok=false;break;}}
   txDirty=false;
-  if(ok)showToast('تم حفظ التغييرات');
+  if(ok)showToast('تم حفظ التغييرات وتحديث شريط الحالة');
   afterStatusChange();
 }
 async function setLineStatus(id,status){if(await applyStatus([String(id)],status)){showToast('تم تحديث الحالة');afterStatusChange();}}
 async function setTxStatus(tx,status){
   const ids=allRequestLines.filter(l=>String(l.transaction_id)===String(tx)).map(l=>String(l.id));
-  if(await applyStatus(ids,status)){showToast('تم تحديث حالة المعاملة كلها');afterStatusChange();}
+  if(await applyStatus(ids,status)){showToast('تم تحديث حالة المعاملة وشريط التقدم');afterStatusChange();}
 }
 
 /* ---------- ملف العميل ---------- */
@@ -631,9 +1318,9 @@ function openClientModal(name){
   const wa=waLink(s.phone,'أهلاً '+s.client_name+'، معك تساهيل | قسم الخدمات الحكومية');
   $('client-modal-wa-slot').innerHTML=wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5"><i class="fa-brands fa-whatsapp"></i><span>واتساب للعميل</span></a>':'';
   $('client-modal-body').innerHTML=
-  '<div class="grid grid-cols-3 gap-3">'+[['إجمالي الإنفاق',formatCurrency(spent),'text-brand-600'],['عدد المعاملات',txs.size,'text-ink dark:text-white'],['إجمالي الخدمات',ls.length,'text-ink dark:text-white']].map(c=>'<div class="card p-3.5 bg-slate-50 dark:bg-slate-800/40"><span class="text-slate-400 text-xs block">'+c[0]+'</span><span class="text-sm sm:text-lg font-bold font-mono whitespace-nowrap '+c[2]+'">'+c[1]+'</span></div>').join('')+'</div>'+
+  '<div class="grid grid-cols-3 gap-3">'+[['إجمالي الإنفاق',formatCurrency(spent),'text-brand-600 dark:text-violet-300'],['عدد المعاملات',txs.size,'text-ink dark:text-white'],['إجمالي الخدمات',ls.length,'text-ink dark:text-white']].map(c=>'<div class="card p-3.5 bg-slate-50 dark:bg-slate-800/40"><span class="text-slate-400 text-xs block">'+c[0]+'</span><span class="text-sm sm:text-lg font-bold font-mono whitespace-nowrap '+c[2]+'">'+c[1]+'</span></div>').join('')+'</div>'+
   '<div><h4 class="font-bold text-xs text-slate-500 mb-2">سجل كل المعاملات والخدمات</h4><div class="space-y-2">'+
-  ls.map(l=>'<button type="button" data-st17="'+escapeHtml(l.status||'In Progress')+'" data-tx="'+escapeHtml(l.transaction_id)+'" onclick="closeClientModal();openTxModal(this.dataset.tx)" class="card lift w-full flex flex-wrap items-center justify-between gap-3 p-3.5 text-start"><div class="min-w-0 space-y-1.5"><div class="rc-svc-pill"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div><div class="flex flex-wrap items-center gap-2 text-[11px] text-slate-500"><span class="rc-tx-pill !py-0.5 !px-2 !text-[11px]" dir="ltr">'+escapeHtml(l.transaction_id)+'</span><span>'+formatDateOnly(lineDate(l))+'</span>'+badge(l.status)+'</div></div><div class="shrink-0 font-bold text-sm text-brand-600 dark:text-brand-400 whitespace-nowrap">'+formatCurrency(l.total)+'</div></button>').join('')+'</div></div>';
+  ls.map(l=>'<button type="button" data-st17="'+escapeHtml(l.status||'In Progress')+'" data-tx="'+escapeHtml(l.transaction_id)+'" onclick="closeClientModal();openTxModal(this.dataset.tx)" class="card lift w-full flex flex-wrap items-center justify-between gap-3 p-3.5 text-start"><div class="min-w-0 space-y-1.5"><div class="rc-svc-pill"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div><div class="flex flex-wrap items-center gap-2 text-[11px] text-slate-500"><span class="rc-tx-pill !py-0.5 !px-2 !text-[11px]" dir="ltr">'+escapeHtml(l.transaction_id)+'</span><span>'+formatDateOnly(lineDate(l))+'</span>'+badge(l.status)+'</div></div><div class="shrink-0 font-bold text-sm text-brand-600 dark:text-violet-300 whitespace-nowrap">'+formatCurrency(l.total)+'</div></button>').join('')+'</div></div>';
   $('client-modal').classList.remove('hidden');$('client-modal').classList.add('flex');
 }
 function closeClientModal(){$('client-modal').classList.add('hidden');$('client-modal').classList.remove('flex');}
@@ -681,7 +1368,6 @@ function filterExecSheet(keepLimit){
   $('x-total').textContent=formatCurrency(cost);
   $('x-label').textContent=(ex==='all'?'كل المنفذين':ex)+(dt?' ('+formatDateOnly(dt)+')':'');
 
-  // 1. تعبئة الجدول (للكمبيوتر) - يعرض أحدث 50 معاملة فقط لسرعة الفتح الفورية
   $('sheet-body').innerHTML=shown.map(function(l){
     const st=l.status||'In Progress';
     const wa=waLink(l.phone,'أهلاً '+(l.client_name||'')+'، بخصوص معاملتك رقم '+(l.transaction_id||'')+' — تساهيل');
@@ -701,7 +1387,6 @@ function filterExecSheet(keepLimit){
       '<td class="px-3 py-3.5 text-xs min-w-[150px] max-w-[250px] whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">'+(l.notes?'<div class="rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/60 px-2.5 py-1.5 text-amber-900 dark:text-amber-200">'+escapeHtml(l.notes)+'</div>':'<span class="text-slate-300">—</span>')+'</td></tr>';
   }).join('')||'<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400">لا توجد مهام مطابقة</td></tr>';
 
-  // 2. تعبئة الكروت (للموبايل) - أحدث 50 معاملة فقط
   $('sheet-cards-container').innerHTML=shown.map(function(l){
     const st=l.status||'In Progress';
     const wa=waLink(l.phone,'أهلاً '+(l.client_name||'')+'، بخصوص معاملتك رقم '+(l.transaction_id||'')+' — تساهيل');
@@ -723,12 +1408,11 @@ function filterExecSheet(keepLimit){
       '</div>'+
       '<div class="flex items-center justify-between text-[11px] text-slate-400">'+
         '<span>البداية: '+formatDateOnly(l.exec_start_date||lineDate(l))+'</span>'+
-        '<button '+at(l.transaction_id)+' class="text-brand-600 font-bold px-2 py-1 rounded hover:underline">عرض التفاصيل</button>'+
+        '<button '+at(l.transaction_id)+' class="text-brand-600 dark:text-violet-300 font-bold px-2 py-1 rounded hover:underline">عرض التفاصيل</button>'+
       '</div>'+
     '</div>';
   }).join('')||'<div class="card p-6 text-center text-slate-400 text-xs">لا توجد مهام مطابقة</div>';
 
-  // 3. شريط تحميل المزيد أسفل شيت المنفذين
   let moreBar=$('exec-more-bar');
   if(!moreBar&&$('sheet-cards-container')){
     $('sheet-cards-container').insertAdjacentHTML('afterend','<div id="exec-more-bar" class="card p-4 text-center"></div>');
@@ -739,7 +1423,7 @@ function filterExecSheet(keepLimit){
     if(rem>0){
       moreBar.className='card p-4 flex flex-wrap items-center justify-between gap-3';
       moreBar.innerHTML='<span class="text-xs font-semibold text-slate-500">يتم عرض أحدث <b class="text-ink dark:text-white">'+shown.length+'</b> معاملة تنفيذ من إجمالي <b class="text-ink dark:text-white">'+f.length+'</b> لسرعة التصفح</span>'+
-        '<button type="button" onclick="loadMoreExecLines()" class="rounded-xl bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 text-xs font-bold shadow-sm transition flex items-center gap-1.5 mx-auto sm:mx-0"><i class="fa-solid fa-angles-down"></i><span>تحميل المزيد (عرض '+Math.min(EXEC_PAGE_SIZE,rem)+' كمان — متبقي '+rem+')</span></button>';
+        '<button type="button" onclick="loadMoreExecLines()" class="btn-neo-pri px-5 py-2.5 text-xs mx-auto sm:mx-0"><i class="fa-solid fa-angles-down"></i><span>تحميل المزيد (عرض '+Math.min(EXEC_PAGE_SIZE,rem)+' كمان — متبقي '+rem+')</span></button>';
     }else if(f.length>0){
       moreBar.className='card p-3 text-center text-xs text-slate-400';
       moreBar.innerHTML='تم عرض كل المعاملات المطابقة ('+f.length+' بند تنفيذ)';
@@ -806,7 +1490,7 @@ function executeSearch(){
     return '<div data-st17="'+escapeHtml(stVal)+'" class="card lift p-4 space-y-2.5 text-xs">'+
       '<div class="flex items-start justify-between gap-2"><button '+ac(l.client_name)+' class="font-bold text-ink dark:text-white leading-snug text-start hover:text-brand-600">'+escapeHtml(l.client_name)+'</button><button '+at(l.transaction_id)+' class="rc-tx-pill !py-0.5 !px-2 !text-[11px]" dir="ltr">'+escapeHtml(l.transaction_id)+'</button></div>'+
       '<div class="rc-svc-pill w-full"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div>'+
-      '<div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500"><span>'+empCell(l.employee)+'</span><div class="flex items-center gap-2">'+badge(stVal)+'<span class="font-bold text-sm text-brand-600 dark:text-brand-400 whitespace-nowrap">'+formatCurrency(l.total)+'</span></div></div></div>';
+      '<div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500"><span>'+empCell(l.employee)+'</span><div class="flex items-center gap-2">'+badge(stVal)+'<span class="font-bold text-sm text-brand-600 dark:text-violet-300 whitespace-nowrap">'+formatCurrency(l.total)+'</span></div></div></div>';
   }).join('')||'<div class="card p-6 text-center text-slate-400 text-xs">'+none+'</div>';
 }
 function exportSearchResultsCsv(){
@@ -814,7 +1498,7 @@ function exportSearchResultsCsv(){
   downloadCsvFile('نتائج_البحث_'+new Date().toISOString().slice(0,10)+'.csv',['العميل','الهاتف','رقم المعاملة','الخدمة','العدد','سعر الوحدة','الإجمالي','الموظف','طريقة الدفع','الحالة','التاريخ'],r.map(l=>[l.client_name,l.phone,l.transaction_id,l.service,l.qty,l.unit_price,l.total,l.employee,l.payment_method,statusLabel(l.status),lineDate(l)]));
 }
 
-/* ---------- الإيصالات (مع إصلاح تكرار الخدمات عند الطباعة وتوحيد العرض البصري) ---------- */
+/* ---------- الإيصالات ---------- */
 function syncReceiptItemCb(el){
   if(!el)return;
   const val=String(el.value),chk=!!el.checked;
@@ -832,7 +1516,6 @@ function loadClientReceiptLines(){
   const s=clientSelectedReceiptLines[0];
   $('receipt-client-meta').textContent='العميل: '+s.client_name+' · الهاتف: '+(s.phone||'—')+' · عدد البنود: '+clientSelectedReceiptLines.length;
   
-  // 1. تعبئة الجدول (للكمبيوتر)
   $('receipt-lines-body').innerHTML=clientSelectedReceiptLines.map((l,i)=>{
     const stVal=l.status||'In Progress';
     return '<tr data-st17="'+escapeHtml(stVal)+'" class="hover:bg-slate-50 dark:hover:bg-slate-800/40 align-middle">'+
@@ -841,11 +1524,10 @@ function loadClientReceiptLines(){
       '<td class="p-3.5"><div class="rc-svc-list"><div class="rc-svc-pill"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div></div></td>'+
       '<td class="p-3.5 text-center whitespace-nowrap"><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></td>'+
       '<td class="p-3.5 whitespace-nowrap font-semibold text-slate-700 dark:text-slate-200">'+formatCurrency(l.unit_price)+'</td>'+
-      '<td class="p-3.5 whitespace-nowrap font-bold text-sm text-brand-600 dark:text-brand-400">'+formatCurrency(l.total)+'</td>'+
+      '<td class="p-3.5 whitespace-nowrap font-bold text-sm text-brand-600 dark:text-violet-300">'+formatCurrency(l.total)+'</td>'+
       '<td class="p-3.5 text-xs whitespace-nowrap font-medium">'+empCell(l.employee)+'</td></tr>';
   }).join('');
   
-  // 2. تعبئة الكروت (للموبايل)
   $('receipt-cards-container').innerHTML=clientSelectedReceiptLines.map((l,i)=>{
     const stVal=l.status||'In Progress';
     return '<label data-st17="'+escapeHtml(stVal)+'" class="card lift p-4 flex items-start gap-3 cursor-pointer">'+
@@ -854,7 +1536,7 @@ function loadClientReceiptLines(){
         '<div class="rc-svc-pill w-full"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div>'+
         '<div class="flex items-center justify-between gap-2">'+
           '<span class="rc-tx-pill !py-0.5 !px-2 !text-[11px]" dir="ltr">'+escapeHtml(l.transaction_id)+'</span>'+
-          '<span class="font-bold text-sm text-brand-600 dark:text-brand-400 whitespace-nowrap">'+formatCurrency(l.total)+'</span>'+
+          '<span class="font-bold text-sm text-brand-600 dark:text-violet-300 whitespace-nowrap">'+formatCurrency(l.total)+'</span>'+
         '</div>'+
         '<div class="flex items-center justify-between text-[11px] text-slate-500">'+
           '<span>سعر الوحدة: '+formatCurrency(l.unit_price)+'</span>'+
@@ -905,7 +1587,7 @@ function buildThermalSlip(ls){
 
 /* ---------- الداش بورد ---------- */
 function styleDashButtons(){
-  ['all','month','week','today'].forEach(r=>{$('dash-btn-'+r).className='rounded-lg px-3 py-1 font-semibold '+(r===currentDashboardRange?'text-white bg-ink dark:bg-brand-600':'text-slate-600 dark:text-slate-300');});
+  ['all','month','week','today'].forEach(r=>{const b=$('dash-btn-'+r);if(b)b.className='rounded-lg px-3 py-1 font-semibold '+(r===currentDashboardRange?'text-white bg-ink dark:bg-brand-600':'text-slate-600 dark:text-slate-300');});
 }
 function setDashboardRange(r){currentDashboardRange=r;styleDashButtons();renderDashboardMetrics();}
 function getFilteredDashboardLines(){
@@ -920,27 +1602,29 @@ function renderDashboardMetrics(){
   const ls=getFilteredDashboardLines();
   const rev=ls.reduce((s,l)=>s+(Number(l.total)||0),0),cost=ls.reduce((s,l)=>s+execCostOf(l),0);
   const txs=new Set(ls.map(l=>l.transaction_id).filter(Boolean)).size;
-  $('d-total-revenue').textContent=formatCurrency(rev);$('d-total-cost').textContent=formatCurrency(cost);
-  $('d-net-margin').textContent=formatCurrency(rev-cost);$('d-orders-count').textContent=txs;
-  $('d-orders-avg-sub').textContent='متوسط المعاملة: '+formatCurrency(txs?rev/txs:0);
+  if($('d-total-revenue'))$('d-total-revenue').textContent=formatCurrency(rev);
+  if($('d-total-cost'))$('d-total-cost').textContent=formatCurrency(cost);
+  if($('d-net-margin'))$('d-net-margin').textContent=formatCurrency(rev-cost);
+  if($('d-orders-count'))$('d-orders-count').textContent=txs;
+  if($('d-orders-avg-sub'))$('d-orders-avg-sub').textContent='متوسط المعاملة: '+formatCurrency(txs?rev/txs:0);
   const grid={color:'rgba(148,163,184,0.12)'},base={responsive:true,maintainAspectRatio:false,animation:{duration:900,easing:'easeOutQuart'}};
   const dm=new Map();ls.forEach(l=>{const k=dayKey(lineDate(l));if(k)dm.set(k,(dm.get(k)||0)+(Number(l.total)||0));});
   const days=[...dm.keys()].sort().slice(-14);
-  drawChart('daily','chart-daily-revenue',{type:'line',data:{labels:days.length?days.map(d=>formatDateOnly(d)):['—'],datasets:[{label:'المبيعات (ج.م)',data:days.length?days.map(d=>dm.get(d)):[0],borderColor:'#0d9488',backgroundColor:'rgba(13,148,136,0.15)',fill:true,tension:.35,borderWidth:2.5}]},options:Object.assign({},base,{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:grid},x:{grid:{display:false}}}})});
+  drawChart('daily','chart-daily-revenue',{type:'line',data:{labels:days.length?days.map(d=>formatDateOnly(d)):['—'],datasets:[{label:'المبيعات (ج.م)',data:days.length?days.map(d=>dm.get(d)):[0],borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,0.18)',fill:true,tension:.35,borderWidth:2.5}]},options:Object.assign({},base,{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:grid},x:{grid:{display:false}}}})});
   const pm=new Map();ls.forEach(l=>{const m=l.payment_method||'كاش';pm.set(m,(pm.get(m)||0)+(Number(l.total)||0));});
-  drawChart('pay','chart-payment-methods',{type:'doughnut',data:{labels:pm.size?[...pm.keys()]:['—'],datasets:[{data:pm.size?[...pm.values()]:[1],backgroundColor:['#0d9488','#2563eb','#8b5cf6','#f59e0b','#10b981','#ec4899']}]},options:Object.assign({},base,{plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{family:'IBM Plex Sans Arabic'}}}}})});
+  drawChart('pay','chart-payment-methods',{type:'doughnut',data:{labels:pm.size?[...pm.keys()]:['—'],datasets:[{data:pm.size?[...pm.values()]:[1],backgroundColor:['#8b5cf6','#ec4899','#0d9488','#f59e0b','#10b981','#3b82f6']}]},options:Object.assign({},base,{plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{family:'IBM Plex Sans Arabic'}}}}})});
   const sm=new Map();ls.forEach(l=>{const s=l.service||'أخرى';sm.set(s,(sm.get(s)||0)+(Number(l.total)||0));});
   const top=[...sm.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);
-  drawChart('svc','chart-top-services',{type:'bar',data:{labels:top.length?top.map(t=>t[0].length>24?t[0].slice(0,24)+'…':t[0]):['—'],datasets:[{label:'المبيعات (ج.م)',data:top.length?top.map(t=>t[1]):[0],backgroundColor:'#0d9488',borderRadius:6}]},options:Object.assign({},base,{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:grid},x:{grid:{display:false}}}})});
+  drawChart('svc','chart-top-services',{type:'bar',data:{labels:top.length?top.map(t=>t[0].length>24?t[0].slice(0,24)+'…':t[0]):['—'],datasets:[{label:'المبيعات (ج.م)',data:top.length?top.map(t=>t[1]):[0],backgroundColor:'#8b5cf6',borderRadius:6}]},options:Object.assign({},base,{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:grid},x:{grid:{display:false}}}})});
   const cm=new Map();ls.forEach(l=>{const n=(l.client_name||'').trim();if(!n)return;cm.set(n,(cm.get(n)||0)+(Number(l.total)||0));});
   const tc=[...cm.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);
-  $('top-clients-box').innerHTML=tc.map((c,i)=>'<div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs"><div class="flex items-center gap-2.5 truncate"><span class="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-[10px] font-bold">'+(i+1)+'</span><button '+ac(c[0])+' class="font-bold text-ink dark:text-white truncate hover:text-brand-600">'+escapeHtml(c[0])+'</button></div><div class="font-mono font-bold text-brand-600 shrink-0">'+formatCurrency(c[1])+'</div></div>').join('')||'<div class="text-xs text-slate-400 py-6 text-center">لا توجد بيانات كافية</div>';
+  if($('top-clients-box'))$('top-clients-box').innerHTML=tc.map((c,i)=>'<div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 text-xs"><div class="flex items-center gap-2.5 truncate"><span class="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-[10px] font-bold">'+(i+1)+'</span><button '+ac(c[0])+' class="font-bold text-ink dark:text-white truncate hover:text-brand-600">'+escapeHtml(c[0])+'</button></div><div class="font-mono font-bold text-brand-600 shrink-0">'+formatCurrency(c[1])+'</div></div>').join('')||'<div class="text-xs text-slate-400 py-6 text-center">لا توجد بيانات كافية</div>';
   const em=new Map();ls.forEach(l=>{const e=l.employee||'غير محدد';if(!em.has(e))em.set(e,{rev:0,n:0,tx:new Set()});const d=em.get(e);d.rev+=Number(l.total)||0;d.n++;if(l.transaction_id)d.tx.add(l.transaction_id);});
-  $('emp-perf-body').innerHTML=[...em.entries()].sort((a,b)=>b[1].rev-a[1].rev).map(([n,d])=>{const t=d.tx.size||1;return '<tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"><td class="px-6 py-3.5 font-bold text-ink dark:text-white">'+escapeHtml(n)+'</td><td class="px-4 py-3.5 text-center font-mono">'+t+'</td><td class="px-4 py-3.5 text-center font-mono text-slate-500">'+d.n+'</td><td class="px-4 py-3.5 font-mono font-bold text-brand-600">'+formatCurrency(d.rev)+'</td><td class="px-4 py-3.5 font-mono">'+formatCurrency(d.rev/t)+'</td></tr>';}).join('')||'<tr><td colspan="5" class="p-6 text-center text-slate-400">لا توجد بيانات</td></tr>';
+  if($('emp-perf-body'))$('emp-perf-body').innerHTML=[...em.entries()].sort((a,b)=>b[1].rev-a[1].rev).map(([n,d])=>{const t=d.tx.size||1;return '<tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"><td class="px-6 py-3.5 font-bold text-ink dark:text-white">'+escapeHtml(n)+'</td><td class="px-4 py-3.5 text-center font-mono">'+t+'</td><td class="px-4 py-3.5 text-center font-mono text-slate-500">'+d.n+'</td><td class="px-4 py-3.5 font-mono font-bold text-brand-600">'+formatCurrency(d.rev)+'</td><td class="px-4 py-3.5 font-mono">'+formatCurrency(d.rev/t)+'</td></tr>';}).join('')||'<tr><td colspan="5" class="p-6 text-center text-slate-400">لا توجد بيانات</td></tr>';
 }
 
-/* ---------- بروفايل الموظفين والفريق (المرحلة 1) ---------- */
-const AV_COLORS=['#0d9488','#2563eb','#7c3aed','#db2777','#d97706','#059669','#dc2626','#0891b2'];
+/* ---------- بروفايل الموظفين والفريق ---------- */
+const AV_COLORS=['#7c3aed','#db2777','#0d9488','#2563eb','#d97706','#059669','#dc2626','#0891b2'];
 function avColor(s){let h=0;s=String(s||'');for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return AV_COLORS[h%AV_COLORS.length];}
 function avatarHtml(p,size){
   size=size||40;const nm=((p&&p.full_name)||'').trim(),url=p&&p.avatar_path?avatarUrls[p.avatar_path]:'';
@@ -976,13 +1660,12 @@ async function loadProfiles(){
   }
   profilesReady=true;profiles=r.data||[];
   myProfile=profiles.find(p=>p.id===currentUser.id)||null;
-  // السطرين دول هما الجداد اللي بيجيبوا الاسم الحقيقي ويعرضوه
   if(myProfile && myProfile.full_name) { $('user-display').textContent = myProfile.full_name; }
   else { $('user-display').textContent = (currentUser.email || '').split('@')[0]; }
   
   try{await signAvatars();}catch(err){console.warn('avatars',err);}
   renderHeaderAvatar();renderRecentRequests();renderClientDatalists();
-  if(myProfile&&myProfile.full_name&&$('employee')&&!$('employee').value)$('employee').value=myProfile.full_name;
+  if(myProfile&&myProfile.full_name&&$('employee')&&!$('employee').value){$('employee').value=myProfile.full_name;updateOrderProgressBar();}
   if(currentTab==='team')renderTeam();
 }
 function renderHeaderAvatar(){
@@ -990,11 +1673,13 @@ function renderHeaderAvatar(){
   if(!currentUser){b.innerHTML='';return;}
   b.innerHTML=avatarHtml(myProfile||{id:currentUser.id,full_name:(currentUser.email||'').split('@')[0]},34);
 }
-/* ---------- متابعة حالة تواجد ونشاط الموظفين المباشرة (بدون أي استعلامات إضافية على Supabase أو ضغط على Vercel) ---------- */
+
+/* ---------- متابعة حالة تواجد ونشاط الموظفين المباشرة ---------- */
 let presenceMap={},myLastActiveAt=Date.now(),myActivityState='working',lastPresenceTrackAt=0,presenceTimer=null,presenceListenersBound=false;
 const TAB_LABELS_AR={
   home:'الشاشة الرئيسية',
   new:'طلب جديد',
+  tx:'المعاملات',
   myday:'شغلي النهاردة والمتأخرات',
   comm:'الكوميشن والتارجت',
   exec:'المنفذين',
@@ -1176,7 +1861,7 @@ function renderTeam(){
       '</div>'+
       '<div class="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-2.5 text-xs flex items-center justify-between gap-2">'+
         '<span class="text-slate-500 truncate">'+escapeHtml(st.sub)+'</span>'+
-        '<span class="shrink-0 font-bold text-brand-600 dark:text-brand-400">اليوم: '+st.todayTx+' معاملة ('+st.todayLines+' بند)</span>'+
+        '<span class="shrink-0 font-bold text-brand-600 dark:text-violet-300">اليوم: '+st.todayTx+' معاملة ('+st.todayLines+' بند)</span>'+
       '</div>'+
       '<div class="font-mono text-sm text-slate-600 dark:text-slate-300" dir="ltr">'+(ph?'<span class="rc-phone-pill"><i class="fa-solid fa-phone text-xs text-brand-600"></i><span>'+escapeHtml(ph)+'</span></span>':'<span class="text-xs text-slate-400 font-sans">لم يُضَف رقم هاتف بعد</span>')+'</div>'+
       '<div class="flex items-center gap-2 mt-auto">'+(!me&&chatReady?'<button type="button" data-u="'+escapeHtml(p.id)+'" onclick="startChatWith(this.dataset.u)" class="rounded-xl bg-ink dark:bg-brand-600 hover:opacity-90 px-3 py-2 text-xs font-bold text-white" title="مراسلة"><i class="fa-solid fa-comment-dots ms-1"></i> مراسلة</button>':'')+
@@ -1256,7 +1941,7 @@ async function handleSaveProfile(e){
   finally{btn.disabled=false;btn.innerHTML='حفظ';}
 }
 
-/* ---------- الشات الداخلي (المرحلة 2) ---------- */
+/* ---------- الشات الداخلي ---------- */
 const BASE_TITLE='تساهيل | قسم الخدمات الحكومية';
 function profileById(id){return profiles.find(p=>p.id===id)||null;}
 function nameOfUser(id){const p=profileById(id);return (p&&p.full_name)||'زميل';}
@@ -1276,7 +1961,6 @@ function chatFormat(body){
   return escapeHtml(body).replace(/\n/g,'<br>').replace(/(https?:\/\/[^\s<]+)/g,function(u){return '<a href="'+u+'" target="_blank" rel="noopener noreferrer" class="underline break-all">'+u+'</a>';});
 }
 
-/* --- تشغيل / إيقاف --- */
 function teardownChat(){
   try{if(chatMsgCh&&sbClient)sbClient.removeChannel(chatMsgCh);}catch(e){}
   try{if(chatPresCh&&sbClient)sbClient.removeChannel(chatPresCh);}catch(e){}
@@ -1329,7 +2013,6 @@ async function loadChatOverview(){
   updateChatBadges();return true;
 }
 
-/* --- الإشعارات (عدّاد + صوت + عنوان الصفحة) --- */
 function updateChatBadges(){
   const n=chatItems.reduce((s,i)=>s+(i.unread||0),0),b=$('chat-badge');
   if(b){b.textContent=n>99?'99+':String(n);b.classList.toggle('hidden',!n);}
@@ -1353,7 +2036,6 @@ function toggleChatMute(){
 }
 function paintMuteBtn(){const b=$('chat-mute-btn');if(b)b.innerHTML='<i class="fa-solid '+(localStorage.getItem('chat_mute')==='1'?'fa-volume-xmark text-slate-400':'fa-volume-high')+'"></i>';}
 
-/* --- قائمة المحادثات --- */
 function chatSortedItems(){
   return chatItems.slice().sort(function(a,b){
     if(a.ch_kind==='general'&&b.ch_kind!=='general')return -1;
@@ -1393,7 +2075,6 @@ function renderChatList(){
   box.innerHTML=h||'<div class="p-6 text-center text-xs text-slate-400">لا توجد نتائج</div>';
 }
 
-/* --- فتح محادثة --- */
 function openChatTab(){
   paintMuteBtn();
   if(!chatReady){initChat();return;}
@@ -1441,7 +2122,6 @@ function renderChatHead(){
   paintMuteBtn();
 }
 
-/* --- الرسائل --- */
 async function loadChatMessages(cid,before){
   let q=sbClient.from('messages').select('id,channel_id,sender_id,body,reply_to,created_at').eq('channel_id',cid).order('created_at',{ascending:false}).limit(40);
   if(before)q=q.lt('created_at',before);
@@ -1501,7 +2181,6 @@ function touchChatItem(m){
   if(!it.last_at||String(m.created_at)>=String(it.last_at)){it.last_body=m.body;it.last_at=m.created_at;it.last_sender=m.sender_id;}
 }
 
-/* --- إرسال / رد / حذف --- */
 function chatAutoGrow(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,128)+'px';}
 function chatKey(e){if(e.key==='Enter'&&!e.shiftKey&&!isTouchDevice()&&!e.isComposing){e.preventDefault();sendChatMessage();}}
 function startChatReply(mid){
@@ -1534,7 +2213,6 @@ async function deleteChatMessage(mid){
   onChatDelete({id:mid});
 }
 
-/* --- أحداث لحظية --- */
 function onChatDelete(old){
   if(!old||!old.id)return;
   Object.keys(chatMsgs).forEach(function(cid){
@@ -1567,7 +2245,218 @@ async function markChatRead(cid){
   try{await sbClient.rpc('mark_channel_read',{cid:cid});}catch(e){console.warn('mark read',e);}
 }
 
-/* ---------- الشاشة الرئيسية (Home Hub) ---------- */
+/* ---------- الشاشة الرئيسية (Home Hub + منصة الكروت المتطايرة التفاعلية) ---------- */
+function selectHomeFloatingTx(tx){
+  window.__homeFloatingTxId=String(tx||'');
+  renderHomeTab();
+}
+window.selectHomeFloatingTx=selectHomeFloatingTx;
+
+function renderFloatingCardsStage(eh,todayOrders,lateCnt){
+  const recent5=groupedOrders.slice(0,5);
+  if(!window.__homeFloatingTxId||!recent5.some(o=>String(o.transaction_id)===String(window.__homeFloatingTxId))){
+    window.__homeFloatingTxId=recent5[0]?String(recent5[0].transaction_id):'';
+  }
+  const selOrder=groupedOrders.find(o=>String(o.transaction_id)===String(window.__homeFloatingTxId))||recent5[0]||null;
+  const selStatus=selOrder?getOrderStatus(selOrder):'In Progress';
+  const selStage=getStageMeta(selStatus,selOrder?isOrderLate(selOrder):false);
+
+  // إحصائيات آخر 7 أيام للرسم البياني التفاعلي داخل الكارت الطائر
+  const WDAYS=['أحد','اثنين','ثلاثاء','أربعاء','خميس','جمعة','سبت'];
+  const dayBars=[];
+  let maxDayRev=1;
+  for(let i=6;i>=0;i--){
+    const d=new Date(Date.now()-i*86400000);
+    const dk=dayKey(d);
+    const dayOrds=groupedOrders.filter(o=>dayKey(o.received_at||o.created_at)===dk);
+    const rev=dayOrds.reduce((s,o)=>s+(Number(o.grand_total)||0),0);
+    if(rev>maxDayRev)maxDayRev=rev;
+    dayBars.push({day:WDAYS[d.getDay()],cnt:dayOrds.length,rev:rev,isToday:i===0});
+  }
+
+  // عميل متكرر لزر "كرّر آخر طلب"
+  const clientCounts=new Map();
+  groupedOrders.forEach(o=>{
+    const k=normName(o.client_name||'');
+    if(!k)return;
+    if(!clientCounts.has(k))clientCounts.set(k,{name:o.client_name,cnt:0,lastOrder:o});
+    clientCounts.get(k).cnt++;
+  });
+  const topRepeatClient=[...clientCounts.values()].sort((a,b)=>b.cnt-a.cnt)[0]||(selOrder?{name:selOrder.client_name,cnt:1,lastOrder:selOrder}:null);
+
+  // حساب نسبة تحقيق هدف الشهر للكارت الدائري
+  const curYm=new Date().toLocaleDateString('en-CA').slice(0,7);
+  const monthSales=allRequestLines.filter(l=>dayKey(lineDate(l)).slice(0,7)===curYm).reduce((s,l)=>s+(Number(l.total)||0),0);
+  const targetGoal=Math.max(120000,Math.ceil((monthSales||85000)/50000)*50000);
+  const goalPct=Math.min(100,Math.round((monthSales/targetGoal)*100))||0;
+  const rRing=36,cRing=Math.round(2*Math.PI*rRing),oRing=Math.round(cRing*(1-goalPct/100));
+
+  const lateOrder=groupedOrders.find(o=>isOrderLate(o));
+  const delivOrder=groupedOrders.find(o=>getOrderStatus(o)==='Delivered');
+
+  return '<div class="fl-stage-wrap">'+
+    '<div class="flex flex-wrap items-center justify-between gap-2 mb-4">'+
+      '<div class="flex items-center gap-2.5">'+
+        '<span class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-md"><i class="fa-solid fa-wand-magic-sparkles"></i></span>'+
+        '<div>'+
+          '<h2 class="font-bold text-sm sm:text-base text-white">لوحة الكروت المتطايرة التفاعلية · نظرة حية على القسم</h2>'+
+          '<p class="text-[11px] text-violet-200/80">مرّر الماوس أو اضغط على أي كارت أو معاملة للتفاعل المباشر</p>'+
+        '</div>'+
+      '</div>'+
+      '<div class="flex items-center gap-2">'+
+        '<button type="button" onclick="switchTab(\'new\')" class="btn-neo-pri !py-1.5 !px-3.5 text-xs"><i class="fa-solid fa-plus"></i><span>طلب جديد</span></button>'+
+        '<button type="button" onclick="switchTab(\'tx\')" class="btn-neo-sec !py-1.5 !px-3.5 text-xs text-white"><span>كل المعاملات</span></button>'+
+      '</div>'+
+    '</div>'+
+
+    '<div class="fl-deck-grid">'+
+      /* الكارت المتطاير الأيمن: قائمة المعاملات السريعة */
+      '<div class="fl-card fl-tilt-r flex flex-col justify-between gap-3">'+
+        '<div>'+
+          '<div class="flex items-center justify-between mb-3">'+
+            '<span class="font-bold text-base text-white">المعاملات</span>'+
+            '<span class="text-[11px] text-violet-300">دوس على معاملة للمعاينة</span>'+
+          '</div>'+
+          '<div class="space-y-1.5">'+
+            (recent5.length?recent5.map(o=>{
+              const isSel=selOrder&&String(o.transaction_id)===String(selOrder.transaction_id);
+              const init=Array.from(String(o.client_name||'؟').trim())[0]||'؟';
+              const svcTxt=o.lines.map(l=>l.service).filter(Boolean).slice(0,2).join(' + ');
+              const st=getOrderStatus(o);
+              return '<button type="button" onclick="selectHomeFloatingTx(\''+eh(o.transaction_id)+'\')" class="fl-tx-item '+(isSel?'sel':'')+'">'+
+                '<span class="flex items-center gap-2.5 min-w-0">'+
+                  '<span class="fl-av">'+eh(init)+'</span>'+
+                  '<span class="min-w-0">'+
+                    '<span class="block font-bold text-xs sm:text-sm text-white truncate">'+eh(o.client_name||'—')+'</span>'+
+                    '<span class="block text-[11px] text-slate-400 truncate mt-0.5">'+eh(svcTxt||'—')+'</span>'+
+                  '</span>'+
+                '</span>'+
+                '<span class="shrink-0">'+badge(st)+'</span>'+
+              '</button>';
+            }).join(''):'<div class="py-8 text-center text-xs text-slate-400">لا توجد معاملات بعد</div>')+
+          '</div>'+
+        '</div>'+
+        /* كارت العميل المتكرر وتكرار آخر طلب */
+        (topRepeatClient&&topRepeatClient.lastOrder?
+          '<div class="mt-2 pt-3 border-t border-white/10">'+
+            '<div class="flex items-center justify-between gap-2">'+
+              '<div class="min-w-0">'+
+                '<div class="font-bold text-xs text-white truncate">'+eh(topRepeatClient.name)+'</div>'+
+                '<div class="text-[11px] text-violet-300">عميل مسجّل · '+topRepeatClient.cnt+' معاملات</div>'+
+              '</div>'+
+              '<span class="fl-av">'+eh(Array.from(String(topRepeatClient.name||'أ'))[0])+'</span>'+
+            '</div>'+
+            '<button type="button" data-qk-repeat="'+eh(topRepeatClient.lastOrder.transaction_id)+'" onclick="switchTab(\'new\')" class="mt-2.5 w-full rounded-xl bg-violet-500/20 hover:bg-violet-500/35 border border-violet-400/35 px-3 py-2 text-xs font-bold text-violet-200 flex items-center justify-between transition">'+
+              '<span class="truncate">آخر طلب: '+eh((topRepeatClient.lastOrder.lines[0]&&topRepeatClient.lastOrder.lines[0].service)||'خدمة')+' · '+eh(formatCurrency(topRepeatClient.lastOrder.grand_total))+'</span>'+
+              '<span class="shrink-0 underline">كرّر</span>'+
+            '</button>'+
+          '</div>':'')+
+      '</div>'+
+
+      /* الكارت المتطاير الأوسط المرتفع: ملخص الطلب / المعاملة المختارة + هدف الشهر */
+      '<div class="flex flex-col gap-4">'+
+        '<div class="fl-card fl-dark fl-tilt-center space-y-3.5">'+
+          (selOrder?
+            '<div class="flex items-center justify-between">'+
+              '<span class="rounded-full bg-violet-500/20 border border-violet-400/35 px-3 py-0.5 text-[11px] font-bold text-violet-200" dir="ltr">● معاملة #'+eh(selOrder.transaction_id)+'</span>'+
+              '<span class="font-bold text-base text-white">ملخص الطلب</span>'+
+            '</div>'+
+            '<div class="text-xs text-slate-300 flex items-center justify-between">'+
+              '<span class="font-bold text-sm text-white">'+eh(selOrder.client_name||'—')+'</span>'+
+              '<span class="font-mono text-violet-300" dir="ltr">'+eh(selOrder.phone||'')+'</span>'+
+            '</div>'+
+            '<div class="space-y-1.5 border-y border-white/10 py-2.5 text-xs">'+
+              selOrder.lines.slice(0,3).map(l=>
+                '<div class="flex items-center justify-between gap-2">'+
+                  '<span class="text-slate-200 truncate">'+eh(l.service||'—')+(Number(l.qty)>1?' ×'+fmtNum(l.qty):'')+'</span>'+
+                  '<span class="font-mono font-bold text-white">'+fmtNum(l.total)+'</span>'+
+                '</div>'
+              ).join('')+
+              (txDisc(selOrder)>0?'<div class="flex items-center justify-between text-rose-300"><span>خصم</span><span class="font-mono">− '+fmtNum(txDisc(selOrder))+'%</span></div>':'')+
+            '</div>'+
+            '<div class="flex items-baseline justify-between">'+
+              '<span class="text-xs text-slate-400">الإجمالي</span>'+
+              '<div class="text-3xl font-bold font-mono text-white">'+fmtNum(selOrder.grand_total)+' <small class="text-xs font-normal text-slate-300">ج.م</small></div>'+
+            '</div>'+
+            /* شريط حالة المعاملة المصغر داخل الكارت الطائر */
+            '<div class="space-y-1">'+
+              '<div class="flex items-center justify-between text-[11px]">'+
+                '<span class="text-slate-300">حالة الطلب: <b style="color:'+selStage.color+'">'+eh(selStage.title)+'</b></span>'+
+                '<span class="font-mono font-bold" style="color:'+selStage.color+'">'+selStage.pct+'%</span>'+
+              '</div>'+
+              '<div class="h-1.5 rounded-full bg-white/10 overflow-hidden"><div class="h-full rounded-full transition-all duration-500" style="width:'+selStage.barW+'%;background:'+selStage.color+'"></div></div>'+
+            '</div>'+
+            '<div class="pt-1 space-y-2">'+
+              '<button type="button" onclick="openTxInTransactionsTab(\''+eh(selOrder.transaction_id)+'\')" class="btn-neo-pri w-full py-2.5 text-xs">فتح في شاشة المعاملات وتغيير الحالة</button>'+
+              '<div class="grid grid-cols-2 gap-2">'+
+                '<button type="button" onclick="printTxReceipt(\''+eh(selOrder.transaction_id)+'\')" class="btn-neo-sec !text-white !border-white/15 !bg-white/5 py-2 text-xs">حفظ وطباعة</button>'+
+                '<button type="button" onclick="switchTab(\'new\')" class="btn-neo-sec !text-white !border-white/15 !bg-white/5 py-2 text-xs">طلب جديد +</button>'+
+              '</div>'+
+            '</div>'
+          :'<div class="py-10 text-center text-xs text-slate-400">سجّل أول معاملة لتظهر هنا</div>')+
+        '</div>'+
+
+        /* كارت هدف الشهر الدائري المتطاير */
+        '<div onclick="switchTab(\'comm\')" class="fl-card fl-tilt-b2 cursor-pointer flex items-center justify-between gap-4">'+
+          '<div>'+
+            '<div class="font-bold text-sm text-white">هدف الشهر</div>'+
+            '<div class="text-xs text-slate-400 font-mono mt-1" dir="ltr">'+fmtNum(monthSales)+' / '+fmtNum(targetGoal)+' ج.م</div>'+
+            '<div class="text-[11px] text-violet-300 mt-1">اضغط لفتح الكوميشن والتارجت ←</div>'+
+          '</div>'+
+          '<div class="relative flex items-center justify-center shrink-0" style="width:86px;height:86px">'+
+            '<svg class="tx-ring-svg" width="86" height="86" viewBox="0 0 86 86">'+
+              '<circle class="tx-ring-bg" cx="43" cy="43" r="'+rRing+'"></circle>'+
+              '<circle class="tx-ring-fg" cx="43" cy="43" r="'+rRing+'" stroke="#a855f7" stroke-dasharray="'+cRing+'" stroke-dashoffset="'+oRing+'"></circle>'+
+            '</svg>'+
+            '<span class="absolute font-bold text-base font-mono text-white">'+goalPct+'%</span>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+
+      /* الكارت المتطاير الأيسر: إيراد الأسبوع التفاعلي + كروت التنبيهات الطائرة */
+      '<div class="flex flex-col justify-between gap-4">'+
+        '<div class="fl-card fl-tilt-l">'+
+          '<div class="flex items-center justify-between">'+
+            '<span class="font-bold text-base text-white">إيراد الأسبوع</span>'+
+            '<span class="rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 text-xs font-bold font-mono">'+todayOrders.length+' اليوم</span>'+
+          '</div>'+
+          '<div class="fl-bars-wrap">'+
+            dayBars.map(b=>{
+              const hPct=Math.max(12,Math.round((b.rev/maxDayRev)*100));
+              return '<div class="fl-bar-col '+(b.isToday?'is-peak':'')+'" onclick="switchTab(\'dash\')">'+
+                '<span class="fl-bar-tip">'+b.cnt+' معاملة · '+eh(formatCurrency(b.rev))+'</span>'+
+                '<div class="fl-bar-cap" style="height:'+hPct+'%"></div>'+
+              '</div>';
+            }).join('')+
+          '</div>'+
+          '<div class="flex gap-1.5 mt-2.5 text-[11px] text-slate-400">'+
+            dayBars.map(b=>'<span class="flex-1 text-center truncate '+(b.isToday?'text-violet-300 font-bold':'')+'">'+eh(b.day)+'</span>').join('')+
+          '</div>'+
+        '</div>'+
+
+        /* كروت التنبيهات الطائرة (المتأخرات + آخر تسليم) */
+        '<div class="space-y-3">'+
+          '<div onclick="openMyDayTab(\'late\')" class="fl-card fl-tilt-b1 cursor-pointer !p-4 flex items-center justify-between gap-3" style="background:rgba(76,17,39,0.55);border-color:rgba(244,63,94,0.38)">'+
+            '<div class="min-w-0">'+
+              '<div class="font-bold text-xs sm:text-sm text-rose-200 truncate">'+(lateOrder?('معاملة #'+eh(lateOrder.transaction_id)+' متأخرة'):(lateCnt>0?lateCnt+' معاملات متأخرة':'0 معاملات متأخرة حالياً ✓'))+'</div>'+
+              '<div class="text-[11px] text-rose-300/80 truncate mt-0.5">'+(lateOrder?(eh(lateOrder.client_name)+' · '+eh((lateOrder.lines[0]&&lateOrder.lines[0].service)||'')):'كل المعاملات في موعدها المحدد')+'</div>'+
+            '</div>'+
+            '<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-500/25 text-rose-300"><i class="fa-regular fa-clock"></i></span>'+
+          '</div>'+
+
+          '<div onclick="switchTab(\'tx\')" class="fl-card fl-tilt-b2 cursor-pointer !p-4 flex items-center justify-between gap-3" style="background:rgba(13,58,46,0.55);border-color:rgba(16,185,129,0.38)">'+
+            '<div class="min-w-0">'+
+              '<div class="font-bold text-xs sm:text-sm text-emerald-200 truncate">'+(delivOrder?('تم تسليم #'+eh(delivOrder.transaction_id)):'جاهزية التسليم السريع')+'</div>'+
+              '<div class="text-[11px] text-emerald-300/80 truncate mt-0.5">'+(delivOrder?(eh(delivOrder.client_name)+' · '+eh((delivOrder.lines[0]&&delivOrder.lines[0].service)||'')):'اضغط لمتابعة المعاملات المسلمة')+'</div>'+
+            '</div>'+
+            '<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/25 text-emerald-300"><i class="fa-solid fa-check"></i></span>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+}
+
 function renderHomeTab(){
   const box=$('tab-home');if(!box)return;
   const eh=escapeHtml;
@@ -1582,7 +2471,6 @@ function renderHomeTab(){
   const unreadChat=chatItems.reduce((s,i)=>s+(i.unread||0),0);
   const cashTodayCnt=allRequestLines.filter(l=>(l.payment_method||'').trim()==='كاش'&&dayKey(lineDate(l))===tk).length;
 
-  // حالة تواجد ونشاط الموظفين
   const staffList=profiles.filter(p=>p.id&&p.role!=='partner');
   const empCards=staffList.map(p=>({p:p,st:getEmpLiveStatus(p)}));
   empCards.sort((a,b)=>{
@@ -1598,8 +2486,8 @@ function renderHomeTab(){
       '<span class="hm-nav-icon" style="background:'+bgGrad+'"><i class="fa-solid '+icon+'"></i></span>'+
       '<div class="min-w-0 flex-1">'+
         '<div class="flex items-center justify-between gap-2">'+
-          '<span class="font-bold text-sm sm:text-base text-ink dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition">'+eh(title)+'</span>'+
-          (badgeHtml||'<i class="fa-solid fa-chevron-left text-[11px] text-slate-300 group-hover:text-brand-500 transition"></i>')+
+          '<span class="font-bold text-sm sm:text-base text-ink dark:text-white group-hover:text-violet-500 dark:group-hover:text-violet-300 transition">'+eh(title)+'</span>'+
+          (badgeHtml||'<i class="fa-solid fa-chevron-left text-[11px] text-slate-300 group-hover:text-violet-400 transition"></i>')+
         '</div>'+
         '<p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">'+eh(sub)+'</p>'+
       '</div>'+
@@ -1612,26 +2500,27 @@ function renderHomeTab(){
     '<div class="hm-hero">'+
       '<div class="flex flex-wrap items-center justify-between gap-4">'+
         '<div>'+
-          '<div class="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-teal-100 backdrop-blur-xs"><i class="fa-solid fa-sparkles"></i><span>الشاشة الرئيسية · بوابة تساهيل الذكية</span></div>'+
+          '<div class="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-violet-100 backdrop-blur-xs"><i class="fa-solid fa-sparkles"></i><span>الشاشة الرئيسية · بوابة تساهيل الذكية</span></div>'+
           '<h1 class="text-xl sm:text-2xl font-bold mt-2">أهلاً بك، '+eh(meName)+' 👋</h1>'+
-          '<p class="text-xs text-teal-100/85 mt-1">'+eh(todayStr)+' — اختر أي قسم بالأسفل للدخول السريع والمباشر</p>'+
+          '<p class="text-xs text-violet-100/85 mt-1">'+eh(todayStr)+' — اختر أي قسم أو تفاعل مباشرة مع الكروت المتطايرة بالأسفل</p>'+
         '</div>'+
         '<div class="flex flex-wrap items-center gap-2">'+
-          '<button type="button" onclick="switchTab(\'new\')" class="rounded-xl bg-white text-slate-900 hover:bg-teal-50 px-4 py-2.5 text-xs sm:text-sm font-bold shadow-md flex items-center gap-2"><i class="fa-solid fa-plus text-brand-600"></i><span>طلب جديد</span></button>'+
+          '<button type="button" onclick="switchTab(\'new\')" class="rounded-xl bg-white text-slate-900 hover:bg-violet-50 px-4 py-2.5 text-xs sm:text-sm font-bold shadow-md flex items-center gap-2"><i class="fa-solid fa-plus text-violet-600"></i><span>طلب جديد</span></button>'+
+          '<button type="button" onclick="switchTab(\'tx\')" class="rounded-xl bg-white/15 hover:bg-white/25 text-white px-4 py-2.5 text-xs sm:text-sm font-bold backdrop-blur-xs flex items-center gap-2"><i class="fa-solid fa-list-ul"></i><span>المعاملات</span></button>'+
           '<button type="button" onclick="if(window.qkOpen)qkOpen();else switchTab(\'search\')" class="rounded-xl bg-white/15 hover:bg-white/25 text-white px-4 py-2.5 text-xs sm:text-sm font-bold backdrop-blur-xs flex items-center gap-2"><i class="fa-solid fa-magnifying-glass"></i><span>بحث سريع</span></button>'+
         '</div>'+
       '</div>'+
       '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">'+
-        '<button type="button" onclick="switchTab(\'new\')" class="rounded-xl bg-white/12 hover:bg-white/20 p-3.5 text-right backdrop-blur-xs transition">'+
-          '<div class="text-[11px] text-teal-100">مبيعات اليوم</div>'+
+        '<button type="button" onclick="switchTab(\'tx\')" class="rounded-xl bg-white/12 hover:bg-white/20 p-3.5 text-right backdrop-blur-xs transition">'+
+          '<div class="text-[11px] text-violet-100">إيراد اليوم</div>'+
           '<div class="text-lg sm:text-xl font-bold mt-1 whitespace-nowrap">'+eh(formatCurrency(todaySales))+'</div>'+
         '</button>'+
-        '<button type="button" onclick="openMyDayTab(\'today\')" class="rounded-xl bg-white/12 hover:bg-white/20 p-3.5 text-right backdrop-blur-xs transition">'+
-          '<div class="text-[11px] text-teal-100">معاملات اليوم</div>'+
+        '<button type="button" onclick="switchTab(\'tx\')" class="rounded-xl bg-white/12 hover:bg-white/20 p-3.5 text-right backdrop-blur-xs transition">'+
+          '<div class="text-[11px] text-violet-100">معاملات اليوم</div>'+
           '<div class="text-lg sm:text-xl font-bold mt-1 whitespace-nowrap">'+todayOrders.length+' معاملة</div>'+
         '</button>'+
-        '<button type="button" onclick="openMyDayTab(\'open\')" class="rounded-xl bg-white/12 hover:bg-white/20 p-3.5 text-right backdrop-blur-xs transition">'+
-          '<div class="text-[11px] text-teal-100">بنود مفتوحة قيد التنفيذ</div>'+
+        '<button type="button" onclick="switchTab(\'tx\')" class="rounded-xl bg-white/12 hover:bg-white/20 p-3.5 text-right backdrop-blur-xs transition">'+
+          '<div class="text-[11px] text-violet-100">بنود مفتوحة قيد التنفيذ</div>'+
           '<div class="text-lg sm:text-xl font-bold mt-1 whitespace-nowrap">'+openLines+' بند</div>'+
         '</button>'+
         '<button type="button" onclick="openMyDayTab(\'late\')" class="rounded-xl '+(lateCnt>0?'bg-rose-600/90 hover:bg-rose-600 ring-2 ring-rose-300':'bg-white/12 hover:bg-white/20')+' p-3.5 text-right backdrop-blur-xs transition">'+
@@ -1641,24 +2530,28 @@ function renderHomeTab(){
       '</div>'+
     '</div>'+
 
-    /* 2. الأقسام اليومية الأساسية (بوابة الدخول السريع) */
+    /* 2. منصة الكروت المتطايرة التفاعلية (مثل الصورة المرفقة و Interactive.dc.html) */
+    renderFloatingCardsStage(eh,todayOrders,lateCnt)+
+
+    /* 3. الأقسام اليومية الأساسية (مع فصل طلب جديد عن المعاملات) */
     '<div class="space-y-3">'+
       '<div class="flex items-center justify-between px-1">'+
-        '<h2 class="font-bold text-sm sm:text-base text-ink dark:text-white flex items-center gap-2"><i class="fa-solid fa-compass text-brand-600"></i><span>الأقسام اليومية الأساسية</span></h2>'+
+        '<h2 class="font-bold text-sm sm:text-base text-ink dark:text-white flex items-center gap-2"><i class="fa-solid fa-compass text-violet-500"></i><span>جميع أقسام وشاشات السيستم</span></h2>'+
         '<span class="text-xs text-slate-400">اضغط على أي كارت للانتقال الفوري</span>'+
       '</div>'+
       '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">'+
-        navCard('طلب جديد وآخر المعاملات','تسجيل معاملة جديدة للعميل ومتابعة أحدث المعاملات المسجلة','fa-plus','linear-gradient(135deg,#0d9488,#115e59)',"switchTab('new')",bPill(todayOrders.length+' اليوم','bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300'))+
+        navCard('طلب جديد','تسجيل معاملة جديدة للعميل في 3 خطوات مع شريط التقدم والكروت السريعة','fa-plus','linear-gradient(135deg,#7c3aed,#a855f7)',"switchTab('new')",bPill('إنشاء سريع +','bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300'))+
+        navCard('المعاملات','شاشة مستقلة لمتابعة كل المعاملات وشريط حالة الطلب التفاعلي وسجل الإجراءات','fa-list-ul','linear-gradient(135deg,#6366f1,#4338ca)',"switchTab('tx')",bPill(groupedOrders.length+' معاملة','bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'))+
         navCard('شغلي النهاردة','متابعة معاملاتك اليوم، البنود المفتوحة، وتحقيق تارجت الشهر','fa-sun','linear-gradient(135deg,#0284c7,#1d4ed8)',"openMyDayTab('all')",bPill('شغلي','bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300'))+
         navCard('المتأخرات','عرض ومتابعة الطلبات التي تجاوزت مدة التنفيذ المحددة فوراً','fa-triangle-exclamation','linear-gradient(135deg,#e11d48,#be123c)',"openMyDayTab('late')",lateCnt>0?bPill(lateCnt+' متأخر','bg-rose-600 text-white'):bPill('لا يوجد متأخر','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
         navCard('الكوميشن والتارجت','حساب الكوميشن الشهري وتارجت المبلغ وعدد الخدمات والطباعة','fa-bullseye','linear-gradient(135deg,#059669,#047857)',"switchTab('comm')",bPill('الشهر الحالي','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
-        navCard('المنفذين','متابعة بنود التنفيذ، تصفية بالمنفذ والتاريخ، وطباعة وتصدير PDF/Excel','fa-user-gear','linear-gradient(135deg,#4f46e5,#3730a3)',"switchTab('exec')",bPill(allRequestLines.length+' بند','bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'))+
+        navCard('المنفذين','متابعة أحدث 50 بند تنفيذ فوراً مع البحث وتحميل المزيد وPDF/Excel','fa-user-gear','linear-gradient(135deg,#4f46e5,#3730a3)',"switchTab('exec')",bPill(allRequestLines.length+' بند','bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'))+
         navCard('الكاش','متابعة تحصيلات الكاش اليومية وتقفيل الكاش وطباعة التقارير','fa-wallet','linear-gradient(135deg,#d97706,#b45309)',"switchTab('cash')",bPill(cashTodayCnt+' اليوم','bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300'))+
         navCard('المناديب','كروت المناديب ومشاوير الاستلام والتسليم وعهدة الكاش والطباعة','fa-motorcycle','linear-gradient(135deg,#0f766e,#134e4a)',"switchTab('couriers')",bPill('المشاوير','bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300'))+
-        navCard('الإيصالات','إصدار وطباعة إيصال استلام وتسليم رسمي A5 أو إيصال حراري 80mm','fa-receipt','linear-gradient(135deg,#7c3aed,#5b21b6)',"switchTab('receipt')",'')+
+        navCard('الإيصالات','إصدار وطباعة إيصال استلام وتسليم رسمي A5 أو إيصال حراري 80mm','fa-receipt','linear-gradient(135deg,#9333ea,#6b21a8)',"switchTab('receipt')",'')+
         navCard('البحث الشامل','بحث فوري باسم العميل أو رقم التليفون أو رقم المعاملة أو الخدمة','fa-magnifying-glass','linear-gradient(135deg,#2563eb,#1e40af)',"switchTab('search')",'')+
         navCard('الشات الداخلي','مراسلة الزملاء وقناة الشركة العامة مع إشعارات القراءة والمنشن','fa-comments','linear-gradient(135deg,#0891b2,#155e75)',"switchTab('chat')",unreadChat>0?bPill(unreadChat+' رسالة جديدة','bg-rose-600 text-white'):bPill('متصل','bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300'))+
-        navCard('الداش بورد والتقارير','لوحة الإحصائيات الشاملة والرسوم البيانية وتحليل الأداء','fa-chart-pie','linear-gradient(135deg,#0b1b33,#1e293b)',"switchTab('dash')",'')+
+        navCard('الداش بورد والتقارير','لوحة الإحصائيات الشاملة والرسوم البيانية وتحليل الأداء','fa-chart-pie','linear-gradient(135deg,#3b0764,#1e1b4b)',"switchTab('dash')",'')+
         navCard('المهام والتنبيهات','متابعة المهام اليومية المسندة والمواعيد النهائية','fa-list-check','linear-gradient(135deg,#0d9488,#0f766e)',"switchTab('tasks')",'')+
         navCard('فريق العمل','أرقام التواصل المباشر وواتساب وحالة اتصال ونشاط الزملاء','fa-user-group','linear-gradient(135deg,#6366f1,#4338ca)',"switchTab('team')",bPill(wCount+' شغال الآن','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
         navCard('الموارد البشرية (HR)','تسجيل بصمة الحضور والانصراف وجدول الشيفتات والإجازات والرواتب','fa-fingerprint','linear-gradient(135deg,#db2777,#9d174d)',"switchTab('hr')",'')+
@@ -1668,8 +2561,8 @@ function renderHomeTab(){
       '</div>'+
     '</div>'+
 
-    /* 3. لوحة حالة تواجد ونشاط الموظفين المباشرة (مين فاتح وشغال ومين خامل ومين قافل) */
-    '<div class="card p-5 space-y-4">'+
+    /* 4. لوحة حالة تواجد ونشاط الموظفين المباشرة */
+    '<div class="card lift p-5 space-y-4">'+
       '<div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3.5">'+
         '<div class="flex items-center gap-2.5">'+
           '<span class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-white"><i class="fa-solid fa-signal"></i></span>'+
@@ -1691,7 +2584,7 @@ function renderHomeTab(){
               '<div class="flex items-center gap-3 min-w-0">'+
                 '<span class="relative shrink-0">'+avatarHtml(p,42)+'<span class="absolute bottom-0 end-0 h-3 w-3 rounded-full border-2 border-white dark:border-slate-900 '+st.dotCls+'"></span></span>'+
                 '<div class="min-w-0">'+
-                  '<div class="font-bold text-xs sm:text-sm text-ink dark:text-white truncate">'+eh(p.full_name||'موظف')+(isMe?' <span class="text-[10px] text-brand-600 font-bold">(أنت)</span>':'')+'</div>'+
+                  '<div class="font-bold text-xs sm:text-sm text-ink dark:text-white truncate">'+eh(p.full_name||'موظف')+(isMe?' <span class="text-[10px] text-violet-400 font-bold">(أنت)</span>':'')+'</div>'+
                   '<div class="text-[11px] text-slate-500 truncate mt-0.5">'+eh(st.sub)+'</div>'+
                 '</div>'+
               '</div>'+
@@ -1717,7 +2610,7 @@ function paintCurrentTabBanner(id){
     main.insertAdjacentHTML('afterbegin',
       '<div id="cur-tab-title" class="hidden text-ink dark:text-white" style="display:none">'+
         '<div class="flex items-center gap-2.5"><span class="flex h-8 w-8 items-center justify-center rounded-xl bg-ink text-white dark:bg-brand-600"><i id="cur-tab-ic"></i></span><span id="cur-tab-nm" class="font-bold text-sm sm:text-base"></span></div>'+
-        '<button type="button" onclick="switchTab(\'home\')" class="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 hover:bg-brand-50 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-brand-700 dark:text-slate-200 transition"><i class="fa-solid fa-house text-brand-600 dark:text-brand-400"></i><span>الشاشة الرئيسية</span></button>'+
+        '<button type="button" onclick="switchTab(\'home\')" class="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 hover:bg-brand-50 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-brand-700 dark:text-slate-200 transition"><i class="fa-solid fa-house text-brand-600 dark:text-violet-400"></i><span>الشاشة الرئيسية</span></button>'+
       '</div>');
     t=$('cur-tab-title');
   }
@@ -1739,7 +2632,7 @@ function paintCurrentTabBanner(id){
 /* ---------- تنقل وثيم ---------- */
 function switchTab(id){
   currentTab=id;
-  const baseTabs=['home','new','exec','cash','search','receipt','dash','comm','team','chat','tasks','notes'];
+  const baseTabs=['home','new','tx','exec','cash','search','receipt','dash','comm','team','chat','tasks','notes'];
   baseTabs.forEach(t=>{
     const pane=$('tab-'+t);if(pane)pane.classList.toggle('hidden',t!==id);
     const btn=$('tab-'+t+'-btn');
@@ -1752,6 +2645,8 @@ function switchTab(id){
   try{paintCurrentTabBanner(id);}catch(e){}
   syncMyPresence(false);
   if(id==='home')renderHomeTab();
+  if(id==='new'){updateOrderProgressBar();renderQuickServicesGrid();}
+  if(id==='tx')renderRecentRequests();
   if(id==='dash')renderDashboardMetrics();
   if(id==='exec')filterExecSheet();
   if(id==='cash')filterCashSheet();
@@ -1762,8 +2657,17 @@ function switchTab(id){
   if(id==='tasks'&&window.renderTasks)renderTasks();
   if(id==='notes'&&window.renderNotes)renderNotes();
 }
-function toggleDarkMode(){const d=document.documentElement.classList.toggle('dark');document.documentElement.classList.toggle('light',!d);localStorage.setItem('theme',d?'dark':'light');}
-function initTheme(){const s=localStorage.getItem('theme');const d=s==='dark'||(!s&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);document.documentElement.classList.toggle('light',!d);}
+function toggleDarkMode(){
+  const d=document.documentElement.classList.toggle('dark');
+  document.documentElement.classList.toggle('light',!d);
+  localStorage.setItem('theme_v2',d?'dark':'light');
+}
+function initTheme(){
+  const s=localStorage.getItem('theme_v2');
+  const d=s?s==='dark':true; // الثيم البنفسجي النيون الداكن هو الافتراضي للتصميم الجديد
+  document.documentElement.classList.toggle('dark',d);
+  document.documentElement.classList.toggle('light',!d);
+}
 
 function tafqeetArabic(num){
   num=Number(num)||0;if(num<=0)return 'صفر جنيه مصري فقط لا غير';
