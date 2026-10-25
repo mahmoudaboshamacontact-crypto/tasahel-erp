@@ -254,35 +254,35 @@
   }
 
   window.submitInquiryReply = async function(id, txId, isPublic) {
-    const input = document.getElementById(`reply-input-${id}`);
-    const body = input.value.trim();
-    if (!body) return showToast('اكتب الرد الأول', 'error');
+  const input = document.getElementById(`reply-input-${id}`);
+  const body = input.value.trim();
+  if (!body) return showToast('اكتب الرد الأول', 'error');
 
-    const author = (myProfile && myProfile.full_name) || currentUser.email;
-    const btn = input.nextElementSibling.querySelector('button'); 
-    if (btn) btn.disabled = true;
+  const author = (myProfile && myProfile.full_name) || currentUser.email;
+  const btn = input.nextElementSibling.querySelector('button'); 
+  if (btn) btn.disabled = true;
 
-    try {
-      const r1 = await sbClient.from('tx_comments').insert({
-        transaction_id: txId,
-        author_id: currentUser.id,
-        author_name: author,
-        body: body,
-        is_public: isPublic
-      });
-      if (r1.error) throw r1.error;
+  try {
+    // إضافة رد الإدارة فقط (من غير ما نكرر رسالة العميل)
+    const r1 = await sbClient.from('tx_comments').insert({
+      transaction_id: txId,
+      author_id: currentUser.id,
+      author_name: author,
+      body: body,
+      is_public: isPublic
+    });
+    if (r1.error) throw r1.error;
 
-      const r2 = await sbClient.from('customer_inquiries').update({ status: isPublic ? 'replied' : 'converted' }).eq('id', id);
-      if (r2.error) throw r2.error;
+    const r2 = await sbClient.from('customer_inquiries').update({ status: isPublic ? 'replied' : 'converted' }).eq('id', id);
+    if (r2.error) throw r2.error;
 
-      showToast(isPublic ? 'تم إرسال الرد للعميل' : 'تم حفظ الملاحظة داخلياً');
-      loadInquiries();
-    } catch (e) {
-      showError('تعذر حفظ الرد', e);
-      if (btn) btn.disabled = false;
-    }
-  };
-
+    showToast(isPublic ? 'تم إرسال الرد للعميل' : 'تم حفظ الملاحظة داخلياً');
+    loadInquiries();
+  } catch (e) {
+    showError('تعذر حفظ الرد', e);
+    if (btn) btn.disabled = false;
+  }
+};
   const _switchTabInq = window.switchTab;
   if (typeof _switchTabInq === 'function') {
     window.switchTab = function(id) {
