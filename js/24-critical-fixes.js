@@ -272,12 +272,29 @@ window.convertInquiryToComment = async function(id, txId, body) {
   }
 };
 
-// تحديث التاب عند الضغط عليه
+// تحديث التاب عند الضغط عليه (النسخة المصححة)
 const _switchTabInq = window.switchTab;
 if (typeof _switchTabInq === 'function') {
   window.switchTab = function(id) {
     const r = _switchTabInq.apply(this, arguments);
-    if (id === 'inquiries') { loadInquiries(); }
+    
+    // 1. إخفاء شاشة الاستفسارات لو كنا رايحين لتاب تاني
+    const inqPane = document.getElementById('tab-inquiries');
+    if (inqPane) {
+      if (id === 'inquiries') {
+        inqPane.classList.remove('hidden');
+        loadInquiries(); // تحديث البيانات
+      } else {
+        inqPane.classList.add('hidden');
+      }
+    }
+    
+    // 2. تغيير لون الزرار لما يكون مختار
+    const inqBtn = document.getElementById('tab-inquiries-btn');
+    if (inqBtn) {
+      inqBtn.className = 'tab-btn ' + (id === 'inquiries' ? 'bg-ink text-white dark:bg-brand-600 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800');
+    }
+    
     return r;
   };
 }
