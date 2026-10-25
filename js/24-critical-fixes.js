@@ -70,5 +70,27 @@
 
   setTimeout(patchSupabase, 1500);
 
+  /* 4) قفل تعديل الأسعار في المعاملات المسلّمة */
+const _openTxEdit = window.openTxEdit;
+if (typeof _openTxEdit === 'function') {
+  window.openTxEdit = async function(tx) {
+    await _openTxEdit.apply(this, arguments);
+    setTimeout(() => {
+      // البحث عن المعاملة ومعرفة حالتها
+      const o = groupedOrders.find(x => String(x.transaction_id) === String(tx));
+      if (o && o.lines.some(l => l.status === 'Delivered')) {
+        // قفل خانة السعر
+        document.querySelectorAll('#tx-edit-modal .te-l-price').forEach(inp => {
+          inp.readOnly = true;
+          inp.style.backgroundColor = '#e2e8f0';
+          inp.style.cursor = 'not-allowed';
+          inp.title = 'لا يمكن تعديل سعر معاملة تم تسليمها';
+        });
+        showToast('تم قفل الأسعار لأن المعاملة مسلّمة بالفعل', 'info', 5000);
+      }
+    }, 300); // تأخير بسيط عشان نافذة التعديل تفتح الأول
+  };
+}
+
   console.info('[phase24] loaded successfully');
 })();
