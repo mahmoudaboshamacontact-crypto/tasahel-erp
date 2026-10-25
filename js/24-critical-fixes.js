@@ -33,7 +33,7 @@
   }
 
   /* 2) سجل الأخطاء التلقائي */
-  async function logError(err, context) {
+   function logError(err, context) {
     try {
       if (!window.sbClient || !window.currentUser) return;
       await sbClient.from('error_log').insert({
@@ -61,7 +61,7 @@
   /* 3) تشغيل تلقائي */
   const _init = window.loadInitialData;
   if (typeof _init === 'function') {
-    window.loadInitialData = async function () {
+    window.loadInitialData =  function () {
       const res = await _init.apply(this, arguments);
       patchSupabase();
       return res;
@@ -73,7 +73,7 @@
   /* 4) قفل تعديل الأسعار في المعاملات المسلّمة */
 const _openTxEdit = window.openTxEdit;
 if (typeof _openTxEdit === 'function') {
-  window.openTxEdit = async function(tx) {
+  window.openTxEdit =  function(tx) {
     await _openTxEdit.apply(this, arguments);
     setTimeout(() => {
       // البحث عن المعاملة ومعرفة حالتها
@@ -127,7 +127,7 @@ function injectMonthLockUI() {
   inp.value = new Date().toISOString().slice(0, 7);
 
   // زرار القفل
-  document.getElementById('btn-lock-month').onclick = async () => {
+  document.getElementById('btn-lock-month').onclick =  () => {
     if (!confirm('هل أنت متأكد من قفل شهر ' + inp.value + '؟\nسيتم منع أي تعديل في الأسعار أو الكميات لهذا الشهر.')) return;
     const r = await sbClient.from('month_closures').insert({ month: inp.value });
     const msg = document.getElementById('lock-month-msg');
@@ -143,7 +143,7 @@ function injectMonthLockUI() {
   };
 
   // زرار الفتح
-  document.getElementById('btn-unlock-month').onclick = async () => {
+  document.getElementById('btn-unlock-month').onclick =  () => {
     if (!confirm('هل أنت متأكد من فتح شهر ' + inp.value + '؟\nسيتم السماح بتعديل الأسعار مرة أخرى.')) return;
     const r = await sbClient.from('month_closures').delete().eq('month', inp.value);
     const msg = document.getElementById('lock-month-msg');
@@ -198,6 +198,7 @@ function injectInquiriesTab() {
 }
 
 // دالة تحديث الشاشة
+// دالة تحديث الشاشة (النسخة النهائية بالرد)
 async function loadInquiries() {
   if (window.__role !== 'manager' || !sbClient) return;
   const list = document.getElementById('inquiries-list');
@@ -221,6 +222,77 @@ async function loadInquiries() {
     list.innerHTML = '<div class="text-center text-xs text-slate-400 py-6">لا توجد استفسارات حالياً</div>';
     return;
   }
+
+  list.innerHTML = data.map(inq => `
+    <div class="card p-4 ${inq.status === 'pending' ? 'border-r-4 border-r-rose-500' : 'border-r-4 border-r-emerald-500 opacity-60'}">
+      <div class="flex justify-between items-start mb-2">
+        <div>
+          <span class="text-xs font-bold text-ink dark:text-white">${inq.client_name || 'عميل'}</span>
+          <span class="text-[10px] text-slate-400 font-mono mr-2" dir="ltr">#${inq.transaction_id}</span>
+        </div>
+        <span class="text-[10px] text-slate-400">${new Date(inq.created_at).toLocaleString('ar-EG')}</span>
+      </div>
+      
+      <!-- نص الرسالة -->
+      <div class="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg text-sm text-slate-700 dark:text-slate-300 mb-3 border border-slate-100 dark:border-slate-700">
+        <i class="fa-solid fa-quote-right text-slate-300 text-xs mb-1 block"></i>
+        ${inq.body}
+      </div>
+
+      <!-- منطقة الرد (تظهر لو الرسالة لسه جديدة) -->
+      ${inq.status === 'pending' ? `
+        <div class="space-y-2 mt-3">
+          <input type="text" id="reply-input-${inq.id}" placeholder="اكتب ردك هنا..." class="field !py-1.5 text-xs w-full">
+          <div class="flex justify-end gap-2">
+            <button onclick="submitInquiryReply(${inq.id}, '${inq.transaction_id}', false)" class="rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1.5 text-[11px] font-bold transition">
+              حفظ (ملاحظة داخلية)
+            </button>
+            <button onclick="submitInquiryReply(${inq.id}, '${inq.transaction_id}', true)" class="rounded-lg bg-violet-600 hover:bg-violet-700 text-white px-3 py-1.5 text-[11px] font-bold transition">
+              <i class="fa-solid fa-paper-plane text-[10px] ms-1"></i> إرسال (للعميل)
+            </button>
+          </div>
+        </div>
+      ` : `
+        <div class="text-[11px] text-emerald-600 font-bold text-left mt-2 bg-emerald-50 inline-block px-2 py-1 rounded border border-emerald-100">
+          <i class="fa-solid fa-check-circle"></i> تم الرد / التحويل
+        </div>
+      `}
+    </div>
+  `).join('');
+}
+
+// دالة إرسال الرد
+window.submitInquiryReply = async function(id, txId, isPublic) {
+  const input = document.getElementById(`reply-input-${id}`);
+  const body = input.value.trim();
+  if (!body) return showToast('اكتب الرد الأول', 'error');
+
+  const author = (myProfile && myProfile.full_name) || currentUser.email;
+  const btn = input.nextElementSibling.querySelector('button'); // تعطيل الزرار مؤقتاً
+  if (btn) btn.disabled = true;
+
+  try {
+    // 1. إضافة الرد في سجل المعاملة
+    const r1 = await sbClient.from('tx_comments').insert({
+      transaction_id: txId,
+      author_id: currentUser.id,
+      author_name: author,
+      body: body,
+      is_public: isPublic
+    });
+    if (r1.error) throw r1.error;
+
+    // 2. تحديث حالة الاستفسار
+    const r2 = await sbClient.from('customer_inquiries').update({ status: isPublic ? 'replied' : 'converted' }).eq('id', id);
+    if (r2.error) throw r2.error;
+
+    showToast(isPublic ? 'تم إرسال الرد للعميل' : 'تم حفظ الملاحظة داخلياً');
+    loadInquiries();
+  } catch (e) {
+    showError('تعذر حفظ الرد', e);
+    if (btn) btn.disabled = false;
+  }
+};
 
   list.innerHTML = data.map(inq => `
     <div class="card p-4 ${inq.status === 'pending' ? 'border-r-4 border-r-rose-500' : 'border-r-4 border-r-emerald-500 opacity-60'}">
