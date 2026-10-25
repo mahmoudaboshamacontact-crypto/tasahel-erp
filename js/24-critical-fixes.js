@@ -169,24 +169,21 @@ if (typeof _sw === 'function') {
 }
 // وتشغيله لو الصفحة اتفتحت على الداش بورد
 setTimeout(injectMonthLockUI, 2000);
-   /* 8) تاب استفسارات العملاء للمدير */
+/* 8) تاب استفسارات العملاء للمدير */
 function injectInquiriesTab() {
   if (window.__role !== 'manager') return;
   const menu = document.getElementById('nav-menu');
   if (!menu || document.getElementById('tab-inquiries-btn')) return;
 
-  // إضافة زرار التاب
   const btn = document.createElement('button');
   btn.id = 'tab-inquiries-btn';
   btn.className = 'tab-btn text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800';
   btn.onclick = () => switchTab('inquiries');
   btn.innerHTML = '<i class="fa-solid fa-headset text-rose-500"></i><span>استفسارات العملاء</span><span id="inq-badge" class="hidden rounded-full bg-rose-600 text-white text-[10px] font-bold px-1.5 min-w-[18px] text-center leading-[18px] mr-auto">0</span>';
   
-  // نحطها قبل زرار الإعدادات
   const dbBtn = menu.querySelector('button[onclick="openSupabaseModal()"]');
   if (dbBtn) menu.insertBefore(btn, dbBtn); else menu.appendChild(btn);
 
-  // إضافة شاشة التاب (مخفية)
   if (!document.getElementById('tab-inquiries')) {
     const main = document.querySelector('main');
     const div = document.createElement('div');
@@ -197,8 +194,6 @@ function injectInquiriesTab() {
   }
 }
 
-// دالة تحديث الشاشة
-// دالة تحديث الشاشة (النسخة النهائية بالرد)
 async function loadInquiries() {
   if (window.__role !== 'manager' || !sbClient) return;
   const list = document.getElementById('inquiries-list');
@@ -233,13 +228,11 @@ async function loadInquiries() {
         <span class="text-[10px] text-slate-400">${new Date(inq.created_at).toLocaleString('ar-EG')}</span>
       </div>
       
-      <!-- نص الرسالة -->
       <div class="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg text-sm text-slate-700 dark:text-slate-300 mb-3 border border-slate-100 dark:border-slate-700">
         <i class="fa-solid fa-quote-right text-slate-300 text-xs mb-1 block"></i>
         ${inq.body}
       </div>
 
-      <!-- منطقة الرد (تظهر لو الرسالة لسه جديدة) -->
       ${inq.status === 'pending' ? `
         <div class="space-y-2 mt-3">
           <input type="text" id="reply-input-${inq.id}" placeholder="اكتب ردك هنا..." class="field !py-1.5 text-xs w-full">
@@ -261,18 +254,16 @@ async function loadInquiries() {
   `).join('');
 }
 
-// دالة إرسال الرد
 window.submitInquiryReply = async function(id, txId, isPublic) {
   const input = document.getElementById(`reply-input-${id}`);
   const body = input.value.trim();
   if (!body) return showToast('اكتب الرد الأول', 'error');
 
   const author = (myProfile && myProfile.full_name) || currentUser.email;
-  const btn = input.nextElementSibling.querySelector('button'); // تعطيل الزرار مؤقتاً
+  const btn = input.nextElementSibling.querySelector('button'); 
   if (btn) btn.disabled = true;
 
   try {
-    // 1. إضافة الرد في سجل المعاملة
     const r1 = await sbClient.from('tx_comments').insert({
       transaction_id: txId,
       author_id: currentUser.id,
@@ -282,7 +273,6 @@ window.submitInquiryReply = async function(id, txId, isPublic) {
     });
     if (r1.error) throw r1.error;
 
-    // 2. تحديث حالة الاستفسار
     const r2 = await sbClient.from('customer_inquiries').update({ status: isPublic ? 'replied' : 'converted' }).eq('id', id);
     if (r2.error) throw r2.error;
 
@@ -294,84 +284,27 @@ window.submitInquiryReply = async function(id, txId, isPublic) {
   }
 };
 
-  list.innerHTML = data.map(inq => `
-    <div class="card p-4 ${inq.status === 'pending' ? 'border-r-4 border-r-rose-500' : 'border-r-4 border-r-emerald-500 opacity-60'}">
-      <div class="flex justify-between items-start mb-2">
-        <div>
-          <span class="text-xs font-bold text-ink dark:text-white">${inq.client_name || 'عميل'}</span>
-          <span class="text-[10px] text-slate-400 font-mono mr-2" dir="ltr">#${inq.transaction_id}</span>
-        </div>
-        <span class="text-[10px] text-slate-400">${new Date(inq.created_at).toLocaleString('ar-EG')}</span>
-      </div>
-      <div class="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg text-sm text-slate-700 dark:text-slate-300 mb-3">
-        ${inq.body}
-      </div>
-      ${inq.status === 'pending' ? `
-        <div class="flex justify-end gap-2">
-          <button onclick="convertInquiryToComment(${inq.id}, '${inq.transaction_id}', '${inq.body.replace(/'/g, "\\'")}')" class="rounded-lg bg-violet-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-violet-700">
-            <i class="fa-solid fa-share ms-1"></i> تحويل لملاحظة في الريكوست
-          </button>
-        </div>
-      ` : `
-        <div class="text-[11px] text-emerald-600 font-bold text-left"><i class="fa-solid fa-check-circle"></i> تم التحويل لملاحظة</div>
-      `}
-    </div>
-  `).join('');
-}
-
-// دالة تحويل الرسالة لملاحظة (هتشتغل في الخطوة اللي جاية)
-window.convertInquiryToComment = async function(id, txId, body) {
-  if (!confirm('هل تريد تحويل هذه الرسالة إلى ملاحظة رسمية في سجل المعاملة؟')) return;
-  try {
-    // 1. إضافة التعليق في جدول المعاملة
-    const r = await sbClient.from('tx_comments').insert({
-      transaction_id: txId,
-      author_id: currentUser.id,
-      author_name: 'تحويل من صندوق الاستفسارات',
-      body: 'استفسار العميل: ' + body,
-      is_public: true // رد للعميل
-    });
-    if (r.error) throw r.error;
-
-    // 2. تحديث حالة الاستفسار إنه اتحول
-    const r2 = await sbClient.from('customer_inquiries').update({ status: 'converted' }).eq('id', id);
-    if (r2.error) throw r2.error;
-
-    showToast('تم التحويل وإضافته لسجل المعاملة');
-    loadInquiries();
-  } catch (e) {
-    showError('تعذر التحويل', e);
-  }
-};
-
-// تحديث التاب عند الضغط عليه (النسخة المصححة)
 const _switchTabInq = window.switchTab;
 if (typeof _switchTabInq === 'function') {
   window.switchTab = function(id) {
     const r = _switchTabInq.apply(this, arguments);
-    
-    // 1. إخفاء شاشة الاستفسارات لو كنا رايحين لتاب تاني
     const inqPane = document.getElementById('tab-inquiries');
     if (inqPane) {
       if (id === 'inquiries') {
         inqPane.classList.remove('hidden');
-        loadInquiries(); // تحديث البيانات
+        loadInquiries();
       } else {
         inqPane.classList.add('hidden');
       }
     }
-    
-    // 2. تغيير لون الزرار لما يكون مختار
     const inqBtn = document.getElementById('tab-inquiries-btn');
     if (inqBtn) {
       inqBtn.className = 'tab-btn ' + (id === 'inquiries' ? 'bg-ink text-white dark:bg-brand-600 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800');
     }
-    
     return r;
   };
 }
 
-// تشغيل التاب عند تحميل الصفحة
 const _initInq = window.loadInitialData;
 if (typeof _initInq === 'function') {
   window.loadInitialData = async function() {
@@ -380,4 +313,3 @@ if (typeof _initInq === 'function') {
     return r;
   };
 }
-})();
