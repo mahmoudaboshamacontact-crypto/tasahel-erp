@@ -95,6 +95,7 @@ if (typeof _openTxEdit === 'function') {
   console.info('[phase24] loaded successfully');
    /* 6) كارت إدارة قفل الشهور في شاشة الداش بورد */
 function injectMonthLockUI() {
+   if (window.__role !== 'manager') return;
   if (document.getElementById('month-lock-box')) return;
   const dash = document.getElementById('tab-dash');
   if (!dash) return;
