@@ -104,4 +104,33 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     } catch (e) { /* */ }
     return r;
   };
+
+  /* ---- QR في الإيصال الرسمي: بنلفّ buildOfficialReceipt ونحقن الكود قبل ما window.print تشتغل ---- */
+  function tokenNow(tx) {
+    const l = allRequestLines.find(x => String(x.transaction_id) === String(tx) && OK.test(String(x.tracking_token || '')));
+    return l ? l.tracking_token : null;
+  }
+  function addQr(url) {
+    const root = document.querySelector('#print-content .receipt-half'), head = root && root.firstElementChild;
+    if (!head || head.querySelector('[data-trkqr]')) return;
+    const q = qrcode(0, 'M'); q.addData(url); q.make();
+    const svg = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }).replace('<svg ', '<svg style="width:100%;height:100%;display:block" ');
+    head.insertAdjacentHTML('beforeend',
+      '<div data-trkqr="1" style="text-align:center;margin-inline-start:10px;flex:none"><div style="width:62px;height:62px;background:#fff">' + svg +
+      '</div><div style="font-size:7.5px;font-weight:bold;margin-top:1px;color:#000">امسح لمتابعة طلبك</div></div>');
+  }
+  const _bor = window.buildOfficialReceipt;
+  if (typeof _bor === 'function') window.buildOfficialReceipt = function (ls) {
+    const self = this, args = arguments;
+    const txs = Array.from(new Set((ls || []).map(l => String(l.transaction_id))));
+    const go = function (url) {
+      const op = window.print;
+      window.print = function () { window.print = op; try { if (url) addQr(url); } catch (e) { console.warn('trk qr', e); } return op.apply(window, arguments); };
+      try { return _bor.apply(self, args); } finally { if (window.print !== op) window.print = op; }
+    };
+    if (txs.length !== 1) return go(null);              /* أكتر من معاملة في إيصال واحد: من غير QR */
+    const t = tokenNow(txs[0]);
+    if (t) return go(linkFor(t));
+    ensureToken(txs[0]).then(tok => go(tok ? linkFor(tok) : null)).catch(() => go(null));
+  };
 })();
