@@ -6,7 +6,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
    ===================================================================== */
 (function () {
   if (window.__trackShare) return; window.__trackShare = true;
-  const OK = /^[A-Za-z0-9_-]{16,128}$/;           /* نفس شرط صفحة Track.html */
+  const OK = /^[A-Za-z0-9_-]{16,128}$/;          /* نفس شرط صفحة Track.html */
   const eh = escapeHtml;
 
   /* عنوان صفحة التتبع: افتراضياً Track.html جنب السيستم. تقدر تغيّره من النافذة */
@@ -106,7 +106,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   };
 
   /* =====================================================================
-     الإيصال الرسمي الجديد: A5 عرضي + QR تتبع (يحل محل buildOfficialReceipt القديمة)
+     الإيصال الرسمي الجديد: نصف ورقة A4 طولي (أبعاد المرفق 2) + تصميم أخضر + QR تتبع
      ===================================================================== */
   function tokenNow(tx) {
     const l = allRequestLines.find(x => String(x.transaction_id) === String(tx) && OK.test(String(x.tracking_token || '')));
@@ -116,50 +116,48 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     const q = qrcode(0, 'M'); q.addData(url); q.make();
     return q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }).replace('<svg ', '<svg style="width:100%;height:100%;display:block" ');
   }
-  /* الاسم/العنوان في سطر واحد: الخط بيصغر حسب طول النص (لحد 7.5px) وبعدها بس بيسمح بسطرين */
-  function fit(txt, budget, max) {
-    const n = Math.max(1, String(txt || '').length), size = Math.min(max, budget / (n * 0.52));
-    return size < 7.5 ? 'font-size:7.5px;white-space:normal' : 'font-size:' + size.toFixed(1) + 'px;white-space:nowrap';
-  }
   function renderReceipt(ls, url) {
-    const s0 = ls[0], total = ls.reduce((a, l) => a + (Number(l.total) || 0), 0),
+    const s = ls[0], total = ls.reduce((a, l) => a + (Number(l.total) || 0), 0),
       rec = 'REC-' + new Date().getFullYear() + '-' + Math.floor(10000 + Math.random() * 90000),
-      today = new Date().toLocaleDateString('ar-EG'), n = ls.length, d = n > 8 ? 2 : n > 5 ? 1 : 0,
-      fs = ['10px', '9.5px', '8.5px'][d], pad = ['4px 3px', '2.5px 3px', '1.5px 3px'][d];
-    const logo = typeof logoImg === 'function' ? logoImg(38, 8) : '<b style="font-size:18px;color:#0a6b3a">تساهيل</b>';
-    const rows = ls.map((l, i) => '<tr><td>' + (i + 1) + '</td><td dir="ltr">' + eh(l.transaction_id) + '</td><td>' + eh(l.service || '') + '</td><td>' + eh(formatDateOnly(lineDate(l))) + '</td><td>' + eh(l.qty) + '</td><td>' + fmtNum(l.unit_price) + '</td><td>' + formatCurrency(l.total) + '</td></tr>').join('');
-    const qrBlock = url ? '<div style="text-align:center"><div style="width:60px;height:60px;border:1px solid #cfe0d6;border-radius:4px;padding:2px;box-sizing:border-box;background:#fff">' + qrSvg(url) + '</div><div style="font-size:7px;margin-top:1px;color:#0d3b2a">امسح لمتابعة طلبك</div></div>' : '';
+      today = new Date().toLocaleDateString('ar-EG'),
+      c = 'border:1px solid #b8d4c5;padding:4px 6px;font-size:11px;',
+      lbl = c + 'background:#eef5f0;color:#0d3b2a;font-weight:700;white-space:nowrap;';
+    const logo = typeof logoImg === 'function' ? logoImg(40, 9) : '<b style="font-size:18px;color:#0a6b3a">تساهيل</b>';
+    const qrBlock = url ? '<div style="text-align:center;flex-shrink:0"><div style="width:66px;height:66px;border:1px solid #b8d4c5;border-radius:4px;padding:2px;box-sizing:border-box;background:#fff">' + qrSvg(url) + '</div><div style="font-size:7.5px;margin-top:2px;color:#0d3b2a;font-weight:700">امسح لمتابعة طلبك</div></div>' : '';
     $('print-content').innerHTML =
-      '<style>.trk-r,.trk-r *{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}' +
-      '.trk-r{width:100%;padding:12px 18px 8px;border:1.5px solid #0a6b3a;border-radius:6px;font-family:inherit;font-weight:700;color:#0d2b21;direction:rtl;background:#fff;display:flex;flex-direction:column;gap:7px;break-inside:avoid}' +
-      '.trk-lb{background:#eef5f0;color:#0d3b2a;font-size:10px;padding:4px 8px;display:flex;align-items:center;justify-content:center;text-align:center;white-space:nowrap}' +
-      '.trk-vl{background:#fff;font-size:10.5px;padding:4px 8px;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}' +
-      '.trk-gr{display:grid;gap:1px;background:#cfe0d6}' +
-      '.trk-t{width:100%;border-collapse:collapse;table-layout:fixed;font-size:' + fs + ';text-align:center;border:1px solid #cfe0d6}' +
-      '.trk-t th{background:#e3f1e9;color:#0d3b2a;padding:5px 2px;font-weight:700;border-bottom:1.5px solid #0a6b3a;white-space:nowrap}' +
-      '.trk-t td{padding:' + pad + ';border-bottom:1px solid #dfece4;font-weight:700;white-space:nowrap;overflow:hidden}' +
-      '.trk-t tr{break-inside:avoid}</style>' +
-      '<div class="trk-r">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center">' +
-        '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">' + logo + '<div style="font-size:10.5px;color:#0a6b3a">قسم الخدمات الحكومية</div></div>' +
-        '<div style="font-size:15px;color:#0a6b3a">إيصال تسليم واستلام مستندات</div>' +
-        '<div style="display:flex;align-items:center;gap:8px"><div style="text-align:center;line-height:1.45"><div style="font-size:7.5px;color:#3f5a4d">رقم الإيصال</div><div style="font-size:9px;direction:ltr">' + rec + '</div><div style="font-size:7.5px;color:#3f5a4d;margin-top:2px">التاريخ</div><div style="font-size:9px">' + eh(today) + '</div></div>' + qrBlock + '</div>' +
-      '</div>' +
-      '<div class="trk-gr" style="border:1px solid #cfe0d6;border-radius:6px;overflow:hidden">' +
-        '<div class="trk-gr" style="grid-template-columns:auto 1fr auto auto"><div class="trk-lb">السيد / المنشأة</div><div class="trk-vl" style="' + fit(s0.client_name, 380, 10.5) + '">' + eh(s0.client_name) + '</div><div class="trk-lb" style="padding:4px 12px">رقم التليفون</div><div class="trk-vl" dir="ltr" style="min-width:128px;white-space:nowrap;font-size:11px">' + eh(s0.phone || '—') + '</div></div>' +
-        '<div class="trk-gr" style="grid-template-columns:auto 1fr"><div class="trk-lb">العنوان</div><div class="trk-vl" style="' + fit(s0.address || '—', 640, 10.5) + '">' + eh(s0.address || '—') + '</div></div>' +
-        '<div class="trk-gr" style="grid-template-columns:auto 1fr auto 1fr auto 1fr"><div class="trk-lb">المستلم</div><div class="trk-vl">' + eh(s0.receiver || '—') + '</div><div class="trk-lb">الموظف المسؤول</div><div class="trk-vl">' + eh(s0.employee || '—') + '</div><div class="trk-lb">طريقة الدفع</div><div class="trk-vl">' + eh(s0.payment_method || '—') + '</div></div>' +
-      '</div>' +
-      '<table class="trk-t"><colgroup><col style="width:26px"><col style="width:72px"><col><col style="width:96px"><col style="width:40px"><col style="width:64px"><col style="width:84px"></colgroup>' +
-        '<thead><tr><th>م</th><th>المعاملة</th><th>الخدمة</th><th>تاريخ الاستلام</th><th>العدد</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1.5px solid #0a6b3a;padding-top:6px"><div style="font-size:14px;color:#0a6b3a;white-space:nowrap">المبلغ الإجمالي: ' + formatCurrency(total) + '</div><div style="font-size:10.5px;text-align:center">المبلغ كتابة: ' + eh(tafqeetArabic(total)) + '</div></div>' +
-      '<div style="border:1px solid #cfe0d6;background:#f8fbf9;border-radius:6px;padding:4px 10px;font-size:8px;line-height:1.5;text-align:center">أقر أنا / ' + eh(s0.client_name) + ' بأنني استلمت المستندات الموضحة أعلاه كاملة وبحالة جيدة، ولا توجد أي ملاحظات وقت الاستلام.</div>' +
-      '<div class="trk-gr" style="grid-template-columns:1fr 1fr 1fr 1fr;border:1px solid #cfe0d6;border-radius:6px;overflow:hidden"><div class="trk-lb">اسم المندوب</div><div class="trk-lb">توقيع المندوب</div><div class="trk-lb">تاريخ التسليم</div><div class="trk-lb">توقيع العميل</div>' +
-        '<div class="trk-vl" style="height:34px"></div><div class="trk-vl"></div><div class="trk-vl" dir="ltr">&nbsp;&nbsp;/&nbsp;&nbsp;/&nbsp;' + new Date().getFullYear() + '</div><div class="trk-vl"></div></div>' +
-      '<div style="text-align:center;font-size:8.5px;color:#3f5a4d">للاستفسار: 15439 &nbsp;·&nbsp; <span dir="ltr">tasahel.com.eg</span></div></div>';
+      '<div class="receipt-half" style="-webkit-print-color-adjust:exact;print-color-adjust:exact;border:2px solid #0a6b3a;border-radius:8px;padding:10px 12px;font-size:11px;font-weight:700;color:#0d2b21;direction:rtl;background:#fff;box-sizing:border-box;width:100%">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0a6b3a;padding-bottom:7px;margin-bottom:8px">' +
+          '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">' + logo + '<div><div style="font-size:12px;font-weight:bold;color:#0a6b3a">قسم الخدمات الحكومية</div></div></div>' +
+          '<div style="display:flex;align-items:center;gap:10px">' +
+            '<div style="text-align:right;font-size:10.5px;line-height:1.6;' + (url ? 'border-left:1px solid #cfe0d6;padding-left:10px' : '') + '">' +
+              '<div style="font-size:14px;font-weight:bold;color:#0a6b3a;margin-bottom:2px">إيصال تسليم واستلام مستندات</div>' +
+              '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#3f5a4d">رقم الإيصال</span><b dir="ltr" style="color:#0d2b21">' + rec + '</b></div>' +
+              '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#3f5a4d">التاريخ</span><b style="color:#0d2b21">' + eh(today) + '</b></div>' +
+            '</div>' +
+            qrBlock +
+          '</div>' +
+        '</div>' +
+        '<table style="width:100%;border-collapse:collapse;table-layout:fixed">' +
+          '<tr><td style="' + lbl + 'width:16%">السيد / المنشأة</td><td style="' + c + 'width:34%;text-align:right;word-break:break-word;line-height:1.35">' + eh(s.client_name) + '</td><td style="' + lbl + 'width:16%">رقم التليفون</td><td style="' + c + 'width:34%;text-align:right" dir="ltr"><span style="display:block;text-align:right;font-weight:700">' + eh(s.phone || '—') + '</span></td></tr>' +
+          '<tr><td style="' + lbl + '">العنوان</td><td colspan="3" style="' + c + 'text-align:right;word-break:break-word">' + eh(s.address || '—') + '</td></tr>' +
+        '</table>' +
+        '<table style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:-1px;margin-bottom:8px">' +
+          '<tr><td style="' + lbl + 'width:11%">المستلم</td><td style="' + c + 'width:22%;text-align:right">' + eh(s.receiver || '—') + '</td><td style="' + lbl + 'width:17%">الموظف المسؤول</td><td style="' + c + 'width:22%;text-align:right">' + eh(s.employee || '—') + '</td><td style="' + lbl + 'width:13%">طريقة الدفع</td><td style="' + c + 'width:15%;text-align:right">' + eh(s.payment_method || '—') + '</td></tr>' +
+        '</table>' +
+        '<table style="width:100%;border-collapse:collapse;margin-bottom:8px"><thead><tr style="background:#e3f1e9;color:#0d3b2a;border-bottom:1.5px solid #0a6b3a">' +
+          '<th style="' + c + 'width:26px;text-align:center">م</th><th style="' + c + 'width:90px;text-align:center">المعاملة</th><th style="' + c + 'text-align:right">الخدمة</th><th style="' + c + 'width:105px;text-align:center">تاريخ الاستلام</th><th style="' + c + 'width:44px;text-align:center">العدد</th><th style="' + c + 'width:80px;text-align:center">سعر الوحدة</th><th style="' + c + 'width:90px;text-align:left">الإجمالي</th></tr></thead><tbody>' +
+          ls.map((l, i) => '<tr><td style="' + c + 'text-align:center">' + (i + 1) + '</td><td style="' + c + 'text-align:center" dir="ltr">' + eh(l.transaction_id) + '</td><td style="' + c + 'text-align:right;font-weight:700">' + eh(l.service || '') + '</td><td style="' + c + 'text-align:center">' + eh(formatDateOnly(lineDate(l))) + '</td><td style="' + c + 'text-align:center">' + eh(l.qty) + '</td><td style="' + c + 'text-align:center">' + fmtNum(l.unit_price) + '</td><td style="' + c + 'text-align:left;font-weight:bold">' + formatCurrency(l.total) + '</td></tr>').join('') +
+        '</tbody></table>' +
+        '<div style="border-top:2px solid #0a6b3a;padding-top:6px"><div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:13px;color:#0d3b2a">المبلغ الإجمالي:</b><b style="font-size:19px;color:#0a6b3a">' + formatCurrency(total) + '</b></div>' +
+        '<div style="background:#eef5f0;color:#0d3b2a;padding:4px 8px;margin-top:5px;font-weight:700;font-size:11px;border-radius:4px">المبلغ كتابة: ' + eh(tafqeetArabic(total)) + '</div></div>' +
+        '<div style="border:1px solid #b8d4c5;background:#f8fbf9;padding:4px 6px;font-size:8.5px;line-height:1.5;text-align:center;margin:8px 0;font-weight:700;border-radius:4px">أقر أنا / ' + eh(s.client_name) + ' بأنني استلمت المستندات الموضحة أعلاه كاملة وبحالة جيدة، ولا توجد أي ملاحظات وقت الاستلام.</div>' +
+        '<table style="width:100%;border-collapse:collapse;table-layout:fixed"><tr><td style="' + lbl + 'width:25%;text-align:center">اسم المندوب</td><td style="' + lbl + 'width:25%;text-align:center">توقيع المندوب</td><td style="' + lbl + 'width:25%;text-align:center">تاريخ التسليم</td><td style="' + lbl + 'width:25%;text-align:center">توقيع العميل</td></tr>' +
+        '<tr><td style="' + c + 'height:34px"></td><td style="' + c + '"></td><td style="' + c + 'text-align:center" dir="ltr">&nbsp;&nbsp;/&nbsp;&nbsp;/&nbsp;' + new Date().getFullYear() + '</td><td style="' + c + '"></td></tr></table>' +
+        '<div style="text-align:center;font-size:8.5px;color:#3f5a4d;margin-top:5px">للاستفسار: 15439 &nbsp;·&nbsp; <span dir="ltr">tasahel.com.eg</span></div>' +
+      '</div>';
     const old = document.getElementById('pg-orient'); if (old) old.remove();
     const st = document.createElement('style'); st.id = 'pg-orient';
-    st.textContent = '@page{size:A5 landscape;margin:4mm}@media print{#print-content{padding:0!important}}';
+    st.textContent = '@page{size:A4 portrait;margin:6mm}@media print{#print-content{padding:0!important}#printArea tr{page-break-inside:avoid}.receipt-half{width:100%}}';
     document.head.appendChild(st);
     const done = () => { st.remove(); window.removeEventListener('afterprint', done); };
     window.addEventListener('afterprint', done);
