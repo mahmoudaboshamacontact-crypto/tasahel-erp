@@ -112,12 +112,29 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   }
   function addQr(url) {
     const root = document.querySelector('#print-content .receipt-half'), head = root && root.firstElementChild;
-    if (!head || head.querySelector('[data-trkqr]')) return;
-    const q = qrcode(0, 'M'); q.addData(url); q.make();
-    const svg = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }).replace('<svg ', '<svg style="width:100%;height:100%;display:block" ');
-    head.insertAdjacentHTML('beforeend',
-      '<div data-trkqr="1" style="text-align:center;margin-inline-start:10px;flex:none"><div style="width:62px;height:62px;background:#fff">' + svg +
-      '</div><div style="font-size:7.5px;font-weight:bold;margin-top:1px;color:#000">امسح لمتابعة طلبك</div></div>');
+    if (!head || head.querySelector('[data-trkh],[data-trkqr]')) return;
+    let qrBox = '';
+    if (url) {
+      const q = qrcode(0, 'M'); q.addData(url); q.make();
+      const svg = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }).replace('<svg ', '<svg style="width:100%;height:100%;display:block" ');
+      qrBox = '<div data-trkqr="1" style="text-align:center;flex:none;border-inline-start:1px solid #b8bfcc;padding-inline-start:12px"><div style="width:66px;height:66px;background:#fff;margin:0 auto">' + svg +
+        '</div><div style="font-size:7.5px;font-weight:bold;margin-top:2px;color:#000">امسح لمتابعة طلبك</div></div>';
+    }
+    /* نقرأ بيانات الهيدر الأصلي: [0]=اللوجو واسم القسم، [1]=العنوان / رقم الإيصال / التاريخ */
+    const logo = head.children[0], info = head.children[1];
+    let title = '', rec = '', date = '';
+    if (info && info.children.length >= 3) {
+      title = info.children[0].textContent.trim();
+      const b = info.children[1].querySelector('b'); rec = b ? b.textContent.trim() : '';
+      date = info.children[2].textContent.replace(/^[^:]*:\s*/, '').trim();
+    }
+    if (!logo || !title || !rec) { if (qrBox) head.insertAdjacentHTML('beforeend', qrBox.replace('border-inline-start:1px solid #b8bfcc;padding-inline-start:12px', 'margin-inline-start:10px')); return; }
+    const td = 'padding:1px 0;';
+    const meta = '<div data-trkh="1" style="text-align:right"><div style="font-size:15px;font-weight:800;color:#0b1b33;margin-bottom:5px;letter-spacing:.2px">' + eh(title) + '</div>' +
+      '<table style="border-collapse:collapse;font-size:10.5px"><tr><td style="' + td + 'color:#555;padding-inline-end:10px">رقم الإيصال</td><td style="' + td + 'font-weight:700;direction:ltr;text-align:right">' + eh(rec) + '</td></tr>' +
+      '<tr><td style="' + td + 'color:#555;padding-inline-end:10px">التاريخ</td><td style="' + td + 'font-weight:700">' + eh(date) + '</td></tr></table></div>';
+    head.removeChild(info);
+    head.insertAdjacentHTML('beforeend', '<div style="display:flex;align-items:center;gap:12px">' + meta + qrBox + '</div>');
   }
   const _bor = window.buildOfficialReceipt;
   if (typeof _bor === 'function') window.buildOfficialReceipt = function (ls) {
@@ -125,7 +142,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     const txs = Array.from(new Set((ls || []).map(l => String(l.transaction_id))));
     const go = function (url) {
       const op = window.print;
-      window.print = function () { window.print = op; try { if (url) addQr(url); } catch (e) { console.warn('trk qr', e); } return op.apply(window, arguments); };
+      window.print = function () { window.print = op; try { addQr(url); } catch (e) { console.warn('trk qr', e); } return op.apply(window, arguments); };
       try { return _bor.apply(self, args); } finally { if (window.print !== op) window.print = op; }
     };
     if (txs.length !== 1) return go(null);              /* أكتر من معاملة في إيصال واحد: من غير QR */
