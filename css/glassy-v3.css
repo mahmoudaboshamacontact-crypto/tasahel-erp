@@ -1,5 +1,5 @@
-/* TASAHEL GLASSY V3 & NEUMORPHIC - v3.0.0 */
-:root {
+/* TASAHEL v3.0.0 Pro Styles */
+:root { --v3-accent: #8b5cf6; }
   --v3-glass-bg: rgba(21, 17, 32, 0.72);
   --v3-glass-border: rgba(255, 255, 255, 0.12);
   --v3-glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
