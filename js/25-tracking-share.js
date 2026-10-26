@@ -105,49 +105,72 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     return r;
   };
 
-  /* ---- QR في الإيصال الرسمي: بنلفّ buildOfficialReceipt ونحقن الكود قبل ما window.print تشتغل ---- */
+  /* =====================================================================
+     الإيصال الرسمي الجديد: A5 عرضي + QR تتبع (يحل محل buildOfficialReceipt القديمة)
+     ===================================================================== */
   function tokenNow(tx) {
     const l = allRequestLines.find(x => String(x.transaction_id) === String(tx) && OK.test(String(x.tracking_token || '')));
     return l ? l.tracking_token : null;
   }
-  function addQr(url) {
-    const root = document.querySelector('#print-content .receipt-half'), head = root && root.firstElementChild;
-    if (!head || head.querySelector('[data-trkh],[data-trkqr]')) return;
-    let qrBox = '';
-    if (url) {
-      const q = qrcode(0, 'M'); q.addData(url); q.make();
-      const svg = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }).replace('<svg ', '<svg style="width:100%;height:100%;display:block" ');
-      qrBox = '<div data-trkqr="1" style="text-align:center;flex:none;border-inline-start:1px solid #b8bfcc;padding-inline-start:12px"><div style="width:66px;height:66px;background:#fff;margin:0 auto">' + svg +
-        '</div><div style="font-size:7.5px;font-weight:bold;margin-top:2px;color:#000">امسح لمتابعة طلبك</div></div>';
-    }
-    /* نقرأ بيانات الهيدر الأصلي: [0]=اللوجو واسم القسم، [1]=العنوان / رقم الإيصال / التاريخ */
-    const logo = head.children[0], info = head.children[1];
-    let title = '', rec = '', date = '';
-    if (info && info.children.length >= 3) {
-      title = info.children[0].textContent.trim();
-      const b = info.children[1].querySelector('b'); rec = b ? b.textContent.trim() : '';
-      date = info.children[2].textContent.replace(/^[^:]*:\s*/, '').trim();
-    }
-    if (!logo || !title || !rec) { if (qrBox) head.insertAdjacentHTML('beforeend', qrBox.replace('border-inline-start:1px solid #b8bfcc;padding-inline-start:12px', 'margin-inline-start:10px')); return; }
-    const td = 'padding:1px 0;';
-    const meta = '<div data-trkh="1" style="text-align:right"><div style="font-size:15px;font-weight:800;color:#0b1b33;margin-bottom:5px;letter-spacing:.2px">' + eh(title) + '</div>' +
-      '<table style="border-collapse:collapse;font-size:10.5px"><tr><td style="' + td + 'color:#555;padding-inline-end:10px">رقم الإيصال</td><td style="' + td + 'font-weight:700;direction:ltr;text-align:right">' + eh(rec) + '</td></tr>' +
-      '<tr><td style="' + td + 'color:#555;padding-inline-end:10px">التاريخ</td><td style="' + td + 'font-weight:700">' + eh(date) + '</td></tr></table></div>';
-    head.removeChild(info);
-    head.insertAdjacentHTML('beforeend', '<div style="display:flex;align-items:center;gap:12px">' + meta + qrBox + '</div>');
+  function qrSvg(url) {
+    const q = qrcode(0, 'M'); q.addData(url); q.make();
+    return q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }).replace('<svg ', '<svg style="width:100%;height:100%;display:block" ');
   }
-  const _bor = window.buildOfficialReceipt;
-  if (typeof _bor === 'function') window.buildOfficialReceipt = function (ls) {
-    const self = this, args = arguments;
-    const txs = Array.from(new Set((ls || []).map(l => String(l.transaction_id))));
-    const go = function (url) {
-      const op = window.print;
-      window.print = function () { window.print = op; try { addQr(url); } catch (e) { console.warn('trk qr', e); } return op.apply(window, arguments); };
-      try { return _bor.apply(self, args); } finally { if (window.print !== op) window.print = op; }
-    };
-    if (txs.length !== 1) return go(null);              /* أكتر من معاملة في إيصال واحد: من غير QR */
+  /* الاسم/العنوان في سطر واحد: الخط بيصغر حسب طول النص (لحد 7.5px) وبعدها بس بيسمح بسطرين */
+  function fit(txt, budget, max) {
+    const n = Math.max(1, String(txt || '').length), size = Math.min(max, budget / (n * 0.52));
+    return size < 7.5 ? 'font-size:7.5px;white-space:normal' : 'font-size:' + size.toFixed(1) + 'px;white-space:nowrap';
+  }
+  function renderReceipt(ls, url) {
+    const s0 = ls[0], total = ls.reduce((a, l) => a + (Number(l.total) || 0), 0),
+      rec = 'REC-' + new Date().getFullYear() + '-' + Math.floor(10000 + Math.random() * 90000),
+      today = new Date().toLocaleDateString('ar-EG'), n = ls.length, d = n > 8 ? 2 : n > 5 ? 1 : 0,
+      fs = ['10px', '9.5px', '8.5px'][d], pad = ['4px 3px', '2.5px 3px', '1.5px 3px'][d];
+    const logo = typeof logoImg === 'function' ? logoImg(38, 8) : '<b style="font-size:18px;color:#0a6b3a">تساهيل</b>';
+    const rows = ls.map((l, i) => '<tr><td>' + (i + 1) + '</td><td dir="ltr">' + eh(l.transaction_id) + '</td><td>' + eh(l.service || '') + '</td><td>' + eh(formatDateOnly(lineDate(l))) + '</td><td>' + eh(l.qty) + '</td><td>' + fmtNum(l.unit_price) + '</td><td>' + formatCurrency(l.total) + '</td></tr>').join('');
+    const qrBlock = url ? '<div style="text-align:center"><div style="width:60px;height:60px;border:1px solid #cfe0d6;border-radius:4px;padding:2px;box-sizing:border-box;background:#fff">' + qrSvg(url) + '</div><div style="font-size:7px;margin-top:1px;color:#0d3b2a">امسح لمتابعة طلبك</div></div>' : '';
+    $('print-content').innerHTML =
+      '<style>.trk-r,.trk-r *{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}' +
+      '.trk-r{width:100%;padding:12px 18px 8px;border:1.5px solid #0a6b3a;border-radius:6px;font-family:inherit;font-weight:700;color:#0d2b21;direction:rtl;background:#fff;display:flex;flex-direction:column;gap:7px;break-inside:avoid}' +
+      '.trk-lb{background:#eef5f0;color:#0d3b2a;font-size:10px;padding:4px 8px;display:flex;align-items:center;justify-content:center;text-align:center;white-space:nowrap}' +
+      '.trk-vl{background:#fff;font-size:10.5px;padding:4px 8px;display:flex;align-items:center;justify-content:center;text-align:center;overflow:hidden}' +
+      '.trk-gr{display:grid;gap:1px;background:#cfe0d6}' +
+      '.trk-t{width:100%;border-collapse:collapse;table-layout:fixed;font-size:' + fs + ';text-align:center;border:1px solid #cfe0d6}' +
+      '.trk-t th{background:#e3f1e9;color:#0d3b2a;padding:5px 2px;font-weight:700;border-bottom:1.5px solid #0a6b3a;white-space:nowrap}' +
+      '.trk-t td{padding:' + pad + ';border-bottom:1px solid #dfece4;font-weight:700;white-space:nowrap;overflow:hidden}' +
+      '.trk-t tr{break-inside:avoid}</style>' +
+      '<div class="trk-r">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">' + logo + '<div style="font-size:10.5px;color:#0a6b3a">قسم الخدمات الحكومية</div></div>' +
+        '<div style="font-size:15px;color:#0a6b3a">إيصال تسليم واستلام مستندات</div>' +
+        '<div style="display:flex;align-items:center;gap:8px"><div style="text-align:center;line-height:1.45"><div style="font-size:7.5px;color:#3f5a4d">رقم الإيصال</div><div style="font-size:9px;direction:ltr">' + rec + '</div><div style="font-size:7.5px;color:#3f5a4d;margin-top:2px">التاريخ</div><div style="font-size:9px">' + eh(today) + '</div></div>' + qrBlock + '</div>' +
+      '</div>' +
+      '<div class="trk-gr" style="border:1px solid #cfe0d6;border-radius:6px;overflow:hidden">' +
+        '<div class="trk-gr" style="grid-template-columns:auto 1fr auto auto"><div class="trk-lb">السيد / المنشأة</div><div class="trk-vl" style="' + fit(s0.client_name, 380, 10.5) + '">' + eh(s0.client_name) + '</div><div class="trk-lb" style="padding:4px 12px">رقم التليفون</div><div class="trk-vl" dir="ltr" style="min-width:128px;white-space:nowrap;font-size:11px">' + eh(s0.phone || '—') + '</div></div>' +
+        '<div class="trk-gr" style="grid-template-columns:auto 1fr"><div class="trk-lb">العنوان</div><div class="trk-vl" style="' + fit(s0.address || '—', 640, 10.5) + '">' + eh(s0.address || '—') + '</div></div>' +
+        '<div class="trk-gr" style="grid-template-columns:auto 1fr auto 1fr auto 1fr"><div class="trk-lb">المستلم</div><div class="trk-vl">' + eh(s0.receiver || '—') + '</div><div class="trk-lb">الموظف المسؤول</div><div class="trk-vl">' + eh(s0.employee || '—') + '</div><div class="trk-lb">طريقة الدفع</div><div class="trk-vl">' + eh(s0.payment_method || '—') + '</div></div>' +
+      '</div>' +
+      '<table class="trk-t"><colgroup><col style="width:26px"><col style="width:72px"><col><col style="width:96px"><col style="width:40px"><col style="width:64px"><col style="width:84px"></colgroup>' +
+        '<thead><tr><th>م</th><th>المعاملة</th><th>الخدمة</th><th>تاريخ الاستلام</th><th>العدد</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1.5px solid #0a6b3a;padding-top:6px"><div style="font-size:14px;color:#0a6b3a;white-space:nowrap">المبلغ الإجمالي: ' + formatCurrency(total) + '</div><div style="font-size:10.5px;text-align:center">المبلغ كتابة: ' + eh(tafqeetArabic(total)) + '</div></div>' +
+      '<div style="border:1px solid #cfe0d6;background:#f8fbf9;border-radius:6px;padding:4px 10px;font-size:8px;line-height:1.5;text-align:center">أقر أنا / ' + eh(s0.client_name) + ' بأنني استلمت المستندات الموضحة أعلاه كاملة وبحالة جيدة، ولا توجد أي ملاحظات وقت الاستلام.</div>' +
+      '<div class="trk-gr" style="grid-template-columns:1fr 1fr 1fr 1fr;border:1px solid #cfe0d6;border-radius:6px;overflow:hidden"><div class="trk-lb">اسم المندوب</div><div class="trk-lb">توقيع المندوب</div><div class="trk-lb">تاريخ التسليم</div><div class="trk-lb">توقيع العميل</div>' +
+        '<div class="trk-vl" style="height:34px"></div><div class="trk-vl"></div><div class="trk-vl" dir="ltr">&nbsp;&nbsp;/&nbsp;&nbsp;/&nbsp;' + new Date().getFullYear() + '</div><div class="trk-vl"></div></div>' +
+      '<div style="text-align:center;font-size:8.5px;color:#3f5a4d">للاستفسار: 15439 &nbsp;·&nbsp; <span dir="ltr">tasahel.com.eg</span></div></div>';
+    const old = document.getElementById('pg-orient'); if (old) old.remove();
+    const st = document.createElement('style'); st.id = 'pg-orient';
+    st.textContent = '@page{size:A5 landscape;margin:4mm}@media print{#print-content{padding:0!important}}';
+    document.head.appendChild(st);
+    const done = () => { st.remove(); window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
+    window.print();
+  }
+  window.buildOfficialReceipt = function (ls) {
+    if (!ls || !ls.length) return;
+    const txs = Array.from(new Set(ls.map(l => String(l.transaction_id))));
+    if (txs.length !== 1) return renderReceipt(ls, null);        /* أكتر من معاملة في إيصال واحد: من غير QR */
     const t = tokenNow(txs[0]);
-    if (t) return go(linkFor(t));
-    ensureToken(txs[0]).then(tok => go(tok ? linkFor(tok) : null)).catch(() => go(null));
+    if (t) return renderReceipt(ls, linkFor(t));
+    ensureToken(txs[0]).then(tok => renderReceipt(ls, tok ? linkFor(tok) : null)).catch(() => renderReceipt(ls, null));
   };
 })();
