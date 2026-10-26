@@ -673,8 +673,8 @@ document.getElementById('login-brand').src=window.TASAHEL_BRAND;
         <!-- اللوحات الثلاثية الأبعاد الجانبية الطائرة (يسار) -->
         <div class="t3d-wing left">
           <div class="t3d-mini-card">
-            <div class="t3d-mini-head"><span>📑 تتبع الطلبات</span><span class="t3d-mini-badge">QR مفعّل</span></div>
-            <div class="t3d-mini-row"><span>إيصالات نصف A4</span><span style="color:#10b981">جاهز</span></div>
+            <div class="t3d-mini-head"><span>📑 بنحبك وحشتنا</span><span class="t3d-mini-badge">الشغل مستنيك</span></div>
+            <div class="t3d-mini-row"><span>التارجت بيقولك فينك</span><span style="color:#10b981">جاهز</span></div>
           </div>
           <div class="t3d-mini-card">
             <div class="t3d-mini-head"><span>🛡️ حماية الجلسة</span><span class="t3d-mini-badge">SSL 256</span></div>
