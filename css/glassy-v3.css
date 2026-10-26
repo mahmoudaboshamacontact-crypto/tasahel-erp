@@ -1,32 +1,86 @@
 /* =====================================================================
-   TASAHEL GLASSY SIDEBAR V3 (DROPDOWN DRAWER EDITION)
+   TASAHEL GLASSY SIDEBAR V3 (FLOATING DRAWER EDITION)
    Version: v3.0.0 Pro
    ===================================================================== */
 
-/* تأكيد عزل التابات لمنع فتح تابتين فوق بعض نهائياً */
-.hidden { display: none !important; }
+/* 1. المتغيرات العامة */
+:root {
+  --v3-accent: #8b5cf6;
+  --v3-accent-neon: #a855f7;
+  --v3-glass-bg: rgba(18, 14, 28, 0.88);
+  --v3-glass-border: rgba(255, 255, 255, 0.14);
+  --v3-glass-shadow: 0 25px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(168, 85, 247, 0.25);
+  --v3-sidebar-w: 320px;
+}
 
-/* تحويل قائمة الثلاث شرط إلى السايد بار الزجاجي V3 (Glassy Sidebar V3) */
+/* 2. عزل التابات التام - يمنع فتح أي شاشة فوق التانية */
+.hidden {
+  display: none !important;
+}
+
+/* 3. منع أي تداخل أو خروج للعناصر داخل الهيدر */
+.ts-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 40 !important;
+}
+.ts-hdr-inner {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.5rem !important;
+  width: 100% !important;
+  max-width: 80rem !important;
+  margin: 0 auto !important;
+}
+.ts-hdr-start {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  flex-shrink: 0 !important;
+}
+
+/* زر القائمة الزجاجي العائم في الهيدر */
+#menu-btn {
+  background: rgba(139, 92, 246, 0.18) !important;
+  border: 1px solid rgba(196, 181, 253, 0.35) !important;
+  color: #c4b5fd !important;
+  border-radius: 0.75rem !important;
+  padding: 0.55rem 0.65rem !important;
+  transition: all 0.2s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+}
+#menu-btn:hover {
+  background: rgba(139, 92, 246, 0.35) !important;
+  color: #ffffff !important;
+  transform: scale(1.05);
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.55) !important;
+}
+
+/* 4. القائمة الزجاجية الجلاسي المنسدلة العائمة (Glassy Sidebar V3 Drawer) */
 #nav-menu {
   position: fixed !important;
-  top: 14px !important;
-  right: 14px !important;
-  bottom: 14px !important;
-  width: 310px !important;
-  max-width: calc(100vw - 28px) !important;
-  max-height: calc(100vh - 28px) !important;
+  top: 12px !important;
+  right: 12px !important;
+  bottom: 12px !important;
+  width: var(--v3-sidebar-w) !important;
+  max-width: calc(100vw - 24px) !important;
+  max-height: calc(100vh - 24px) !important;
   border-radius: 26px !important;
-  background: rgba(18, 14, 28, 0.82) !important;
+  background: var(--v3-glass-bg) !important;
   backdrop-filter: blur(28px) !important;
   -webkit-backdrop-filter: blur(28px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.14) !important;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(168, 85, 247, 0.25) !important;
-  z-index: 9999 !important;
+  border: 1px solid var(--v3-glass-border) !important;
+  box-shadow: var(--v3-glass-shadow) !important;
+  z-index: 99999 !important;
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
   padding: 0 !important;
-  animation: glassySlideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: glassySlideIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 #nav-menu.hidden {
@@ -34,11 +88,17 @@
 }
 
 @keyframes glassySlideIn {
-  from { opacity: 0; transform: translateX(40px) scale(0.96); }
-  to { opacity: 1; transform: translateX(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateX(50px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
 }
 
-/* الهيدر العلوي للسايد بار الزجاجي بأزرار الماك (🔴 🟡 🟢) */
+/* هيدر القائمة بأزرار الماك (🔴 🟡 🟢) */
 .glassy-menu-head {
   padding: 16px 18px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -46,7 +106,9 @@
   flex-direction: column;
   gap: 10px;
   background: rgba(255, 255, 255, 0.02);
+  flex-shrink: 0;
 }
+
 .glassy-mac-dots {
   display: flex;
   align-items: center;
@@ -56,6 +118,7 @@
   width: 11px;
   height: 11px;
   border-radius: 50%;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
 }
 .glassy-mac-dot.red { background: #ff5f56; cursor: pointer; }
 .glassy-mac-dot.yellow { background: #ffbd2e; }
@@ -76,23 +139,24 @@
   transition: all 0.2s ease;
 }
 .glassy-close-btn:hover {
-  background: rgba(244, 63, 94, 0.3);
-  color: #fff;
+  background: rgba(244, 63, 94, 0.35);
+  color: #ffffff;
   border-color: #f43f5e;
 }
 
-/* شارة الإصدار الفخمة */
+/* شارة الإصدار الفخمة v3.0.0 Pro */
 .glassy-version-tag {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(6, 182, 212, 0.15));
-  border: 1px solid rgba(168, 85, 247, 0.45);
-  padding: 2px 8px;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.28), rgba(6, 182, 212, 0.18));
+  border: 1px solid rgba(168, 85, 247, 0.5);
+  padding: 2px 9px;
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   color: #d8b4fe;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.3);
 }
 
 /* كارت المستخدم داخل القائمة الزجاجية */
@@ -117,6 +181,7 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
+
 .glassy-section-title {
   padding: 10px 8px 4px;
   font-size: 10px;
@@ -125,7 +190,7 @@
   text-transform: uppercase;
 }
 
-/* تصميم أزرار التابات داخل السايد بار */
+/* أزرار التابات داخل السايد بار الزجاجي */
 #nav-menu .tab-btn {
   width: 100% !important;
   justify-content: flex-start !important;
@@ -145,7 +210,7 @@
   transition: all 0.18s ease;
 }
 #nav-menu .tab-btn:hover {
-  background: rgba(255, 255, 255, 0.06) !important;
+  background: rgba(255, 255, 255, 0.07) !important;
   color: #ffffff !important;
   transform: translateX(-3px);
 }
@@ -161,16 +226,11 @@
   box-shadow: 0 4px 18px rgba(124, 58, 237, 0.35) !important;
 }
 
-/* زر القائمة الزجاجي العائم في الهيدر */
-#menu-btn {
-  background: rgba(139, 92, 246, 0.15) !important;
-  border: 1px solid rgba(196, 181, 253, 0.3) !important;
-  color: #c4b5fd !important;
-  transition: all 0.2s ease !important;
+/* تخصيص السكرول بار للقائمة الزجاجية */
+.glassy-scroll-items::-webkit-scrollbar {
+  width: 5px;
 }
-#menu-btn:hover {
-  background: rgba(139, 92, 246, 0.3) !important;
-  color: #ffffff !important;
-  transform: scale(1.05);
-  box-shadow: 0 0 14px rgba(168, 85, 247, 0.5) !important;
+.glassy-scroll-items::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
 }
