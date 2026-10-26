@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0a7b3e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://avehvjqifswsyayckpvx.supabase.co; base-uri 'none'; form-action 'none'">
+<title>متابعة الطلب | تساهيل</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--g:#0a7b3e;--o:#f08a00;--t:#0e8f86;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--bg:#f2f5f9;--sc:var(--o)}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;font-family:'IBM Plex Sans Arabic',Tahoma,'Segoe UI',sans-serif;background:var(--bg);color:var(--ink);line-height:1.7}
+.wrap{max-width:1040px;margin:0 auto;padding:0 14px 20px}
+.center{padding:70px 24px;text-align:center;color:var(--mut)}
+.center h2{color:var(--ink);margin:12px 0 6px;font-size:18px}
+.spin{width:38px;height:38px;border:4px solid #d1fae5;border-top-color:var(--g);border-radius:50%;margin:0 auto 14px;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.top{background:#fff;border-bottom:1px solid var(--line);margin-bottom:16px}
+.top>div{max-width:1040px;margin:0 auto;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.top img{height:44px;width:auto;display:block}
+.top a{color:var(--g);font-weight:700;font-size:13px;text-decoration:none;direction:ltr;white-space:nowrap}
+.top small{color:var(--mut);font-weight:400;margin-inline-end:6px}
+.grid{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@media(min-width:900px){.grid{grid-template-columns:minmax(0,1fr) 380px;align-items:start}.chat{position:sticky;top:12px}}
+.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:16px}
+.grid>div>.card:last-child{margin-bottom:0}
+.stale{background:#fef3c7;color:#92400e;border-radius:12px;padding:8px 12px;font-size:12px;margin-bottom:12px;text-align:center}
+.k{font-size:14px;color:var(--mut);font-weight:600}
+.big{font-size:26px;font-weight:700;color:var(--sc);margin:2px 0 10px;line-height:1.4}
+.sum{font-size:12px;color:var(--mut);margin:-6px 0 10px}
+.bar{display:flex;gap:4px;margin:4px 0 8px;direction:rtl}
+.bar i{flex:1;height:8px;border-radius:8px;background:#c9d4e8;transition:background .4s}
+.bar i.f{background:var(--sc)}
+.v{font-size:15px;font-weight:600}
+.info{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.info>div{min-width:0}
+.info small{display:block;font-size:11px;color:var(--mut);font-weight:600}
+.info b{display:block;font-size:14px;overflow-wrap:anywhere}
+.tkn{font-family:Consolas,monospace;direction:ltr;text-align:right;color:var(--g)}
+.rf{float:left;border:1px solid var(--line);background:#fff;border-radius:999px;padding:3px 12px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink)}
+.rf:disabled{opacity:.5}
+.eta{background:#f0fdf4;border-color:#bbf7d0}
+.eta h3{margin:0 0 4px;font-size:13px;color:var(--mut)}
+.eta p{margin:0;font-size:14px;font-weight:700;color:#166534}
+.eta small{display:block;margin-top:4px;font-size:11px;color:var(--mut)}
+h2.ttl{font-size:22px;margin:4px 0 14px;font-weight:700}
+.tl{position:relative;display:flex;gap:12px;align-items:flex-start;padding-bottom:14px;--c:#9aa8bd}
+.tl:last-child{padding-bottom:0}
+.tl:not(:last-child)::before{content:"";position:absolute;inset-inline-start:15px;top:34px;bottom:0;width:2px;background:var(--line)}
+.tl.done{--c:var(--t)}.tl.cur{--c:var(--sc)}
+.ic{flex:none;width:32px;height:32px;border-radius:50%;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;margin-top:10px}
+.tl.cur .ic{animation:pl 2s ease-out infinite}
+@keyframes pl{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--c) 55%,transparent)}70%,100%{box-shadow:0 0 0 12px transparent}}
+.tc{flex:1;min-width:0;border-radius:16px;background:var(--bg);box-shadow:0 2px 6px rgba(15,23,42,.1);overflow:hidden}
+.tl.cur .tc{background:#fff}
+.th{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;padding:14px 16px;cursor:pointer;color:var(--c);font:inherit;font-weight:600;font-size:16px}
+.th:focus-visible{outline:2px solid var(--c);outline-offset:-2px}
+.th[disabled]{cursor:default}
+.th .n{flex:1}
+.th .d{font-size:13px;font-weight:400}
+.th .ar{transition:transform .25s;font-size:12px}
+.tl.open .ar{transform:rotate(180deg)}
+.tl.nx .ar{visibility:hidden}
+.tb{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s;background:#fff}
+.tl.open .tb{grid-template-rows:1fr}
+.tb>div{overflow:hidden}
+.row{display:flex;justify-content:space-between;gap:10px;padding:9px 16px;font-size:14px;border-top:1px solid #f1f5f9}
+.row span:last-child{color:var(--mut);white-space:nowrap}
+.chat{padding:0;overflow:hidden;margin-bottom:0}
+.ch{padding:14px 18px 10px;font-weight:700}
+.ch small{display:block;font-weight:400;font-size:12px;color:var(--mut)}
+.msgs{max-height:230px;overflow-y:auto;padding:0 18px;overscroll-behavior:contain}
+.ent{border-inline-start:3px solid #cbd5e1;padding:2px 10px;margin:0 0 12px;font-size:13px}
+.ent.a{border-color:var(--g);background:#f0fdf4;border-radius:8px;padding:6px 10px}
+.who{font-size:11px;font-weight:700;color:var(--mut)}.ent.a .who{color:var(--g)}
+.tg{display:inline-block;background:var(--bg);border-radius:999px;padding:0 8px;font-size:11px;font-weight:600;margin-inline-start:6px}
+.bd{white-space:pre-wrap;overflow-wrap:anywhere}
+.tm{font-size:10px;color:var(--mut)}
+.cp{padding:6px 18px 16px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.chips button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink)}
+.chips button.on{background:var(--g);border-color:var(--g);color:#fff}
+.pend{margin:6px 18px 16px;padding:10px 12px;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:13px;font-weight:600}
+.pend small{display:block;font-weight:400;margin-top:2px}
+.note{font-size:11px;color:var(--mut);margin-top:8px}
+textarea{width:100%;border:1px solid #cbd5e1;border-radius:12px;padding:8px 12px;font:inherit;font-size:14px;resize:none;direction:rtl;display:block}
+textarea:focus{outline:2px solid #0a7b3e55;border-color:var(--g)}
+.cr{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px}
+.cnt{font-size:11px;color:var(--mut)}
+.btn{border:0;border-radius:12px;padding:8px 22px;font:inherit;font-weight:700;font-size:14px;background:var(--g);color:#fff;cursor:pointer}
+.btn:disabled{background:#94a3b8;cursor:default}
+.btn2{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:10px;padding:6px 14px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.msg{margin-bottom:8px;padding:7px 10px;border-radius:10px;font-size:12px;font-weight:600}
+.ok{background:#d1fae5;color:#065f46}.err{background:#fee2e2;color:#991b1b}
+.ft{background:var(--g);color:#fff;padding:14px;text-align:center;font-size:13px;font-weight:600}
+.ft a{color:#fff;text-decoration:none;margin:0 10px}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+  <div id="loading" class="center"><div class="spin"></div><p>جارٍ تحميل حالة الطلب...</p></div>
+
+  <div id="invalid" class="center" hidden>
+    <div style="font-size:44px">⚠️</div>
+    <h2>الرابط غير صحيح</h2>
+    <p>هذا الرابط غير موجود أو انتهت صلاحيته. يرجى التواصل معنا على 15439.</p>
+  </div>
+
+  <div id="neterr" class="center" hidden>
+    <div style="font-size:44px">📡</div>
+    <h2>تعذّر الاتصال</h2>
+    <p>تأكد من الإنترنت ثم حاول مرة أخرى.</p>
+    <button id="retry" class="btn2" type="button">إعادة المحاولة</button>
+  </div>
+
+  <div id="content" hidden>
+    <div class="top"><div><img src="logo.png" alt="تساهيل"><a href="tel:15439"><small>للأمور العاجلة</small>15439</a></div></div>
+    <div class="wrap">
+      <div id="stale" class="stale" hidden>تعذّر تحديث البيانات الآن، المعروض آخر نسخة تم تحميلها.</div>
+
+      <div class="grid">
+        <div>
+          <div class="card info">
+            <div><small>رقم التذكرة</small><b class="tkn" id="tx"></b></div>
+            <div><small>اسم العميل</small><b id="cname"></b></div>
+            <div><small>تاريخ الاستلام</small><b id="recv"></b></div>
+            <div><small>الخدمات</small><b id="svc"></b></div>
+          </div>
+
+          <div class="card">
+            <button class="rf" id="rf" type="button">تحديث</button>
+            <div class="k">حالة الطلب</div>
+            <div class="big" id="headline"></div>
+            <div class="sum" id="sumline"></div>
+            <div class="bar" id="bar"><i></i><i></i><i></i><i></i></div>
+            <div class="k" style="font-size:12px">آخر تحديث</div>
+            <div class="v" id="upd"></div>
+          </div>
+
+          <div class="card eta" id="eta" hidden>
+            <h3>موعد التسليم المتوقع</h3>
+            <p id="etatext"></p>
+            <small>الموعد تقديري وقد يتغير حسب الجهة المنفذة.</small>
+          </div>
+
+          <div class="card">
+            <h2 class="ttl">تتبع طلبك</h2>
+            <div id="tl"></div>
+          </div>
+        </div>
+
+        <div class="card chat">
+          <div class="ch">استفسار عن طلبك<small>خدمة استفسارات وليست محادثة مباشرة، نرد خلال يوم عمل.</small></div>
+          <div class="msgs" id="convo" hidden></div>
+          <div class="pend" id="pend" hidden>استفسارك قيد المراجعة<small>سنرد عليك هنا. للأمور العاجلة اتصل بـ 15439.</small></div>
+          <form class="cp" id="form" autocomplete="off">
+            <div class="chips" id="chips"></div>
+            <div id="msg" class="msg" hidden></div>
+            <textarea id="ta" rows="3" maxlength="250" placeholder="اكتب استفسارك بإيجاز..."></textarea>
+            <div class="cr"><span class="cnt"><span id="cnt">0</span> / 250</span><button class="btn" id="send" type="submit">إرسال الاستفسار</button></div>
+            <div class="note">استفسار واحد في المرة، وسيظهر الرد في هذه الصفحة.</div>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="ft">
+      <a href="tel:15439" dir="ltr">15439</a>|<a href="https://tasahel.com.eg" target="_blank" rel="noopener noreferrer" dir="ltr">tasahel.com.eg</a>
+    </div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+  var SB_URL = 'https://avehvjqifswsyayckpvx.supabase.co';
+  var SB_KEY = 'sb_publishable_nTqT3u9TIwx-YnoKA9fCQg_7hybo_Kw';
+  var TZ = 'Africa/Cairo';
+  var STEPS = ['تم الاستلام', 'قيد التنفيذ', 'جاهز للتسليم', 'تم التسليم'];
+  var COL = { 1: '#f08a00', 2: '#0e8f86', 3: '#0a7b3e' };
+  var ERR = {
+    invalid: 'الرابط غير صالح. يرجى التواصل معنا على 15439.',
+    length: 'الاستفسار يجب أن يكون بين 5 و 250 حرفًا.',
+    pending: 'استفسارك السابق قيد المراجعة، سنرد عليك قريبًا. للأمور العاجلة اتصل بـ 15439.',
+    wait: 'يرجى الانتظار دقيقة قبل المحاولة مرة أخرى.',
+    limit: 'وصلت للحد الأقصى اليوم. يرجى الاتصال بنا على 15439.',
+    net: 'تعذّر الإرسال، تأكد من الإنترنت وحاول مرة أخرى.',
+    x: 'حدث خطأ، حاول مرة أخرى.'
+  };
+
+  function $(id) { return document.getElementById(id); }
+  var token = (new URLSearchParams(location.search).get('token') || '').trim();
+  var validShape = /^[A-Za-z0-9_-]{16,128}$/.test(token);
+  var loaded = false, busy = false, cdTimer = null, last = null, topic = '', pending = false, opened = {}, firstTL = true;
+
+  function rpc(name, args) {
+    return fetch(SB_URL + '/rest/v1/rpc/' + name, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      cache: 'no-store',
+      referrerPolicy: 'no-referrer'
+    }).then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    });
+  }
+
+  function fmt(s, o) {
+    if (!s) return '';
+    var d = new Date(s);
+    if (isNaN(d)) return '';
+    o.timeZone = TZ;
+    return new Intl.DateTimeFormat('ar-EG', o).format(d);
+  }
+  function fmtDT(s) { return fmt(s, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) || '—'; }
+  function fmtD(s) { return fmt(s, { day: 'numeric', month: 'long', year: 'numeric' }); }
+  function fmtDay(s) {
+    if (!s) return '—';
+    var d = new Date(String(s).slice(0, 10) + 'T00:00:00Z');
+    if (isNaN(d)) return '—';
+    return new Intl.DateTimeFormat('ar-EG', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(d);
+  }
+
+  function show(which) {
+    ['loading', 'invalid', 'neterr', 'content'].forEach(function (id) { $(id).hidden = (id !== which); });
+  }
+
+  function el(tag, cls, txt) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt != null) e.textContent = txt;
+    return e;
+  }
+
+  function drawTimeline(d, st) {
+    var box = $('tl'), svcs = d.services || [];
+    box.innerHTML = '';
+    for (var i = 0; i < 4; i++) {
+      (function (i) {
+        var state = (i < st || (i === 3 && st === 3)) ? 'done' : (i === st ? 'cur' : 'wait');
+        var items = [];
+        if (i === 0) items.push(['رقم التذكرة', d.transaction_id || '']);
+        else svcs.forEach(function (s) { if (Number(s.stage) === i) items.push([s.name || '', s.qty == null ? '' : 'العدد: ' + s.qty]); });
+        var date = i === 0 ? fmtD(d.received_at) : (state === 'cur' ? fmtD(d.last_update) : '');
+        if (firstTL && state === 'cur') opened[i] = true;
+
+        var wrap = el('div', 'tl ' + state + (opened[i] && items.length ? ' open' : '') + (items.length ? '' : ' nx'));
+        wrap.appendChild(el('span', 'ic', state === 'done' ? '✓' : (state === 'cur' ? '!' : '')));
+        var card = el('div', 'tc');
+        var h = el('button', 'th'); h.type = 'button';
+        h.appendChild(el('span', 'n', STEPS[i]));
+        if (date) h.appendChild(el('span', 'd', date));
+        h.appendChild(el('span', 'ar', '▼'));
+        h.setAttribute('aria-expanded', String(!!opened[i]));
+        if (!items.length) h.disabled = true;
+        h.addEventListener('click', function () {
+          opened[i] = !opened[i];
+          wrap.classList.toggle('open', opened[i]);
+          h.setAttribute('aria-expanded', String(opened[i]));
+        });
+        card.appendChild(h);
+        var tb = el('div', 'tb'), inner = el('div');
+        items.forEach(function (it) {
+          var r = el('div', 'row'); r.appendChild(el('span', null, it[0])); r.appendChild(el('span', null, it[1])); inner.appendChild(r);
+        });
+        tb.appendChild(inner); card.appendChild(tb);
+        wrap.appendChild(card); box.appendChild(wrap);
+      })(i);
+    }
+    firstTL = false;
+  }
+
+  var TOPICS = ['موعد التسليم', 'تعديل بيانات الطلب', 'الدفع والفاتورة', 'مشكلة في الخدمة', 'أخرى'];
+  function drawChips() {
+    var c = $('chips'); c.innerHTML = '';
+    TOPICS.forEach(function (t) {
+      var b = el('button', topic === t ? 'on' : '', t); b.type = 'button';
+      b.addEventListener('click', function () { topic = t; drawChips(); });
+      c.appendChild(b);
+    });
+  }
+
+  function drawConvo(conv) {
+    var cb = $('convo'); cb.innerHTML = '';
+    conv.slice(-6).forEach(function (m) {
+      var adm = m.kind === 'admin', body = m.body || '', tag = '';
+      var mt = /^\[([^\]]{1,30})\]\s*/.exec(body);
+      if (mt && !adm) { tag = mt[1]; body = body.slice(mt[0].length); }
+      var d = el('div', 'ent' + (adm ? ' a' : ''));
+      var w = el('div', 'who', adm ? 'رد الإدارة' : 'استفسارك');
+      if (tag) w.appendChild(el('span', 'tg', tag));
+      d.appendChild(w); d.appendChild(el('div', 'bd', body)); d.appendChild(el('div', 'tm', fmtDT(m.at)));
+      cb.appendChild(d);
+    });
+    cb.hidden = !conv.length;
+    cb.scrollTop = cb.scrollHeight;
+    pending = conv.length > 0 && conv[conv.length - 1].kind !== 'admin';
+    $('pend').hidden = !pending; $('form').hidden = pending;
+  }
+
+  function render(d) {
+    $('tx').textContent = d.transaction_id || '';
+    $('cname').textContent = d.client_name || '';
+    $('recv').textContent = fmtD(d.received_at) || '—';
+    $('upd').textContent = fmtDT(d.last_update);
+
+    var st = Number(d.overall_stage) || 1;
+    if (st < 1) st = 1; if (st > 3) st = 3;
+    var total = Number(d.total_services) || 0, del = Number(d.delivered_count) || 0;
+    $('svc').textContent = total ? (total + (total === 1 ? ' خدمة' : ' خدمات')) : '—';
+    var hl = $('headline'); hl.textContent = STEPS[st];
+    document.documentElement.style.setProperty('--sc', COL[st]);
+    $('sumline').textContent = total > 1 ? ('تم تسليم ' + del + ' من ' + total + ' خدمات') : '';
+    var segs = $('bar').children;
+    for (var i = 0; i < 4; i++) segs[i].className = i <= st ? 'f' : '';
+
+    var eta = $('eta');
+    if (d.expected_from && st < 3) {
+      eta.hidden = false;
+      $('etatext').textContent = d.expected_late
+        ? 'تجاوز الموعد التقديري، ونعمل على إنهائه. يمكنك إرسال استفسار أو الاتصال بنا.'
+        : 'من ' + fmtDay(d.expected_from) + ' إلى ' + fmtDay(d.expected_to);
+    } else { eta.hidden = true; }
+
+    drawTimeline(d, st);
+    drawConvo(d.conversation || []);
+    loaded = true;
+  }
+
+  function load(manual) {
+    if (busy) return;
+    if (!validShape) { show('invalid'); return; }
+    busy = true;
+    if (manual) $('rf').disabled = true;
+    rpc('get_public_tracking', { p_token: token }).then(function (d) {
+      busy = false; $('rf').disabled = false;
+      if (!d) { show('invalid'); return; }
+      render(d); $('stale').hidden = true; show('content');
+    }).catch(function () {
+      busy = false; $('rf').disabled = false;
+      if (loaded) $('stale').hidden = false; else show('neterr');
+    });
+  }
+
+  function say(text, kind) {
+    var m = $('msg'); m.hidden = false; m.className = 'msg ' + kind; m.textContent = text;
+  }
+  function cooldown(sec) {
+    var btn = $('send'), left = sec;
+    btn.disabled = true; clearInterval(cdTimer);
+    btn.textContent = 'انتظر ' + left + ' ث';
+    cdTimer = setInterval(function () {
+      left--;
+      if (left <= 0) { clearInterval(cdTimer); btn.disabled = false; btn.textContent = 'إرسال الاستفسار'; }
+      else btn.textContent = 'انتظر ' + left + ' ث';
+    }, 1000);
+  }
+
+  $('ta').addEventListener('input', function () { $('cnt').textContent = this.value.length; });
+
+  $('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var text = $('ta').value.trim();
+    if (!topic) { say('اختر موضوع الاستفسار أولاً.', 'err'); return; }
+    if (text.length < 5 || text.length > 250) { say(ERR.length, 'err'); return; }
+    var btn = $('send'); btn.disabled = true; btn.textContent = 'جارٍ الإرسال...';
+    rpc('add_public_inquiry', { p_token: token, p_body: '[' + topic + '] ' + text }).then(function (r) {
+      btn.disabled = false; btn.textContent = 'إرسال الاستفسار';
+      if (r && r.ok) {
+        $('ta').value = ''; $('cnt').textContent = '0'; topic = ''; drawChips(); $('msg').hidden = true;
+        load(false);
+      } else {
+        var c = r && r.error;
+        say(ERR[c] || ERR.x, 'err');
+        if (c === 'wait') cooldown(60); else if (c === 'pending') load(false);
+      }
+    }).catch(function () {
+      say(ERR.net, 'err'); btn.disabled = false; btn.textContent = 'إرسال الاستفسار';
+    });
+  });
+
+  $('rf').addEventListener('click', function () { load(true); });
+  $('retry').addEventListener('click', function () { show('loading'); load(false); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && loaded) load(false); });
+  setInterval(function () { if (!document.hidden && loaded) load(false); }, 120000);
+
+  drawChips();
+  load(false);
+})();
+</script>
+</body>
+</html>
