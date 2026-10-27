@@ -1,4 +1,4 @@
-/* تذكير المهام: سرينة شرطة/إسعاف حقيقية ومستمرة لحد ما الموظف يفتح المهمة */
+/* تذكير المهام: سرينة إنذار الخطر / الغارات الجوية وحقيقية ومستمرة لحد ما الموظف يفتح المهمة */
 (function () {
   'use strict';
   if (window.__taskRemind) return; window.__taskRemind = true;
@@ -11,7 +11,7 @@
   function sound() { try { return localStorage.getItem(SK) !== '0'; } catch (e) { return true; } }
   function setSound(v) { try { localStorage.setItem(SK, v ? '1' : '0'); } catch (e) {} }
 
-  /* ---- تشغيل موجة سرينة شرطة/إسعاف واحدة (مدتها ثانيتين) ---- */
+  /* ---- تشغيل صوت إنذار الخطر / الغارات الجوية (صوت منخفض يرتفع وينخفض ببطء شديد ومنذر بالخطر) ---- */
   function playSirenWave() {
     if (!sound() || !pending.length) return;
     try {
@@ -23,24 +23,25 @@
       var osc = audioCtx.createOscillator();
       var gain = audioCtx.createGain();
 
-      osc.type = 'sawtooth'; // موجات sawtooth بتدي صوت سرينة الطوارئ الحقيقي
+      // استخدام موجة sawtooth لتعطي طابعاً قوياً وحاداً يشبه صافرات الإنذار الحقيقية
+      osc.type = 'sawtooth';
       
-      // حركة السرينة: تطلع من 550Hz لـ 1200Hz وتنزل تاني في ثانيتين
-      osc.frequency.setValueAtTime(550, now);
-      osc.frequency.linearRampToValueAtTime(1200, now + 0.9);
-      osc.frequency.linearRampToValueAtTime(550, now + 1.8);
+      // التردد يصعد من 300 هرتز إلى 1100 هرتز ثم ينخفض بانتظام
+      osc.frequency.setValueAtTime(300, now);
+      osc.frequency.linearRampToValueAtTime(1100, now + 1.5);
+      osc.frequency.linearRampToValueAtTime(300, now + 3.0);
 
-      // مستوى الصوت (0.12 واضح جداً ومش مزعج زيادة عن اللزوم)
+      // التحكم في قوة وارتفاع الصوت تدريجياً ليكون واقعياً
       gain.gain.setValueAtTime(0.01, now);
-      gain.gain.linearRampToValueAtTime(0.12, now + 0.1);
-      gain.gain.setValueAtTime(0.12, now + 1.7);
-      gain.gain.linearRampToValueAtTime(0.001, now + 1.85);
+      gain.gain.linearRampToValueAtTime(0.18, now + 0.4);
+      gain.gain.setValueAtTime(0.18, now + 2.6);
+      gain.gain.linearRampToValueAtTime(0.001, now + 3.0);
 
       osc.connect(gain);
       gain.connect(audioCtx.destination);
 
       osc.start(now);
-      osc.stop(now + 1.85);
+      osc.stop(now + 3.0);
     } catch (e) {}
   }
 
@@ -55,7 +56,7 @@
         return;
       }
       playSirenWave();
-    }, 2000); // تعيد الموجة كل ثانيتين بدون أي حمل على المتصفح
+    }, 3100); // إعادة موجة الإنذار كل 3.1 ثانية بشكل متواصل
   }
 
   function stopSirenLoop() {
