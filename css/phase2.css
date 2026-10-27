@@ -203,3 +203,144 @@ html.dark .gl-remind-btn { color: #fcd34d; }
   }
 }
 
+/* Calculator compact layout and draggable floating button */
+#gl-calc {
+  width: min(390px, calc(100vw - 20px));
+  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
+  padding: 10px;
+  border-radius: 18px;
+  overflow-y: hidden;
+  overflow-x: hidden;
+}
+
+#gl-calc .gcal-head {
+  padding-bottom: 7px;
+  gap: 8px;
+}
+
+#gl-calc .gcal-brand {
+  gap: 8px;
+}
+
+#gl-calc .gcal-brand-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 16px;
+}
+
+#gl-calc .gcal-brand strong {
+  font-size: 14px;
+}
+
+#gl-calc .gcal-brand small {
+  font-size: 8px;
+}
+
+#gl-calc .gcal-window-actions button {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+
+#gl-calc .gcal-display {
+  padding: 8px 11px;
+  margin-bottom: 7px;
+  border-radius: 14px;
+}
+
+#gl-calc .gcal-display-label {
+  margin-bottom: 3px;
+  font-size: 10px;
+}
+
+#gl-calc .gcal-ex {
+  min-height: 20px;
+  font-size: 14px;
+}
+
+#gl-calc .gcal-res {
+  font-size: 30px;
+}
+
+#gl-calc .gcal-copy {
+  width: 30px;
+  height: 30px;
+}
+
+#gl-calc .gcal-tools {
+  margin: 0 2px 6px;
+  font-size: 10px;
+}
+
+#gl-calc .gcal-fx {
+  padding: 7px 9px;
+  margin-bottom: 7px;
+  border-radius: 12px;
+}
+
+#gl-calc .gcal-fx-head {
+  margin-bottom: 5px;
+}
+
+#gl-calc .gcal-fx-head strong {
+  font-size: 12px;
+}
+
+#gl-calc .gcal-fx-status {
+  font-size: 9px;
+}
+
+#gl-calc .gcal-fx-controls input,
+#gl-calc .gcal-fx-controls select {
+  height: 30px;
+  font-size: 10px;
+}
+
+#gl-calc .gcal-fx-result {
+  margin-top: 5px;
+  padding: 5px 8px;
+}
+
+#gl-calc .gcal-fx-result-value {
+  font-size: 17px;
+}
+
+#gl-calc .gcal-fx small {
+  margin-top: 4px;
+  font-size: 9px;
+}
+
+#gl-calc .gcal-keys {
+  gap: 5px;
+}
+
+#gl-calc .gcal-key {
+  height: 38px;
+  border-radius: 10px;
+  font-size: 18px;
+}
+
+#gl-calc .gcal-key.operator,
+#gl-calc .gcal-key.equals {
+  font-size: 21px;
+}
+
+#gl-calc .gcal-foot {
+  margin-top: 6px;
+  padding-top: 6px;
+  font-size: 9px;
+}
+
+#gl-calc-fab {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+#gl-calc-fab:active {
+  cursor: grabbing;
+}
+
