@@ -31,8 +31,9 @@
     var r = await sbClient.rpc('remind_task', { p_task: b.dataset.id });
     if (r.error) {
       b.disabled = false;
-      var miss = /42883|PGRST202|does not exist|function/i.test((r.error.message || '') + (r.error.code || ''));
-      return showToast(miss ? 'لازم تشغّل ملف phase2-task-reminder.sql في Supabase مرة واحدة' : 'تعذّر إرسال التذكير: ' + (r.error.message || ''), 'error');
+      var m = (r.error.message || '') + ' ' + (r.error.code || ''), miss = /42883|PGRST202|schema cache|could not find the function/i.test(m);
+      console.warn('remind_task', r.error);
+      return showToast(miss ? 'الدالة مش ظاهرة لسه: شغّل في Supabase السطر: notify pgrst, \'reload schema\';  أو الملف phase2-task-reminder.sql' : 'تعذّر إرسال التذكير: ' + (r.error.message || r.error.code || 'خطأ غير معروف'), 'error');
     }
     b.innerHTML = '<i class="fa-solid fa-check"></i> اتبعت'; showToast('اتبعت التذكير للموظف');
     setTimeout(function () { b.disabled = false; b.innerHTML = '<i class="fa-solid fa-bell"></i> تذكير'; }, 8000);

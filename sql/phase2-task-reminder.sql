@@ -24,3 +24,6 @@ end $$;
 
 revoke all on function public.remind_task(uuid) from public;
 grant execute on function public.remind_task(uuid) to authenticated;
+
+-- تحديث كاش PostgREST عشان الدالة الجديدة تظهر فوراً
+notify pgrst, 'reload schema';
