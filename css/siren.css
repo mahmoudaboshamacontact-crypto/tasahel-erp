@@ -1,0 +1,139 @@
+/* ---- شريط السيرينة والإنذار ---- */
+#gl-siren {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  left: 20px;
+  max-width: 550px;
+  margin: 0 auto;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 2px solid rgba(239, 68, 68, 0.8);
+  border-radius: 14px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  color: #ffffff;
+  font-family: inherit;
+  direction: rtl;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(20px);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* حالة تفعيل السيرينة (الظهور والوميض) */
+#gl-siren.on {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  animation: policeFlash 0.8s infinite alternate ease-in-out;
+}
+
+/* أيقونة الجرس */
+#gl-siren .gs-ic {
+  font-size: 22px;
+  color: #ef4444;
+  animation: bellShake 0.4s infinite alternate;
+}
+
+/* نص التذكير */
+#gl-siren .gs-tx {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #f8fafc;
+}
+
+#gl-siren .gs-tx small {
+  display: block;
+  font-size: 11px;
+  color: #cbd5e1;
+  margin-top: 2px;
+}
+
+/* زر التحكم في الصوت */
+#gl-siren .gs-snd {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+#gl-siren .gs-snd:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* زر فتح المهمة */
+#gl-siren .gs-open {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+
+#gl-siren .gs-open:hover {
+  background: #dc2626;
+}
+
+#gl-siren .gs-open:active {
+  transform: scale(0.96);
+}
+
+/* ---- أنيميشن الوميض (أحمر و أزرق للشرطة) ---- */
+@keyframes policeFlash {
+  0% {
+    background-color: rgba(185, 28, 28, 0.92); /* أحمر غامق */
+    border-color: #ef4444;
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.8), inset 0 0 15px rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    background-color: rgba(15, 23, 42, 0.95); /* لون داكن في المنتصف للتناوب */
+    border-color: #3b82f6;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+  }
+  100% {
+    background-color: rgba(29, 78, 216, 0.92); /* أزرق غامق */
+    border-color: #3b82f6;
+    box-shadow: 0 0 25px rgba(59, 130, 246, 0.8), inset 0 0 15px rgba(59, 130, 246, 0.5);
+  }
+}
+
+/* أنيميشن اهتزاز الجرس */
+@keyframes bellShake {
+  0% { transform: rotate(-15deg); }
+  100% { transform: rotate(15deg); }
+}
+
+/* استجابة الشاشات الصغيرة (الهواتف) */
+@media (max-width: 640px) {
+  #gl-siren {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    padding: 10px 14px;
+  }
+  #gl-siren .gs-tx {
+    font-size: 13px;
+  }
+  #gl-siren .gs-open {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}
