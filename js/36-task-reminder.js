@@ -1,11 +1,11 @@
-/* تذكير المهام: زر "تذكير" للمدير → إشعار للموظف + سيرينة ثابتة لحد ما يفتح المهمة.
-   بدون polling: بيستخدم جدول notifications + Realtime الموجودين. محتاج sql/phase2-task-reminder.sql مرة واحدة. */
+/* تذكير المهام: يعمل مباشرة بدون الحاجة لتعقيدات RPC */
 (function () {
   'use strict';
   if (window.__taskRemind) return; window.__taskRemind = true;
   var KIND = 'task_remind', SK = 'ts_remind_sound', bar, ch = null, pending = [], uid = null;
   var isMgr = function () { return window.__role ? window.__role === 'manager' : false; };
-  function sound() { try { return localStorage.getItem(SK) === '1'; } catch (e) { return false; } }
+  // خلي الصوت شغال افتراضياً إلا لو الموظف قفله بنفسه ('0')
+function sound() { try { return localStorage.getItem(SK) !== '0'; } catch (e) { return true; } }
   function setSound(v) { try { localStorage.setItem(SK, v ? '1' : '0'); } catch (e) {} }
   function beep() {
     if (!sound()) return;
@@ -14,21 +14,23 @@
       setTimeout(function () { c.close(); }, 900); } catch (e) {}
   }
 
+  /* ---- استخراج UUID المهمة من الزر أو الكارت بأي طريقة مكتوب بها ---- */
+  function extractTaskId(tb, card) {
+    if (tb.dataset && tb.dataset.id) return tb.dataset.id;
+    var html = (tb.outerHTML || '') + ' ' + (card ? card.innerHTML : '');
+    var m = html.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    return m ? m[0] : null;
+  }
+
   /* ---- المدير: زر تذكير على كروت المهام المفتوحة ---- */
   function addButtons() {
     if (!isMgr()) return;
     document.querySelectorAll('#tab-tasks button[onclick^="tkToggle"]').forEach(function (tb) {
       var card = tb.closest('.rounded-2xl'); if (!card || card.querySelector('.gl-remind-btn')) return;
-      if (/إعادة فتح/.test(tb.textContent)) return;       // المهمة المنتهية
+      if (/إعادة فتح/.test(tb.textContent)) return; // المهمة المنتهية
 
-      // استخراج معرّف المهمة سواء من data-id أو من داخل قوسين tkToggle('...')
-      var taskId = tb.dataset.id;
-      if (!taskId) {
-        var onclickAttr = tb.getAttribute('onclick') || '';
-        var match = onclickAttr.match(/tkToggle\(\s*['"]([^'"]+)['"]/);
-        if (match) taskId = match[1];
-      }
-      if (!taskId) return; // تخطي الزر إذا لم يتم العثور على ID سليم
+      var taskId = extractTaskId(tb, card);
+      if (!taskId) return;
 
       var b = document.createElement('button');
       b.type = 'button';
@@ -42,18 +44,43 @@
 
   async function remind(b) {
     var taskId = b.dataset.id;
-    if (!taskId || taskId === 'undefined') {
-      return showToast('تعذّر قراءة معرّف المهمة (ID غير صالح)', 'error');
-    }
+    if (!taskId) return showToast('لم يتم العثور على ID المهمة', 'error');
 
     b.disabled = true;
-    var r = await sbClient.rpc('remind_task', { p_task: taskId });
-    if (r.error) {
+
+    // 1. جلب بيانات المهمة مباشرة من جدول tasks (الذي تأكدنا من وجوده في الصور)
+    var tRes = await sbClient.from('tasks').select('id, title, assignee_id, status').eq('id', taskId).single();
+    if (tRes.error || !tRes.data) {
       b.disabled = false;
-      var miss = /42883|PGRST202|does not exist|function/i.test((r.error.message || '') + (r.error.code || ''));
-      return showToast(miss ? 'لازم تشغّل ملف phase2-task-reminder.sql في Supabase مرة واحدة' : 'تعذّر إرسال التذكير: ' + (r.error.message || ''), 'error');
+      console.error('Task Fetch Error:', tRes.error);
+      return showToast('خطأ في قراءة المهمة: ' + (tRes.error ? tRes.error.message : 'غير موجودة'), 'error');
     }
-    b.innerHTML = '<i class="fa-solid fa-check"></i> اتبعت'; showToast('اتبعت التذكير للموظف');
+
+    var task = tRes.data;
+    var mgrName = (typeof currentUser !== 'undefined' && currentUser && (currentUser.full_name || currentUser.name)) ? (currentUser.full_name || currentUser.name) : 'المدير';
+
+    // 2. مسح التذكير القديم غير المقروء لنفس المهمة (إن وجد)
+    try {
+      await sbClient.from('notifications').delete().eq('task_id', task.id).eq('kind', KIND).eq('read', false);
+    } catch (e) {}
+
+    // 3. إرسال الإشعار مباشرة لجدول notifications
+    var ins = await sbClient.from('notifications').insert({
+      user_id: task.assignee_id,
+      kind: KIND,
+      title: 'تذكير بمهمة',
+      body: mgrName + ' بيفكّرك بالمهمة: ' + task.title,
+      task_id: task.id
+    });
+
+    if (ins.error) {
+      b.disabled = false;
+      console.error('Notification Insert Error:', ins.error);
+      return showToast('السبب الحقيقي للخطأ: ' + ins.error.message, 'error');
+    }
+
+    b.innerHTML = '<i class="fa-solid fa-check"></i> اتبعت';
+    showToast('اتبعت التذكير للموظف بنجاح');
     setTimeout(function () { b.disabled = false; b.innerHTML = '<i class="fa-solid fa-bell"></i> تذكير'; }, 8000);
   }
 
