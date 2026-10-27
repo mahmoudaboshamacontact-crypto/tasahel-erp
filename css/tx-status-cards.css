@@ -1,0 +1,17 @@
+/* شريط لون حالة المعاملة على كروت/صفوف المعاملات — بيتجاور مع علامات الخصم والتعليق ومبيمسحهاش */
+[data-st-bar] { --stc: 245, 158, 11; position: relative; }
+[data-st-bar="late"] { --stc: 244, 63, 94; }
+[data-st-bar="prog"] { --stc: 245, 158, 11; }
+[data-st-bar="ready"] { --stc: 6, 182, 212; }
+[data-st-bar="done"] { --stc: 16, 185, 129; }
+/* كروت الموبايل */
+#recent-cards-container > [data-st-bar]::before {
+  content: ""; position: absolute; top: 10px; bottom: 10px; inset-inline-start: 0; width: 5px;
+  border-radius: 0 6px 6px 0; background: rgb(var(--stc)); box-shadow: 0 0 12px rgba(var(--stc), .55);
+}
+html[dir="rtl"] #recent-cards-container > [data-st-bar]::before { border-radius: 6px 0 0 6px; }
+#recent-cards-container > [data-st-bar="late"] { border-color: rgba(244, 63, 94, .45) !important; }
+/* صفوف الجدول (ديسكتوب) */
+#recent-table-body tr[data-st-bar] > td:first-child { box-shadow: inset -5px 0 0 rgb(var(--stc)); }
+/* بادج الخصم/التعليق تفضل ظاهرة فوق الشريط */
+#recent-cards-container .f16-badge { position: relative; z-index: 1; }
