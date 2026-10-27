@@ -122,3 +122,84 @@ html.dark .gl-remind-btn { color: #fcd34d; }
 .gl-clock.gl-clock-analog .gc-m{stroke-width:2.1}
 .gl-clock.gl-clock-analog .gc-s{stroke-width:1.2}
 @media(max-width:1250px){.gl-clock.gl-clock-analog svg{width:46px!important;height:46px!important}}
+
+/* Calculator: fit normal browser zoom */
+#gl-calc {
+  box-sizing: border-box;
+  width: min(460px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  padding: 16px;
+  border-radius: 24px;
+}
+
+#gl-calc .gcal-head {
+  padding-bottom: 10px;
+}
+
+#gl-calc .gcal-brand-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+}
+
+#gl-calc .gcal-brand strong {
+  font-size: 16px;
+}
+
+#gl-calc .gcal-display {
+  padding: 12px 15px;
+  margin-bottom: 9px;
+}
+
+#gl-calc .gcal-res {
+  font-size: clamp(28px, 5vw, 40px);
+}
+
+#gl-calc .gcal-tools {
+  margin-bottom: 8px;
+}
+
+#gl-calc .gcal-fx {
+  padding: 9px 11px;
+  margin-bottom: 9px;
+}
+
+#gl-calc .gcal-fx-controls input,
+#gl-calc .gcal-fx-controls select {
+  height: 34px;
+}
+
+#gl-calc .gcal-keys {
+  gap: 7px;
+}
+
+#gl-calc .gcal-key {
+  height: 46px;
+  border-radius: 13px;
+}
+
+#gl-calc .gcal-foot {
+  margin-top: 9px;
+  padding-top: 8px;
+}
+
+@media (max-height: 800px) {
+  #gl-calc {
+    padding: 12px;
+  }
+
+  #gl-calc .gcal-key {
+    height: 42px;
+  }
+
+  #gl-calc .gcal-fx {
+    padding: 7px 9px;
+    margin-bottom: 7px;
+  }
+
+  #gl-calc .gcal-display {
+    padding: 9px 12px;
+  }
+}
+
