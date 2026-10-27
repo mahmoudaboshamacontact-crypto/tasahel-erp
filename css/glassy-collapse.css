@@ -1,0 +1,52 @@
+/* Glassy Sidebar V3 — قائمة زجاجية قابلة للطي/الفرد (إضافة معزولة، متعدّلش أي ملف قديم)
+   الافتراضي مفرودة. .gl-collapsed = كبسولة أيقونات. الحالة بتتحفظ في localStorage. */
+#nav-menu {
+  width: 290px !important;
+  max-width: 88vw;
+  padding: 0 8px 8px !important;
+  border-radius: 24px !important;
+  background: rgba(18, 14, 28, .88) !important;
+  border: 1px solid rgba(255, 255, 255, .14) !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, .55), 0 0 0 1px rgba(168, 85, 247, .22) !important;
+  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent;
+  transition: width .26s cubic-bezier(.2, .8, .2, 1);
+}
+#nav-menu .gl-head {
+  position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 12px 14px 10px; margin: 0 -8px 4px;
+  background: rgba(18, 14, 28, .95); border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+#nav-menu .gl-title { font-size: 12px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; }
+#nav-menu .gl-toggle {
+  width: 28px; height: 28px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .2); color: #c4b5fd; cursor: pointer;
+  transition: background .2s;
+}
+#nav-menu .gl-toggle:hover { background: rgba(168, 85, 247, .4); color: #fff; }
+#nav-menu .gl-toggle i { font-size: 11px; transition: transform .26s ease; }
+#nav-menu .gl-sec { font-size: 10px !important; color: #8b85a3 !important; padding: 10px 10px 4px !important; }
+#nav-menu hr { border-color: rgba(255, 255, 255, .08) !important; }
+#nav-menu .tab-btn { display: flex !important; width: 100% !important; box-sizing: border-box; color: #d6d1e6 !important; border-radius: 12px !important; position: relative; }
+#nav-menu .tab-btn:hover { background: rgba(255, 255, 255, .07) !important; color: #fff !important; }
+#nav-menu .tab-btn.bg-ink, #nav-menu .tab-btn.dark\:bg-brand-600 {
+  background: linear-gradient(135deg, rgba(168, 85, 247, .38), rgba(124, 58, 237, .22)) !important; color: #fff !important;
+}
+
+/* ===== مطوية ===== */
+#nav-menu.gl-collapsed { width: 68px !important; }
+#nav-menu.gl-collapsed .gl-head { flex-direction: column; padding: 10px 6px; }
+#nav-menu.gl-collapsed .gl-title { display: none; }
+#nav-menu.gl-collapsed .gl-toggle i { transform: rotate(180deg); }
+#nav-menu.gl-collapsed { padding-inline: 6px !important; }
+#nav-menu.gl-collapsed .gl-head { margin-inline: -6px; }
+#nav-menu.gl-collapsed .gl-sec { font-size: 0 !important; height: 1px; padding: 0 !important; margin: 6px 12px !important; background: rgba(255, 255, 255, .12); }
+#nav-menu.gl-collapsed hr { display: none; }
+#nav-menu.gl-collapsed .tab-btn { justify-content: center !important; padding: .6rem 0 !important; }
+#nav-menu.gl-collapsed .tab-btn > span:not([class*="rounded-full"]) { display: none; }
+#nav-menu.gl-collapsed .tab-btn > i { font-size: 16px; }
+#nav-menu.gl-collapsed .tab-btn > span[class*="rounded-full"] {
+  position: absolute; top: 2px; left: 4px; margin: 0 !important; min-width: 15px !important;
+  height: 15px !important; line-height: 15px !important; font-size: 9px !important; padding: 0 3px !important;
+}
+@media (prefers-reduced-motion: reduce) { #nav-menu, .gl-toggle i { transition: none; } }
