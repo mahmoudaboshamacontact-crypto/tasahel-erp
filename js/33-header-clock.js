@@ -10,6 +10,7 @@
   function parts(d) { var p = fT.format(d).split(':'); return [+p[0], +p[1], +p[2]]; }
   function build() {
     var m = mode();
+    el.classList.toggle('gl-clock-analog',m==='analog'); el.classList.toggle('gl-clock-digital',m!=='analog');
     el.innerHTML = m === 'analog'
       ? '<svg viewBox="0 0 40 40"><circle class="gc-face" cx="20" cy="20" r="18" stroke-width="1.5"/><line class="gc-h" x1="20" y1="20" x2="20" y2="11" stroke-width="2.4"/><line class="gc-m" x1="20" y1="20" x2="20" y2="7" stroke-width="1.8"/><line class="gc-s" x1="20" y1="22" x2="20" y2="6" stroke-width="1"/></svg><span class="gc-date"></span>'
       : '<div><div class="gc-time"></div><div class="gc-date"></div></div>';
@@ -19,7 +20,7 @@
     if (!el) return; var d = new Date(), p = parts(d);
     var dt = el.querySelector('.gc-date'); if (dt) { var s = fD.format(d); if (dt.textContent !== s) dt.textContent = s; }
     var t = el.querySelector('.gc-time');
-    if (t) t.textContent = (p[0] < 10 ? '0' : '') + p[0] + ':' + (p[1] < 10 ? '0' : '') + p[1] + ':' + (p[2] < 10 ? '0' : '') + p[2];
+    if (t) t.textContent = ((p[0] % 12) || 12) + ':' + (p[1] < 10 ? '0' : '') + p[1] + (p[0] < 12 ? ' ص' : ' م');
     else {
       var rot = function (c, a) { var n = el.querySelector(c); if (n) n.setAttribute('transform', 'rotate(' + a + ' 20 20)'); };
       rot('.gc-h', (p[0] % 12) * 30 + p[1] * .5); rot('.gc-m', p[1] * 6 + p[2] * .1); rot('.gc-s', p[2] * 6);
