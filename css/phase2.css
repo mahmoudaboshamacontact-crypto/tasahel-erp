@@ -70,3 +70,35 @@ html:not(.dark) #gl-calc .gcal-keys button { background: rgba(99, 102, 241, .08)
   color: #fff; font-size: 18px; background: linear-gradient(135deg, #a855f7, #7c3aed); box-shadow: 0 10px 26px rgba(124, 58, 237, .5); }
 #gl-calc-fab.on { display: inline-flex; }
 @media (max-width: 767px) { #gl-calc { bottom: 90px; right: 10px; } }
+
+/* 3) استفسارات العملاء داخل التعليقات + زر النسخ */
+#txc-list .gl-inq { border-color: rgba(244, 63, 94, .55) !important; background: linear-gradient(120deg, rgba(244, 63, 94, .13), rgba(251, 146, 60, .08)) !important; border-inline-start-width: 4px !important; }
+.gl-inq-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 800; padding: 1px 8px; border-radius: 99px; margin-inline-end: 6px;
+  background: rgba(244, 63, 94, .18); color: #e11d48; }
+html.dark .gl-inq-tag { color: #fb7185; }
+.gl-copy-btn { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 9px; border: 0; cursor: pointer;
+  background: rgba(124, 58, 237, .12); color: #7c3aed; }
+.gl-copy-btn:hover { background: rgba(124, 58, 237, .25); }
+html.dark .gl-copy-btn { color: #c4b5fd; }
+.gl-copy-btn.ok { background: rgba(16, 185, 129, .18); color: #059669; }
+.gl-inq-add { display: inline-flex; align-items: center; gap: 5px; border-radius: 8px; padding: 6px 12px; font-size: 11px; font-weight: 800; border: 0; cursor: pointer;
+  background: rgba(244, 63, 94, .12); color: #e11d48; margin-top: 8px; }
+.gl-inq-add:hover { background: rgba(244, 63, 94, .22); }
+.gl-inq-add:disabled { opacity: .55; cursor: default; }
+
+/* 7) تذكير المهام: سيرينة تفضل لحد ما الموظف يدخل المهمة */
+.gl-remind-btn { border: 0; border-radius: 12px; padding: 6px 12px; font-size: 12px; font-weight: 800; cursor: pointer; background: rgba(245, 158, 11, .16); color: #b45309; }
+.gl-remind-btn:hover { background: rgba(245, 158, 11, .3); } .gl-remind-btn:disabled { opacity: .55; cursor: default; }
+html.dark .gl-remind-btn { color: #fcd34d; }
+#gl-siren { position: fixed; z-index: 130; top: 70px; left: 50%; transform: translateX(-50%); width: min(94vw, 440px); display: none; align-items: center; gap: 10px; padding: 10px 12px;
+  border-radius: 18px; color: #fff; background: linear-gradient(135deg, #e11d48, #be123c); box-shadow: 0 14px 38px rgba(225, 29, 72, .55), 0 0 0 2px rgba(255, 255, 255, .25); }
+#gl-siren.on { display: flex; animation: glSirenGlow 1s ease-in-out 8; }
+#gl-siren .gs-ic { width: 36px; height: 36px; flex: none; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, .22); animation: glSirenRing .6s ease-in-out 12; }
+#gl-siren .gs-tx { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; line-height: 1.35; }
+#gl-siren .gs-tx small { display: block; font-weight: 500; opacity: .85; font-size: 11px; }
+#gl-siren button { border: 0; cursor: pointer; border-radius: 11px; padding: 7px 12px; font-size: 11.5px; font-weight: 800; background: #fff; color: #be123c; }
+#gl-siren button.gs-snd { background: rgba(255, 255, 255, .22); color: #fff; padding: 7px 9px; }
+@keyframes glSirenGlow { 0%, 100% { box-shadow: 0 14px 38px rgba(225, 29, 72, .5), 0 0 0 2px rgba(255, 255, 255, .25); } 50% { box-shadow: 0 14px 44px rgba(225, 29, 72, .9), 0 0 0 6px rgba(255, 255, 255, .4); } }
+@keyframes glSirenRing { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-16deg); } 75% { transform: rotate(16deg); } }
+@media (prefers-reduced-motion: reduce) { #gl-siren.on, #gl-siren .gs-ic { animation: none; } }
+@media print { #gl-siren { display: none !important; } }
