@@ -20,15 +20,34 @@
     document.querySelectorAll('#tab-tasks button[onclick^="tkToggle"]').forEach(function (tb) {
       var card = tb.closest('.rounded-2xl'); if (!card || card.querySelector('.gl-remind-btn')) return;
       if (/إعادة فتح/.test(tb.textContent)) return;       // المهمة المنتهية
-      var b = document.createElement('button'); b.type = 'button'; b.className = 'gl-remind-btn'; b.dataset.id = tb.dataset.id;
+
+      // استخراج معرّف المهمة سواء من data-id أو من داخل قوسين tkToggle('...')
+      var taskId = tb.dataset.id;
+      if (!taskId) {
+        var onclickAttr = tb.getAttribute('onclick') || '';
+        var match = onclickAttr.match(/tkToggle\(\s*['"]([^'"]+)['"]/);
+        if (match) taskId = match[1];
+      }
+      if (!taskId) return; // تخطي الزر إذا لم يتم العثور على ID سليم
+
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'gl-remind-btn';
+      b.dataset.id = taskId;
       b.innerHTML = '<i class="fa-solid fa-bell"></i> تذكير';
       b.addEventListener('click', function () { remind(b); });
       tb.insertAdjacentElement('beforebegin', b);
     });
   }
+
   async function remind(b) {
+    var taskId = b.dataset.id;
+    if (!taskId || taskId === 'undefined') {
+      return showToast('تعذّر قراءة معرّف المهمة (ID غير صالح)', 'error');
+    }
+
     b.disabled = true;
-    var r = await sbClient.rpc('remind_task', { p_task: b.dataset.id });
+    var r = await sbClient.rpc('remind_task', { p_task: taskId });
     if (r.error) {
       b.disabled = false;
       var miss = /42883|PGRST202|does not exist|function/i.test((r.error.message || '') + (r.error.code || ''));
