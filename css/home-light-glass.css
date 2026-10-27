@@ -1,0 +1,51 @@
+/* الرئيسية (أرقام كبيرة بدون اختصارات) + الثيم الفاتح الزجاجي — طبقة CSS معزولة */
+/* ===== الرئيسية ===== */
+#tab-home .hm-kpi-box > div:nth-child(2), #tab-home .hm-kpi-box > div.text-base { font-size: 1.75rem !important; line-height: 1.15; font-weight: 800; }
+#tab-home .hm-hero .grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+@media (min-width: 768px) { #tab-home .hm-hero .grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; } }
+@media (min-width: 1100px) { #tab-home .hm-hero .grid { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; } }
+@media (max-width: 480px) { #tab-home .hm-kpi-box > div.text-base { font-size: 1.4rem !important; } }
+#tab-home .hm-kpi-box.hm-ready .text-base { color: #67e8f9 !important; }
+#tab-home .hm-kpi-box.hm-done .text-base { color: #6ee7b7 !important; }
+#tab-home [data-hm-hide] { display: none !important; }   /* اختصارات الرئيسية (مخفية، مش ممسوحة) */
+
+/* ===== الثيم الفاتح الزجاجي ===== */
+html:not(.dark) body {
+  background: radial-gradient(900px 520px at 85% -8%, rgba(167, 139, 250, .38), transparent 60%),
+              radial-gradient(800px 500px at 0% 100%, rgba(56, 189, 248, .30), transparent 60%),
+              radial-gradient(700px 420px at 100% 85%, rgba(244, 114, 182, .20), transparent 60%),
+              #eef1f9 !important;
+  background-attachment: fixed !important;
+}
+html:not(.dark) .ts-header { background: rgba(255, 255, 255, .55) !important; border-bottom-color: rgba(255, 255, 255, .7) !important; box-shadow: 0 6px 24px rgba(99, 102, 241, .08); }
+html:not(.dark) #app .card:not(.hm-hero) {
+  background: rgba(255, 255, 255, .55) !important; border: 1px solid rgba(255, 255, 255, .75) !important;
+  box-shadow: 0 8px 28px rgba(99, 102, 241, .10), inset 0 1px 0 rgba(255, 255, 255, .8) !important;
+}
+html:not(.dark) #app .card:not([data-tx]):not(tr) { -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+html:not(.dark) #app .field, html:not(.dark) #app input.field, html:not(.dark) #app select.field, html:not(.dark) #app textarea.field {
+  background: rgba(255, 255, 255, .6) !important; border-color: rgba(148, 163, 184, .35) !important;
+}
+html:not(.dark) #app table thead { background: rgba(255, 255, 255, .45) !important; }
+/* القائمة والشريط السفلي في الفاتح */
+html:not(.dark) #nav-menu {
+  background: rgba(255, 255, 255, .72) !important; border-color: rgba(255, 255, 255, .85) !important;
+  box-shadow: 0 24px 56px rgba(99, 102, 241, .22), 0 0 0 1px rgba(167, 139, 250, .25) !important;
+  -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
+}
+html:not(.dark) #nav-menu .gl-head { background: rgba(255, 255, 255, .85); border-bottom-color: rgba(148, 163, 184, .25); }
+html:not(.dark) #nav-menu .gl-title { color: #1e2540; }
+html:not(.dark) #nav-menu .gl-toggle { background: rgba(124, 58, 237, .10); border-color: rgba(124, 58, 237, .25); color: #6d28d9; }
+html:not(.dark) #nav-menu .gl-sec { color: #7a84a6 !important; }
+html:not(.dark) #nav-menu .tab-btn { color: #33406a !important; }
+html:not(.dark) #nav-menu .tab-btn:hover { background: rgba(124, 58, 237, .08) !important; color: #1e1b4b !important; }
+html:not(.dark) #nav-menu .tab-btn.bg-ink, html:not(.dark) #nav-menu .tab-btn.dark\:bg-brand-600 {
+  background: linear-gradient(135deg, rgba(196, 181, 253, .65), rgba(221, 214, 254, .5)) !important; color: #4c1d95 !important;
+}
+html:not(.dark) #nav-menu hr { border-color: rgba(148, 163, 184, .25) !important; }
+@media (max-width: 767px) {
+  html:not(.dark) #gl-bn.gl-bn-on { background: rgba(255, 255, 255, .7); border-color: rgba(255, 255, 255, .85); box-shadow: 0 12px 30px rgba(99, 102, 241, .22); }
+  html:not(.dark) #gl-bn button { color: #5b6590; }
+  html:not(.dark) #gl-bn button.is-active { color: #4c1d95; background: linear-gradient(135deg, rgba(196, 181, 253, .6), rgba(221, 214, 254, .45)); }
+  html:not(.dark) #gl-bn button.is-active i { color: #7c3aed; }
+}
