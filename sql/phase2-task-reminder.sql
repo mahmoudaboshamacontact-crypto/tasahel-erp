@@ -10,7 +10,7 @@ set search_path = public
 as $$
 declare t record; me_name text;
 begin
-  if not exists (select 1 from public.profiles where id = auth.uid() and role = 'manager') then
+  if coalesce(public.my_role(), '') <> 'manager' then
     raise exception 'not allowed';
   end if;
   select id, title, assignee_id, status into t from public.tasks where id = p_task;
