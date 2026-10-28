@@ -59,8 +59,7 @@
 </div>
 <div id="tx-modal-body" class="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs sm:text-sm"></div>
 <div class="border-t border-slate-100 dark:border-slate-800 px-5 py-3 bg-slate-50 dark:bg-slate-800/40 flex flex-wrap items-center justify-between gap-2">
-<div id="tx-modal-actions-left" class="flex flex-wrap items-center gap-2"></div>
-<button onclick="closeTxModal()" class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 font-semibold text-xs text-slate-700 dark:text-slate-300">إغلاق</button>
+<div id="tx-modal-actions-left" class="flex flex-wrap items-center gap-2 w-full"></div>
 </div>
 </div>
 </div>
@@ -133,24 +132,24 @@
 </section>
 
 <section id="app" class="hidden min-h-screen flex flex-col">
-<header class="ts-header sticky top-0 z-40 border-b border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md">
+<header class="ts-header sticky top-0 z-40 border-b border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md">
 <div class="ts-hdr-inner">
-<!-- الجانب الأيمن: زر القائمة (الثلاث شرط) بجانب أيقونة ولوجو تساهيل -->
+<!-- الجانب الأيمن: زر القائمة الجانبية + شعار وهوية تساهيل للخدمات الحكومية -->
 <div class="ts-hdr-start">
 <div class="relative shrink-0" id="menu-wrap">
-<button id="menu-btn" type="button" onclick="toggleNavMenu(event)" class="relative rounded-xl p-2 text-slate-700 dark:text-slate-200 bg-slate-100/80 dark:bg-slate-800/80 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-700 transition" title="كل أقسام السيستم" aria-label="القائمة" aria-expanded="false"><i class="fa-solid fa-bars text-sm"></i><span id="menu-dot" class="hidden absolute top-1 right-1 h-2 w-2 rounded-full bg-rose-600"></span></button>
-<div id="nav-menu" class="hidden absolute right-0 top-full z-50 mt-2 w-64 max-w-[88vw] max-h-[80vh] overflow-y-auto space-y-0.5 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+<button id="menu-btn" type="button" onclick="toggleNavMenu(event)" class="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 bg-slate-50/90 dark:bg-slate-800/80 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-700 transition" title="القائمة الجانبية وأقسام النظام" aria-label="القائمة" aria-expanded="false"><i class="fa-solid fa-bars text-sm"></i><span id="menu-dot" class="hidden absolute top-1 right-1 h-2 w-2 rounded-full bg-rose-600"></span></button>
+<div id="nav-menu" class="hidden absolute right-0 top-full z-50 mt-2 w-64 max-w-[88vw] max-h-[82vh] overflow-y-auto space-y-0.5 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
 <div class="px-2.5 py-1 text-[10px] font-bold text-slate-400">الأقسام اليومية</div>
 <button type="button" data-tab-target="home" onclick="switchTab('home')" class="tab-btn"><i class="fa-solid fa-house text-brand-600"></i><span>الرئيسية</span></button>
 <button type="button" data-tab-target="new" onclick="switchTab('new')" class="tab-btn"><i class="fa-solid fa-circle-plus text-violet-500"></i><span>طلب جديد</span></button>
 <button type="button" data-tab-target="tx" onclick="switchTab('tx')" class="tab-btn"><i class="fa-solid fa-list-ul text-purple-500"></i><span>المعاملات</span><span id="menu-tx-badge" class="hidden rounded-full bg-violet-600 text-white text-[10px] font-bold px-1.5 min-w-[18px] text-center leading-[18px] mr-auto">0</span></button>
 <button type="button" data-tab-target="exec" onclick="switchTab('exec')" class="tab-btn"><i class="fa-solid fa-gear text-indigo-500"></i><span>المنفذين</span></button>
-<button type="button" data-tab-target="cash" onclick="switchTab('cash')" class="tab-btn"><i class="fa-solid fa-wallet text-amber-500"></i><span>الكاش</span></button>
-<button type="button" data-tab-target="receipt" onclick="switchTab('receipt')" class="tab-btn"><i class="fa-solid fa-receipt text-fuchsia-500"></i><span>الإيصالات</span></button>
+<button id="tab-cash-btn" type="button" data-tab-target="cash" onclick="switchTab('cash')" class="tab-btn"><i class="fa-solid fa-wallet text-amber-500"></i><span>شيت الكاش</span></button>
+<button id="tab-receipt-btn" type="button" data-tab-target="receipt" onclick="switchTab('receipt')" class="tab-btn"><i class="fa-solid fa-receipt text-fuchsia-500"></i><span>الإيصالات</span></button>
 <button type="button" data-tab-target="comm" onclick="switchTab('comm')" class="tab-btn"><i class="fa-solid fa-bullseye text-emerald-500"></i><span>الكوميشن والتارجت</span></button>
 <button type="button" data-tab-target="myday" onclick="openMyDayTab('all')" class="tab-btn"><i class="fa-solid fa-sun text-sky-500"></i><span>شغلي النهاردة</span></button>
 <button type="button" onclick="openMyDayTab('late')" class="tab-btn"><i class="fa-solid fa-triangle-exclamation text-rose-500"></i><span>المتأخرات</span><span id="menu-late-badge" class="hidden rounded-full bg-rose-600 text-white text-[10px] font-bold px-1.5 min-w-[18px] text-center leading-[18px] mr-auto">0</span></button>
-<button type="button" data-tab-target="chat" onclick="switchTab('chat')" class="tab-btn"><i class="fa-solid fa-comments text-cyan-500"></i><span>الشات الداخلي</span></button>
+<button id="tab-chat-btn" type="button" data-tab-target="chat" onclick="switchTab('chat')" class="tab-btn"><i class="fa-solid fa-comments text-cyan-500"></i><span>الشات الداخلي</span><span id="chat-badge" class="hidden rounded-full bg-rose-600 text-white text-[10px] font-bold px-1.5 min-w-[18px] text-center leading-[18px] mr-auto">0</span></button>
 <hr class="my-1 border-slate-100 dark:border-slate-800">
 <div class="px-2.5 py-1 text-[10px] font-bold text-slate-400">باقي أقسام السيستم</div>
 <button id="tab-search-btn" onclick="switchTab('search')" class="tab-btn"><i class="fa-solid fa-magnifying-glass"></i><span>البحث الشامل</span></button>
@@ -163,30 +162,44 @@
 <button id="backup-btn" onclick="backupAll()" class="hidden tab-btn text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"><i class="fa-solid fa-cloud-arrow-down"></i><span>نسخة احتياطية</span></button>
 </div>
 </div>
-<div onclick="switchTab('home')" class="ts-brand-box" title="الرئيسية">
-<span class="ts-logo-badge"><img id="hdr-brand-logo" src="icon.png" onerror="this.src='icon.png?v=3'" alt="تساهيل"></span>
-<div class="leading-tight text-right"><div class="font-bold text-ink dark:text-white text-xs sm:text-sm">تساهيل <span class="text-[10px] bg-violet-600/30 text-violet-300 border border-violet-400/30 px-1.5 py-0.2 rounded-full font-mono">v3.0.0 Pro</span></div><div class="ts-brand-sub text-[10px] text-slate-500 dark:text-slate-400">قسم الخدمات الحكومية</div></div>
+
+<!-- الشعار وعناصر الهوية المتكاملة بدون مربع ملون منفصل -->
+<div class="ts-brand-box">
+  <img id="hdr-brand-logo" src="logo.png" onerror="this.src='icon.png?v=3'" alt="تساهيل" onclick="switchTab('home')" class="ts-brand-img cursor-pointer" title="الرئيسية">
+  <span class="ts-brand-sep" aria-hidden="true"></span>
+  <div class="leading-tight text-right">
+    <div onclick="switchTab('home')" class="font-bold text-slate-900 dark:text-white text-xs sm:text-sm cursor-pointer hover:text-brand-600 dark:hover:text-violet-300 transition">تساهيل للخدمات الحكومية</div>
+    <div class="ts-brand-sub flex items-center gap-2 mt-0.5 text-[10.5px] text-slate-500 dark:text-slate-400">
+      <a href="https://www.facebook.com/tasahel.eg" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-slate-300 hover:text-[#1877F2] dark:hover:text-[#60a5fa] transition" title="صفحة تساهيل على Facebook">
+        <i class="fa-brands fa-facebook text-[#1877F2] text-xs"></i><span>Facebook</span>
+      </a>
+      <span class="text-slate-300 dark:text-slate-600">•</span>
+      <span class="font-mono font-bold text-brand-700 dark:text-emerald-400" dir="ltr" title="الرقم المختصر">15439</span>
+    </div>
+  </div>
 </div>
 </div>
 
-<!-- شريط الاختصارات السريعة -->
+<!-- شريط الاختصارات السريعة الأساسية فقط (بدون الكاش أو الشات) -->
 <nav id="hdr-shortcuts" class="ts-hdr-nav" aria-label="اختصارات سريعة">
 <button id="tab-home-btn" type="button" onclick="switchTab('home')" class="tab-btn"><i class="fa-solid fa-house"></i><span>الرئيسية</span></button>
 <button id="tab-new-btn" type="button" onclick="switchTab('new')" class="tab-btn"><i class="fa-solid fa-plus"></i><span>طلب جديد</span></button>
 <button id="tab-tx-btn" type="button" onclick="switchTab('tx')" class="tab-btn"><i class="fa-solid fa-list-ul"></i><span>المعاملات</span><span id="hdr-tx-badge" class="hidden rounded-full bg-violet-600 text-white text-[10px] font-bold px-1.5 min-w-[16px] text-center leading-4">0</span></button>
 <button id="tab-exec-btn" type="button" onclick="switchTab('exec')" class="tab-btn"><i class="fa-solid fa-gear"></i><span>المنفذين</span></button>
-<button id="tab-cash-btn" type="button" onclick="switchTab('cash')" class="tab-btn"><i class="fa-solid fa-wallet"></i><span>الكاش</span></button>
-<button id="tab-receipt-btn" type="button" onclick="switchTab('receipt')" class="tab-btn"><i class="fa-solid fa-receipt"></i><span>الإيصالات</span></button>
 </nav>
 
-<!-- الجانب الأيسر -->
+<!-- الجانب الأيسر: الإشعارات، الثيم، اسم المستخدم المختصر، وزر تسجيل الخروج الواضح -->
 <div class="ts-hdr-end">
-<button id="tab-chat-btn" type="button" onclick="switchTab('chat')" class="relative rounded-xl p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" title="المحادثة"><i class="fa-solid fa-comments text-sm"></i><span id="chat-badge" class="hidden rounded-full bg-rose-600 text-white text-[10px] font-bold px-1 min-w-[16px] text-center leading-4">0</span></button>
-<div class="relative"><button id="nt-bell" type="button" class="relative rounded-xl p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" title="الإشعارات" aria-label="الإشعارات"><i class="fa-solid fa-bell text-sm"></i><span id="nt-count" class="hidden absolute -top-0.5 -right-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold px-1 min-w-[16px] text-center leading-4">0</span></button><div id="nt-panel" class="hidden absolute left-0 top-10 z-50 w-[min(92vw,340px)] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl"></div></div>
-<button onclick="toggleDarkMode()" class="rounded-xl p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" title="تبديل الثيم"><i class="fa-solid fa-moon dark:hidden text-sm"></i><i class="fa-solid fa-sun hidden dark:inline text-amber-400 text-sm"></i></button>
-<span id="user-display" dir="rtl" onclick="openMeModal()" class="cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-200 truncate max-w-[90px] sm:max-w-[125px]"></span>
-<button id="hdr-me" type="button" onclick="openMeModal()" class="shrink-0 rounded-full ring-2 ring-transparent hover:ring-brand-500 transition" title="حسابي"></button>
-<button onclick="handleLogout()" class="rounded-xl p-1.5 text-slate-600 dark:text-slate-300 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40" title="تسجيل الخروج"><i class="fa-solid fa-arrow-right-from-bracket text-sm"></i></button>
+<div class="relative"><button id="nt-bell" type="button" class="ts-hdr-icon-btn relative" title="الإشعارات" aria-label="الإشعارات"><i class="fa-solid fa-bell text-sm"></i><span id="nt-count" class="hidden absolute -top-0.5 -right-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold px-1 min-w-[16px] text-center leading-4">0</span></button><div id="nt-panel" class="hidden absolute left-0 top-11 z-50 w-[min(92vw,340px)] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl"></div></div>
+<button id="hdr-theme-btn" type="button" onclick="toggleDarkMode()" class="ts-hdr-icon-btn" title="التبديل بين الوضع النهاري والليلي" aria-label="تبديل الثيم"><i class="fa-solid fa-moon dark:hidden text-sm"></i><i class="fa-solid fa-sun hidden dark:inline text-amber-400 text-sm"></i></button>
+<div onclick="openMeModal()" class="ts-user-pill cursor-pointer" title="حسابي">
+  <button id="hdr-me" type="button" class="shrink-0 rounded-full ring-1 ring-slate-200 dark:ring-slate-700 transition" title="حسابي"></button>
+  <span id="user-display" dir="rtl" class="text-xs font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap"></span>
+</div>
+<button id="hdr-logout-btn" type="button" onclick="handleLogout()" class="ts-logout-btn" title="تسجيل الخروج من النظام" aria-label="تسجيل الخروج">
+  <i class="fa-solid fa-power-off text-xs"></i>
+  <span class="hidden sm:inline">خروج</span>
+</button>
 </div>
 </div>
 </header>
@@ -212,50 +225,6 @@
   </div>
 </div>
 
-<div id="new-order-progress-wrap" class="card p-3.5 sm:p-4 space-y-2.5">
-  <div class="flex items-center justify-between gap-2">
-    <div class="flex items-center gap-2">
-      <span id="nop-icon" class="flex h-6 w-6 items-center justify-center rounded-lg bg-violet-600 text-white text-[11px] font-bold"><i class="fa-solid fa-layer-group"></i></span>
-      <span class="text-xs font-bold text-ink dark:text-white" id="nop-status-title">خطوات التسجيل</span>
-      <span class="text-[11px] text-slate-400 hidden sm:inline" id="nop-status-sub"></span>
-    </div>
-    <span id="nop-pct-badge" class="rounded-full bg-violet-100 dark:bg-violet-950/80 text-violet-700 dark:text-violet-300 border border-violet-300/60 dark:border-violet-700/60 px-2.5 py-0.5 text-[11px] font-bold font-mono">0%</span>
-  </div>
-  <div class="nop-bar-track">
-    <div id="nop-bar-fill" class="nop-bar-fill" style="width:0%"></div>
-  </div>
-  <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-0.5" id="nop-steps-grid">
-    <button type="button" onclick="focusOrderStep(1)" id="nop-step-1" class="nop-step-pill active">
-      <span class="nop-step-dot">1</span>
-      <div class="min-w-0 text-right">
-        <div class="text-xs font-bold truncate">العميل</div>
-        <div class="text-[10px] opacity-75 truncate" id="nop-step-1-sub">الاسم والموبايل</div>
-      </div>
-    </button>
-    <button type="button" onclick="focusOrderStep(2)" id="nop-step-2" class="nop-step-pill">
-      <span class="nop-step-dot">2</span>
-      <div class="min-w-0 text-right">
-        <div class="text-xs font-bold truncate">الخدمات</div>
-        <div class="text-[10px] opacity-75 truncate" id="nop-step-2-sub">الخدمة والسعر</div>
-      </div>
-    </button>
-    <button type="button" onclick="focusOrderStep(3)" id="nop-step-3" class="nop-step-pill">
-      <span class="nop-step-dot">3</span>
-      <div class="min-w-0 text-right">
-        <div class="text-xs font-bold truncate">المنفذ</div>
-        <div class="text-[10px] opacity-75 truncate" id="nop-step-3-sub">المنفذ والتكلفة</div>
-      </div>
-    </button>
-    <button type="button" onclick="focusOrderStep(4)" id="nop-step-4" class="nop-step-pill">
-      <span class="nop-step-dot">4</span>
-      <div class="min-w-0 text-right">
-        <div class="text-xs font-bold truncate">الدفع والحفظ</div>
-        <div class="text-[10px] opacity-75 truncate" id="nop-step-4-sub">طريقة الدفع</div>
-      </div>
-    </button>
-  </div>
-</div>
-
 <div id="today-strip" class="grid grid-cols-2 gap-3 lg:grid-cols-4">
 <div class="card lift p-3.5"><div class="text-[11px] text-slate-500">مبيعات اليوم</div><div id="t-sales" class="mt-1 text-lg font-bold mono text-brand-600 dark:text-brand-400">—</div></div>
 <div class="card lift p-3.5"><div class="text-[11px] text-slate-500">معاملات اليوم</div><div id="t-orders" class="mt-1 text-lg font-bold mono text-ink dark:text-white">—</div></div>
@@ -273,7 +242,7 @@
 <div class="grid gap-3.5 sm:grid-cols-2">
 <div><label class="label" for="client-name">اسم العميل أو المؤسسة</label><input id="client-name" list="clients-datalist" required autocomplete="off" placeholder="اكتب اسم العميل أو اختر من القائمة..." class="field" oninput="onClientNameInput(this.value)"><datalist id="clients-datalist"></datalist></div>
 <div><label class="label" for="phone">رقم الموبايل</label><input id="phone" list="phones-datalist" inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" class="field text-right font-mono" oninput="onPhoneInput(this.value)"><datalist id="phones-datalist"></datalist></div>
-<div><div class="flex items-center justify-between mb-1"><label class="label mb-0" for="tx-id">رقم المعاملة</label><button type="button" onclick="generateNewTxId(true)" class="text-[11px] text-brand-600 dark:text-brand-400 hover:underline"><i class="fa-solid fa-rotate-right ms-1"></i> رقم جديد</button></div><input id="tx-id" required placeholder="اضغط «رقم جديد»" dir="ltr" class="field text-right font-mono font-semibold text-brand-600 dark:text-brand-400"></div>
+<div><div class="flex items-center justify-between mb-1"><label class="label mb-0" for="tx-id">Request ID</label><button type="button" onclick="generateNewTxId(true)" class="text-[11px] text-brand-600 dark:text-brand-400 hover:underline font-bold"><i class="fa-solid fa-rotate-right ms-1"></i> رقم جديد</button></div><input id="tx-id" required placeholder="اضغط «رقم جديد» لتوليد Request ID" dir="ltr" class="field text-right font-mono font-semibold text-brand-600 dark:text-brand-400"></div>
 <div><label class="label" for="address">العنوان / الفرع (اختياري)</label><input id="address" placeholder="المقر، الشارع، المدينة..." class="field" oninput="updateOrderProgressBar()"></div>
 </div>
 </div>
@@ -306,35 +275,81 @@
 </div>
 
 <aside class="lg:sticky lg:top-20 space-y-4">
-<div class="card overflow-hidden rounded-2xl bg-ink dark:bg-slate-900 text-white shadow-xl border border-slate-800/90 ts-summary-panel">
+<div id="new-order-progress-wrap" class="card p-4 space-y-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+  <div class="flex items-center justify-between gap-2">
+    <div class="flex items-center gap-2">
+      <span id="nop-icon" class="flex h-6 w-6 items-center justify-center rounded-lg bg-violet-600 text-white text-[11px] font-bold"><i class="fa-solid fa-list-check"></i></span>
+      <div>
+        <span class="text-xs font-bold text-slate-800 dark:text-white block" id="nop-status-title">تقدم خطوات إنشاء الطلب</span>
+        <span class="text-[10px] text-slate-500 dark:text-slate-400 block" id="nop-status-sub">استكمال بيانات النموذج قبل الحفظ</span>
+      </div>
+    </div>
+    <span id="nop-pct-badge" class="rounded-full bg-violet-100 dark:bg-violet-950/80 text-violet-700 dark:text-violet-300 border border-violet-300/60 dark:border-violet-700/60 px-2.5 py-0.5 text-[11px] font-bold font-mono">0%</span>
+  </div>
+  <div class="nop-bar-track">
+    <div id="nop-bar-fill" class="nop-bar-fill" style="width:0%"></div>
+  </div>
+  <div class="grid grid-cols-2 gap-1.5 pt-0.5" id="nop-steps-grid">
+    <button type="button" onclick="focusOrderStep(1)" id="nop-step-1" class="nop-step-pill active">
+      <span class="nop-step-dot">1</span>
+      <div class="min-w-0 text-right">
+        <div class="text-[11px] font-bold truncate">العميل</div>
+        <div class="text-[9.5px] opacity-80 truncate" id="nop-step-1-sub">الاسم والموبايل</div>
+      </div>
+    </button>
+    <button type="button" onclick="focusOrderStep(2)" id="nop-step-2" class="nop-step-pill">
+      <span class="nop-step-dot">2</span>
+      <div class="min-w-0 text-right">
+        <div class="text-[11px] font-bold truncate">الخدمات</div>
+        <div class="text-[9.5px] opacity-80 truncate" id="nop-step-2-sub">الخدمة والسعر</div>
+      </div>
+    </button>
+    <button type="button" onclick="focusOrderStep(3)" id="nop-step-3" class="nop-step-pill">
+      <span class="nop-step-dot">3</span>
+      <div class="min-w-0 text-right">
+        <div class="text-[11px] font-bold truncate">المنفذ</div>
+        <div class="text-[9.5px] opacity-80 truncate" id="nop-step-3-sub">المنفذ والتكلفة</div>
+      </div>
+    </button>
+    <button type="button" onclick="focusOrderStep(4)" id="nop-step-4" class="nop-step-pill">
+      <span class="nop-step-dot">4</span>
+      <div class="min-w-0 text-right">
+        <div class="text-[11px] font-bold truncate">الدفع والحفظ</div>
+        <div class="text-[9.5px] opacity-80 truncate" id="nop-step-4-sub">طريقة الدفع</div>
+      </div>
+    </button>
+  </div>
+</div>
+
+<div class="card overflow-hidden rounded-2xl bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-lg border border-slate-200 dark:border-slate-800/90 ts-summary-panel">
 <div class="p-4 sm:p-5">
 <div class="flex items-center justify-between gap-2">
-  <span class="text-sm font-bold text-white">ملخص الطلب</span>
-  <span class="rounded-full bg-violet-500/20 border border-violet-400/30 px-2.5 py-0.5 text-[10.5px] font-bold text-violet-200">● طلب جديد</span>
+  <span class="text-sm font-bold text-slate-900 dark:text-white">ملخص الطلب</span>
+  <span class="rounded-full bg-violet-100 dark:bg-violet-500/20 border border-violet-300 dark:border-violet-400/30 px-2.5 py-0.5 text-[10.5px] font-bold text-violet-700 dark:text-violet-200">● طلب جديد</span>
 </div>
 <dl class="mt-3.5 space-y-2 text-xs">
-<div class="flex justify-between gap-3"><dt class="text-slate-400">العميل</dt><dd id="s-client" class="truncate font-bold text-slate-100">—</dd></div>
-<div class="flex justify-between gap-3"><dt class="text-slate-400">عدد الخدمات</dt><dd id="s-lines" class="font-bold text-slate-200 font-mono">0</dd></div>
-<div class="flex justify-between gap-3"><dt class="text-slate-400">طريقة الدفع</dt><dd id="s-pay" class="font-bold text-violet-300">كاش</dd></div>
+<div class="flex justify-between gap-3"><dt class="text-slate-500 dark:text-slate-400">العميل</dt><dd id="s-client" class="truncate font-bold text-slate-900 dark:text-slate-100">—</dd></div>
+<div class="flex justify-between gap-3"><dt class="text-slate-500 dark:text-slate-400">عدد الخدمات</dt><dd id="s-lines" class="font-bold text-slate-800 dark:text-slate-200 font-mono">0</dd></div>
+<div class="flex justify-between gap-3"><dt class="text-slate-500 dark:text-slate-400">طريقة الدفع</dt><dd id="s-pay" class="font-bold text-violet-700 dark:text-violet-300">كاش</dd></div>
 </dl>
-<div id="s-items-list" class="mt-3.5 pt-2.5 border-t border-white/10 space-y-1.5 text-xs"></div>
-<div id="s-disc-row" class="hidden flex justify-between gap-3 pt-2 text-xs"><span class="text-rose-300">خصم <span id="s-disc-pct"></span></span><span id="s-disc-amt" class="font-bold text-rose-300 font-mono">—</span></div>
-<div class="mt-4 border-t border-white/10 pt-3.5 flex items-baseline justify-between">
-  <span class="text-xs text-slate-300 font-semibold">الإجمالي</span>
-  <div class="flex items-baseline gap-1.5"><span id="grand-total-display" class="text-2xl font-bold font-mono text-white">0</span><span class="text-xs text-slate-300">ج.م</span></div>
+<div id="s-items-list" class="mt-3.5 pt-2.5 border-t border-slate-200 dark:border-white/10 space-y-1.5 text-xs"></div>
+<div id="s-disc-row" class="hidden flex justify-between gap-3 pt-2 text-xs"><span class="text-rose-600 dark:text-rose-300 font-semibold">إجمالي خصم البنود <span id="s-disc-pct"></span></span><span id="s-disc-amt" class="font-bold text-rose-600 dark:text-rose-300 font-mono">—</span></div>
+<div class="mt-4 border-t border-slate-200 dark:border-white/10 pt-3.5 flex items-baseline justify-between">
+  <span class="text-xs text-slate-600 dark:text-slate-300 font-semibold">الإجمالي النهائي</span>
+  <div class="flex items-baseline gap-1.5"><span id="grand-total-display" class="text-2xl font-bold font-mono text-brand-700 dark:text-white">0</span><span class="text-xs text-slate-500 dark:text-slate-300">ج.م</span></div>
 </div>
 </div>
 
-<div class="bg-black/30 p-4 border-t border-white/10 space-y-2">
-<button id="save-btn" type="submit" onclick="window.__saveOrderMode='normal'" class="btn-neo-pri w-full py-2.5 text-xs sm:text-sm font-bold shadow-lg disabled:opacity-60">
+<div class="bg-slate-50 dark:bg-black/30 p-4 border-t border-slate-200 dark:border-white/10 space-y-2">
+<button id="save-btn" type="submit" onclick="window.__saveOrderMode='normal'" class="btn-neo-pri w-full py-2.5 text-xs sm:text-sm font-bold shadow-md disabled:opacity-60">
   <i class="fa-solid fa-check ms-1"></i><span>حفظ الطلب</span>
 </button>
 <div class="grid grid-cols-2 gap-2">
   <button type="button" onclick="submitOrderWithMode('print')" class="btn-neo-sec py-2 text-xs font-bold justify-center">
-    <i class="fa-solid fa-print ms-1 text-violet-300"></i><span>حفظ وطباعة</span>
+    <i class="fa-solid fa-print ms-1 text-violet-600 dark:text-violet-300"></i><span>حفظ وطباعة</span>
   </button>
   <button type="button" onclick="submitOrderWithMode('new')" class="btn-neo-sec py-2 text-xs font-bold justify-center">
-    <i class="fa-solid fa-plus ms-1 text-emerald-300"></i><span>حفظ وطلب جديد</span>
+    <i class="fa-solid fa-plus ms-1 text-emerald-600 dark:text-emerald-300"></i><span>حفظ وطلب جديد</span>
   </button>
 </div>
 </div>
@@ -405,7 +420,7 @@
         <table class="w-full text-xs sm:text-sm text-right">
           <thead class="bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold text-slate-500 dark:text-slate-400">
             <tr>
-              <th class="th px-3.5">رقم</th>
+              <th class="th px-3.5" dir="ltr">Request ID</th>
               <th class="th">العميل</th>
               <th class="th">الخدمة</th>
               <th class="th">الموظف</th>
@@ -423,7 +438,7 @@
       <div id="recent-cards-container" class="md:hidden p-3.5 space-y-2.5"></div>
     </div>
 
-    <aside id="tx-inspector-aside" class="hidden lg:sticky lg:top-20">
+    <aside id="tx-inspector-aside" class="hidden">
       <div id="tx-inspector-panel" class="card p-4 sm:p-5 space-y-4"></div>
     </aside>
   </div>
@@ -447,7 +462,7 @@
 <div class="card p-4"><div class="text-xs font-semibold text-slate-500">المنفذ / التاريخ</div><div id="x-label" class="text-sm font-bold text-ink dark:text-white mt-1 truncate">—</div></div>
 </div>
 <div class="card hidden md:block overflow-x-auto"><table class="w-full text-xs sm:text-sm text-right">
-<thead class="bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold text-slate-500 dark:text-slate-400"><tr><th class="th px-4">العميل</th><th class="th">التليفون</th><th class="th">ID الطلب</th><th class="th">الخدمة</th><th class="th">Service ID</th><th class="th text-center">العدد</th><th class="th">المنفذ</th><th class="th">تكلفة التنفيذ</th><th class="th">بداية التنفيذ</th><th class="th">ملاحظات</th></tr></thead>
+<thead class="bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold text-slate-500 dark:text-slate-400"><tr><th class="th px-4">العميل</th><th class="th">التليفون</th><th class="th" dir="ltr">Request ID</th><th class="th" dir="ltr">Service ID</th><th class="th">الخدمة</th><th class="th text-center">العدد</th><th class="th">المنفذ</th><th class="th">تكلفة تنفيذ الوحدة</th><th class="th">إجمالي التنفيذ</th><th class="th">بداية التنفيذ</th><th class="th">الملاحظات</th></tr></thead>
 <tbody id="sheet-body" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
 </table></div>
 <div id="sheet-cards-container" class="md:hidden space-y-2.5"></div>
