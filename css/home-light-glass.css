@@ -19,8 +19,9 @@ html:not(.dark) body {
 }
 html:not(.dark) .ts-header { background: rgba(255, 255, 255, .55) !important; border-bottom-color: rgba(255, 255, 255, .7) !important; box-shadow: 0 6px 24px rgba(99, 102, 241, .08); }
 html:not(.dark) #app .card:not(.hm-hero) {
-  background: rgba(255, 255, 255, .55) !important; border: 1px solid rgba(255, 255, 255, .75) !important;
-  box-shadow: 0 8px 28px rgba(99, 102, 241, .10), inset 0 1px 0 rgba(255, 255, 255, .8) !important;
+  background: rgba(255, 255, 255, .92) !important; border: 1px solid rgba(203, 213, 225, .85) !important;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, .05), inset 0 1px 0 rgba(255, 255, 255, .95) !important;
+  color: #0f172a;
 }
 html:not(.dark) #app .card:not([data-tx]):not(tr) { -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
 html:not(.dark) #app .field, html:not(.dark) #app input.field, html:not(.dark) #app select.field, html:not(.dark) #app textarea.field {
