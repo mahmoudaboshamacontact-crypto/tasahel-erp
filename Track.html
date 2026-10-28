@@ -48,6 +48,14 @@ body{margin:0;font-family:'IBM Plex Sans Arabic',Tahoma,'Segoe UI',sans-serif;ba
 .eta p{margin:0;font-size:14px;font-weight:700;color:#166534}
 .eta small{display:block;margin-top:4px;font-size:11px;color:var(--mut)}
 h2.ttl{font-size:22px;margin:4px 0 14px;font-weight:700}
+.sv{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.sv:last-child{margin-bottom:0}
+.sv .h{display:flex;justify-content:space-between;gap:8px;align-items:baseline;font-weight:700;font-size:15px}
+.sv .h small{color:var(--mut);font-weight:600;font-size:12px;white-space:nowrap}
+.sv .pb{height:8px;border-radius:8px;background:#c9d4e8;margin:8px 0 6px;overflow:hidden}
+.sv .pb i{display:block;height:100%;border-radius:8px;background:var(--c,#0e8f86);transition:width .4s}
+.sv .st{font-size:12px;font-weight:700;color:var(--c,#0e8f86)}
+.sv .ev{font-size:11px;color:var(--mut);margin-top:4px;line-height:1.7}
 .tl{position:relative;display:flex;gap:12px;align-items:flex-start;padding-bottom:14px;--c:#9aa8bd}
 .tl:last-child{padding-bottom:0}
 .tl:not(:last-child)::before{content:"";position:absolute;inset-inline-start:15px;top:34px;bottom:0;width:2px;background:var(--line)}
@@ -139,6 +147,11 @@ textarea:focus{outline:2px solid #0a7b3e55;border-color:var(--g)}
             <div class="bar" id="bar"><i></i><i></i><i></i><i></i></div>
             <div class="k" style="font-size:12px">آخر تحديث</div>
             <div class="v" id="upd"></div>
+          </div>
+
+          <div class="card" id="svcs-card" hidden>
+            <h2 class="ttl">خدمات طلبك</h2>
+            <div id="svcs"></div>
           </div>
 
           <div class="card eta" id="eta" hidden>
@@ -273,6 +286,26 @@ textarea:focus{outline:2px solid #0a7b3e55;border-color:var(--g)}
     firstTL = false;
   }
 
+  var SLBL = { in_progress: 'قيد التنفيذ', under_review: 'قيد المراجعة', complete: 'جاهز للتسليم', delivered: 'تم التسليم' };
+  var SCOL = { in_progress: '#f08a00', under_review: '#0e8f86', complete: '#0a7b3e', delivered: '#0a7b3e' };
+  function drawServices(d) {
+    var box = $('svcs'), list = d.services || [], card = $('svcs-card');
+    var has = list.length && list[0].status;
+    card.hidden = !has; if (!has) return;
+    box.innerHTML = '';
+    list.forEach(function (s) {
+      var c = SCOL[s.status] || '#0e8f86';
+      var w = el('div', 'sv'); w.style.setProperty('--c', c);
+      var h = el('div', 'h'); h.appendChild(el('span', null, s.name || '')); if (s.qty != null) h.appendChild(el('small', null, 'العدد: ' + s.qty));
+      w.appendChild(h);
+      var pb = el('div', 'pb'), bi = el('i'); bi.style.width = (Number(s.pct) || 0) + '%'; pb.appendChild(bi); w.appendChild(pb);
+      w.appendChild(el('div', 'st', (SLBL[s.status] || '') + ' · ' + (Number(s.pct) || 0) + '%'));
+      var ev = (s.events || []).map(function (e) { return (SLBL[e.stage] || '') + ': ' + fmtDT(e.at); });
+      if (ev.length) w.appendChild(el('div', 'ev', ev.join(' — ')));
+      box.appendChild(w);
+    });
+  }
+
   var TOPICS = ['موعد التسليم', 'تعديل بيانات الطلب', 'الدفع والفاتورة', 'مشكلة في الخدمة', 'أخرى'];
   function drawChips() {
     var c = $('chips'); c.innerHTML = '';
@@ -313,7 +346,7 @@ textarea:focus{outline:2px solid #0a7b3e55;border-color:var(--g)}
     $('svc').textContent = total ? (total + (total === 1 ? ' خدمة' : ' خدمات')) : '—';
     var hl = $('headline'); hl.textContent = STEPS[st];
     document.documentElement.style.setProperty('--sc', COL[st]);
-    $('sumline').textContent = total > 1 ? ('تم تسليم ' + del + ' من ' + total + ' خدمات') : '';
+    $('sumline').textContent = (d.order_pct != null ? 'تقدم الطلب: ' + d.order_pct + '%' + (total > 1 ? ' · ' : '') : '') + (total > 1 ? ('تم تسليم ' + del + ' من ' + total + ' خدمات') : '');
     var segs = $('bar').children;
     for (var i = 0; i < 4; i++) segs[i].className = i <= st ? 'f' : '';
 
@@ -325,6 +358,7 @@ textarea:focus{outline:2px solid #0a7b3e55;border-color:var(--g)}
         : 'من ' + fmtDay(d.expected_from) + ' إلى ' + fmtDay(d.expected_to);
     } else { eta.hidden = true; }
 
+    drawServices(d);
     drawTimeline(d, st);
     drawConvo(d.conversation || []);
     loaded = true;
@@ -335,7 +369,7 @@ textarea:focus{outline:2px solid #0a7b3e55;border-color:var(--g)}
     if (!validShape) { show('invalid'); return; }
     busy = true;
     if (manual) $('rf').disabled = true;
-    rpc('get_public_tracking', { p_token: token }).then(function (d) {
+    rpc('get_public_tracking_v2', { p_token: token }).catch(function () { return rpc('get_public_tracking', { p_token: token }); }).then(function (d) {
       busy = false; $('rf').disabled = false;
       if (!d) { show('invalid'); return; }
       render(d); $('stale').hidden = true; show('content');
