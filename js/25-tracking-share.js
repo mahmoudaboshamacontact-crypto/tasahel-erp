@@ -82,13 +82,13 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   if (typeof _ot === 'function') window.openTxModal = function (tx) {
     const r = _ot.apply(this, arguments);
     try {
-      const mine = document.getElementById('p24-link');   /* زرار phase24 الموجود: نحوّله لنافذة QR بدل ما نكرر الزرار */
+      const mine = document.getElementById('p24-link');
       const box = document.getElementById('tx-modal-actions-left');
       if (mine) {
-        mine.innerHTML = '<i class="fa-solid fa-qrcode"></i><span>رابط المتابعة وQR</span>';
+        mine.innerHTML = '<i class="fa-solid fa-qrcode"></i><span>رابط المتابعة وQR Code</span>';
         mine.onclick = function () { window.tasahelTrackOpen(tx); };
       } else if (box && !box.querySelector('[data-trk]')) box.insertAdjacentHTML('beforeend',
-        '<button type="button" data-trk="1" data-tx="' + eh(tx) + '" onclick="tasahelTrackOpen(this.dataset.tx)" class="px-3 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-qrcode"></i><span>رابط التتبع</span></button>');
+        '<button type="button" data-trk="1" data-tx="' + eh(tx) + '" onclick="tasahelTrackOpen(this.dataset.tx)" class="px-3.5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-qrcode"></i><span>رابط المتابعة وQR Code</span></button>');
     } catch (e) { /* */ }
     return r;
   };
@@ -100,7 +100,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     try {
       const p = document.getElementById('tx-inspector-panel'), f = p && p.querySelector('form');
       if (p && f && !p.querySelector('[data-trk]')) f.insertAdjacentHTML('beforebegin',
-        '<button type="button" data-trk="1" data-tx="' + eh(tx) + '" onclick="tasahelTrackOpen(this.dataset.tx)" class="btn-neo-sec w-full text-xs py-2"><i class="fa-solid fa-qrcode text-violet-400"></i><span>رابط التتبع وQR</span></button>');
+        '<button type="button" data-trk="1" data-tx="' + eh(tx) + '" onclick="tasahelTrackOpen(this.dataset.tx)" class="btn-neo-sec w-full text-xs py-2"><i class="fa-solid fa-qrcode text-violet-500 dark:text-violet-400"></i><span>رابط المتابعة وQR Code</span></button>');
     } catch (e) { /* */ }
     return r;
   };
@@ -138,7 +138,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
           '</div>' +
         '</div>' +
         '<table style="width:100%;border-collapse:collapse;table-layout:fixed">' +
-          '<tr><td style="' + lbl + 'width:16%">السيد / المنشأة</td><td style="' + c + 'width:34%;text-align:right;word-break:break-word;line-height:1.35">' + eh(s.client_name) + '</td><td style="' + lbl + 'width:16%">رقم التليفون</td><td style="' + c + 'width:34%;text-align:right" dir="ltr"><span style="display:block;text-align:right;font-weight:700">' + eh(s.phone || '—') + '</span></td></tr>' +
+          '<tr><td style="' + lbl + 'width:16%">السيد / المنشأة</td><td style="' + c + 'width:34%;text-align:right;word-break:break-word;line-height:1.35">' + eh(s.client_name) + (typeof window.getRequestPeopleNamesText === 'function' && window.getRequestPeopleNamesText(s.transaction_id) ? '<div style="font-size:9.5px;color:#0a6b3a;margin-top:2px">المستفيدون: ' + eh(window.getRequestPeopleNamesText(s.transaction_id)) + '</div>' : '') + '</td><td style="' + lbl + 'width:16%">رقم التليفون</td><td style="' + c + 'width:34%;text-align:right" dir="ltr"><span style="display:block;text-align:right;font-weight:700">' + eh(s.phone || '—') + '</span></td></tr>' +
           '<tr><td style="' + lbl + '">العنوان</td><td colspan="3" style="' + c + 'text-align:right;word-break:break-word">' + eh(s.address || '—') + '</td></tr>' +
         '</table>' +
         '<table style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:-1px;margin-bottom:8px">' +

@@ -129,8 +129,22 @@ function initReceivedAtClock(){
   if(!receivedAtTimer)receivedAtTimer=setInterval(()=>syncReceivedAt(false),15000);
 }
 window.syncReceivedAt=syncReceivedAt;
+window.__homeTargetsMap={};
+async function loadHomeTargets(){
+  if(!sbClient)return;
+  try{
+    const ym=new Date().toLocaleDateString('en-CA').slice(0,7);
+    const r=await sbClient.from('emp_targets').select('user_id,target,services_target').eq('month',ym);
+    if(!r.error&&Array.isArray(r.data)){
+      const m={};
+      r.data.forEach(x=>{if(x&&x.user_id)m[String(x.user_id)]={target:Number(x.target)||0,services_target:Number(x.services_target)||0};});
+      window.__homeTargetsMap=m;
+      if(currentTab==='home'&&typeof renderHomeTab==='function')renderHomeTab();
+    }
+  }catch(e){}
+}
 async function loadInitialData(){
-  await Promise.all([loadServices(),loadRecentRequests(),loadProfiles()]);
+  await Promise.all([loadServices(),loadRecentRequests(),loadProfiles(),loadHomeTargets()]);
   renderPaymentMethodButtons();
   renderQuickServicesGrid();
   if(!$('tx-id').value)generateNewTxId();
@@ -531,26 +545,164 @@ function selectTxForInspector(tx,openModalOnMobile){
 }
 window.selectTxForInspector=selectTxForInspector;
 
+/* حساب نسبة التقدم لكل خدمة ومتوسط تقدم الطلب بالتساوي (القسمان 5.3 و 5.4 و 14) */
+function getLinePct(st){
+  if(st==='Delivered'||st==='delivered')return 100;
+  if(st==='Complete'||st==='complete')return 75;
+  if(st==='Under Review'||st==='under_review')return 50;
+  return 25;
+}
+function getLineStageColor(st){
+  if(st==='Delivered'||st==='delivered')return '#10b981';
+  if(st==='Complete'||st==='complete')return '#14b8a6';
+  if(st==='Under Review'||st==='under_review')return '#f59e0b';
+  return '#8b5cf6';
+}
+function getOrderPct(oOrStatuses){
+  if(!oOrStatuses)return 25;
+  const arr=Array.isArray(oOrStatuses)?oOrStatuses:(oOrStatuses.lines||[]).map(l=>l.status||'In Progress');
+  if(!arr.length)return 25;
+  const sum=arr.reduce((acc,s)=>acc+getLinePct(s),0);
+  return Math.round(sum/arr.length);
+}
+window.getLinePct=getLinePct;
+window.getOrderPct=getOrderPct;
+
+/* سجل الطوابع الزمنية الفعلية لمراحل كل خدمة من line_stage_events (القسم 5.4) */
+const lineStageEventsCache={};
+const STAGE_EVENT_LABELS={
+  'in_progress':'بدء التنفيذ',
+  'under_review':'مرحلة المراجعة / كود التنفيذ',
+  'complete':'الجاهزية للتسليم',
+  'delivered':'التسليم الفعلي'
+};
+function formatLineStageEventsHtml(l){
+  const lid=String(l.id);
+  const evs=lineStageEventsCache[lid];
+  const pills=[];
+  if(Array.isArray(evs)&&evs.length){
+    const byStage={};
+    evs.forEach(e=>{if(e&&e.stage&&e.at)byStage[e.stage]=e.at;});
+    ['in_progress','under_review','complete','delivered'].forEach(stKey=>{
+      if(byStage[stKey]){
+        pills.push('<span class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 px-2 py-0.5 text-[10.5px] text-slate-600 dark:text-slate-300"><b class="text-ink dark:text-white">'+escapeHtml(STAGE_EVENT_LABELS[stKey])+':</b> <span>'+escapeHtml(formatDateTime(byStage[stKey]))+'</span></span>');
+      }
+    });
+  }else{
+    const startAt=l.exec_start_date?formatDateOnly(l.exec_start_date):formatDateTime(lineDate(l));
+    if(startAt&&startAt!=='—'){
+      pills.push('<span class="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 px-2 py-0.5 text-[10.5px] text-slate-600 dark:text-slate-300"><b class="text-ink dark:text-white">بدء التنفيذ:</b> <span>'+escapeHtml(startAt)+'</span></span>');
+    }
+    if(l.status==='Delivered'&&l.delivered_date){
+      pills.push('<span class="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-[10.5px] text-emerald-700 dark:text-emerald-300"><b>التسليم الفعلي:</b> <span>'+escapeHtml(formatDateOnly(l.delivered_date))+'</span></span>');
+    }
+  }
+  return pills.length?pills.join(' '):'<span class="text-[10.5px] text-slate-400">لم تُسجّل انتقالات إضافية بعد</span>';
+}
+async function loadLineStageEvents(tx){
+  if(!sbClient||!tx)return;
+  try{
+    const r=await sbClient.from('line_stage_events').select('line_id,stage,at').eq('transaction_id',String(tx)).order('at',{ascending:true});
+    if(r.error||!Array.isArray(r.data))return;
+    const grouped={};
+    r.data.forEach(row=>{
+      const k=String(row.line_id);
+      if(!grouped[k])grouped[k]=[];
+      grouped[k].push(row);
+    });
+    Object.keys(grouped).forEach(k=>{lineStageEventsCache[k]=grouped[k];});
+    const o=groupedOrders.find(x=>String(x.transaction_id)===String(tx));
+    if(o&&o.lines){
+      o.lines.forEach(l=>{
+        document.querySelectorAll('[data-line-events="'+String(l.id)+'"]').forEach(el=>{
+          el.innerHTML=formatLineStageEventsHtml(l);
+        });
+      });
+    }
+  }catch(e){}
+}
+
+/* بطاقة مستقلة وواضحة لكل بند خدمة داخل تفاصيل الطلب واللوحة الجانبية (القسمان 5.3 و 5.4) */
+function buildServiceDetailCard(l,idx,mode){
+  const st=l.status||'In Progress';
+  const pct=getLinePct(st);
+  const col=getLineStageColor(st);
+  const disc=Number(l.discount_pct)||0;
+  const listPr=Number(l.list_price)||Number(l.unit_price)||0;
+  const peopleHtml=typeof window.getRequestPeopleForLineHtml==='function'?window.getRequestPeopleForLineHtml(l.transaction_id,l.id,l.service):'';
+  const ctrlHtml=mode==='modal'
+    ?statusSelect(l)
+    :'<div class="pt-1"><label class="text-[10.5px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">تحديث حالة هذه الخدمة فقط:</label><select onchange="setLineStatus(\''+escapeHtml(l.id)+'\',this.value)" class="field !py-1.5 text-xs">'+Object.keys(STATUS_PATCH).map(s=>'<option value="'+s+'"'+(s===st?' selected':'')+'>'+statusLabel(s)+'</option>').join('')+'</select></div>';
+
+  return '<div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/90 p-3.5 space-y-2.5 shadow-2xs" data-svc-card-id="'+escapeHtml(l.id)+'">'+
+    '<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">'+
+      '<div class="flex items-center gap-2 min-w-0">'+
+        '<span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 text-[11px] font-bold font-mono">'+(idx+1)+'</span>'+
+        '<span class="font-bold text-xs sm:text-sm text-ink dark:text-white truncate">'+escapeHtml(l.service||'—')+'</span>'+
+      '</div>'+
+      '<div class="flex items-center gap-1.5 shrink-0">'+
+        badge(st)+
+        '<span class="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800" data-line-pct-lbl="'+escapeHtml(l.id)+'" style="color:'+col+'">'+pct+'%</span>'+
+      '</div>'+
+    '</div>'+
+
+    /* شريط تقدم مستقل للخدمة */
+    '<div class="space-y-1">'+
+      '<div class="flex items-center justify-between text-[10.5px] text-slate-500 dark:text-slate-400">'+
+        '<span>شريط تقدم الخدمة</span>'+
+        '<span data-line-st-lbl="'+escapeHtml(l.id)+'" class="font-semibold" style="color:'+col+'">'+escapeHtml(statusLabel(st))+' ('+pct+'%)</span>'+
+      '</div>'+
+      '<div class="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">'+
+        '<div data-line-bar="'+escapeHtml(l.id)+'" class="h-full rounded-full transition-all duration-300" style="width:'+pct+'%;background:'+col+'"></div>'+
+      '</div>'+
+    '</div>'+
+
+    /* حقول الخدمة المفصولة والواضحة */
+    '<div class="grid grid-cols-2 sm:grid-cols-3 gap-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-2.5 text-xs">'+
+      '<div><span class="text-[10.5px] text-slate-400 block">العدد</span><span class="font-bold font-mono text-ink dark:text-white">'+fmtNum(l.qty)+'</span></div>'+
+      '<div><span class="text-[10.5px] text-slate-400 block">سعر الوحدة</span><span class="font-bold font-mono text-ink dark:text-white">'+fmtNum(l.unit_price)+' ج.م'+(disc>0?' <small class="text-rose-500">(-'+fmtNum(disc)+'% من '+fmtNum(listPr)+')</small>':'')+'</span></div>'+
+      '<div><span class="text-[10.5px] text-slate-400 block">إجمالي البند</span><span class="font-bold font-mono text-brand-600 dark:text-violet-300">'+formatCurrency(l.total)+'</span></div>'+
+      '<div><span class="text-[10.5px] text-slate-400 block">المنفذ</span><span class="font-semibold text-ink dark:text-white">'+escapeHtml(l.executor||'—')+'</span></div>'+
+      '<div><span class="text-[10.5px] text-slate-400 block">تكلفة التنفيذ</span><span class="font-bold font-mono text-ink dark:text-white">'+formatCurrency(execCostOf(l))+' <small class="text-slate-400 font-normal">('+fmtNum(l.exec_unit_cost||0)+'/وحدة)</small></span></div>'+
+      '<div><span class="text-[10.5px] text-slate-400 block" dir="ltr">Service ID</span><span class="font-bold font-mono text-violet-700 dark:text-violet-300" dir="ltr">'+(l.service_ref?escapeHtml(l.service_ref):'—')+'</span></div>'+
+    '</div>'+
+    (l.notes?'<div class="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/30 rounded-lg px-2.5 py-1.5"><i class="fa-solid fa-note-sticky ms-1"></i>'+escapeHtml(l.notes)+'</div>':'')+
+    peopleHtml+
+    '<div class="space-y-1 pt-0.5">'+
+      '<div class="text-[10.5px] font-semibold text-slate-400">تواريخ مراحل التنفيذ المسجلة:</div>'+
+      '<div class="flex flex-wrap gap-1.5" data-line-events="'+escapeHtml(l.id)+'">'+formatLineStageEventsHtml(l)+'</div>'+
+    '</div>'+
+    ctrlHtml+
+  '</div>';
+}
+
 /* معلومات مرحلة الطلب للشريط التفاعلي والحلقة الدائرية */
-function getStageMeta(st,isLateFlag){
+function getStageMeta(st,isLateFlag,customPct){
   if(st==='Delivered'){
-    return {step:4,pct:100,barW:100,title:'تم التسليم',sub:'تم تسليم المعاملة للعميل',color:'#10b981',icon:'fa-circle-check',nextStatus:'In Progress',nextLabel:'قيد التنفيذ'};
+    const p=customPct!=null?customPct:100;
+    return {step:4,pct:p,barW:p,title:'تم التسليم',sub:'تم تسليم المعاملة للعميل',color:'#10b981',icon:'fa-circle-check',nextStatus:'In Progress',nextLabel:'قيد التنفيذ'};
   }
   if(st==='Complete'){
-    return {step:3,pct:90,barW:78,title:'جاهزة للتسليم',sub:'مكتملة وفي انتظار التسليم',color:'#14b8a6',icon:'fa-box-open',nextStatus:'Delivered',nextLabel:'تم التسليم'};
+    const p=customPct!=null?customPct:75;
+    return {step:3,pct:p,barW:p,title:'جاهزة للتسليم',sub:'مكتملة وفي انتظار التسليم',color:'#14b8a6',icon:'fa-box-open',nextStatus:'Delivered',nextLabel:'تم التسليم'};
   }
   if(st==='Under Review'){
-    return {step:2,pct:50,barW:36,title:'قيد المراجعة',sub:'مراجعة المستندات والبيانات',color:'#f59e0b',icon:'fa-magnifying-glass',nextStatus:'In Progress',nextLabel:'قيد التنفيذ'};
+    const p=customPct!=null?customPct:50;
+    return {step:2,pct:p,barW:p,title:'قيد المراجعة',sub:'مراجعة المستندات والبيانات',color:'#f59e0b',icon:'fa-magnifying-glass',nextStatus:'In Progress',nextLabel:'قيد التنفيذ'};
   }
   if(isLateFlag){
-    return {step:3,pct:65,barW:66,title:'متأخرة',sub:'تجاوزت موعد التسليم المحدد',color:'#f43f5e',icon:'fa-clock',nextStatus:'Complete',nextLabel:'جاهز للتسليم'};
+    const p=customPct!=null?customPct:25;
+    return {step:2,pct:p,barW:p,title:'متأخرة',sub:'تجاوزت موعد التسليم المحدد',color:'#f43f5e',icon:'fa-clock',nextStatus:'Complete',nextLabel:'جاهز للتسليم'};
   }
-  return {step:3,pct:75,barW:68,title:'قيد التنفيذ',sub:'جاري التنفيذ لدى المنفذ',color:'#8b5cf6',icon:'fa-gears',nextStatus:'Complete',nextLabel:'جاهز للتسليم'};
+  const p=customPct!=null?customPct:25;
+  return {step:2,pct:p,barW:p,title:'قيد التنفيذ',sub:'جاري التنفيذ لدى المنفذ',color:'#8b5cf6',icon:'fa-gears',nextStatus:'Complete',nextLabel:'جاهز للتسليم'};
 }
 
 /* بناء شريط مراحل المعاملة والحلقة الدائرية */
-function buildInteractiveStatusWidgets(tx,currentSt,isLateFlag,mode){
-  const m=getStageMeta(currentSt,isLateFlag);
+function buildInteractiveStatusWidgets(tx,currentSt,isLateFlag,mode,customPct){
+  const o=groupedOrders.find(x=>String(x.transaction_id)===String(tx));
+  const derivedPct=customPct!=null?customPct:(o?getOrderPct(o):null);
+  const m=getStageMeta(currentSt,isLateFlag,derivedPct);
   const r=44,circ=Math.round(2*Math.PI*r);
   const offset=Math.round(circ*(1-m.pct/100));
   const clickFn=stVal=>mode==='modal'
@@ -578,16 +730,16 @@ function buildInteractiveStatusWidgets(tx,currentSt,isLateFlag,mode){
           '<circle class="tx-ring-fg" cx="55" cy="55" r="'+r+'" stroke="'+m.color+'" stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'"></circle>'+
         '</svg>'+
         '<div class="absolute inset-0 flex flex-col items-center justify-center text-center px-2">'+
-          '<i class="fa-solid '+m.icon+' text-base mb-0.5" style="color:'+m.color+'"></i>'+
-          '<span class="font-bold text-xs text-white leading-tight">'+escapeHtml(m.title)+'</span>'+
-          '<span class="text-[9.5px] text-slate-400 mt-0.5">تحديث الحالة</span>'+
+          '<span class="font-mono font-extrabold text-sm text-white leading-none mb-0.5" style="color:'+m.color+'">'+m.pct+'%</span>'+
+          '<span class="font-bold text-[11px] text-white leading-tight">'+escapeHtml(m.title)+'</span>'+
+          '<span class="text-[9px] text-slate-400 mt-0.5">متوسط تقدم الخدمات</span>'+
         '</div>'+
       '</div>'+
     '</div>'+
 
     '<div class="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-black/25 p-3">'+
       '<div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mb-0.5 px-1">'+
-        '<span class="font-bold text-ink dark:text-white">مراحل المعاملة</span>'+
+        '<span class="font-bold text-ink dark:text-white">تقدم تنفيذ الخدمات (الإجمالي)</span>'+
         '<span class="font-mono font-bold" style="color:'+m.color+'">'+m.pct+'%</span>'+
       '</div>'+
       '<div class="tx-stepper-wrap">'+
@@ -595,19 +747,19 @@ function buildInteractiveStatusWidgets(tx,currentSt,isLateFlag,mode){
         '<div class="tx-stepper-nodes">'+
           '<button type="button" onclick="'+clickFn('In Progress')+'" class="tx-step-node done">'+
             '<span class="tx-step-circle"><i class="fa-solid fa-check"></i></span>'+
-            '<span class="tx-step-label">تسجيل الطلب</span>'+
+            '<span class="tx-step-label">قيد التنفيذ</span>'+
           '</button>'+
           '<button type="button" onclick="'+clickFn('Under Review')+'" class="'+nodeCls(2)+'">'+
             '<span class="tx-step-circle">'+nodeIcon(2,'fa-magnifying-glass')+'</span>'+
-            '<span class="tx-step-label">مراجعة المستندات</span>'+
+            '<span class="tx-step-label">المراجعة</span>'+
           '</button>'+
-          '<button type="button" onclick="'+clickFn(currentSt==='In Progress'?'Complete':'In Progress')+'" class="'+nodeCls(3)+'">'+
-            '<span class="tx-step-circle">'+nodeIcon(3,'fa-gears')+'</span>'+
-            '<span class="tx-step-label">'+(currentSt==='Complete'?'جاهز للتسليم':'التنفيذ')+'</span>'+
+          '<button type="button" onclick="'+clickFn('Complete')+'" class="'+nodeCls(3)+'">'+
+            '<span class="tx-step-circle">'+nodeIcon(3,'fa-box-open')+'</span>'+
+            '<span class="tx-step-label">جاهز للتسليم</span>'+
           '</button>'+
           '<button type="button" onclick="'+clickFn('Delivered')+'" class="'+nodeCls(4)+'">'+
             '<span class="tx-step-circle">'+nodeIcon(4,'fa-flag-checkered')+'</span>'+
-            '<span class="tx-step-label">التسليم</span>'+
+            '<span class="tx-step-label">تم التسليم</span>'+
           '</button>'+
         '</div>'+
       '</div>'+
@@ -631,14 +783,12 @@ async function renderTxInspector(tx){
   syncTxInspectorLayout();
   const st=getOrderStatus(o);
   const late=isOrderLate(o);
-  const svcs=o.lines.map(l=>l.service+' (×'+fmtNum(l.qty)+')').join(' + ');
-  const wa=waLink(o.phone,'أهلاً '+o.client_name+'، بخصوص معاملتك رقم '+o.transaction_id+' — تساهيل');
 
   panel.innerHTML=
     '<div class="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-white/10 pb-3">'+
       '<div class="min-w-0">'+
         '<div class="flex items-center gap-2">'+
-          '<span class="font-bold text-sm text-ink dark:text-white font-mono" dir="ltr">معاملة #'+escapeHtml(o.transaction_id)+'</span>'+
+          '<span class="font-bold text-sm text-ink dark:text-white font-mono" dir="ltr">Request ID: '+escapeHtml(o.transaction_id)+'</span>'+
           badge(st)+
         '</div>'+
         '<button type="button" '+ac(o.client_name)+' class="mt-1 font-bold text-xs sm:text-sm text-brand-600 dark:text-violet-300 hover:underline block text-right truncate">'+escapeHtml(o.client_name||'—')+(o.phone?' · <span class="font-mono" dir="ltr">'+escapeHtml(o.phone)+'</span>':'')+'</button>'+
@@ -649,21 +799,22 @@ async function renderTxInspector(tx){
     buildInteractiveStatusWidgets(o.transaction_id,st,late,'inspector')+
 
     '<div class="rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 p-3 space-y-1.5 text-xs">'+
-      '<div class="flex justify-between gap-2"><span class="text-slate-400">الخدمات</span><span class="font-bold text-ink dark:text-white text-left">'+escapeHtml(svcs||'—')+'</span></div>'+
-      '<div class="flex justify-between gap-2"><span class="text-slate-400">الإجمالي</span><span class="font-bold text-brand-600 dark:text-violet-300 font-mono">'+escapeHtml(formatCurrency(o.grand_total))+' · '+escapeHtml(o.payment_method||'كاش')+'</span></div>'+
-      '<div class="flex justify-between gap-2"><span class="text-slate-400">الموظف</span><span class="font-bold text-ink dark:text-white">'+empCell(o.employee)+'</span></div>'+
+      '<div class="flex justify-between gap-2"><span class="text-slate-400">عدد الخدمات</span><span class="font-bold text-ink dark:text-white">'+o.lines.length+' خدمة</span></div>'+
+      '<div class="flex justify-between gap-2"><span class="text-slate-400">الإجمالي النهائي</span><span class="font-bold text-brand-600 dark:text-violet-300 font-mono">'+escapeHtml(formatCurrency(o.grand_total))+' · '+escapeHtml(o.payment_method||'كاش')+'</span></div>'+
+      '<div class="flex justify-between gap-2"><span class="text-slate-400">الموظف المسؤول</span><span class="font-bold text-ink dark:text-white">'+empCell(o.employee)+'</span></div>'+
+      '<div class="flex justify-between gap-2"><span class="text-slate-400">مندوب الاستلام</span><span class="font-semibold text-ink dark:text-white">'+escapeHtml(o.receiver||'العميل شخصياً')+'</span></div>'+
     '</div>'+
 
-    '<div class="space-y-2">'+
-      '<div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">'+
-        Object.keys(STATUS_PATCH).map(s=>
-          '<button type="button" onclick="inspectorChangeStatus(\''+escapeHtml(o.transaction_id)+'\',\''+s+'\')" class="rounded-lg py-1.5 px-2 text-[11px] font-bold border transition '+(s===st?'ring-2 ring-violet-400 border-violet-400 ':'border-transparent ')+(STATUS_CLS[s]||'')+'">'+escapeHtml(statusLabel(s))+'</button>'
-        ).join('')+
-      '</div>'+
-      '<div class="grid grid-cols-2 gap-1.5 pt-0.5">'+
-        '<button type="button" onclick="openTxModal(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-pri text-xs py-2"><i class="fa-solid fa-up-right-and-down-left-from-center"></i><span>التفاصيل</span></button>'+
-        '<button type="button" onclick="printTxReceipt(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-sec text-xs py-2"><i class="fa-solid fa-print"></i><span>طباعة</span></button>'+
-        (canStaffEditTx()?'<button type="button" onclick="openTxEdit(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-sec text-xs py-2"><i class="fa-solid fa-pen-to-square text-amber-400"></i><span>تعديل</span></button>':'')+
+    '<div class="space-y-2.5">'+
+      '<h4 class="font-bold text-xs text-slate-500 dark:text-slate-400">بطاقات بنود الخدمات ('+o.lines.length+')</h4>'+
+      o.lines.map((l,i)=>buildServiceDetailCard(l,i,'inspector')).join('')+
+    '</div>'+
+
+    '<div class="space-y-2 pt-1">'+
+      '<div class="grid grid-cols-2 gap-1.5">'+
+        '<button type="button" onclick="openTxModal(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-pri text-xs py-2"><i class="fa-solid fa-up-right-and-down-left-from-center"></i><span>التفاصيل الكاملة</span></button>'+
+        '<button type="button" onclick="printTxReceipt(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-sec text-xs py-2"><i class="fa-solid fa-print"></i><span>الإيصال الرسمي</span></button>'+
+        (canStaffEditTx()?'<button type="button" onclick="openTxEdit(\''+escapeHtml(o.transaction_id)+'\')" class="btn-neo-sec text-xs py-2 col-span-2"><i class="fa-solid fa-pen-to-square text-amber-500"></i><span>تعديل الطلب والخدمات</span></button>':'')+
       '</div>'+
     '</div>'+
 
@@ -673,13 +824,14 @@ async function renderTxInspector(tx){
     '</form>'+
 
     '<div class="pt-2 border-t border-slate-100 dark:border-white/10 space-y-2.5">'+
-      '<h4 class="font-bold text-xs text-ink dark:text-white">سجل الإجراءات</h4>'+
+      '<h4 class="font-bold text-xs text-ink dark:text-white">سجل التغييرات والتعليقات</h4>'+
       '<div id="insp-timeline-box" class="tx-timeline max-h-56 overflow-y-auto pr-3.5 py-0.5">'+
         '<div class="text-xs text-slate-400">جارٍ التحميل...</div>'+
       '</div>'+
     '</div>';
 
   loadInspectorTimeline(o);
+  loadLineStageEvents(o.transaction_id);
 }
 
 async function loadInspectorTimeline(o){
@@ -811,7 +963,7 @@ function renderRecentRequests(){
     else if(txStatusFilter==='late')list=list.filter(o=>isOrderLate(o));
     else list=list.filter(o=>getOrderStatus(o)===txStatusFilter);
   }
-  if(q)list=list.filter(o=>(o.client_name||'').toLowerCase().includes(q)||(o.phone||'').includes(q)||String(o.transaction_id).toLowerCase().includes(q)||(o.lines||[]).some(l=>(l.service||'').toLowerCase().includes(q)));
+  if(q)list=list.filter(o=>(o.client_name||'').toLowerCase().includes(q)||(o.phone||'').includes(q)||String(o.transaction_id).toLowerCase().includes(q)||(o.lines||[]).some(l=>(l.service||'').toLowerCase().includes(q)||String(l.service_ref||'').toLowerCase().includes(q))||(typeof window.getRequestPeopleNamesText==='function'&&window.getRequestPeopleNamesText(o.transaction_id).toLowerCase().includes(q)));
   if(window.__recentFilter)list=window.__recentFilter(list);
 
   const on='rounded-lg px-2.5 py-1 text-xs font-semibold bg-white dark:bg-violet-600 text-brand-700 dark:text-white shadow-xs',off='rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-500';
@@ -886,15 +1038,19 @@ function addServiceLine(){
   d.className='p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/60 dark:bg-white/[0.03] space-y-3';
   d.innerHTML='<div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-medium"><span>بند خدمة #'+serviceLineCounter+'</span><button type="button" onclick="removeServiceLine(\''+id+'\')" class="text-rose-500 hover:text-rose-400 p-1" title="حذف"><i class="fa-solid fa-trash-can"></i></button></div>'+
   '<div class="grid gap-3 sm:grid-cols-12 text-xs">'+
-  '<div class="sm:col-span-5"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-300">الخدمة المطلوبة</label><input list="svc-datalist" class="field svc-name" placeholder="اختر أو اكتب الخدمة..." oninput="onServiceSelected(\''+id+'\',this.value)" required></div>'+
+  '<div class="sm:col-span-5"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-300">اسم الخدمة</label><input list="svc-datalist" class="field svc-name" placeholder="اختر أو اكتب الخدمة..." oninput="onServiceSelected(\''+id+'\',this.value)" required></div>'+
   '<div class="sm:col-span-2"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-300">العدد</label><input type="number" min="1" value="1" class="field svc-qty text-center font-mono" oninput="calculateTotals()" required></div>'+
   '<div class="sm:col-span-2"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-300">سعر الوحدة</label><input type="number" min="0" step="any" value="0" class="field svc-price text-center font-mono" oninput="calculateTotals()" required></div>'+
-  '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-300">المنفذ</label><input list="exec-datalist" class="field svc-executor" placeholder="اسم المنفذ..." oninput="updateOrderProgressBar()"></div></div>'+
-  '<div class="grid gap-3 sm:grid-cols-12 pt-1 border-t border-slate-200/60 dark:border-white/10 text-xs">'+
-  '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">تكلفة التنفيذ/وحدة</label><input type="number" min="0" step="any" value="0" class="field svc-cost text-center font-mono" oninput="calculateTotals()"><div class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">إجمالي التنفيذ: <b class="svc-cost-total font-mono text-violet-500 dark:text-violet-300">0 ج.م</b></div></div>'+
-  '<div class="sm:col-span-2"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">خصم %</label><input type="number" min="0" max="100" step="any" inputmode="decimal" placeholder="0" class="field svc-disc text-center font-mono" oninput="calculateTotals()"></div>'+
-  '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">رقم الخدمة (Service ID)</label><input dir="ltr" class="field svc-ref font-mono text-right" placeholder="يدوي" maxlength="40"></div>'+
-  '<div class="sm:col-span-4 flex items-end justify-end"><div class="text-xs text-slate-500 dark:text-slate-400">إجمالي البند: <span class="font-bold text-sm text-ink dark:text-white line-total-display">0 ج.م</span></div></div></div>'+
+  '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-300" dir="ltr">Service ID (يدوي)</label><input dir="ltr" class="field svc-ref font-mono text-right" placeholder="مرجع الخدمة اليدوي..." maxlength="40"></div></div>'+
+  '<div class="grid gap-3 sm:grid-cols-12 pt-2 border-t border-slate-200/60 dark:border-white/10 text-xs items-start">'+
+  '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">المنفذ / الجهة المنفذة</label><input list="exec-datalist" class="field svc-executor" placeholder="اسم المنفذ..." oninput="updateOrderProgressBar()"></div>'+
+  '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">تكلفة التنفيذ/وحدة</label><input type="number" min="0" step="any" value="0" class="field svc-cost text-center font-mono" oninput="calculateTotals()"><div class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">إجمالي التنفيذ: <b class="svc-cost-total font-mono text-violet-600 dark:text-violet-300">0 ج.م</b></div></div>'+
+  '<div class="sm:col-span-2"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">خصم البند %</label><input type="number" min="0" max="100" step="any" inputmode="decimal" placeholder="0" class="field svc-disc text-center font-mono" oninput="calculateTotals()"><div class="mt-1 text-[10.5px] text-rose-500 font-semibold svc-disc-note hidden"></div></div>'+
+  '<div class="sm:col-span-4 rounded-xl bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-700/80 p-2.5 space-y-1">'+
+    '<div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400"><span>الإجمالي قبل الخصم:</span><b class="line-raw-display font-mono text-slate-700 dark:text-slate-200">0 ج.م</b></div>'+
+    '<div class="flex items-center justify-between text-[11px] text-rose-600 dark:text-rose-400 hidden line-disc-row"><span>قيمة الخصم:</span><b class="line-disc-display font-mono">− 0 ج.م</b></div>'+
+    '<div class="flex items-center justify-between text-xs border-t border-slate-100 dark:border-slate-800 pt-1"><span class="font-bold text-slate-700 dark:text-slate-200">إجمالي البند النهائي:</span><span class="font-bold text-sm font-mono text-brand-600 dark:text-violet-300 line-total-display">0 ج.م</span></div>'+
+  '</div></div>'+
   '<div class="text-xs"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">ملاحظة خاصة بالبند</label><input class="field svc-notes" placeholder="تعليمات تنفيذ هذا البند..."></div>';
   $('lines-container').appendChild(d);calculateTotals();
 }
@@ -932,9 +1088,14 @@ function onServiceSelected(id,name){
 function discountPct(){const el=$('discount-pct'),v=el?parseFloat(el.value):0;return v>0?Math.min(v,100):0;}
 const isFeeSvc=n=>/^رسوم توصيل/.test(normName(n||''));
 function lineDisc(l){
-  const sn=((l.querySelector('.svc-name')&&l.querySelector('.svc-name').value)||'').trim(),di=l.querySelector('.svc-disc');
+  const sn=((l.querySelector('.svc-name')&&l.querySelector('.svc-name').value)||'').trim(),di=l.querySelector('.svc-disc'),nt=l.querySelector('.svc-disc-note');
   if(!di)return 0;
-  const fee=isFeeSvc(sn);if(di.disabled!==fee){di.disabled=fee;if(fee)di.value='';di.title=fee?'رسوم التوصيل ملهاش خصم':'';}
+  const fee=isFeeSvc(sn);
+  if(di.disabled!==fee){di.disabled=fee;if(fee)di.value='';di.title=fee?'رسوم التوصيل ذات رسوم ثابتة ولا تقبل الخصم':'';}
+  if(nt){
+    if(fee){nt.textContent='رسوم ثابتة (لا تقبل خصم)';nt.classList.remove('hidden');}
+    else{nt.textContent='';nt.classList.add('hidden');}
+  }
   const v=parseFloat(di.value);return !fee&&v>0?Math.min(v,100):0;
 }
 function unitAfter(p,d){return d>0?Math.round(p*(1-d/100)*100)/100:p;}
@@ -945,22 +1106,33 @@ function calculateTotals(){
   const summaryRows=[];
   Array.from(lines).forEach(function(l){
     const sn=((l.querySelector('.svc-name')&&l.querySelector('.svc-name').value)||'').trim();
-    const d=lineDisc(l);dmax=Math.max(dmax,d);const q0=parseFloat(l.querySelector('.svc-qty').value)||0,p0=parseFloat(l.querySelector('.svc-price').value)||0,t=q0*unitAfter(p0,d);raw+=q0*p0;
-    g+=t;l.querySelector('.line-total-display').textContent=formatCurrency(t);
-    const ct=l.querySelector('.svc-cost-total');if(ct)ct.textContent=formatCurrency((parseFloat(l.querySelector('.svc-qty').value)||0)*(parseFloat(l.querySelector('.svc-cost').value)||0));
-    if(sn)summaryRows.push({name:sn,qty:q0,rawTotal:q0*p0});
+    const d=lineDisc(l);dmax=Math.max(dmax,d);
+    const q0=parseFloat(l.querySelector('.svc-qty').value)||0;
+    const p0=parseFloat(l.querySelector('.svc-price').value)||0;
+    const rawLine=q0*p0;
+    const netLine=q0*unitAfter(p0,d);
+    const discAmt=Math.max(0,rawLine-netLine);
+    raw+=rawLine;
+    g+=netLine;
+    const rawEl=l.querySelector('.line-raw-display');if(rawEl)rawEl.textContent=formatCurrency(rawLine);
+    const discRow=l.querySelector('.line-disc-row'),discEl=l.querySelector('.line-disc-display');
+    if(discRow)discRow.classList.toggle('hidden',!(discAmt>0));
+    if(discEl&&discAmt>0)discEl.textContent='− '+formatCurrency(discAmt)+' ('+fmtNum(d)+'%)';
+    l.querySelector('.line-total-display').textContent=formatCurrency(netLine);
+    const ct=l.querySelector('.svc-cost-total');if(ct)ct.textContent=formatCurrency(q0*(parseFloat(l.querySelector('.svc-cost').value)||0));
+    if(sn)summaryRows.push({name:sn,qty:q0,rawTotal:rawLine,netTotal:netLine,disc:d});
   });
   if($('s-lines'))$('s-lines').textContent=summaryRows.length||lines.length;
   if($('grand-total-display'))$('grand-total-display').textContent=g.toLocaleString('en-US');
 
-  // تحديث قائمة البنود التفصيلية داخل ملخص الطلب العائم
+  // تحديث قائمة البنود التفصيلية داخل ملخص الطلب الجانبي
   const sList=$('s-items-list');
   if(sList){
     if(summaryRows.length){
       sList.innerHTML=summaryRows.map(item=>
-        '<div class="flex items-center justify-between gap-2 py-1 border-b border-white/5 last:border-0">'+
-          '<span class="truncate text-slate-200 font-medium">'+escapeHtml(item.name)+(item.qty>1?' <small class="text-violet-300 font-mono">×'+fmtNum(item.qty)+'</small>':'')+'</span>'+
-          '<span class="font-mono font-bold text-white shrink-0">'+fmtNum(item.rawTotal)+'</span>'+
+        '<div class="flex items-center justify-between gap-2 py-1 border-b border-slate-100 dark:border-white/5 last:border-0">'+
+          '<span class="truncate text-slate-700 dark:text-slate-200 font-medium">'+escapeHtml(item.name)+(item.qty>1?' <small class="text-violet-600 dark:text-violet-300 font-mono">×'+fmtNum(item.qty)+'</small>':'')+(item.disc>0?' <small class="text-rose-500 font-mono">(-'+fmtNum(item.disc)+'%)</small>':'')+'</span>'+
+          '<span class="font-mono font-bold text-slate-900 dark:text-white shrink-0">'+fmtNum(item.netTotal)+' ج.م</span>'+
         '</div>'
       ).join('');
     }else{
@@ -968,7 +1140,7 @@ function calculateTotals(){
     }
   }
 
-  const dr=$('s-disc-row');if(dr){dr.classList.toggle('hidden',!(raw-g>0));if(raw-g>0){$('s-disc-pct').textContent=dmax>0?'(حتى '+fmtNum(dmax)+'%)':'';$('s-disc-amt').textContent='− '+fmtNum(raw-g);}}
+  const dr=$('s-disc-row');if(dr){dr.classList.toggle('hidden',!(raw-g>0));if(raw-g>0){$('s-disc-pct').textContent=dmax>0?'(حتى '+fmtNum(dmax)+'%)':'';$('s-disc-amt').textContent='− '+formatCurrency(raw-g);}}
   updateOrderProgressBar();
 }
 function renderPaymentMethodButtons(){
@@ -1073,22 +1245,22 @@ async function handleSaveOrder(e){
 function openTxModal(tx){
   const o=groupedOrders.find(x=>x.transaction_id===tx);if(!o)return;
   openTxCurrent=tx;txDirty=false;
-  const curSt=getOrderStatus(o),late=isOrderLate(o);
-  $('tx-modal-title').textContent='معاملة: '+o.client_name;$('tx-modal-subtitle').textContent=o.transaction_id;
-  const wa=waLink(o.phone,'أهلاً '+o.client_name+'، بخصوص معاملتك رقم '+o.transaction_id+' — تساهيل | قسم الخدمات الحكومية');
-  const info=[['رقم المعاملة',o.transaction_id,'<span class="font-mono" dir="ltr">'+escapeHtml(o.transaction_id)+'</span>'],['العميل',o.client_name],['الهاتف',o.phone],['طريقة الدفع',o.payment_method],['الموظف',o.employee,empCell(o.employee)],['العنوان',o.address],['المستلم',o.receiver],['تاريخ الاستلام',formatDateTime(o.received_at||o.created_at)],['رقم الإيصال',o.rn_nm]].concat(txDisc(o)>0?[['خصم العميل',fmtNum(txDisc(o))+'%']]:[]);
+  const curSt=getOrderStatus(o),late=isOrderLate(o),orderPct=getOrderPct(o);
+  $('tx-modal-title').textContent='معاملة: '+o.client_name;$('tx-modal-subtitle').textContent='Request ID: '+o.transaction_id;
+  const info=[['Request ID',o.transaction_id,'<span class="font-mono" dir="ltr">'+escapeHtml(o.transaction_id)+'</span>'],['العميل',o.client_name],['الهاتف',o.phone],['طريقة الدفع',o.payment_method],['الموظف المسؤول',o.employee,empCell(o.employee)],['العنوان',o.address],['مندوب الاستلام',o.receiver||'العميل شخصياً'],['تاريخ الاستلام',formatDateTime(o.received_at||o.created_at)],['رقم الإيصال',o.rn_nm]].concat(txDisc(o)>0?[['أعلى خصم بند',fmtNum(txDisc(o))+'%']]:[]);
   $('tx-modal-body').innerHTML=
-  '<div id="tx-modal-stepper-slot">'+buildInteractiveStatusWidgets(o.transaction_id,curSt,late,'modal')+'</div>'+
+  '<div id="tx-modal-stepper-slot">'+buildInteractiveStatusWidgets(o.transaction_id,curSt,late,'modal',orderPct)+'</div>'+
   '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl text-xs">'+info.map(i=>'<div class="min-w-0"><span class="text-slate-400 block mb-0.5">'+i[0]+'</span><span class="font-semibold text-ink dark:text-white break-words">'+(i[2]||escapeHtml(i[1]||'—'))+'</span></div>').join('')+'</div>'+
   (o.notes?'<div class="p-3 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 rounded-xl text-xs"><i class="fa-solid fa-note-sticky ms-1"></i><b>ملاحظات:</b> '+escapeHtml(o.notes)+'</div>':'')+
-  '<div><h4 class="font-bold text-xs text-slate-500 mb-2">بنود الخدمات ('+o.lines.length+')</h4><div class="space-y-2">'+
-  o.lines.map(l=>'<div class="flex items-start justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-3"><div class="min-w-0"><div class="font-semibold text-ink dark:text-white">'+escapeHtml(l.service)+(l.service_ref?' <span class="rc-tx-pill !py-0.5 !px-2 !text-[11px] font-mono" dir="ltr" title="Service ID">'+escapeHtml(l.service_ref)+'</span>':'')+'</div><div class="mt-1 text-xs text-slate-500">'+fmtNum(l.qty)+' × '+fmtNum(l.unit_price)+' ج.م'+(Number(l.discount_pct)>0?' <span class="text-violet-600 dark:text-violet-300">(بعد خصم '+fmtNum(l.discount_pct)+'% من '+fmtNum(l.list_price)+')</span>':'')+' · المنفذ: '+escapeHtml(l.executor||'—')+' · تكلفة التنفيذ: '+formatCurrency(execCostOf(l))+'</div><div class="mt-2 flex flex-wrap items-center gap-2">'+badge(l.status)+(l.exec_start_date?'<span class="text-[11px] text-slate-400">بداية التنفيذ: '+formatDateOnly(l.exec_start_date)+'</span>':'')+'</div>'+statusSelect(l)+'</div><div class="shrink-0 font-bold font-mono text-brand-600 dark:text-violet-300">'+formatCurrency(l.total)+'</div></div>').join('')+'</div></div>'+
-  '<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><div class="text-[11px] text-slate-500 mb-2">تغيير حالة كل البنود</div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">'+Object.keys(STATUS_PATCH).map(s=>'<button type="button" data-tx="'+escapeHtml(o.transaction_id)+'" data-s="'+s+'" onclick="stageTxStatus(this.dataset.s)" class="rounded-lg py-2 text-xs font-bold '+(STATUS_CLS[s]||'')+'">'+statusLabel(s)+'</button>').join('')+'</div></div>'+
+  '<div><div class="flex items-center justify-between mb-2"><h4 class="font-bold text-xs text-slate-500">بطاقات بنود الخدمات ('+o.lines.length+')</h4><span class="text-[11px] font-semibold text-slate-400">كل خدمة لها حالة وشريط تقدم مستقل</span></div><div class="space-y-2.5">'+
+  o.lines.map((l,i)=>buildServiceDetailCard(l,i,'modal')).join('')+'</div></div>'+
+  '<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><div class="text-[11px] text-slate-500 mb-2">تحديث جماعي لكل الخدمات (اختياري)</div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">'+Object.keys(STATUS_PATCH).map(s=>'<button type="button" data-tx="'+escapeHtml(o.transaction_id)+'" data-s="'+s+'" onclick="stageTxStatus(this.dataset.s)" class="rounded-lg py-2 text-xs font-bold '+(STATUS_CLS[s]||'')+'">'+statusLabel(s)+'</button>').join('')+'</div></div>'+
   '<div class="flex items-center justify-between p-3.5 bg-slate-900 text-white rounded-xl"><span class="text-xs font-semibold text-slate-300">الإجمالي النهائي:</span><span class="text-lg font-bold font-mono">'+formatCurrency(o.grand_total)+'</span></div>';
-  $('tx-modal-actions-left').innerHTML='<button id="tx-save-btn" type="button" onclick="saveTxChanges()" disabled class="px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold flex items-center gap-1.5 opacity-50"><i class="fa-solid fa-floppy-disk"></i><span>حفظ</span></button>'+
-  '<button data-tx="'+escapeHtml(o.transaction_id)+'" onclick="printTxReceipt(this.dataset.tx)" class="px-3.5 py-2 rounded-xl bg-ink dark:bg-brand-600 text-white text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-print"></i><span>إيصال رسمي</span></button>'+
+  $('tx-modal-actions-left').innerHTML='<button id="tx-save-btn" type="button" onclick="saveTxChanges()" disabled class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold flex items-center gap-1.5 opacity-50"><i class="fa-solid fa-floppy-disk"></i><span>حفظ</span></button>'+
+  '<button data-tx="'+escapeHtml(o.transaction_id)+'" onclick="printTxReceipt(this.dataset.tx)" class="px-3.5 py-2 rounded-xl bg-ink dark:bg-brand-600 text-white text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-print"></i><span>الإيصال الرسمي</span></button>'+
   (canStaffEditTx()?'<button data-tx="'+escapeHtml(o.transaction_id)+'" onclick="openTxEdit(this.dataset.tx)" class="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-pen-to-square"></i><span>تعديل</span></button>':'');
   $('tx-modal').classList.remove('hidden');$('tx-modal').classList.add('flex');
+  loadLineStageEvents(o.transaction_id);
 }
 function closeTxModal(){if(txDirty&&!confirm('فيه تغييرات لسه ماتحفظتش. تقفل من غير حفظ؟'))return;txDirty=false;$('tx-modal').classList.add('hidden');$('tx-modal').classList.remove('flex');}
 
@@ -1100,11 +1272,18 @@ let txEditState=null;
 function closeTxEdit(){const m=$('tx-edit-modal');if(m){m.classList.add('hidden');m.classList.remove('flex');}txEditState=null;}
 function onTeServiceInput(inpEl){
   const blk=inpEl&&inpEl.closest('[data-lid],[data-new-line]');if(!blk)return;
-  const f=findCatalogService(inpEl.value);if(!f)return;
-  const pr=blk.querySelector('.te-l-price'),co=blk.querySelector('.te-l-cost'),ex=blk.querySelector('.te-l-executor');
-  if(pr&&f.unit_price!=null)pr.value=f.unit_price;
-  if(co&&f.exec_cost!=null)co.value=f.exec_cost;
-  if(ex&&f.executor)ex.value=f.executor;
+  const f=findCatalogService(inpEl.value);
+  const pr=blk.querySelector('.te-l-price'),co=blk.querySelector('.te-l-cost'),ex=blk.querySelector('.te-l-executor'),di=blk.querySelector('.te-l-disc');
+  if(f){
+    if(pr&&f.unit_price!=null)pr.value=f.unit_price;
+    if(co&&f.exec_cost!=null)co.value=f.exec_cost;
+    if(ex&&f.executor)ex.value=f.executor;
+  }
+  if(di){
+    const fee=isFeeSvc(inpEl.value);
+    di.disabled=fee;
+    if(fee)di.value=0;
+  }
 }
 window.onTeServiceInput=onTeServiceInput;
 function addTxEditLine(){
@@ -1115,12 +1294,15 @@ function addTxEditLine(){
   const div=document.createElement('div');
   div.className='space-y-2 rounded-xl border border-brand-300 bg-brand-50/20 p-3 dark:border-brand-800 dark:bg-brand-950/20';
   div.setAttribute('data-new-line','1');
-  div.innerHTML='<div class="flex items-center justify-between text-[11px] font-bold text-brand-700 dark:text-brand-300"><span>بند جديد #'+idx+'</span><button type="button" onclick="removeTxEditLine(this)" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash-can ms-1"></i>إلغاء البند</button></div><div class="grid grid-cols-2 gap-2 sm:grid-cols-4">'+
-    lf('te-l-service','الخدمة','','list="svc-datalist" oninput="onTeServiceInput(this)"','col-span-2')+
-    lf('te-l-qty','الكمية',1,num)+lf('te-l-price','سعر الوحدة',0,num)+
-    lf('te-l-cost','تكلفة التنفيذ للوحدة',0,num)+
+  div.innerHTML='<div class="flex items-center justify-between text-[11px] font-bold text-brand-700 dark:text-brand-300"><span>بند جديد #'+idx+'</span><button type="button" onclick="removeTxEditLine(this)" class="text-rose-500 hover:text-rose-700"><i class="fa-solid fa-trash-can ms-1"></i>إلغاء البند</button></div><div class="grid grid-cols-2 gap-2 sm:grid-cols-6">'+
+    lf('te-l-service','اسم الخدمة','','list="svc-datalist" oninput="onTeServiceInput(this)"','col-span-2')+
+    lf('te-l-qty','العدد',1,num)+
+    lf('te-l-price','سعر الوحدة (قبل الخصم)',0,num)+
+    lf('te-l-disc','خصم %',0,'type="number" step="any" min="0" max="100" inputmode="decimal"')+
+    lf('te-l-ref','Service ID (يدوي)','','dir="ltr" maxlength="40"')+
     lf('te-l-executor','المنفذ','','list="exec-datalist"','col-span-2')+
-    lf('te-l-notes','ملاحظات البند','','','col-span-2 sm:col-span-4')+'</div>';
+    lf('te-l-cost','تكلفة التنفيذ للوحدة',0,num,'col-span-2')+
+    lf('te-l-notes','ملاحظات البند','','','col-span-2')+'</div>';
   box.appendChild(div);
 }
 function removeTxEditLine(btn){
@@ -1146,55 +1328,72 @@ async function openTxEdit(tx){
   const inp=(id,label,val,extra)=>'<div class="min-w-0"><label class="label" for="'+id+'">'+label+'</label><input id="'+id+'" class="field" value="'+esc(val==null?'':val)+'" '+(extra||'')+'></div>';
   const lf=(cls,label,val,extra,span)=>'<div class="min-w-0'+(span?' '+span:'')+'"><label class="label">'+label+'</label><input class="field '+cls+'" value="'+esc(val==null?'':val)+'" '+(extra||'')+'></div>';
   const num='type="number" step="any" min="0" inputmode="decimal"';
-  const linesH=o.lines.map((l,i)=>'<div class="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700" data-lid="'+esc(l.id)+'"><div class="flex items-center justify-between text-[11px] font-bold text-slate-500"><span>بند '+(i+1)+'</span><button type="button" onclick="removeTxEditLine(this)" class="text-rose-500 hover:text-rose-700" title="حذف البند"><i class="fa-solid fa-trash-can ms-1"></i>حذف البند</button></div><div class="grid grid-cols-2 gap-2 sm:grid-cols-4">'+
-    lf('te-l-service','الخدمة',l.service,'list="svc-datalist" oninput="onTeServiceInput(this)"','col-span-2')+
-    lf('te-l-qty','الكمية',l.qty,num)+lf('te-l-price','سعر الوحدة',l.unit_price,num)+
-    lf('te-l-cost','تكلفة التنفيذ للوحدة',l.exec_unit_cost,num)+
+  const linesH=o.lines.map((l,i)=>{
+    const basePr=Number(l.discount_pct)>0&&Number(l.list_price)>0?l.list_price:l.unit_price;
+    const fee=isFeeSvc(l.service);
+    return '<div class="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700" data-lid="'+esc(l.id)+'"><div class="flex items-center justify-between text-[11px] font-bold text-slate-500"><span>بند '+(i+1)+'</span><button type="button" onclick="removeTxEditLine(this)" class="text-rose-500 hover:text-rose-700" title="حذف البند"><i class="fa-solid fa-trash-can ms-1"></i>حذف البند</button></div><div class="grid grid-cols-2 gap-2 sm:grid-cols-6">'+
+    lf('te-l-service','اسم الخدمة',l.service,'list="svc-datalist" oninput="onTeServiceInput(this)"','col-span-2')+
+    lf('te-l-qty','العدد',l.qty,num)+
+    lf('te-l-price','سعر الوحدة (قبل الخصم)',basePr,num)+
+    lf('te-l-disc','خصم %',fee?0:(l.discount_pct||0),'type="number" step="any" min="0" max="100" inputmode="decimal"'+(fee?' disabled title="رسوم ثابتة لا تقبل الخصم"':''))+
+    lf('te-l-ref','Service ID (يدوي)',l.service_ref||'','dir="ltr" maxlength="40"')+
     lf('te-l-executor','المنفذ',l.executor,'list="exec-datalist"','col-span-2')+
-    lf('te-l-notes','ملاحظات البند',l.notes,'','col-span-2 sm:col-span-4')+'</div></div>').join('');
-  const tripsH=st_trips_html(trips,esc);
+    lf('te-l-cost','تكلفة التنفيذ للوحدة',l.exec_unit_cost,num,'col-span-2')+
+    lf('te-l-notes','ملاحظات البند',l.notes,'','col-span-2')+'</div></div>';
+  }).join('');
+  const tripsH=st_trips_html(trips,esc,first.receiver);
   let m=$('tx-edit-modal');
   if(!m){m=document.createElement('div');m.id='tx-edit-modal';document.body.appendChild(m);}
   m.className='fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-3 sm:p-6';
-  m.innerHTML='<div class="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900"><div class="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800"><div><div class="font-bold text-ink dark:text-white">تعديل المعاملة</div><div class="font-mono text-[11px] text-slate-500">'+esc(o.transaction_id)+'</div></div><button type="button" onclick="closeTxEdit()" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button></div>'+
+  m.innerHTML='<div class="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-slate-900"><div class="flex items-center justify-between border-b border-slate-200 px-5 py-3 dark:border-slate-800"><div><div class="font-bold text-ink dark:text-white">تعديل الطلب</div><div class="font-mono text-[11px] text-slate-500" dir="ltr">Request ID: '+esc(o.transaction_id)+'</div></div><button type="button" onclick="closeTxEdit()" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button></div>'+
     '<div class="space-y-4 overflow-y-auto p-5"><div class="grid grid-cols-1 gap-3 sm:grid-cols-2">'+
     inp('te-client','العميل',first.client_name)+inp('te-phone','الهاتف',first.phone,'dir="ltr"')+
     inp('te-emp','الموظف المسؤول',first.employee,'list="emp-datalist"')+inp('te-pay','طريقة الدفع',first.payment_method,'list="te-pay-dl"')+
-    inp('te-recv','المستلم',first.receiver,'list="rec-datalist"')+inp('te-date','تاريخ ووقت الاستلام',toLocalInput(first.received_at),'type="datetime-local"')+
+    inp('te-date','تاريخ ووقت الاستلام',toLocalInput(first.received_at),'type="datetime-local"')+
     inp('te-rn','رقم الإيصال',first.rn_nm,'dir="ltr"')+inp('te-addr','العنوان',first.address)+
+    '<input id="te-recv" type="hidden" value="'+esc(first.receiver||'')+'">'+
     '<datalist id="te-pay-dl">'+pays.map(p=>'<option value="'+esc(p)+'"></option>').join('')+'</datalist></div>'+
-    '<div><div class="mb-2 flex items-center justify-between"><h4 class="text-xs font-bold text-slate-500">بنود الخدمات</h4><button type="button" onclick="addTxEditLine()" class="rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700 hover:bg-brand-100 dark:bg-brand-950/50 dark:text-brand-300"><i class="fa-solid fa-plus ms-1"></i>إضافة بند</button></div><div id="te-lines-list" class="space-y-2">'+linesH+'</div></div>'+tripsH+
+    '<div><div class="mb-2 flex items-center justify-between"><h4 class="text-xs font-bold text-slate-500">بنود الخدمات</h4><button type="button" onclick="addTxEditLine()" class="rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700 hover:bg-brand-100 dark:bg-brand-950/50 dark:text-brand-300"><i class="fa-solid fa-plus ms-1"></i>إضافة بند</button></div><div id="te-lines-list" class="space-y-2">'+linesH+'</div></div>'+
+    '<div id="te-rp-slot"></div>'+
+    tripsH+
     '<p class="text-[11px] text-slate-400">كل تعديل بيتسجّل تلقائياً في سجل التغييرات باسم الموظف اللي قام بالتعديل ووقت العملية.</p></div>'+
     '<div class="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3 dark:border-slate-800"><button type="button" onclick="closeTxEdit()" class="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">إلغاء</button><button id="te-save" type="button" onclick="saveTxEdit()" class="rounded-xl bg-brand-600 px-5 py-2 text-xs font-bold text-white hover:bg-brand-700">حفظ التعديلات</button></div></div>';
+  if(typeof window.mountTxEditPeople==='function')window.mountTxEditPeople(st.tx,o.lines);
 }
-function st_trips_html(trips,esc){
+function st_trips_html(trips,esc,fallbackReceiver){
   const pk=trips.find(t=>t.kind==='pickup'),dl=trips.find(t=>t.kind==='delivery');
-  return '<div><h4 class="mb-2 text-xs font-bold text-slate-500">مشاوير المندوب</h4><div class="grid grid-cols-1 gap-2 sm:grid-cols-2">'+
-    '<div class="min-w-0" data-tkind="pickup" data-tid="'+esc(pk?pk.id:'')+'"><label class="label">مندوب الاستلام</label><input class="field te-t-courier" list="courier-dl" placeholder="بدون مندوب" value="'+esc(pk&&pk.courier!=='—'?pk.courier:'')+'"></div>'+
+  const pkVal=(pk&&pk.courier!=='—'?pk.courier:(fallbackReceiver&&fallbackReceiver!=='العميل شخصياً'?fallbackReceiver:''));
+  return '<div><h4 class="mb-2 text-xs font-bold text-slate-500">مندوب الاستلام والتسليم</h4><div class="grid grid-cols-1 gap-2 sm:grid-cols-2">'+
+    '<div class="min-w-0" data-tkind="pickup" data-tid="'+esc(pk?pk.id:'')+'"><label class="label">مندوب الاستلام</label><input class="field te-t-courier" list="courier-dl" placeholder="بدون مندوب (العميل شخصياً)" value="'+esc(pkVal)+'" oninput="if($(\'te-recv\'))$(\'te-recv\').value=this.value.trim()||\'العميل شخصياً\'"></div>'+
     '<div class="min-w-0" data-tkind="delivery" data-tid="'+esc(dl?dl.id:'')+'"><label class="label">مندوب التسليم</label><input class="field te-t-courier" list="courier-dl" placeholder="بدون مندوب" value="'+esc(dl&&dl.courier!=='—'?dl.courier:'')+'"></div>'+
   '</div></div>';
 }
 async function saveTxEdit(){
   if(!canStaffEditTx()||!txEditState)return;
-  const st=txEditState,o=st.o,first=o.lines[0],root=$('tx-edit-modal'),V=id=>String($(id).value||'').trim(),nul=s=>s===''?null:s;
+  const st=txEditState,o=st.o,first=o.lines[0],root=$('tx-edit-modal'),V=id=>String(($(id)&&$(id).value)||'').trim(),nul=s=>s===''?null:s;
   const num=(s,def)=>{const t=String(s).trim().replace(',','.');if(t==='')return def;const n=Number(t);return Number.isFinite(n)?n:NaN;};
   const client=V('te-client'),emp=V('te-emp'),pay=V('te-pay'),dt=$('te-date').value;
   if(!client)return showToast('اسم العميل مطلوب','error');
   if(!emp)return showToast('اختر الموظف المسؤول','error');
   if(!pay)return showToast('طريقة الدفع مطلوبة','error');
   if(!dt)return showToast('تاريخ الاستلام مطلوب','error');
+  const pkInp=root.querySelector('[data-tkind="pickup"] .te-t-courier');
+  const unifiedRecv=(pkInp&&pkInp.value.trim())?pkInp.value.trim():'العميل شخصياً';
+  if($('te-recv'))$('te-recv').value=unifiedRecv;
   const patchTx={},cmp=(k,v,req)=>{const old=first[k]==null?'':String(first[k]).trim();if(v!==old)patchTx[k]=req?v:nul(v);};
-  cmp('client_name',client,true);cmp('phone',V('te-phone'));cmp('address',V('te-addr'));cmp('employee',emp,true);cmp('payment_method',pay,true);cmp('receiver',V('te-recv'));cmp('rn_nm',V('te-rn'));
+  cmp('client_name',client,true);cmp('phone',V('te-phone'));cmp('address',V('te-addr'));cmp('employee',emp,true);cmp('payment_method',pay,true);cmp('receiver',unifiedRecv);cmp('rn_nm',V('te-rn'));
   if(dt!==toLocalInput(first.received_at))patchTx.received_at=dt+':00';
   const linePatches=[],deletedIds=[],newLines=[];
   for(const blk of root.querySelectorAll('[data-lid]')){
     const l=o.lines.find(x=>String(x.id)===blk.dataset.lid);if(!l)continue;
     if(blk.getAttribute('data-deleted')==='1'){deletedIds.push(l.id);continue;}
-    const g=c=>String(blk.querySelector('.'+c).value||'').trim();
-    const svc=g('te-l-service'),q=num(g('te-l-qty'),NaN),pr=num(g('te-l-price'),0),co=num(g('te-l-cost'),0);
+    const g=c=>String((blk.querySelector('.'+c)&&blk.querySelector('.'+c).value)||'').trim();
+    const svc=g('te-l-service'),q=num(g('te-l-qty'),NaN),basePr=num(g('te-l-price'),0),co=num(g('te-l-cost'),0);
+    const rawDisc=num(g('te-l-disc'),0),disc=isFeeSvc(svc)?0:Math.max(0,Math.min(100,rawDisc||0));
+    const uPrice=unitAfter(basePr,disc),sRef=g('te-l-ref');
     if(!svc)return showToast('اكتب اسم الخدمة في كل البنود','error');
     if(!(q>0))return showToast('الكمية لازم تكون رقم أكبر من صفر','error');
-    if(!(pr>=0)||!(co>=0))return showToast('السعر والتكلفة لازم يكونوا أرقام صحيحة','error');
+    if(!(basePr>=0)||!(co>=0))return showToast('السعر والتكلفة لازم يكونوا أرقام صحيحة','error');
     const p={},ex=g('te-l-executor'),nt=g('te-l-notes');
     if(svc!==String(l.service||'').trim()){
       p.service=svc;
@@ -1202,21 +1401,26 @@ async function saveTxEdit(){
       if(cr!=null)p.commission_per_unit=cr;
     }
     if(q!==Number(l.qty))p.qty=q;
-    if(pr!==Number(l.unit_price||0))p.unit_price=pr;
+    if(uPrice!==Number(l.unit_price||0))p.unit_price=uPrice;
+    if(disc!==Number(l.discount_pct||0)){p.discount_pct=disc;p.list_price=disc>0?basePr:null;}
+    else if(disc>0&&basePr!==Number(l.list_price||0))p.list_price=basePr;
+    if(sRef!==String(l.service_ref||'').trim())p.service_ref=nul(sRef);
     if(co!==Number(l.exec_unit_cost||0))p.exec_unit_cost=co;
     if(ex!==String(l.executor||'').trim())p.executor=nul(ex);
     if(nt!==String(l.notes||'').trim())p.notes=nul(nt);
     if(Object.keys(p).length)linePatches.push({id:l.id,p:p});
   }
-  const baseRow={client_name:client,phone:nul(V('te-phone')),transaction_id:st.tx,address:nul(V('te-addr')),employee:emp,payment_method:pay,receiver:nul(V('te-recv')),received_at:dt+':00',rn_nm:nul(V('te-rn'))};
+  const baseRow={client_name:client,phone:nul(V('te-phone')),transaction_id:st.tx,address:nul(V('te-addr')),employee:emp,payment_method:pay,receiver:unifiedRecv,received_at:dt+':00',rn_nm:nul(V('te-rn'))};
   for(const blk of root.querySelectorAll('[data-new-line]')){
-    const g=c=>String(blk.querySelector('.'+c).value||'').trim();
-    const svc=g('te-l-service'),q=num(g('te-l-qty'),NaN),pr=num(g('te-l-price'),0),co=num(g('te-l-cost'),0);
+    const g=c=>String((blk.querySelector('.'+c)&&blk.querySelector('.'+c).value)||'').trim();
+    const svc=g('te-l-service'),q=num(g('te-l-qty'),NaN),basePr=num(g('te-l-price'),0),co=num(g('te-l-cost'),0);
+    const rawDisc=num(g('te-l-disc'),0),disc=isFeeSvc(svc)?0:Math.max(0,Math.min(100,rawDisc||0));
+    const uPrice=unitAfter(basePr,disc),sRef=g('te-l-ref');
     if(!svc)return showToast('اكتب اسم الخدمة في كل البنود الجديدة','error');
     if(!(q>0))return showToast('الكمية لازم تكون رقم أكبر من صفر','error');
-    if(!(pr>=0)||!(co>=0))return showToast('السعر والتكلفة لازم يكونوا أرقام صحيحة','error');
+    if(!(basePr>=0)||!(co>=0))return showToast('السعر والتكلفة لازم يكونوا أرقام صحيحة','error');
     const cat=findCatalogService(svc),cr=getServiceCommRate(cat||svc);
-    newLines.push(Object.assign({},baseRow,{service:svc,qty:q,unit_price:pr,exec_unit_cost:co,commission_per_unit:cr!=null?cr:0,executor:nul(g('te-l-executor')),duration_days:cat&&cat.duration_days!=null?Number(cat.duration_days):null,notes:nul(g('te-l-notes'))}));
+    newLines.push(Object.assign({},baseRow,disc>0?{discount_pct:disc,list_price:basePr}:{},{service:svc,service_ref:nul(sRef),qty:q,unit_price:uPrice,exec_unit_cost:co,commission_per_unit:cr!=null?cr:0,executor:nul(g('te-l-executor')),duration_days:cat&&cat.duration_days!=null?Number(cat.duration_days):null,notes:nul(g('te-l-notes'))}));
   }
   const tripOps=[];
   for(const blk of root.querySelectorAll('[data-tkind]')){
@@ -1227,7 +1431,8 @@ async function saveTxEdit(){
       tripOps.push({id:t?t.id:null,kind:kind,oldCourier:old||'—',newCourier:c||'—',fee:c?(t&&Number(t.fee)>0?Number(t.fee):(window.__courierFee||40)):0});
     }
   }
-  if(!Object.keys(patchTx).length&&!linePatches.length&&!deletedIds.length&&!newLines.length&&!tripOps.length){closeTxEdit();return showToast('مفيش تغيير للحفظ');}
+  const peopleChanged=typeof window.hasTxEditPeopleChanged==='function'&&window.hasTxEditPeopleChanged(st.tx);
+  if(!Object.keys(patchTx).length&&!linePatches.length&&!deletedIds.length&&!newLines.length&&!tripOps.length&&!peopleChanged){closeTxEdit();return showToast('مفيش تغيير للحفظ');}
   const btn=$('te-save');btn.disabled=true;btn.textContent='جارٍ الحفظ...';
   let did=false;
   const editorName=(myProfile&&myProfile.full_name)||(currentUser&&currentUser.email)||'موظف';
@@ -1269,6 +1474,7 @@ async function saveTxEdit(){
       }catch(e){}
       did=true;
     }
+    if(typeof window.saveTxEditPeople==='function'){await window.saveTxEditPeople(st.tx);did=true;}
     showToast('تم حفظ التعديلات وتسجيلها في اللوج');
     closeTxEdit();
   }catch(err){showError('تعذّر حفظ التعديلات',err);btn.disabled=false;btn.textContent='حفظ التعديلات';}
@@ -1302,12 +1508,19 @@ function markTxDirty(){
   const sels=[...document.querySelectorAll('#tx-modal-body .st-sel')];
   txDirty=sels.some(s=>s.value!==s.dataset.orig);
   const b=$('tx-save-btn');if(b){b.disabled=!txDirty;b.classList.toggle('opacity-50',!txDirty);}
-  // تفاعل فوري لشريط الحالة داخل نافذة المعاملة عند تغيير أي قائمة
+  sels.forEach(s=>{
+    const lid=s.dataset.id,st=s.value,pct=getLinePct(st),col=getLineStageColor(st);
+    const bar=document.querySelector('[data-line-bar="'+lid+'"]');if(bar){bar.style.width=pct+'%';bar.style.background=col;}
+    const lbl=document.querySelector('[data-line-pct-lbl="'+lid+'"]');if(lbl){lbl.textContent=pct+'%';lbl.style.color=col;}
+    const stLbl=document.querySelector('[data-line-st-lbl="'+lid+'"]');if(stLbl){stLbl.textContent=statusLabel(st)+' ('+pct+'%)';stLbl.style.color=col;}
+  });
+  // تفاعل فوري لشريط الحالة داخل نافذة المعاملة عند تغيير أي قائمة بحساب متوسط تقدم كل الخدمات
   if(openTxCurrent&&$('tx-modal-stepper-slot')&&sels.length){
     let best='In Progress',r=9;
     sels.forEach(s=>{const k=ORDER_STATUS_RANK[s.value];if(k!=null&&k<r){r=k;best=s.value;}});
+    const avgPct=getOrderPct(sels.map(s=>s.value));
     const o=groupedOrders.find(x=>String(x.transaction_id)===String(openTxCurrent));
-    $('tx-modal-stepper-slot').innerHTML=buildInteractiveStatusWidgets(openTxCurrent,best,isOrderLate(o),'modal');
+    $('tx-modal-stepper-slot').innerHTML=buildInteractiveStatusWidgets(openTxCurrent,best,isOrderLate(o),'modal',avgPct);
   }
 }
 function stageTxStatus(s){document.querySelectorAll('#tx-modal-body .st-sel').forEach(x=>{x.value=s;});markTxDirty();}
@@ -1361,7 +1574,8 @@ function getFilteredExecLines(){
     if(ex!=='all'&&(l.executor||'').trim()!==ex)return false;
     if(dt&&String(l.exec_start_date||'').slice(0,10)!==dt)return false;
     if(q){
-      const hit=(l.client_name||'').toLowerCase().includes(q)||(l.phone||'').includes(q)||String(l.transaction_id||'').toLowerCase().includes(q)||String(l.service_ref||'').toLowerCase().includes(q)||(l.service||'').toLowerCase().includes(q)||(l.executor||'').toLowerCase().includes(q);
+      const pTxt=typeof window.getRequestPeopleNamesText==='function'?window.getRequestPeopleNamesText(l.transaction_id,l.id,l.service).toLowerCase():'';
+      const hit=(l.client_name||'').toLowerCase().includes(q)||pTxt.includes(q)||(l.phone||'').includes(q)||String(l.transaction_id||'').toLowerCase().includes(q)||String(l.service_ref||'').toLowerCase().includes(q)||(l.service||'').toLowerCase().includes(q)||(l.executor||'').toLowerCase().includes(q);
       if(!hit)return false;
     }
     return true;
@@ -1391,44 +1605,52 @@ function filterExecSheet(keepLimit){
     const st=l.status||'In Progress';
     const wa=waLink(l.phone,'أهلاً '+(l.client_name||'')+'، بخصوص معاملتك رقم '+(l.transaction_id||'')+' — تساهيل');
     const phHtml=l.phone?'<div class="rc-phone-pill"><span>'+escapeHtml(l.phone)+'</span>'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="text-emerald-600 hover:text-emerald-700 text-sm leading-none" title="مراسلة واتساب"><i class="fa-brands fa-whatsapp"></i></a>':'')+'</div>':'<span class="text-slate-300">—</span>';
-    const svcHtml='<div class="rc-svc-list"><div class="rc-svc-pill"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div></div>';
+    const svcHtml='<div class="rc-svc-list"><div class="rc-svc-pill"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span></div></div>';
     const execHtml=l.executor?'<span class="rc-exec-pill"><i class="fa-solid fa-gear text-[10px]"></i><span>'+escapeHtml(l.executor)+'</span></span>':'<span class="text-slate-300">—</span>';
     const startDt=l.exec_start_date?formatDateOnly(l.exec_start_date):formatDateOnly(lineDate(l));
+    const unitCost=Number(l.exec_unit_cost)||0;
+    const totalCost=execCostOf(l);
+    const peopleSub=typeof window.getRequestPeopleInlineBadge==='function'?window.getRequestPeopleInlineBadge(l.transaction_id,l.id,l.service):'';
     return '<tr data-st17="'+escapeHtml(st)+'" class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 align-middle">'+
-      '<td class="px-4 py-3.5 font-bold text-ink dark:text-white min-w-[175px] max-w-[240px]"><button '+ac(l.client_name)+' class="text-right text-start leading-snug hover:text-brand-600 hover:underline block w-full">'+escapeHtml(l.client_name)+'</button><div class="mt-1">'+badge(st)+'</div></td>'+
+      '<td class="px-4 py-3.5 font-bold text-ink dark:text-white min-w-[175px] max-w-[240px]"><button '+ac(l.client_name)+' class="text-right text-start leading-snug hover:text-brand-600 hover:underline block w-full">'+escapeHtml(l.client_name)+'</button>'+peopleSub+'<div class="mt-1">'+badge(st)+'</div></td>'+
       '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr">'+phHtml+'</td>'+
       '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr"><button '+at(l.transaction_id)+' class="rc-tx-pill">'+escapeHtml(l.transaction_id)+'</button></td>'+
+      '<td class="px-3 py-3.5 whitespace-nowrap font-mono text-xs font-bold text-violet-700 dark:text-violet-300" dir="ltr">'+(l.service_ref?escapeHtml(l.service_ref):'<span class="text-slate-300 font-normal">—</span>')+'</td>'+
       '<td class="px-3 py-3.5">'+svcHtml+'</td>'+
-      '<td class="px-3 py-3.5 whitespace-nowrap font-mono text-xs" dir="ltr">'+(l.service_ref?escapeHtml(l.service_ref):'<span class="text-slate-300">—</span>')+'</td>'+
       '<td class="px-3 py-3.5 text-center whitespace-nowrap"><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></td>'+
       '<td class="px-3 py-3.5 whitespace-nowrap">'+execHtml+'</td>'+
-      '<td class="px-3 py-3.5 font-bold text-ink dark:text-white whitespace-nowrap text-sm">'+formatCurrency(execCostOf(l))+'</td>'+
+      '<td class="px-3 py-3.5 font-mono text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">'+formatCurrency(unitCost)+'</td>'+
+      '<td class="px-3 py-3.5 font-bold font-mono text-ink dark:text-white whitespace-nowrap text-sm">'+formatCurrency(totalCost)+'</td>'+
       '<td class="px-3 py-3.5 whitespace-nowrap"><span class="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap"><i class="fa-regular fa-calendar text-[10px] text-slate-400"></i><span>'+escapeHtml(startDt)+'</span></span></td>'+
       '<td class="px-3 py-3.5 text-xs min-w-[150px] max-w-[250px] whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">'+(l.notes?'<div class="rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/60 px-2.5 py-1.5 text-amber-900 dark:text-amber-200">'+escapeHtml(l.notes)+'</div>':'<span class="text-slate-300">—</span>')+'</td></tr>';
-  }).join('')||'<tr><td colspan="10" class="px-6 py-10 text-center text-slate-400">لا توجد مهام مطابقة</td></tr>';
+  }).join('')||'<tr><td colspan="11" class="px-6 py-10 text-center text-slate-400">لا توجد مهام مطابقة</td></tr>';
 
   $('sheet-cards-container').innerHTML=shown.map(function(l){
     const st=l.status||'In Progress';
     const wa=waLink(l.phone,'أهلاً '+(l.client_name||'')+'، بخصوص معاملتك رقم '+(l.transaction_id||'')+' — تساهيل');
+    const unitCost=Number(l.exec_unit_cost)||0;
+    const totalCost=execCostOf(l);
+    const peopleSub=typeof window.getRequestPeopleInlineBadge==='function'?window.getRequestPeopleInlineBadge(l.transaction_id,l.id,l.service):'';
     return '<div data-st17="'+escapeHtml(st)+'" class="card lift p-4 space-y-2.5 text-xs">'+
       '<div class="flex items-start justify-between gap-2">'+
-        '<div class="min-w-0"><button '+ac(l.client_name)+' class="font-bold text-ink dark:text-white leading-snug text-start hover:text-brand-600">'+escapeHtml(l.client_name)+'</button>'+
+        '<div class="min-w-0"><button '+ac(l.client_name)+' class="font-bold text-ink dark:text-white leading-snug text-start hover:text-brand-600">'+escapeHtml(l.client_name)+'</button>'+peopleSub+
           '<div class="mt-1 flex flex-wrap items-center gap-1.5" dir="ltr">'+
-            '<button '+at(l.transaction_id)+' class="rc-tx-pill !py-0.5 !px-2 !text-[11px]">'+escapeHtml(l.transaction_id)+'</button>'+
+            '<button '+at(l.transaction_id)+' class="rc-tx-pill !py-0.5 !px-2 !text-[11px]" title="Request ID">'+escapeHtml(l.transaction_id)+'</button>'+
+            (l.service_ref?'<span class="rounded-md bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 px-2 py-0.5 font-mono text-[11px] font-bold" title="Service ID">'+escapeHtml(l.service_ref)+'</span>':'')+
             (l.phone?'<span class="rc-phone-pill !py-0.5 !px-2 !text-[11px]"><span>'+escapeHtml(l.phone)+'</span>'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="text-emerald-600"><i class="fa-brands fa-whatsapp"></i></a>':'')+'</span>':'')+
           '</div>'+
         '</div>'+
         '<div class="shrink-0">'+badge(st)+'</div>'+
       '</div>'+
       '<div class="rc-svc-pill w-full"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div>'+
-      (l.service_ref?'<div class="text-[11px] text-slate-500">Service ID: <b class="font-mono" dir="ltr">'+escapeHtml(l.service_ref)+'</b></div>':'')+
       (l.notes?'<div class="rounded-lg bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1.5 text-[11px] text-amber-900 dark:text-amber-200 whitespace-pre-wrap break-words"><i class="fa-solid fa-note-sticky ms-1"></i>'+escapeHtml(l.notes)+'</div>':'')+
-      '<div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">'+
-        '<span class="text-slate-500">المنفذ: <b class="rc-exec-pill !py-0.5 !px-2">'+escapeHtml(l.executor||'—')+'</b></span>'+
-        '<span class="font-bold text-sm text-ink dark:text-white whitespace-nowrap">'+formatCurrency(execCostOf(l))+'</span>'+
+      '<div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">'+
+        '<div><span class="text-slate-400 block">المنفذ</span><b class="text-ink dark:text-white">'+escapeHtml(l.executor||'—')+'</b></div>'+
+        '<div><span class="text-slate-400 block">تكلفة الوحدة</span><b class="font-mono text-ink dark:text-white">'+formatCurrency(unitCost)+'</b></div>'+
+        '<div><span class="text-slate-400 block">إجمالي التنفيذ</span><b class="font-mono text-brand-600 dark:text-violet-300">'+formatCurrency(totalCost)+'</b></div>'+
       '</div>'+
       '<div class="flex items-center justify-between text-[11px] text-slate-400">'+
-        '<span>البداية: '+formatDateOnly(l.exec_start_date||lineDate(l))+'</span>'+
+        '<span>بداية التنفيذ: '+formatDateOnly(l.exec_start_date||lineDate(l))+'</span>'+
         '<button '+at(l.transaction_id)+' class="text-brand-600 dark:text-violet-300 font-bold px-2 py-1 rounded hover:underline">عرض التفاصيل</button>'+
       '</div>'+
     '</div>';
@@ -1463,7 +1685,7 @@ function clearExecFilters(){
 }
 function printExecSheet(){
   const ex=$('f-exec').value||'all',dt=$('f-date').value,f=getFilteredExecLines(),cost=f.reduce((s,l)=>s+execCostOf(l),0);
-  $('print-content').innerHTML='<div class="receipt-box" style="font-size:12px"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b1b33;padding-bottom:8px;margin-bottom:10px"><div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">'+logoImg(38,8)+'<div><div style="font-size:15px;font-weight:bold">قسم الخدمات الحكومية</div><div style="font-size:11px">متابعة المنفذين</div></div></div><div style="font-size:11px"><div>المنفذ: <b>'+escapeHtml(ex==='all'?'كل المنفذين':ex)+'</b></div><div>التاريخ: '+escapeHtml(dt||'كل التواريخ')+'</div></div></div><div style="background:#f1f5f9;border:1px solid #ccc;padding:8px;margin-bottom:10px">إجمالي المهام: <b>'+f.length+'</b> &nbsp;|&nbsp; إجمالي التكلفة: <b>'+formatCurrency(cost)+'</b></div><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#0b1b33;color:#fff">'+['العميل','الهاتف','المعاملة','الخدمة','العدد','المنفذ','التكلفة'].map(h=>'<th style="padding:6px;border:1px solid #555">'+h+'</th>').join('')+'</tr></thead><tbody>'+f.map(l=>'<tr>'+[l.client_name,l.phone||'—',l.transaction_id,l.service,l.qty,l.executor||'—',formatCurrency(execCostOf(l))].map(v=>'<td style="padding:5px;border:1px solid #888">'+escapeHtml(v)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';
+  $('print-content').innerHTML='<div class="receipt-box" style="font-size:12px"><div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b1b33;padding-bottom:8px;margin-bottom:10px"><div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px">'+logoImg(38,8)+'<div><div style="font-size:15px;font-weight:bold">قسم الخدمات الحكومية</div><div style="font-size:11px">متابعة المنفذين</div></div></div><div style="font-size:11px"><div>المنفذ: <b>'+escapeHtml(ex==='all'?'كل المنفذين':ex)+'</b></div><div>التاريخ: '+escapeHtml(dt||'كل التواريخ')+'</div></div></div><div style="background:#f1f5f9;border:1px solid #ccc;padding:8px;margin-bottom:10px">إجمالي المهام: <b>'+f.length+'</b> &nbsp;|&nbsp; إجمالي التكلفة: <b>'+formatCurrency(cost)+'</b></div><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#0b1b33;color:#fff">'+['العميل','الهاتف','Request ID','Service ID','الخدمة','العدد','المنفذ','تكلفة الوحدة','إجمالي التنفيذ','بداية التنفيذ','ملاحظات'].map(h=>'<th style="padding:6px;border:1px solid #555">'+h+'</th>').join('')+'</tr></thead><tbody>'+f.map(l=>{const pTxt=typeof window.getRequestPeopleNamesText==='function'?window.getRequestPeopleNamesText(l.transaction_id,l.id,l.service):'';return '<tr>'+[l.client_name+(pTxt?' ('+pTxt+')':''),l.phone||'—',l.transaction_id,l.service_ref||'—',l.service,l.qty,l.executor||'—',formatCurrency(Number(l.exec_unit_cost)||0),formatCurrency(execCostOf(l)),formatDateOnly(l.exec_start_date||lineDate(l)),l.notes||'—'].map(v=>'<td style="padding:5px;border:1px solid #888">'+escapeHtml(v)+'</td>').join('')+'</tr>';}).join('')+'</tbody></table></div>';
   window.print();
 }
 function csvCell(v){return '"'+String(v==null?'':v).replace(/"/g,'""')+'"';}
@@ -1473,7 +1695,7 @@ function downloadCsvFile(name,headers,rows){
 }
 function exportExecSheetCsv(){
   const f=getFilteredExecLines();if(!f.length)return showToast('لا توجد بيانات للتصدير','info');
-  downloadCsvFile('المنفذين_'+new Date().toISOString().slice(0,10)+'.csv',['العميل','الهاتف','ID الطلب','الخدمة','Service ID','العدد','المنفذ','تكلفة التنفيذ','تاريخ البدء','الحالة','ملاحظات'],f.map(l=>[l.client_name,l.phone,l.transaction_id,l.service,l.service_ref,l.qty,l.executor,execCostOf(l),l.exec_start_date,statusLabel(l.status),l.notes]));
+  downloadCsvFile('المنفذين_'+new Date().toISOString().slice(0,10)+'.csv',['العميل','المستفيدون','الهاتف','Request ID','Service ID','الخدمة','العدد','المنفذ','تكلفة تنفيذ الوحدة','إجمالي التنفيذ','بداية التنفيذ','الحالة','ملاحظات'],f.map(l=>[l.client_name,typeof window.getRequestPeopleNamesText==='function'?window.getRequestPeopleNamesText(l.transaction_id,l.id,l.service):'',l.phone,l.transaction_id,l.service_ref||'',l.service,l.qty,l.executor,Number(l.exec_unit_cost)||0,execCostOf(l),l.exec_start_date||dayKey(lineDate(l)),statusLabel(l.status),l.notes]));
 }
 
 /* ---------- البحث ---------- */
@@ -1481,7 +1703,8 @@ function searchResults(){
   const q=$('search-key').value.trim().toLowerCase(),st=$('search-status-filter').value;
   return allRequestLines.filter(l=>{
     if(st!=='all'&&l.status!==st)return false;if(!q)return true;
-    return [l.client_name,l.transaction_id,l.service,l.employee,l.notes,l.rn_nm].some(v=>(v||'').toLowerCase().includes(q))||(l.phone||'').replace(/\s+/g,'').includes(q.replace(/\s+/g,''));
+    const pTxt=typeof window.getRequestPeopleNamesText==='function'?window.getRequestPeopleNamesText(l.transaction_id,l.id,l.service):'';
+    return [l.client_name,pTxt,l.transaction_id,l.service_ref,l.service,l.employee,l.notes,l.rn_nm].some(v=>(v||'').toLowerCase().includes(q))||(l.phone||'').replace(/\s+/g,'').includes(q.replace(/\s+/g,''));
   });
 }
 function executeSearch(){
@@ -1682,8 +1905,10 @@ async function loadProfiles(){
   }
   profilesReady=true;profiles=r.data||[];
   myProfile=profiles.find(p=>p.id===currentUser.id)||null;
-  if(myProfile && myProfile.full_name) { $('user-display').textContent = myProfile.full_name; }
-  else { $('user-display').textContent = (currentUser.email || '').split('@')[0]; }
+  const rawName=(myProfile&&myProfile.full_name)?myProfile.full_name.trim():(currentUser.email||'').split('@')[0];
+  const parts=rawName.split(/\s+/).filter(Boolean);
+  const shortName=parts.length>2?(parts[0]+' '+parts[1]):rawName;
+  if($('user-display')){$('user-display').textContent=shortName;$('user-display').title=rawName;}
   
   try{await signAvatars();}catch(err){console.warn('avatars',err);}
   renderHeaderAvatar();renderRecentRequests();renderClientDatalists();
@@ -1937,8 +2162,7 @@ function renderTeam(){
       '</div>'+
       '<div class="font-mono text-sm text-slate-600 dark:text-slate-300" dir="ltr">'+(ph?'<span class="rc-phone-pill"><i class="fa-solid fa-phone text-xs text-brand-600"></i><span>'+escapeHtml(ph)+'</span></span>':'<span class="text-xs text-slate-400 font-sans">لم يُضَف رقم هاتف بعد</span>')+'</div>'+
       '<div class="flex items-center gap-2 mt-auto">'+(!me&&chatReady?'<button type="button" data-u="'+escapeHtml(p.id)+'" onclick="startChatWith(this.dataset.u)" class="rounded-xl bg-ink dark:bg-brand-600 hover:opacity-90 px-3 py-2 text-xs font-bold text-white" title="مراسلة"><i class="fa-solid fa-comment-dots ms-1"></i> مراسلة</button>':'')+
-      (ph?'<a href="tel:'+escapeHtml(tel)+'" class="flex-1 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 py-2 text-center text-xs font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-phone ms-1"></i> اتصال</a>'+
-        '<a href="'+wa+'" target="_blank" rel="noopener" class="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 py-2 text-center text-xs font-bold text-white"><i class="fa-brands fa-whatsapp ms-1"></i> واتساب</a>':'')+
+      (ph?'<a href="'+wa+'" target="_blank" rel="noopener" class="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 py-2 text-center text-xs font-bold text-white"><i class="fa-brands fa-whatsapp ms-1"></i> واتساب</a>':'')+
       (me?'<button type="button" onclick="openMeModal()" class="flex-1 rounded-xl bg-brand-600 hover:bg-brand-700 py-2 text-xs font-bold text-white"><i class="fa-solid fa-user-pen ms-1"></i> تعديل</button>':'')+
       '</div></div>';
   }).join('');
@@ -2324,186 +2548,185 @@ function selectHomeFloatingTx(tx){
 }
 window.selectHomeFloatingTx=selectHomeFloatingTx;
 
-function renderFloatingCardsStage(eh,todayOrders,lateCnt){
-  const recent5=groupedOrders.slice(0,5);
-  if(!window.__homeFloatingTxId||!recent5.some(o=>String(o.transaction_id)===String(window.__homeFloatingTxId))){
-    window.__homeFloatingTxId=recent5[0]?String(recent5[0].transaction_id):'';
-  }
-  const selOrder=groupedOrders.find(o=>String(o.transaction_id)===String(window.__homeFloatingTxId))||recent5[0]||null;
-  const selStatus=selOrder?getOrderStatus(selOrder):'In Progress';
-  const selStage=getStageMeta(selStatus,selOrder?isOrderLate(selOrder):false);
-
-  const WDAYS=['أحد','اثنين','ثلاثاء','أربعاء','خميس','جمعة','سبت'];
-  const dayBars=[];
-  let maxDayRev=1;
-  for(let i=6;i>=0;i--){
-    const d=new Date(Date.now()-i*86400000);
-    const dk=dayKey(d);
-    const dayOrds=groupedOrders.filter(o=>dayKey(o.received_at||o.created_at)===dk);
-    const rev=dayOrds.reduce((s,o)=>s+(Number(o.grand_total)||0),0);
-    if(rev>maxDayRev)maxDayRev=rev;
-    dayBars.push({day:WDAYS[d.getDay()],cnt:dayOrds.length,rev:rev,isToday:i===0});
-  }
-
-  const clientCounts=new Map();
-  groupedOrders.forEach(o=>{
-    const k=normName(o.client_name||'');
-    if(!k)return;
-    if(!clientCounts.has(k))clientCounts.set(k,{name:o.client_name,cnt:0,lastOrder:o});
-    clientCounts.get(k).cnt++;
-  });
-  const topRepeatClient=[...clientCounts.values()].sort((a,b)=>b.cnt-a.cnt)[0]||(selOrder?{name:selOrder.client_name,cnt:1,lastOrder:selOrder}:null);
-
+function computeHomeOperationalMetrics(){
   const curYm=new Date().toLocaleDateString('en-CA').slice(0,7);
-  const monthSales=allRequestLines.filter(l=>dayKey(lineDate(l)).slice(0,7)===curYm).reduce((s,l)=>s+(Number(l.total)||0),0);
-  const targetGoal=Math.max(120000,Math.ceil((monthSales||85000)/50000)*50000);
-  const goalPct=Math.min(100,Math.round((monthSales/targetGoal)*100))||0;
-  const rRing=32,cRing=Math.round(2*Math.PI*rRing),oRing=Math.round(cRing*(1-goalPct/100));
+  const tgtMap=window.__homeTargetsMap||{};
+  const monthLines=allRequestLines.filter(l=>dayKey(lineDate(l)).slice(0,7)===curYm);
+  const monthSales=monthLines.reduce((s,l)=>s+(Number(l.total)||0),0);
+  const monthTxSet=new Set(monthLines.map(l=>l.transaction_id).filter(Boolean));
+  const monthUnits=monthLines.reduce((s,l)=>s+(Math.max(1,Number(l.qty)||1)),0);
 
-  const lateOrder=groupedOrders.find(o=>isOrderLate(o));
-  const delivOrder=groupedOrders.find(o=>getOrderStatus(o)==='Delivered');
+  // بناء إحصائيات الأداء الفعلية لكل موظف في الشهر الحالي
+  const staffProfiles=profiles.filter(p=>p&&p.id&&p.role!=='partner');
+  const byEmp=new Map();
+  staffProfiles.forEach(p=>{
+    const tObj=tgtMap[String(p.id)]||{target:0,services_target:0};
+    byEmp.set(String(p.id),{
+      p:p,
+      name:p.full_name||'موظف',
+      sales:0,
+      units:0,
+      txSet:new Set(),
+      openCnt:0,
+      lateCnt:0,
+      target:Number(tObj.target)||0,
+      svcTarget:Number(tObj.services_target)||0
+    });
+  });
+
+  monthLines.forEach(l=>{
+    if(!l.employee)return;
+    const p=typeof profileByName==='function'?profileByName(l.employee):null;
+    const key=p?String(p.id):('raw:'+normName(l.employee));
+    if(!byEmp.has(key)){
+      byEmp.set(key,{p:p,name:l.employee.trim(),sales:0,units:0,txSet:new Set(),openCnt:0,lateCnt:0,target:0,svcTarget:0});
+    }
+    const rec=byEmp.get(key);
+    rec.sales+=Number(l.total)||0;
+    rec.units+=Math.max(1,Number(l.qty)||1);
+    if(l.transaction_id)rec.txSet.add(l.transaction_id);
+  });
+
+  allRequestLines.forEach(l=>{
+    if(!l.employee)return;
+    const st=l.status||'In Progress';
+    if(st==='Delivered')return;
+    const p=typeof profileByName==='function'?profileByName(l.employee):null;
+    const key=p?String(p.id):('raw:'+normName(l.employee));
+    if(!byEmp.has(key))return;
+    const rec=byEmp.get(key);
+    rec.openCnt++;
+    if(isLineLate(l))rec.lateCnt++;
+  });
+
+  const empList=[...byEmp.values()].filter(x=>x.sales>0||x.target>0||x.openCnt>0);
+  const sumConfiguredTargets=empList.reduce((s,x)=>s+(x.target||0),0);
+  const targetGoal=sumConfiguredTargets>0?sumConfiguredTargets:Math.max(120000,Math.ceil((monthSales||85000)/50000)*50000);
+  const goalPct=targetGoal>0?Math.min(100,Math.round((monthSales/targetGoal)*100)):0;
+
+  // حساب نسبة تحقيق المستهدف لكل موظف (أو حصته من متوسط المستهدف إن لم يُحدد له هدف فردي بعد)
+  const perEmpDefaultTarget=empList.length?Math.round(targetGoal/empList.length):targetGoal;
+  empList.forEach(x=>{
+    const effTgt=x.target>0?x.target:perEmpDefaultTarget;
+    x.effectiveTarget=effTgt;
+    x.pct=effTgt>0?Math.round((x.sales/effTgt)*100):0;
+    x.txCount=x.txSet.size;
+  });
+
+  // ترتيب الموظفين لتحديد الأعلى تحقيقاً للمستهدف والأكثر احتياجاً للدعم
+  const rankedByAch=empList.slice().sort((a,b)=>(b.pct-a.pct)||(b.sales-a.sales)||(b.txCount-a.txCount));
+  const topEmp=rankedByAch[0]||null;
+
+  // الموظف الأكثر احتياجاً للدعم: من لديه أقل نسبة تحقيق للمستهدف أو أعلى معاملات متأخرة/مفتوحة (بشرط ألا يكون هو نفسه الأعلى إن وُجد أكثر من موظف)
+  let supportEmp=null;
+  if(rankedByAch.length>1){
+    const candidates=rankedByAch.slice(1).sort((a,b)=>(a.pct-b.pct)||(b.lateCnt-a.lateCnt)||(a.sales-b.sales));
+    supportEmp=candidates[0];
+  }else if(rankedByAch.length===1){
+    supportEmp=rankedByAch[0];
+  }
+
+  return {
+    curYm:curYm,
+    monthSales:monthSales,
+    monthTxCount:monthTxSet.size,
+    monthUnits:monthUnits,
+    targetGoal:targetGoal,
+    goalPct:goalPct,
+    hasConfiguredTargets:sumConfiguredTargets>0,
+    topEmp:topEmp,
+    supportEmp:supportEmp
+  };
+}
+
+function renderFloatingCardsStage(eh,todayOrders,lateCnt){
+  const M=computeHomeOperationalMetrics();
+  const rRing=36,cRing=Math.round(2*Math.PI*rRing),oRing=Math.round(cRing*(1-M.goalPct/100));
+  const readyOrders=groupedOrders.filter(o=>getOrderStatus(o)==='Complete');
+
+  const topHtml=M.topEmp
+    ?'<div class="flex items-start justify-between gap-3">'+
+        '<div class="flex items-center gap-3 min-w-0">'+
+          '<span class="shrink-0">'+(M.topEmp.p?avatarHtml(M.topEmp.p,44):'<span class="fl-av">★</span>')+'</span>'+
+          '<div class="min-w-0">'+
+            '<div class="font-bold text-sm text-slate-900 dark:text-white truncate">'+eh(M.topEmp.name)+'</div>'+
+            '<div class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">حقق '+M.topEmp.pct+'% من المستهدف</div>'+
+          '</div>'+
+        '</div>'+
+        '<span class="rounded-full bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-300 dark:border-emerald-400/30 px-2.5 py-0.5 text-[11px] font-bold font-mono text-emerald-800 dark:text-emerald-300 shrink-0">'+M.topEmp.pct+'%</span>'+
+      '</div>'+
+      '<div class="space-y-1.5 pt-2">'+
+        '<div class="h-2 w-full rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300" style="width:'+Math.min(100,M.topEmp.pct)+'%"></div></div>'+
+        '<div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-300">'+
+          '<span>إيراد الشهر: <b class="font-mono text-slate-800 dark:text-white">'+eh(formatCurrency(M.topEmp.sales))+'</b></span>'+
+          '<span>'+M.topEmp.txCount+' معاملة · '+M.topEmp.units+' خدمة</span>'+
+        '</div>'+
+      '</div>'
+    :'<div class="py-5 text-center text-xs text-slate-400">تظهر المؤشرات تلقائياً مع تسجيل معاملات الشهر</div>';
+
+  const supHtml=M.supportEmp
+    ?'<div class="flex items-start justify-between gap-3">'+
+        '<div class="flex items-center gap-3 min-w-0">'+
+          '<span class="shrink-0">'+(M.supportEmp.p?avatarHtml(M.supportEmp.p,44):'<span class="fl-av">•</span>')+'</span>'+
+          '<div class="min-w-0">'+
+            '<div class="font-bold text-sm text-slate-900 dark:text-white truncate">'+eh(M.supportEmp.name)+'</div>'+
+            '<div class="text-[11px] text-amber-600 dark:text-amber-300 font-semibold mt-0.5">'+(M.supportEmp.lateCnt>0?('لديه '+M.supportEmp.lateCnt+' بنود متأخرة تحتاج مساندة'):('نسبة الإنجاز الحالية '+M.supportEmp.pct+'% من المستهدف'))+'</div>'+
+          '</div>'+
+        '</div>'+
+        '<span class="rounded-full bg-amber-100 dark:bg-amber-500/20 border border-amber-300 dark:border-amber-400/30 px-2.5 py-0.5 text-[10.5px] font-bold text-amber-800 dark:text-amber-200 shrink-0">أولوية دعم</span>'+
+      '</div>'+
+      '<div class="space-y-1.5 pt-2">'+
+        '<div class="h-2 w-full rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-400 transition-all duration-300" style="width:'+Math.max(8,Math.min(100,M.supportEmp.pct))+'%"></div></div>'+
+        '<div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-300">'+
+          '<span>المحقق: <b class="font-mono text-slate-800 dark:text-white">'+eh(formatCurrency(M.supportEmp.sales))+'</b></span>'+
+          '<span>مفتوح قيد المتابعة: <b class="font-mono text-slate-800 dark:text-white">'+M.supportEmp.openCnt+' بند</b></span>'+
+        '</div>'+
+      '</div>'
+    :'<div class="py-5 text-center text-xs text-slate-400">لا توجد حالات تحتاج دعماً إضافياً حالياً</div>';
 
   return '<div class="fl-stage-wrap">'+
     '<div class="fl-deck-grid">'+
-      /* الكارت الأيمن: آخر المعاملات */
-      '<div class="fl-card fl-tilt-r flex flex-col justify-between gap-2.5">'+
-        '<div>'+
-          '<div class="flex items-center justify-between mb-2.5">'+
-            '<span class="font-bold text-sm text-white">المعاملات</span>'+
-            '<button type="button" onclick="switchTab(\'tx\')" class="text-[11px] font-semibold text-violet-300 hover:underline">عرض الكل</button>'+
-          '</div>'+
-          '<div class="space-y-1">'+
-            (recent5.length?recent5.map(o=>{
-              const isSel=selOrder&&String(o.transaction_id)===String(selOrder.transaction_id);
-              const init=Array.from(String(o.client_name||'؟').trim())[0]||'؟';
-              const svcTxt=o.lines.map(l=>l.service).filter(Boolean).slice(0,2).join(' + ');
-              const st=getOrderStatus(o);
-              return '<button type="button" onclick="selectHomeFloatingTx(\''+eh(o.transaction_id)+'\')" class="fl-tx-item '+(isSel?'sel':'')+'">'+
-                '<span class="flex items-center gap-2 min-w-0">'+
-                  '<span class="fl-av">'+eh(init)+'</span>'+
-                  '<span class="min-w-0">'+
-                    '<span class="block font-bold text-xs text-white truncate">'+eh(o.client_name||'—')+'</span>'+
-                    '<span class="block text-[10.5px] text-slate-400 truncate mt-0.5">'+eh(svcTxt||'—')+'</span>'+
-                  '</span>'+
-                '</span>'+
-                '<span class="shrink-0">'+badge(st)+'</span>'+
-              '</button>';
-            }).join(''):'<div class="py-6 text-center text-xs text-slate-400">لا توجد معاملات بعد</div>')+
-          '</div>'+
-        '</div>'+
-        (topRepeatClient&&topRepeatClient.lastOrder?
-          '<div class="mt-2 pt-2.5 border-t border-white/10">'+
-            '<div class="flex items-center justify-between gap-2">'+
-              '<div class="min-w-0">'+
-                '<div class="font-bold text-xs text-white truncate">'+eh(topRepeatClient.name)+'</div>'+
-                '<div class="text-[10.5px] text-violet-300">عميل مسجّل · '+topRepeatClient.cnt+' معاملات</div>'+
-              '</div>'+
-              '<span class="fl-av">'+eh(Array.from(String(topRepeatClient.name||'أ'))[0])+'</span>'+
-            '</div>'+
-            '<button type="button" data-qk-repeat="'+eh(topRepeatClient.lastOrder.transaction_id)+'" onclick="switchTab(\'new\')" class="mt-2 w-full rounded-xl bg-violet-500/20 hover:bg-violet-500/35 border border-violet-400/30 px-2.5 py-1.5 text-[11px] font-bold text-violet-200 flex items-center justify-between transition">'+
-              '<span class="truncate">آخر طلب: '+eh((topRepeatClient.lastOrder.lines[0]&&topRepeatClient.lastOrder.lines[0].service)||'خدمة')+' · '+eh(formatCurrency(topRepeatClient.lastOrder.grand_total))+'</span>'+
-              '<span class="shrink-0 underline">كرّر</span>'+
-            '</button>'+
-          '</div>':'')+
-      '</div>'+
 
-      /* الكارت الأوسط: ملخص المعاملة + هدف الشهر */
-      '<div class="flex flex-col gap-3.5">'+
-        '<div class="fl-card fl-dark fl-tilt-center space-y-3">'+
-          (selOrder?
-            '<div class="flex items-center justify-between">'+
-              '<span class="rounded-full bg-violet-500/20 border border-violet-400/30 px-2.5 py-0.5 text-[10.5px] font-bold text-violet-200" dir="ltr">● #'+eh(selOrder.transaction_id)+'</span>'+
-              '<span class="font-bold text-sm text-white">ملخص الطلب</span>'+
-            '</div>'+
-            '<div class="text-xs text-slate-300 flex items-center justify-between">'+
-              '<span class="font-bold text-white truncate">'+eh(selOrder.client_name||'—')+'</span>'+
-              '<span class="font-mono text-violet-300" dir="ltr">'+eh(selOrder.phone||'')+'</span>'+
-            '</div>'+
-            '<div class="space-y-1.5 border-y border-white/10 py-2 text-xs">'+
-              selOrder.lines.slice(0,3).map(l=>
-                '<div class="flex items-center justify-between gap-2">'+
-                  '<span class="text-slate-200 truncate">'+eh(l.service||'—')+(Number(l.qty)>1?' ×'+fmtNum(l.qty):'')+'</span>'+
-                  '<span class="font-mono font-bold text-white">'+fmtNum(l.total)+'</span>'+
-                '</div>'
-              ).join('')+
-              (txDisc(selOrder)>0?'<div class="flex items-center justify-between text-rose-300"><span>خصم</span><span class="font-mono">− '+fmtNum(txDisc(selOrder))+'%</span></div>':'')+
-            '</div>'+
-            '<div class="flex items-baseline justify-between">'+
-              '<span class="text-xs text-slate-400">الإجمالي</span>'+
-              '<div class="text-2xl font-bold font-mono text-white">'+fmtNum(selOrder.grand_total)+' <small class="text-xs font-normal text-slate-300">ج.م</small></div>'+
-            '</div>'+
-            '<div class="space-y-1">'+
-              '<div class="flex items-center justify-between text-[10.5px]">'+
-                '<span class="text-slate-300">'+eh(selStage.title)+'</span>'+
-                '<span class="font-mono font-bold" style="color:'+selStage.color+'">'+selStage.pct+'%</span>'+
-              '</div>'+
-              '<div class="h-1.5 rounded-full bg-white/10 overflow-hidden"><div class="h-full rounded-full transition-all duration-500" style="width:'+selStage.barW+'%;background:'+selStage.color+'"></div></div>'+
-            '</div>'+
-            '<div class="pt-1 space-y-1.5">'+
-              '<button type="button" onclick="openTxInTransactionsTab(\''+eh(selOrder.transaction_id)+'\')" class="btn-neo-pri w-full py-2 text-xs">فتح المعاملة</button>'+
-              '<div class="grid grid-cols-2 gap-1.5">'+
-                '<button type="button" onclick="printTxReceipt(\''+eh(selOrder.transaction_id)+'\')" class="btn-neo-sec !text-white !border-white/15 !bg-white/5 py-1.5 text-xs">طباعة</button>'+
-                '<button type="button" onclick="switchTab(\'new\')" class="btn-neo-sec !text-white !border-white/15 !bg-white/5 py-1.5 text-xs">طلب جديد</button>'+
-              '</div>'+
-            '</div>'
-          :'<div class="py-8 text-center text-xs text-slate-400">لا توجد معاملات بعد</div>')+
-        '</div>'+
-
-        /* كارت هدف الشهر */
-        '<div onclick="switchTab(\'comm\')" class="fl-card fl-tilt-b2 cursor-pointer flex items-center justify-between gap-3 !p-3.5">'+
+      /* البطاقة 1: هدف الشهر الفعلي ومؤشر الإنجاز العام */
+      '<div onclick="switchTab(\'comm\')" class="fl-card cursor-pointer flex flex-col justify-between gap-3">'+
+        '<div class="flex items-start justify-between gap-3">'+
           '<div>'+
-            '<div class="font-bold text-xs sm:text-sm text-white">هدف الشهر</div>'+
-            '<div class="text-xs text-slate-400 font-mono mt-1" dir="ltr">'+fmtNum(monthSales)+' / '+fmtNum(targetGoal)+'</div>'+
+            '<span class="inline-flex items-center gap-1.5 rounded-full bg-violet-100 dark:bg-violet-500/20 border border-violet-300 dark:border-violet-400/30 px-2.5 py-0.5 text-[10.5px] font-bold text-violet-700 dark:text-violet-200"><i class="fa-solid fa-bullseye"></i><span>هدف الشهر</span></span>'+
+            '<div class="mt-2 text-xl sm:text-2xl font-extrabold font-mono text-slate-900 dark:text-white">'+eh(formatCurrency(M.monthSales))+'</div>'+
+            '<div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">من مستهدف <b class="font-mono text-slate-700 dark:text-slate-200">'+eh(formatCurrency(M.targetGoal))+'</b></div>'+
           '</div>'+
-          '<div class="relative flex items-center justify-center shrink-0" style="width:74px;height:74px">'+
-            '<svg class="tx-ring-svg" width="74" height="74" viewBox="0 0 74 74">'+
-              '<circle class="tx-ring-bg" cx="37" cy="37" r="'+rRing+'"></circle>'+
-              '<circle class="tx-ring-fg" cx="37" cy="37" r="'+rRing+'" stroke="#a855f7" stroke-dasharray="'+cRing+'" stroke-dashoffset="'+oRing+'"></circle>'+
+          '<div class="relative flex items-center justify-center shrink-0" style="width:84px;height:84px">'+
+            '<svg class="tx-ring-svg" width="84" height="84" viewBox="0 0 84 84">'+
+              '<circle class="tx-ring-bg" cx="42" cy="42" r="'+rRing+'"></circle>'+
+              '<circle class="tx-ring-fg" cx="42" cy="42" r="'+rRing+'" stroke="#8b5cf6" stroke-dasharray="'+cRing+'" stroke-dashoffset="'+oRing+'"></circle>'+
             '</svg>'+
-            '<span class="absolute font-bold text-xs font-mono text-white">'+goalPct+'%</span>'+
+            '<span class="absolute font-bold text-sm font-mono text-slate-900 dark:text-white">'+M.goalPct+'%</span>'+
           '</div>'+
+        '</div>'+
+        '<div class="pt-2 border-t border-slate-200/70 dark:border-white/10 flex items-center justify-between text-xs text-slate-500 dark:text-slate-300">'+
+          '<span>إنجاز الشهر: <b class="text-slate-800 dark:text-white font-mono">'+M.monthTxCount+' طلب</b> ('+M.monthUnits+' خدمة)</span>'+
+          '<span class="text-violet-600 dark:text-violet-300 font-bold hover:underline">التفاصيل ←</span>'+
         '</div>'+
       '</div>'+
 
-      /* الكارت الأيسر: إيراد الأسبوع + التنبيهات */
-      '<div class="flex flex-col justify-between gap-3.5">'+
-        '<div class="fl-card fl-tilt-l">'+
-          '<div class="flex items-center justify-between">'+
-            '<span class="font-bold text-sm text-white">إيراد الأسبوع</span>'+
-            '<span class="rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-bold font-mono">'+todayOrders.length+' اليوم</span>'+
-          '</div>'+
-          '<div class="fl-bars-wrap">'+
-            dayBars.map(b=>{
-              const hPct=Math.max(12,Math.round((b.rev/maxDayRev)*100));
-              return '<div class="fl-bar-col '+(b.isToday?'is-peak':'')+'" onclick="switchTab(\'dash\')">'+
-                '<span class="fl-bar-tip">'+b.cnt+' معاملة · '+eh(formatCurrency(b.rev))+'</span>'+
-                '<div class="fl-bar-cap" style="height:'+hPct+'%"></div>'+
-              '</div>';
-            }).join('')+
-          '</div>'+
-          '<div class="flex gap-1 mt-2 text-[10.5px] text-slate-400">'+
-            dayBars.map(b=>'<span class="flex-1 text-center truncate '+(b.isToday?'text-violet-300 font-bold':'')+'">'+eh(b.day)+'</span>').join('')+
-          '</div>'+
+      /* البطاقة 2: الموظف الأعلى تحقيقاً للمستهدف */
+      '<div onclick="switchTab(\'comm\')" class="fl-card cursor-pointer flex flex-col justify-between gap-2.5">'+
+        '<div class="flex items-center justify-between">'+
+          '<span class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300"><i class="fa-solid fa-trophy text-amber-500"></i><span>الأعلى تحقيقاً للمستهدف</span></span>'+
+          '<span class="text-[11px] text-slate-400">بيانات الأداء الفعلية</span>'+
         '</div>'+
-
-        '<div class="space-y-2.5">'+
-          '<div onclick="openMyDayTab(\'late\')" class="fl-card fl-tilt-b1 cursor-pointer !p-3.5 flex items-center justify-between gap-2.5" style="background:rgba(76,17,39,0.48);border-color:rgba(244,63,94,0.32)">'+
-            '<div class="min-w-0">'+
-              '<div class="font-bold text-xs text-rose-200 truncate">'+(lateOrder?('معاملة #'+eh(lateOrder.transaction_id)+' متأخرة'):(lateCnt>0?lateCnt+' معاملات متأخرة':'لا توجد متأخرات ✓'))+'</div>'+
-              '<div class="text-[10.5px] text-rose-300/80 truncate mt-0.5">'+(lateOrder?(eh(lateOrder.client_name)+' · '+eh((lateOrder.lines[0]&&lateOrder.lines[0].service)||'')):'كل المعاملات في موعدها')+'</div>'+
-            '</div>'+
-            '<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-500/25 text-rose-300 text-xs"><i class="fa-regular fa-clock"></i></span>'+
-          '</div>'+
-
-          '<div onclick="switchTab(\'tx\')" class="fl-card fl-tilt-b2 cursor-pointer !p-3.5 flex items-center justify-between gap-2.5" style="background:rgba(13,58,46,0.48);border-color:rgba(16,185,129,0.32)">'+
-            '<div class="min-w-0">'+
-              '<div class="font-bold text-xs text-emerald-200 truncate">'+(delivOrder?('تم تسليم #'+eh(delivOrder.transaction_id)):'المعاملات المسلمة')+'</div>'+
-              '<div class="text-[10.5px] text-emerald-300/80 truncate mt-0.5">'+(delivOrder?(eh(delivOrder.client_name)+' · '+eh((delivOrder.lines[0]&&delivOrder.lines[0].service)||'')):'متابعة التسليمات')+'</div>'+
-            '</div>'+
-            '<span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/25 text-emerald-300 text-xs"><i class="fa-solid fa-check"></i></span>'+
-          '</div>'+
-        '</div>'+
+        topHtml+
       '</div>'+
+
+      /* البطاقة 3: الموظف الأكثر احتياجاً للدعم والمساندة (بصياغة مهنية) */
+      '<div onclick="openMyDayTab(\'all\')" class="fl-card cursor-pointer flex flex-col justify-between gap-2.5">'+
+        '<div class="flex items-center justify-between">'+
+          '<span class="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-300"><i class="fa-solid fa-hands-helping"></i><span>الأكثر احتياجاً للدعم والمتابعة</span></span>'+
+          '<span class="text-[11px] text-slate-400">توزيع العبء والمساندة</span>'+
+        '</div>'+
+        supHtml+
+      '</div>'+
+
     '</div>'+
   '</div>';
 }
@@ -2552,13 +2775,9 @@ function renderHomeTab(){
       '<div class="flex flex-wrap items-center justify-between gap-3">'+
         '<div>'+
           '<h1 class="text-base sm:text-lg font-bold text-white">أهلاً، '+eh(meName)+'</h1>'+
-          '<p class="text-[11px] text-slate-400 mt-0.5">'+eh(todayStr)+'</p>'+
+          '<p class="text-[11px] text-slate-300 mt-0.5">'+eh(todayStr)+'</p>'+
         '</div>'+
-        '<div class="flex flex-wrap items-center gap-2">'+
-          '<button type="button" onclick="switchTab(\'new\')" class="btn-neo-pri text-xs"><i class="fa-solid fa-plus"></i><span>طلب جديد</span></button>'+
-          '<button type="button" onclick="switchTab(\'tx\')" class="btn-neo-sec text-xs"><i class="fa-solid fa-list-ul"></i><span>المعاملات</span></button>'+
-          '<button type="button" onclick="if(window.qkOpen)qkOpen();else switchTab(\'search\')" class="btn-neo-sec text-xs"><i class="fa-solid fa-magnifying-glass"></i><span>بحث</span></button>'+
-        '</div>'+
+        '<div id="hm-clock-slot" class="flex items-center"></div>'+
       '</div>'+
       '<div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mt-3.5">'+
         '<button type="button" onclick="switchTab(\'tx\')" class="hm-kpi-box">'+
@@ -2644,6 +2863,7 @@ function renderHomeTab(){
     '</div>';
 
   box.innerHTML=h;
+  if(typeof window.mountHomeClock==='function')window.mountHomeClock();
 }
 window.renderHomeTab=renderHomeTab;
 

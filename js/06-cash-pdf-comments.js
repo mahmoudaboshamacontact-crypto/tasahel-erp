@@ -73,14 +73,18 @@
       .filter(l => (l.payment_method || '').trim() === 'كاش' && (!dt || dayKey(lineDate(l)) === dt))
       .sort((a, b) => String(lineDate(a)).localeCompare(String(lineDate(b))));
   }
+  function clientWithPeopleText(l) {
+    const pTxt = typeof window.getRequestPeopleNamesText === 'function' ? window.getRequestPeopleNamesText(l.transaction_id, l.id, l.service) : '';
+    return (l.client_name || '') + (pTxt ? ' (المستفيدون: ' + pTxt + ')' : '');
+  }
   function cashDef() {
     const f = getCashLines(), dt = $('cash-date').value, total = f.reduce((s, l) => s + (Number(l.total) || 0), 0);
     return {
       title: 'شيت الكاش',
       meta: ['التاريخ: ' + (dt ? formatDateOnly(dt) : 'كل التواريخ')],
       stats: [['عدد بنود الكاش', f.length], ['عدد المعاملات', new Set(f.map(l => l.transaction_id)).size], ['إجمالي تحصيل الكاش', formatCurrency(total)]],
-      headers: ['العميل', 'التليفون', 'العنوان', 'رقم المعاملة', 'رقم الإيصال', 'الخدمة', 'العدد', 'الإجمالي', 'الموظف', 'المستلم', 'وقت الاستلام'],
-      rows: f.map(l => [l.client_name, l.phone, l.address, l.transaction_id, l.rn_nm, l.service, l.qty, formatCurrency(l.total), l.employee, l.receiver, formatDateTime(lineDate(l))]),
+      headers: ['العميل والمستفيدون', 'التليفون', 'العنوان', 'Request ID', 'رقم الإيصال', 'الخدمة', 'العدد', 'الإجمالي', 'الموظف', 'مندوب الاستلام', 'وقت الاستلام'],
+      rows: f.map(l => [clientWithPeopleText(l), l.phone, l.address, l.transaction_id, l.rn_nm, l.service, l.qty, formatCurrency(l.total), l.employee, l.receiver, formatDateTime(lineDate(l))]),
       filename: 'شيت_الكاش_' + (dt || 'كل_التواريخ') + '.pdf',
       perPage: 15
     };
@@ -91,9 +95,10 @@
     $('cash-count').textContent = f.length;
     $('cash-total').textContent = formatCurrency(total);
     const dash = v => v ? eh(v) : '<span class="text-slate-300">—</span>';
-    $('cash-body').innerHTML = f.map(l =>
-      '<tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">' +
-      '<td class="px-5 py-3 font-semibold text-ink dark:text-white"><button ' + ac(l.client_name) + ' class="hover:text-brand-600 hover:underline text-start">' + eh(l.client_name) + '</button></td>' +
+    $('cash-body').innerHTML = f.map(l => {
+      const pSub = typeof window.getRequestPeopleInlineBadge === 'function' ? window.getRequestPeopleInlineBadge(l.transaction_id, l.id, l.service) : '';
+      return '<tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">' +
+      '<td class="px-5 py-3 font-semibold text-ink dark:text-white"><button ' + ac(l.client_name) + ' class="hover:text-brand-600 hover:underline text-start">' + eh(l.client_name) + '</button>' + pSub + '</td>' +
       '<td class="px-3 py-3 font-mono text-xs" dir="ltr">' + dash(l.phone) + '</td>' +
       '<td class="px-3 py-3 text-xs max-w-[180px]">' + dash(l.address) + '</td>' +
       '<td class="px-3 py-3 font-mono text-xs font-semibold text-brand-600" dir="ltr"><button ' + at(l.transaction_id) + ' class="hover:underline">' + eh(l.transaction_id) + '</button></td>' +
@@ -103,8 +108,8 @@
       '<td class="px-3 py-3 font-mono font-bold text-brand-600">' + formatCurrency(l.total) + '</td>' +
       '<td class="px-3 py-3 text-xs">' + empCell(l.employee) + '</td>' +
       '<td class="px-3 py-3 text-xs">' + dash(l.receiver) + '</td>' +
-      '<td class="px-3 py-3 font-mono text-xs text-slate-500">' + formatDateTime(lineDate(l)) + '</td></tr>'
-    ).join('') || '<tr><td colspan="11" class="px-6 py-10 text-center text-slate-400">لا توجد معاملات كاش في هذا التاريخ</td></tr>';
+      '<td class="px-3 py-3 font-mono text-xs text-slate-500">' + formatDateTime(lineDate(l)) + '</td></tr>';
+    }).join('') || '<tr><td colspan="11" class="px-6 py-10 text-center text-slate-400">لا توجد معاملات كاش في هذا التاريخ</td></tr>';
     $('cash-cards-container').innerHTML = f.map(l =>
       '<div class="card p-4 space-y-2 text-xs">' +
       '<div class="flex items-center justify-between gap-2"><button ' + ac(l.client_name) + ' class="font-bold text-ink dark:text-white text-start">' + eh(l.client_name) + '</button><button ' + at(l.transaction_id) + ' class="font-mono text-brand-600 font-bold" dir="ltr">' + eh(l.transaction_id) + '</button></div>' +
@@ -135,8 +140,8 @@
       title: 'شيت متابعة المنفذين',
       meta: ['المنفذ: ' + (ex === 'all' ? 'كل المنفذين' : ex), 'تاريخ بداية التنفيذ: ' + (dt ? formatDateOnly(dt) : 'كل التواريخ')],
       stats: [['عدد بنود التنفيذ', f.length], ['إجمالي تكلفة التنفيذ', formatCurrency(cost)]],
-      headers: ['العميل', 'الهاتف', 'ID الطلب', 'الخدمة', 'Service ID', 'العدد', 'المنفذ', 'التكلفة', 'تاريخ البدء', 'ملاحظات'],
-      rows: f.map(l => [l.client_name, l.phone, l.transaction_id, l.service, l.service_ref, l.qty, l.executor, formatCurrency(execCostOf(l)), formatDateOnly(l.exec_start_date), l.notes]),
+      headers: ['العميل والمستفيدون', 'الهاتف', 'Request ID', 'Service ID', 'الخدمة', 'العدد', 'المنفذ', 'تكلفة الوحدة', 'إجمالي التنفيذ', 'بداية التنفيذ', 'ملاحظات'],
+      rows: f.map(l => [clientWithPeopleText(l), l.phone, l.transaction_id, l.service_ref || '—', l.service, l.qty, l.executor, formatCurrency(Number(l.exec_unit_cost) || 0), formatCurrency(execCostOf(l)), formatDateOnly(l.exec_start_date || lineDate(l)), l.notes]),
       filename: 'شيت_المنفذين_' + (ex === 'all' ? 'الكل' : ex) + '_' + (dt || dayKey(new Date())) + '.pdf',
       perPage: 14
     };
