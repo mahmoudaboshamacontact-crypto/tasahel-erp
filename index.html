@@ -273,7 +273,7 @@
 <div class="grid gap-3.5 sm:grid-cols-2">
 <div><label class="label" for="client-name">اسم العميل أو المؤسسة</label><input id="client-name" list="clients-datalist" required autocomplete="off" placeholder="اكتب اسم العميل أو اختر من القائمة..." class="field" oninput="onClientNameInput(this.value)"><datalist id="clients-datalist"></datalist></div>
 <div><label class="label" for="phone">رقم الموبايل</label><input id="phone" list="phones-datalist" inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" class="field text-right font-mono" oninput="onPhoneInput(this.value)"><datalist id="phones-datalist"></datalist></div>
-<div><div class="flex items-center justify-between mb-1"><label class="label mb-0" for="tx-id">رقم المعاملة</label><button type="button" onclick="generateNewTxId()" class="text-[11px] text-brand-600 dark:text-brand-400 hover:underline"><i class="fa-solid fa-rotate-right ms-1"></i> رقم جديد</button></div><input id="tx-id" required dir="ltr" class="field text-right font-mono font-semibold text-brand-600 dark:text-brand-400"></div>
+<div><div class="flex items-center justify-between mb-1"><label class="label mb-0" for="tx-id">رقم المعاملة</label><button type="button" onclick="generateNewTxId(true)" class="text-[11px] text-brand-600 dark:text-brand-400 hover:underline"><i class="fa-solid fa-rotate-right ms-1"></i> رقم جديد</button></div><input id="tx-id" required placeholder="اضغط «رقم جديد»" dir="ltr" class="field text-right font-mono font-semibold text-brand-600 dark:text-brand-400"></div>
 <div><label class="label" for="address">العنوان / الفرع (اختياري)</label><input id="address" placeholder="المقر، الشارع، المدينة..." class="field" oninput="updateOrderProgressBar()"></div>
 </div>
 </div>
@@ -296,10 +296,10 @@
 <div class="mb-4"><label class="label">طريقة الدفع</label><div id="pay-group" class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"></div><input type="hidden" id="payment-method-val" value="كاش"></div>
 <div class="grid gap-3.5 sm:grid-cols-3">
 <div><label class="label" for="employee">الموظف المسؤول</label><input id="employee" list="emp-datalist" required placeholder="اسم الموظف..." class="field" oninput="updateOrderProgressBar()"><datalist id="emp-datalist"></datalist></div>
-<div><label class="label" for="receiver">المستلم</label><input id="receiver" list="rec-datalist" placeholder="العميل شخصياً أو مندوب..." class="field" oninput="updateOrderProgressBar()"><datalist id="rec-datalist"></datalist></div>
+<div class="hidden" id="receiver-wrap"><label class="label" for="receiver">المستلم</label><input id="receiver" list="rec-datalist" placeholder="العميل شخصياً أو مندوب..." class="field" oninput="updateOrderProgressBar()"><datalist id="rec-datalist"></datalist></div>
 <div><label class="label" for="received-at">تاريخ ووقت الاستلام</label><input id="received-at" type="datetime-local" required class="field font-mono text-xs"></div>
-<div><label class="label" for="rn-nm">رقم الإيصال الورقي (اختياري)</label><input id="rn-nm" placeholder="رقم الإيصال الورقي" class="field font-mono text-xs" oninput="updateOrderProgressBar()"></div>
-<div><label class="label" for="discount-pct">خصم العميل (%)</label><div class="relative"><input id="discount-pct" type="number" min="0" max="100" step="any" inputmode="decimal" placeholder="0" oninput="calculateTotals()" class="field font-mono text-center pe-8"><span class="pointer-events-none absolute inset-y-0 end-3 flex items-center text-sm font-bold text-violet-500">%</span></div></div>
+<div><label class="label" for="rn-nm">رقم الإيصال (اختياري)</label><input id="rn-nm" placeholder="رقم الإيصال" class="field font-mono text-xs" oninput="updateOrderProgressBar()"></div>
+<input id="discount-pct" type="hidden" value="">
 <div class="sm:col-span-3"><label class="label" for="notes">ملاحظة</label><input id="notes" placeholder="مثال: العميل هيستلم بنفسه..." class="field" oninput="updateOrderProgressBar()"></div>
 </div>
 </div>
@@ -598,13 +598,13 @@
 </section>
 
 <div id="printArea"><div id="print-content" class="p-6"></div></div>
-<script src="js/03-core-app.js?v=20261040"></script>
+<script src="js/03-core-app.js?v=p1a1"></script>
 <script src="js/05-chat-improvements.js?v=20261040"></script>
 <script src="js/06-cash-pdf-comments.js?v=20261040"></script>
 <script src="js/07-commission-targets.js?v=20261040"></script>
 <script src="js/08-dashboard.js?v=20261040"></script>
 <script src="js/09-receipt-and-print.js?v=20261040"></script>
-<script src="js/10-audit-backup-pwa.js?v=20261040"></script>
+<script src="js/10-audit-backup-pwa.js?v=p1a1"></script>
 <script src="js/11-tasks-notifications.js?v=20261040"></script>
 <script src="js/12-notes-password-lock.js?v=20261040"></script>
 <script src="js/13-couriers.js?v=20261040"></script>
@@ -615,7 +615,7 @@
 <script src="js/18-discount-comments.js?v=20261040"></script>
 <script src="js/19-phase17.js?v=20261040"></script>
 <script src="js/20-phase18.js?v=20261040"></script>
-<script src="js/21-quick-entry.js?v=20261040"></script>
+<script src="js/21-quick-entry.js?v=p1a1"></script>
 <script src="js/22-my-day.js?v=20261040"></script>
 <script src="js/23-staff-performance.js?v=20261040"></script>
 <script src="js/24-critical-fixes.js?v=1"></script>
@@ -631,5 +631,6 @@
 <script src="js/34-calculator.js?v=3" defer></script>
 <script src="js/35-inquiry-comments.js?v=1" defer></script>
 <script src="js/36-task-reminder.js?v=1" defer></script>
+<script src="js/37-order-cycle.js?v=1" defer></script>
 </body>
 </html>

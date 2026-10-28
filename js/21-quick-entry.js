@@ -70,6 +70,7 @@
     setV(el, '.svc-qty', num(l.qty) || 1);
     if (!catalogOf(l.service)) {
       setV(el, '.svc-price', num(l.discount_pct) > 0 && num(l.list_price) > 0 ? num(l.list_price) : num(l.unit_price));
+      setV(el, '.svc-disc', num(l.discount_pct) > 0 ? num(l.discount_pct) : '');
       setV(el, '.svc-cost', num(l.exec_unit_cost)); setV(el, '.svc-executor', l.executor || '');
       if (l.commission_per_unit != null) el.dataset.comm = l.commission_per_unit;
       if (l.duration_days != null) el.dataset.dur = l.duration_days;
@@ -130,7 +131,7 @@
   function snapshot() {
     const g = id => ($(id) ? $(id).value : '');
     return { t: Date.now(), f: { client: g('client-name'), phone: g('phone'), address: g('address'), rn: g('rn-nm'), notes: g('notes'), disc: g('discount-pct'), recv: g('receiver'), pay: g('payment-method-val') },
-      lines: lineEls().map(el => ({ s: val(el, '.svc-name'), q: val(el, '.svc-qty'), p: val(el, '.svc-price'), c: val(el, '.svc-cost'), x: val(el, '.svc-executor'), n: val(el, '.svc-notes'), comm: el.dataset.comm, dur: el.dataset.dur })) };
+      lines: lineEls().map(el => ({ s: val(el, '.svc-name'), q: val(el, '.svc-qty'), p: val(el, '.svc-price'), c: val(el, '.svc-cost'), x: val(el, '.svc-executor'), n: val(el, '.svc-notes'), d: val(el, '.svc-disc'), r: val(el, '.svc-ref'), comm: el.dataset.comm, dur: el.dataset.dur })) };
   }
   const meaningful = d => !!(d && (d.f.client.trim() || d.f.phone.trim() || d.f.notes.trim() || d.lines.some(l => l.s.trim() || l.n.trim())));
   const saveDraft = safe('draft', function () { if (!live() || !$('req-form')) return; const d = snapshot(); if (meaningful(d)) store.set(draftKey(), JSON.stringify(d)); else store.del(draftKey()); });
@@ -144,7 +145,7 @@
     $('lines-container').innerHTML = ''; try { serviceLineCounter = 0; } catch (e) { /* */ }
     (d.lines.length ? d.lines : [{}]).forEach(l => {
       addServiceLine(); const el = $('lines-container').lastElementChild;
-      setV(el, '.svc-name', l.s); setV(el, '.svc-qty', l.q || 1); setV(el, '.svc-price', l.p || 0); setV(el, '.svc-cost', l.c || 0); setV(el, '.svc-executor', l.x); setV(el, '.svc-notes', l.n);
+      setV(el, '.svc-name', l.s); setV(el, '.svc-qty', l.q || 1); setV(el, '.svc-price', l.p || 0); setV(el, '.svc-cost', l.c || 0); setV(el, '.svc-executor', l.x); setV(el, '.svc-notes', l.n); setV(el, '.svc-disc', l.d || ''); setV(el, '.svc-ref', l.r || '');
       if (l.comm != null && l.comm !== '') el.dataset.comm = l.comm; if (l.dur != null && l.dur !== '') el.dataset.dur = l.dur;
     });
     calculateTotals(); lineEls().forEach(updateHint); checkDup(); updateLast();
@@ -264,7 +265,7 @@
       { ic: 'fa-layer-group', t: 'إضافة بند خدمة', s: 'Alt+A', k: 'بند خدمه اضافه', run: () => { switchTab('new'); addServiceLine(); const l = lineEls().pop(); if (l) { const i = l.querySelector('.svc-name'); i && i.focus(); } } },
       { ic: 'fa-floppy-disk', t: 'حفظ المعاملة', s: 'Ctrl+Enter', k: 'حفظ سجل', run: () => { switchTab('new'); const b = $('save-btn'); if (b && !b.disabled) b.click(); } },
       { ic: 'fa-copy', t: 'تكرار آخر معاملة', s: 'يفتح آخر معاملة اتسجلت كمعاملة جديدة', k: 'تكرار نسخ اخر', run: () => { const x = buildIndex().tx[0]; if (x) repeatTx(x.o.transaction_id); } },
-      { ic: 'fa-rotate-right', t: 'توليد رقم معاملة جديد', s: '', k: 'رقم معامله توليد', run: () => { switchTab('new'); generateNewTxId(); } },
+      { ic: 'fa-rotate-right', t: 'توليد رقم معاملة جديد', s: '', k: 'رقم معامله توليد', run: () => { switchTab('new'); generateNewTxId(true); } },
       { ic: 'fa-circle-half-stroke', t: 'تبديل الوضع الليلي / النهاري', s: '', k: 'ليلي نهاري داكن مظلم', run: () => toggleDarkMode() },
       { ic: 'fa-arrows-rotate', t: 'تحديث البيانات', s: '', k: 'تحديث اعاده تحميل', run: () => loadRecentRequests() },
       { ic: 'fa-keyboard', t: 'اختصارات الكيبورد', s: 'علامة ؟', k: 'اختصارات كيبورد مساعده', run: () => helpOpen() }
