@@ -66,6 +66,7 @@
     var prev = window.handleSaveOrder;
     if (typeof prev !== 'function' || prev.__rp) return;
     window.handleSaveOrder = async function (e) {
+      if (e && e.preventDefault) e.preventDefault();   /* لازم قبل أي await وإلا الفورم بيتبعت عادي والصفحة بتعمل ريفرش */
       var people = collect(), tx = $('tx-id') ? $('tx-id').value.trim() : '';
       var before = (people.length && tx && sbClient) ? (await exists(tx)).length : 1;
       var r = await prev.apply(this, arguments);
