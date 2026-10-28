@@ -1750,7 +1750,16 @@ function agoAr(ms){
   const d=Math.floor(h/24);
   return 'منذ '+(d===1?'يوم':d===2?'يومين':d<=10?d+' أيام':d+' يوم');
 }
-const timeAr=ts=>new Intl.DateTimeFormat('ar-EG',{weekday:'long',hour:'numeric',minute:'2-digit',hour12:true}).format(new Date(ts));
+/* وقت مع اليوم بوضوح: اليوم / أمس / أو اسم اليوم + التاريخ (بتوقيت القاهرة) */
+function timeAr(ts){
+  const d=new Date(ts),tz={timeZone:'Africa/Cairo'};
+  const key=x=>new Intl.DateTimeFormat('en-CA',tz).format(x);
+  const tm=new Intl.DateTimeFormat('ar-EG',Object.assign({hour:'numeric',minute:'2-digit',hour12:true},tz)).format(d);
+  const k=key(d),nowD=new Date();
+  if(k===key(nowD))return 'اليوم '+tm;
+  if(k===key(new Date(nowD.getTime()-864e5)))return 'أمس '+tm;
+  return new Intl.DateTimeFormat('ar-EG',Object.assign({weekday:'long',day:'numeric',month:'long'},tz)).format(d)+' '+tm;
+}
 function syncMyPresence(force){
   if(!chatPresCh||!currentUser)return;
   const now=Date.now();
@@ -1835,8 +1844,8 @@ function getEmpLiveStatus(p){
   const isOnline=isMe||onlineIds.includes(p.id)||(Array.isArray(presList)&&presList.length>0);
   if(!isOnline){
     const seenTs=p.last_seen_at?new Date(p.last_seen_at).getTime():0;
-    const seenStr=Number.isFinite(seenTs)&&seenTs>0?('آخر ظهور '+agoAr(Date.now()-seenTs)+' ('+timeAr(seenTs)+')'):'';
-    const workStr=lastWorkAt?('آخر معاملة: '+new Intl.DateTimeFormat('ar-EG',{hour:'numeric',minute:'2-digit',hour12:true}).format(new Date(lastWorkAt))):'';
+    const seenStr=Number.isFinite(seenTs)&&seenTs>0?('آخر ظهور '+timeAr(seenTs)+' ('+agoAr(Date.now()-seenTs)+')'):'';
+    const workStr=lastWorkAt?('آخر معاملة: '+timeAr(lastWorkAt)):'';
     const lastStr=[seenStr,workStr].filter(Boolean).join(' · ')||'غير متصل حالياً';
     return{
       online:false,
