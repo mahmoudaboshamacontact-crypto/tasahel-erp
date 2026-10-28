@@ -5,7 +5,7 @@
 
 create or replace function public.is_manager()
 returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.profiles where id = auth.uid() and role = 'manager');
+  select coalesce(public.my_role(), '') = 'manager';  -- الأدوار في user_roles وبترجع من my_role() (مش عمود في profiles)
 $$;
 revoke all on function public.is_manager() from public;
 grant execute on function public.is_manager() to authenticated;
