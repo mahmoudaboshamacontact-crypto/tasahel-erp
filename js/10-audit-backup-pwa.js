@@ -103,7 +103,7 @@
     showToast('تم إلغاء التقفيل'); renderCashClose();
   };
   const tabCash = $('tab-cash');
-  if (tabCash && tabCash.children[1]) tabCash.children[1].insertAdjacentHTML('beforebegin', '<div id="cash-close-box"></div>');
+  /* كارت تقفيل الكاش اليومي اتشال (P2): التقفيل اليومي مبقاش جزء من الإجراء الحالي */
   const _fc = window.filterCashSheet;
   window.filterCashSheet = function () { _fc(); renderCashClose(); };
 

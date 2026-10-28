@@ -217,7 +217,7 @@
 
   let initRng = defaultRange('month');
   let filterPreset = 'month', filterFrom = initRng[0], filterTo = initRng[1];
-  let filterKind = 'all'; // 'all' | 'pickup' | 'delivery' | 'both' | 'far'
+  let filterKind = 'all'; // 'all' | 'pickup' | 'delivery' | 'both'
   let filterCourier = 'all';
   let filterQuery = '';
   let expandedCouriers = new Set();
@@ -227,8 +227,7 @@
     all: 'كل المشاوير (شامل)',
     pickup: 'استلام فقط',
     delivery: 'تسليم فقط',
-    both: 'استلام وتسليم معاً',
-    far: 'مشاوير بعيدة فقط'
+    both: 'استلام وتسليم معاً'
   };
 
   window.courierSetPreset = function (p) {
@@ -303,10 +302,12 @@
   }
 
   /* بناء قائمة مشاوير المندوب المفلترة حسب نوع المشوار والبحث */
+  /* خدمة التوصيل باسمها الفعلي «رسوم توصيل» + نوعها حسب التكليف */
+  function feeTypeLabel(svc) { return 'رسوم توصيل — ' + (/عودة|عوده|رجوع|ذهاب\s*[+&و]\s*ع/.test(String(svc || '')) ? 'ذهاب وعودة' : 'ذهاب فقط'); }
   function buildCourierItems(courierName, trips, far, txMap) {
     const includePickup = filterKind === 'all' || filterKind === 'pickup' || filterKind === 'both';
     const includeDelivery = filterKind === 'all' || filterKind === 'delivery' || filterKind === 'both';
-    const includeFar = filterKind === 'all' || filterKind === 'far';
+    const includeFar = filterKind === 'all';
 
     const myTrips = trips.filter(t => nn(t.courier) === nn(courierName) && Number(t.fee) > 0 && ((t.kind === 'pickup' && includePickup) || (t.kind === 'delivery' && includeDelivery)));
     const myFar = includeFar ? far.filter(l => nn(l.executor) === nn(courierName)) : [];
@@ -341,7 +342,7 @@
           phone: l.phone || info.phone,
           address: l.address || info.address,
           services: l.service || info.services,
-          typeLabel: 'مشوار بعيد (' + (l.service || 'توصيل') + ')',
+          typeLabel: feeTypeLabel(l.service),
           typeIcon: 'fa-map-location-dot',
           typeCls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800',
           fee: Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0),
@@ -421,7 +422,6 @@
           kindChip('pickup', 'استلام فقط', 'fa-box-open') +
           kindChip('delivery', 'تسليم فقط', 'fa-truck-fast') +
           kindChip('both', 'استلام وتسليم معاً', 'fa-right-left') +
-          kindChip('far', 'مشاوير بعيدة فقط', 'fa-map-location-dot') +
         '</div>' +
         '<div class="flex items-center gap-1.5 text-xs">' +
           '<button type="button" onclick="courierExpandAll(true)" class="rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 px-2.5 py-1.5 font-semibold text-slate-600 dark:text-slate-300"><i class="fa-solid fa-angles-down ms-1"></i>فتح كل الكروت</button>' +
@@ -451,7 +451,7 @@
       '</div>' +
       '<div class="card p-4 flex items-center gap-3.5">' +
         '<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 text-lg"><i class="fa-solid fa-map-location-dot"></i></div>' +
-        '<div><div class="text-[11px] text-slate-500">مشاوير بعيدة (رسوم توصيل)</div><div class="text-xl font-bold text-amber-600 dark:text-amber-400 mt-0.5">' + totFar + ' مشوار</div></div>' +
+        '<div><div class="text-[11px] text-slate-500">رسوم توصيل</div><div class="text-xl font-bold text-amber-600 dark:text-amber-400 mt-0.5">' + totFar + ' مشوار</div></div>' +
       '</div>' +
       '<div class="card p-4 flex items-center gap-3.5">' +
         '<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 text-lg"><i class="fa-solid fa-sack-dollar"></i></div>' +
@@ -518,9 +518,8 @@
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1 font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-list-ol text-slate-400"></i>الإجمالي: ' + allItems.length + ' مشوار</span>' +
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-sky-50 dark:bg-sky-950/60 px-2.5 py-1 font-bold text-sky-700 dark:text-sky-300"><i class="fa-solid fa-box-open"></i>استلام: ' + d.pkCount + '</span>' +
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 font-bold text-emerald-700 dark:text-emerald-300"><i class="fa-solid fa-truck-fast"></i>تسليم: ' + d.dlCount + '</span>' +
-                '<span class="inline-flex items-center gap-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 px-2.5 py-1 font-bold text-amber-700 dark:text-amber-300"><i class="fa-solid fa-map-location-dot"></i>بعيدة: ' + d.farCount + '</span>' +
+                '<span class="inline-flex items-center gap-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 px-2.5 py-1 font-bold text-amber-700 dark:text-amber-300"><i class="fa-solid fa-motorcycle"></i>رسوم توصيل: ' + d.farCount + '</span>' +
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 px-2.5 py-1 font-bold text-teal-800 dark:text-teal-200"><i class="fa-solid fa-coins"></i>المستحق: ' + formatCurrency(d.totalFee) + '</span>' +
-                (r.held != null && r.held !== 0 ? '<span class="inline-flex items-center gap-1 rounded-lg bg-violet-50 dark:bg-violet-950/60 px-2.5 py-1 font-bold text-violet-700 dark:text-violet-300"><i class="fa-solid fa-wallet"></i>عهدة كاش: ' + formatCurrency(r.held) + '</span>' : '') +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -604,7 +603,6 @@
     let h = renderFilterControlPanel(allNames);
     h += renderSummaryKpis(filteredCourierData);
     h += renderCourierAccordionCards(filteredCourierData);
-    h += walletCard(last.cash);
     h += manageCard();
     root.innerHTML = h;
 
@@ -628,11 +626,10 @@
     const q = await Promise.all([
       sbClient.from('courier_trips').select('*').gte('trip_day', s).lte('trip_day', e).order('trip_day').limit(5000),
       sbClient.from('request_lines').select('id,transaction_id,client_name,phone,address,service,executor,qty,exec_unit_cost,exec_total,received_at').ilike('service', 'رسوم توصيل%').gte('received_at', (s + 'T00:00:00' > DATA_FROM_TS ? s + 'T00:00:00' : DATA_FROM_TS)).lt('received_at', e1 + 'T00:00:00').limit(5000),
-      sbClient.from('courier_closings').select('*').eq('period_start', s).eq('period_end', e),
-      sbClient.from('courier_cash').select('*').order('day', { ascending: false }).order('id', { ascending: false }).limit(5000)
+      sbClient.from('courier_closings').select('*').eq('period_start', s).eq('period_end', e)
     ]);
     if (my !== seq) return;
-    const tr = q[0], fr = q[1], cl = q[2], cash = q[3].error ? null : (q[3].data || []);
+    const tr = q[0], fr = q[1], cl = q[2];
     if (tr.error || cl.error) {
       const er = tr.error || cl.error;
       root.innerHTML = renderFilterControlPanel(COURIERS) + '<div class="card p-6 text-center text-xs text-slate-500">' + (miss(er) ? 'لازم تشغّل ملف <b class="font-mono">phase11-couriers.sql</b> في Supabase الأول.' : 'تعذّر تحميل البيانات') + '</div>';
@@ -663,8 +660,7 @@
       } catch (err) {}
     }
 
-    const heldOf = n => cash ? cash.filter(z => nn(z.courier) === nn(n)).reduce((s2, z) => s2 + (z.kind === 'collect' ? 1 : -1) * Number(z.amount), 0) : 0;
-    const names = ALLC.filter(x => x.active || trips.some(t => nn(t.courier) === nn(x.name)) || far.some(l => nn(l.executor) === nn(x.name)) || heldOf(x.name) !== 0).map(x => x.name);
+    const names = ALLC.filter(x => x.active || trips.some(t => nn(t.courier) === nn(x.name)) || far.some(l => nn(l.executor) === nn(x.name)) ).map(x => x.name);
     const rows = names.map(c => {
       const t = trips.filter(x => nn(x.courier) === nn(c)), fl = far.filter(l => nn(l.executor) === nn(c));
       const fa = fl.reduce((a, l) => a + (Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0)), 0), ta = t.reduce((a, x) => a + Number(x.fee || 0), 0);
@@ -676,19 +672,12 @@
         fa: fa,
         ta: ta,
         tot: ta + fa,
-        closed: (cl.data || []).find(x => nn(x.courier) === nn(c)),
-        held: cash ? cash.filter(z => nn(z.courier) === nn(c)).reduce((s2, z) => s2 + (z.kind === 'collect' ? 1 : -1) * Number(z.amount), 0) : null
+        closed: (cl.data || []).find(x => nn(x.courier) === nn(c))
       };
     });
 
-    last = { s: s, e: e, rows: rows, trips: trips, far: far, txMap: txMap, cash: cash, filteredCourierData: [] };
+    last = { s: s, e: e, rows: rows, trips: trips, far: far, txMap: txMap, filteredCourierData: [] };
     paintFromLast();
-  }
-
-  function walletNames(cash) {
-    const a = COURIERS.slice();
-    ALLC.forEach(x => { if (!x.active && !a.includes(x.name) && cash.filter(z => nn(z.courier) === nn(x.name)).reduce((s2, z) => s2 + (z.kind === 'collect' ? 1 : -1) * Number(z.amount), 0) !== 0) a.push(x.name); });
-    return a;
   }
 
   function manageCard() {
@@ -717,24 +706,6 @@
     showToast(active ? 'تم تفعيل ' + x.name : 'تم إيقاف ' + x.name); await loadCouriers(true); render();
   };
 
-  function walletCard(cash) {
-    if (!cash) return '<div class="card p-4 text-center text-xs text-slate-500">لازم تشغّل ملف <b class="font-mono">phase11b-courier-cash.sql</b> علشان محفظة الكاش تشتغل.</div>';
-    const form = isMgr() ? '<form onsubmit="courierCashAdd(event)" class="flex flex-wrap items-end gap-2"><select id="cw-c" class="field !w-36 !py-2 text-xs">' + walletNames(cash).map(c => '<option>' + eh(c) + '</option>').join('') + '</select><select id="cw-k" class="field !w-48 !py-2 text-xs"><option value="collect">حصّل من عميل (عهدة عليه)</option><option value="handover">سلّم للمكتب</option></select><input id="cw-a" type="number" min="1" step="any" required placeholder="المبلغ" class="field !w-28 !py-2 text-center text-xs"><input id="cw-n" placeholder="ملاحظة (العميل / رقم المعاملة)" class="field !w-56 !py-2 text-xs"><button class="rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-slate-950">تسجيل</button></form>' : '';
-    const rowsH = cash.slice(0, 15).map(z => '<tr><td class="px-3 py-2">' + eh(formatDateOnly(z.day)) + '</td><td class="font-bold">' + eh(z.courier) + '</td><td>' + (z.kind === 'collect' ? 'حصّل' : 'سلّم للمكتب') + '</td><td class="font-bold">' + formatCurrency(z.amount) + '</td><td class="text-slate-500">' + eh(z.note || '') + '</td><td>' + (isMgr() ? '<button type="button" onclick="courierCashDel(' + z.id + ')" class="px-2 text-rose-500"><i class="fa-solid fa-trash-can"></i></button>' : '') + '</td></tr>').join('') || '<tr><td class="p-4 text-center text-slate-400">لا توجد حركات كاش</td></tr>';
-    return '<details class="card overflow-hidden"><summary class="cursor-pointer bg-slate-50 dark:bg-slate-800/60 px-4 py-3 text-xs font-bold text-ink dark:text-white"><i class="fa-solid fa-wallet ms-1.5 text-brand-600"></i>محفظة وعهدة الكاش للمناديب <span class="text-[11px] font-normal text-slate-500">(العهدة = المحصّل − المسلّم للمكتب)</span></summary><div class="space-y-3 p-4">' + form + '<div class="max-h-64 overflow-x-auto overflow-y-auto"><table class="w-full text-right text-xs"><tbody class="divide-y divide-slate-100 dark:divide-slate-800">' + rowsH + '</tbody></table></div></div></details>';
-  }
-
-  window.courierCashAdd = async function (e) {
-    e.preventDefault(); if (!isMgr()) return;
-    const a = parseFloat($('cw-a').value); if (!(a > 0)) return;
-    const r = await sbClient.from('courier_cash').insert({ courier: $('cw-c').value, kind: $('cw-k').value, amount: a, note: $('cw-n').value.trim() || null, day: today(), created_by: uname() });
-    if (r.error) return showError('تعذّر تسجيل الحركة', r.error); showToast('تم التسجيل'); render();
-  };
-
-  window.courierCashDel = async function (id) {
-    if (!isMgr() || !confirm('حذف الحركة دي؟')) return;
-    const r = await sbClient.from('courier_cash').delete().eq('id', id); if (r.error) return showError('تعذّر الحذف', r.error); render();
-  };
 
   /* ---------- الطباعة وتصدير PDF و Excel للمناديب (حسب الفلتر المحدد) ---------- */
   function buildCourierReportDef(courierNameOpt) {
@@ -789,7 +760,7 @@
       stats: [
         ['إجمالي المشاوير', flatRows.length + ' مشوار'],
         ['استلام / تسليم', 'استلام: ' + totPk + ' | تسليم: ' + totDl],
-        ['مشاوير بعيدة', totFar + ' مشوار'],
+        ['رسوم توصيل', totFar + ' مشوار'],
         ['الإجمالي المستحق', formatCurrency(totMoney)]
       ],
       headers: ['#', 'المندوب', 'التاريخ', 'رقم المعاملة', 'العميل والهاتف', 'الخدمة', 'نوع المشوار', 'الأجر'],
