@@ -44,7 +44,7 @@
       const tx = $('tx-id').value.trim(), rn = $('rn-nm').value.trim();
       if (tx) {
         const r = await sbClient.from('request_lines').select('client_name').eq('transaction_id', tx).limit(1);
-        if (!r.error && r.data && r.data.length) { generateNewTxId(); return showToast('رقم المعاملة ' + tx + ' مسجل قبل كده باسم ' + (r.data[0].client_name || '') + '. اتولّد رقم جديد، راجع واضغط حفظ تاني', 'error', 9000); }
+        if (!r.error && r.data && r.data.length) { generateNewTxId(true); return showToast('رقم المعاملة ' + tx + ' مسجل قبل كده باسم ' + (r.data[0].client_name || '') + '. اتولّد رقم جديد، راجع واضغط حفظ تاني', 'error', 9000); }
       }
       if (rn) {
         const r = await sbClient.from('request_lines').select('client_name,transaction_id').eq('rn_nm', rn).limit(1);

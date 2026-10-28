@@ -893,8 +893,10 @@ function addServiceLine(){
   '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-600 dark:text-slate-300">المنفذ</label><input list="exec-datalist" class="field svc-executor" placeholder="اسم المنفذ..." oninput="updateOrderProgressBar()"></div></div>'+
   '<div class="grid gap-3 sm:grid-cols-12 pt-1 border-t border-slate-200/60 dark:border-white/10 text-xs">'+
   '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">تكلفة التنفيذ/وحدة</label><input type="number" min="0" step="any" value="0" class="field svc-cost text-center font-mono" oninput="calculateTotals()"><div class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">إجمالي التنفيذ: <b class="svc-cost-total font-mono text-violet-500 dark:text-violet-300">0 ج.م</b></div></div>'+
-  '<div class="sm:col-span-5"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">ملاحظة خاصة بالبند</label><input class="field svc-notes" placeholder="تعليمات تنفيذ هذا البند..."></div>'+
-  '<div class="sm:col-span-4 flex items-end justify-end"><div class="text-xs text-slate-500 dark:text-slate-400">إجمالي البند: <span class="font-bold text-sm text-ink dark:text-white line-total-display">0 ج.م</span></div></div></div>';
+  '<div class="sm:col-span-2"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">خصم %</label><input type="number" min="0" max="100" step="any" inputmode="decimal" placeholder="0" class="field svc-disc text-center font-mono" oninput="calculateTotals()"></div>'+
+  '<div class="sm:col-span-3"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">رقم الخدمة (Service ID)</label><input dir="ltr" class="field svc-ref font-mono text-right" placeholder="يدوي" maxlength="40"></div>'+
+  '<div class="sm:col-span-4 flex items-end justify-end"><div class="text-xs text-slate-500 dark:text-slate-400">إجمالي البند: <span class="font-bold text-sm text-ink dark:text-white line-total-display">0 ج.م</span></div></div></div>'+
+  '<div class="text-xs"><label class="block font-semibold mb-1 text-slate-500 dark:text-slate-400">ملاحظة خاصة بالبند</label><input class="field svc-notes" placeholder="تعليمات تنفيذ هذا البند..."></div>';
   $('lines-container').appendChild(d);calculateTotals();
 }
 function removeServiceLine(id){
@@ -929,15 +931,22 @@ function onServiceSelected(id,name){
   renderQuickServicesGrid();
 }
 function discountPct(){const el=$('discount-pct'),v=el?parseFloat(el.value):0;return v>0?Math.min(v,100):0;}
+const isFeeSvc=n=>/^رسوم توصيل/.test(normName(n||''));
+function lineDisc(l){
+  const sn=((l.querySelector('.svc-name')&&l.querySelector('.svc-name').value)||'').trim(),di=l.querySelector('.svc-disc');
+  if(!di)return 0;
+  const fee=isFeeSvc(sn);if(di.disabled!==fee){di.disabled=fee;if(fee)di.value='';di.title=fee?'رسوم التوصيل ملهاش خصم':'';}
+  const v=parseFloat(di.value);return !fee&&v>0?Math.min(v,100):0;
+}
 function unitAfter(p,d){return d>0?Math.round(p*(1-d/100)*100)/100:p;}
 const txDisc=o=>Math.max(0,...o.lines.map(l=>Number(l.discount_pct)||0));
 function calculateTotals(){
   const lines=$('lines-container')?$('lines-container').children:[];
-  const d=discountPct();let g=0,raw=0;
+  let g=0,raw=0,dmax=0;
   const summaryRows=[];
   Array.from(lines).forEach(function(l){
     const sn=((l.querySelector('.svc-name')&&l.querySelector('.svc-name').value)||'').trim();
-    const q0=parseFloat(l.querySelector('.svc-qty').value)||0,p0=parseFloat(l.querySelector('.svc-price').value)||0,t=q0*unitAfter(p0,d);raw+=q0*p0;
+    const d=lineDisc(l);dmax=Math.max(dmax,d);const q0=parseFloat(l.querySelector('.svc-qty').value)||0,p0=parseFloat(l.querySelector('.svc-price').value)||0,t=q0*unitAfter(p0,d);raw+=q0*p0;
     g+=t;l.querySelector('.line-total-display').textContent=formatCurrency(t);
     const ct=l.querySelector('.svc-cost-total');if(ct)ct.textContent=formatCurrency((parseFloat(l.querySelector('.svc-qty').value)||0)*(parseFloat(l.querySelector('.svc-cost').value)||0));
     if(sn)summaryRows.push({name:sn,qty:q0,rawTotal:q0*p0});
@@ -960,7 +969,7 @@ function calculateTotals(){
     }
   }
 
-  const dr=$('s-disc-row');if(dr){dr.classList.toggle('hidden',!(d>0));if(d>0){$('s-disc-pct').textContent=fmtNum(d)+'%';$('s-disc-amt').textContent='− '+fmtNum(raw-g);}}
+  const dr=$('s-disc-row');if(dr){dr.classList.toggle('hidden',!(raw-g>0));if(raw-g>0){$('s-disc-pct').textContent=dmax>0?'(حتى '+fmtNum(dmax)+'%)':'';$('s-disc-amt').textContent='− '+fmtNum(raw-g);}}
   updateOrderProgressBar();
 }
 function renderPaymentMethodButtons(){
@@ -999,7 +1008,7 @@ function onPhoneInput(phone){
   if(m&&!$('client-name').value){$('client-name').value=m.client_name;$('s-client').textContent=m.client_name;if(m.address&&!$('address').value)$('address').value=m.address;}
   updateOrderProgressBar();
 }
-function generateNewTxId(){$('tx-id').value='TX-'+new Date().getFullYear()+'-'+Math.floor(1000+Math.random()*9000);}
+function generateNewTxId(force){$('tx-id').value=force===true?'TX-'+new Date().getFullYear()+'-'+Math.floor(1000+Math.random()*9000):'';}
 
 /* ---------- حفظ المعاملة (مع دعم حفظ فقط / حفظ وطباعة إيصال / حفظ وطلب جديد / حفظ وواتساب) ---------- */
 async function handleSaveOrder(e){
@@ -1013,19 +1022,20 @@ async function handleSaveOrder(e){
     employee:$('employee').value.trim(),payment_method:$('payment-method-val').value,receiver:$('receiver').value.trim()||null,
     received_at:$('received-at').value+':00',rn_nm:$('rn-nm').value.trim()||null};
   if(!base.employee)return showToast('اختر الموظف المسؤول','error');
-  const dv=$('discount-pct').value;
-  if(dv!==''&&!(Number(dv)>=0&&Number(dv)<=100))return showToast('نسبة الخصم لازم تكون بين 0 و100','error');
-  const disc=discountPct();
+  if(!base.transaction_id)return showToast('اضغط "رقم جديد" لتوليد رقم الطلب الأول','error');
   const gen=$('notes').value.trim(),rows=[];
   for(const el of els){
     const service=el.querySelector('.svc-name').value.trim();
     if(!service)return showToast('اكتب اسم الخدمة في كل البنود','error');
     const ln=el.querySelector('.svc-notes').value.trim();
+    const dvl=el.querySelector('.svc-disc').value;
+    if(dvl!==''&&!(Number(dvl)>=0&&Number(dvl)<=100))return showToast('نسبة الخصم لازم تكون بين 0 و100','error');
+    const disc=lineDisc(el);
     const catComm=getServiceCommRate(service);
     const commVal=(el.dataset.comm!==''&&el.dataset.comm!=null)?Number(el.dataset.comm):(catComm!=null?catComm:0);
     const qVal=parseFloat(el.querySelector('.svc-qty').value)||1;
     const uPrice=unitAfter(parseFloat(el.querySelector('.svc-price').value)||0,disc);
-    rows.push(Object.assign({},base,disc>0?{discount_pct:disc,list_price:parseFloat(el.querySelector('.svc-price').value)||0}:{},{service:service,qty:qVal,unit_price:uPrice,
+    rows.push(Object.assign({},base,disc>0?{discount_pct:disc,list_price:parseFloat(el.querySelector('.svc-price').value)||0}:{},{service:service,service_ref:el.querySelector('.svc-ref').value.trim()||null,qty:qVal,unit_price:uPrice,
       exec_unit_cost:parseFloat(el.querySelector('.svc-cost').value)||0,commission_per_unit:commVal,
       executor:el.querySelector('.svc-executor').value.trim()||null,duration_days:el.dataset.dur===''||el.dataset.dur==null?null:Number(el.dataset.dur),
       notes:(ln?(gen?gen+' - '+ln:ln):gen)||null}));
@@ -1056,7 +1066,7 @@ async function handleSaveOrder(e){
     }else if(saveMode==='new'){
       setTimeout(()=>{if($('client-name')){$('client-name').focus();$('client-name').scrollIntoView({behavior:'smooth',block:'center'});}},120);
     }
-  }catch(err){showError(/discount_pct|list_price/.test((err&&err.message)||'')?'شغّل ملف phase16-discount.sql في Supabase الأول (عمود الخصم)':'فشل الحفظ',err);}
+  }catch(err){showError(/service_ref/.test((err&&err.message)||'')?'شغّل ملف sql/p1a-order-cycle.sql في Supabase الأول (عمود رقم الخدمة)':/discount_pct|list_price/.test((err&&err.message)||'')?'شغّل ملف phase16-discount.sql في Supabase الأول (عمود الخصم)':'فشل الحفظ',err);}
   finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-check ms-1.5"></i><span>حفظ الطلب</span>';}
 }
 
