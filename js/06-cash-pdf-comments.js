@@ -135,8 +135,8 @@
       title: 'شيت متابعة المنفذين',
       meta: ['المنفذ: ' + (ex === 'all' ? 'كل المنفذين' : ex), 'تاريخ بداية التنفيذ: ' + (dt ? formatDateOnly(dt) : 'كل التواريخ')],
       stats: [['عدد بنود التنفيذ', f.length], ['إجمالي تكلفة التنفيذ', formatCurrency(cost)]],
-      headers: ['العميل', 'الهاتف', 'المعاملة', 'الخدمة', 'العدد', 'المنفذ', 'التكلفة', 'تاريخ البدء', 'ملاحظات'],
-      rows: f.map(l => [l.client_name, l.phone, l.transaction_id, l.service, l.qty, l.executor, formatCurrency(execCostOf(l)), formatDateOnly(l.exec_start_date), l.notes]),
+      headers: ['العميل', 'الهاتف', 'ID الطلب', 'الخدمة', 'Service ID', 'العدد', 'المنفذ', 'التكلفة', 'تاريخ البدء', 'ملاحظات'],
+      rows: f.map(l => [l.client_name, l.phone, l.transaction_id, l.service, l.service_ref, l.qty, l.executor, formatCurrency(execCostOf(l)), formatDateOnly(l.exec_start_date), l.notes]),
       filename: 'شيت_المنفذين_' + (ex === 'all' ? 'الكل' : ex) + '_' + (dt || dayKey(new Date())) + '.pdf',
       perPage: 14
     };

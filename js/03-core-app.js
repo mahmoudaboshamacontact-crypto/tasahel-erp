@@ -1361,7 +1361,7 @@ function getFilteredExecLines(){
     if(ex!=='all'&&(l.executor||'').trim()!==ex)return false;
     if(dt&&String(l.exec_start_date||'').slice(0,10)!==dt)return false;
     if(q){
-      const hit=(l.client_name||'').toLowerCase().includes(q)||(l.phone||'').includes(q)||String(l.transaction_id||'').toLowerCase().includes(q)||(l.service||'').toLowerCase().includes(q)||(l.executor||'').toLowerCase().includes(q);
+      const hit=(l.client_name||'').toLowerCase().includes(q)||(l.phone||'').includes(q)||String(l.transaction_id||'').toLowerCase().includes(q)||String(l.service_ref||'').toLowerCase().includes(q)||(l.service||'').toLowerCase().includes(q)||(l.executor||'').toLowerCase().includes(q);
       if(!hit)return false;
     }
     return true;
@@ -1399,12 +1399,13 @@ function filterExecSheet(keepLimit){
       '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr">'+phHtml+'</td>'+
       '<td class="px-3 py-3.5 whitespace-nowrap" dir="ltr"><button '+at(l.transaction_id)+' class="rc-tx-pill">'+escapeHtml(l.transaction_id)+'</button></td>'+
       '<td class="px-3 py-3.5">'+svcHtml+'</td>'+
+      '<td class="px-3 py-3.5 whitespace-nowrap font-mono text-xs" dir="ltr">'+(l.service_ref?escapeHtml(l.service_ref):'<span class="text-slate-300">—</span>')+'</td>'+
       '<td class="px-3 py-3.5 text-center whitespace-nowrap"><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></td>'+
       '<td class="px-3 py-3.5 whitespace-nowrap">'+execHtml+'</td>'+
       '<td class="px-3 py-3.5 font-bold text-ink dark:text-white whitespace-nowrap text-sm">'+formatCurrency(execCostOf(l))+'</td>'+
       '<td class="px-3 py-3.5 whitespace-nowrap"><span class="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap"><i class="fa-regular fa-calendar text-[10px] text-slate-400"></i><span>'+escapeHtml(startDt)+'</span></span></td>'+
       '<td class="px-3 py-3.5 text-xs min-w-[150px] max-w-[250px] whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">'+(l.notes?'<div class="rounded-lg bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/60 px-2.5 py-1.5 text-amber-900 dark:text-amber-200">'+escapeHtml(l.notes)+'</div>':'<span class="text-slate-300">—</span>')+'</td></tr>';
-  }).join('')||'<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400">لا توجد مهام مطابقة</td></tr>';
+  }).join('')||'<tr><td colspan="10" class="px-6 py-10 text-center text-slate-400">لا توجد مهام مطابقة</td></tr>';
 
   $('sheet-cards-container').innerHTML=shown.map(function(l){
     const st=l.status||'In Progress';
@@ -1420,6 +1421,7 @@ function filterExecSheet(keepLimit){
         '<div class="shrink-0">'+badge(st)+'</div>'+
       '</div>'+
       '<div class="rc-svc-pill w-full"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div>'+
+      (l.service_ref?'<div class="text-[11px] text-slate-500">Service ID: <b class="font-mono" dir="ltr">'+escapeHtml(l.service_ref)+'</b></div>':'')+
       (l.notes?'<div class="rounded-lg bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1.5 text-[11px] text-amber-900 dark:text-amber-200 whitespace-pre-wrap break-words"><i class="fa-solid fa-note-sticky ms-1"></i>'+escapeHtml(l.notes)+'</div>':'')+
       '<div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">'+
         '<span class="text-slate-500">المنفذ: <b class="rc-exec-pill !py-0.5 !px-2">'+escapeHtml(l.executor||'—')+'</b></span>'+
@@ -1471,7 +1473,7 @@ function downloadCsvFile(name,headers,rows){
 }
 function exportExecSheetCsv(){
   const f=getFilteredExecLines();if(!f.length)return showToast('لا توجد بيانات للتصدير','info');
-  downloadCsvFile('المنفذين_'+new Date().toISOString().slice(0,10)+'.csv',['العميل','الهاتف','رقم المعاملة','الخدمة','العدد','المنفذ','تكلفة التنفيذ','تاريخ البدء','الحالة','ملاحظات'],f.map(l=>[l.client_name,l.phone,l.transaction_id,l.service,l.qty,l.executor,execCostOf(l),l.exec_start_date,statusLabel(l.status),l.notes]));
+  downloadCsvFile('المنفذين_'+new Date().toISOString().slice(0,10)+'.csv',['العميل','الهاتف','ID الطلب','الخدمة','Service ID','العدد','المنفذ','تكلفة التنفيذ','تاريخ البدء','الحالة','ملاحظات'],f.map(l=>[l.client_name,l.phone,l.transaction_id,l.service,l.service_ref,l.qty,l.executor,execCostOf(l),l.exec_start_date,statusLabel(l.status),l.notes]));
 }
 
 /* ---------- البحث ---------- */
