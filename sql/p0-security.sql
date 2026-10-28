@@ -52,6 +52,20 @@ drop trigger if exists comment_author on public.tx_comments;
 create trigger comment_author before insert or update on public.tx_comments
 for each row execute function public.trg_comment_author();
 
+-- ===== سياسات الحضور: "النهارده" بتوقيت القاهرة بدل CURRENT_DATE (UTC) =====
+-- قبل كده تسجيل الحضور بين 12 بالليل و2/3 الفجر كان ممكن يترفض. باقي شروط السياسة زي ما هي بالظبط.
+begin;
+drop policy if exists hr_att_ins on public.hr_attendance;
+create policy hr_att_ins on public.hr_attendance for insert to authenticated
+  with check (hr_is_mgr() or (user_id = auth.uid() and hr_is_staff() and day = (now() at time zone 'Africa/Cairo')::date));
+
+drop policy if exists hr_att_upd on public.hr_attendance;
+create policy hr_att_upd on public.hr_attendance for update to authenticated
+  using (hr_is_mgr() or (user_id = auth.uid() and hr_is_staff() and day = (now() at time zone 'Africa/Cairo')::date))
+  with check (hr_is_mgr() or (user_id = auth.uid() and day = (now() at time zone 'Africa/Cairo')::date));
+commit;
+
 -- ===== Rollback =====
 -- drop trigger if exists attendance_server_time on public.hr_attendance;
 -- drop trigger if exists comment_author on public.tx_comments;
+-- لإرجاع السياستين للأصل: نفس الأوامر فوق مع استبدال (now() at time zone 'Africa/Cairo')::date بـ current_date
