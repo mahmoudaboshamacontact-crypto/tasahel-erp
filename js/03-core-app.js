@@ -1673,7 +1673,8 @@ async function signAvatars(){
 }
 async function loadProfiles(){
   if(!sbClient||!currentUser)return;
-  const r=await sbClient.from('profiles').select('id,full_name,phone,job_title,avatar_path').order('full_name');
+  let r=await sbClient.from('profiles').select('id,full_name,phone,job_title,avatar_path,last_seen_at').order('full_name');
+  if(r.error&&/42703|last_seen_at/i.test((r.error.message||'')+' '+(r.error.code||'')))r=await sbClient.from('profiles').select('id,full_name,phone,job_title,avatar_path').order('full_name');
   if(r.error){
     const missing=/PGRST205|42P01|schema cache|does not exist/i.test((r.error.message||'')+' '+(r.error.code||''));
     if(missing)profilesReady=false;else showError('تعذّر تحميل الفريق',r.error);
@@ -1717,6 +1718,39 @@ const TAB_LABELS_AR={
   perf:'أداء الموظفين',
   partners:'المنفذون الخارجيون'
 };
+/* آخر ظهور: بيتسجل في الداتابيز من دخول السيستم وأحداث فعلية (ضغط/كتابة/تعديل) — مفيش تتبع لحركة الماوس */
+const SESSION_START=Date.now();
+let lastSeenSentAt=0,lastSeenOk=true,lastSeenPullAt=0;
+async function touchLastSeen(force){
+  if(!lastSeenOk||!sbClient||!currentUser)return;
+  const now=Date.now();
+  if(!force&&(now-lastSeenSentAt)<3*60*1000)return;
+  lastSeenSentAt=now;
+  try{
+    const r=await sbClient.rpc('touch_last_seen');
+    if(r.error){if(/PGRST202|42883|does not exist|schema cache/i.test((r.error.message||'')+' '+(r.error.code||'')))lastSeenOk=false;return;}
+    if(myProfile)myProfile.last_seen_at=new Date().toISOString();
+  }catch(e){}
+}
+async function pullLastSeen(){
+  if(!lastSeenOk||!sbClient||!currentUser||(Date.now()-lastSeenPullAt)<3*60*1000)return;
+  lastSeenPullAt=Date.now();
+  try{
+    const r=await sbClient.from('profiles').select('id,last_seen_at');
+    if(r.error)return;
+    (r.data||[]).forEach(x=>{const p=profiles.find(q=>q.id===x.id);if(p)p.last_seen_at=x.last_seen_at;});
+    if(currentTab==='team')renderTeam();
+  }catch(e){}
+}
+function agoAr(ms){
+  const m=Math.max(1,Math.round(ms/60000));
+  if(m<60)return 'منذ '+(m===1?'دقيقة':m===2?'دقيقتين':m<=10?m+' دقائق':m+' دقيقة');
+  const h=Math.floor(m/60);
+  if(h<24)return 'منذ '+(h===1?'ساعة':h===2?'ساعتين':h<=10?h+' ساعات':h+' ساعة');
+  const d=Math.floor(h/24);
+  return 'منذ '+(d===1?'يوم':d===2?'يومين':d<=10?d+' أيام':d+' يوم');
+}
+const timeAr=ts=>new Intl.DateTimeFormat('ar-EG',{weekday:'long',hour:'numeric',minute:'2-digit',hour12:true}).format(new Date(ts));
 function syncMyPresence(force){
   if(!chatPresCh||!currentUser)return;
   const now=Date.now();
@@ -1728,6 +1762,7 @@ function syncMyPresence(force){
     chatPresCh.track({
       at:now,
       lastActive:myLastActiveAt,
+      since:SESSION_START,
       state:myActivityState,
       tab:currentTab||'home'
     });
@@ -1737,6 +1772,7 @@ function onUserInteract(){
   const now=Date.now();
   const wasIdle=myActivityState==='idle'||(now-myLastActiveAt)>5*60*1000;
   myLastActiveAt=now;
+  touchLastSeen(false);
   if(wasIdle){
     myActivityState='working';
     syncMyPresence(true);
@@ -1747,11 +1783,13 @@ function onUserInteract(){
 function bindPresenceActivity(){
   if(presenceListenersBound)return;
   presenceListenersBound=true;
+  touchLastSeen(true);
   ['pointerdown','keydown','input','change'].forEach(ev=>{
     document.addEventListener(ev,onUserInteract,{passive:true});
   });
   document.addEventListener('visibilitychange',function(){
     if(!document.hidden){
+      touchLastSeen(false);
       myLastActiveAt=Date.now();
       myActivityState='working';
       syncMyPresence(true);
@@ -1770,7 +1808,7 @@ function bindPresenceActivity(){
         syncMyPresence(true);
       }
       if(currentTab==='home')renderHomeTab();
-      else if(currentTab==='team')renderTeam();
+      else if(currentTab==='team'){pullLastSeen();renderTeam();}
     },60000);
   }
 }
@@ -1796,7 +1834,10 @@ function getEmpLiveStatus(p){
   const isMe=currentUser&&String(p.id)===String(currentUser.id);
   const isOnline=isMe||onlineIds.includes(p.id)||(Array.isArray(presList)&&presList.length>0);
   if(!isOnline){
-    const lastStr=lastWorkAt?('آخر معاملة: '+new Intl.DateTimeFormat('ar-EG',{hour:'numeric',minute:'2-digit',hour12:true}).format(new Date(lastWorkAt))):'غير متصل حالياً';
+    const seenTs=p.last_seen_at?new Date(p.last_seen_at).getTime():0;
+    const seenStr=Number.isFinite(seenTs)&&seenTs>0?('آخر ظهور '+agoAr(Date.now()-seenTs)+' ('+timeAr(seenTs)+')'):'';
+    const workStr=lastWorkAt?('آخر معاملة: '+new Intl.DateTimeFormat('ar-EG',{hour:'numeric',minute:'2-digit',hour12:true}).format(new Date(lastWorkAt))):'';
+    const lastStr=[seenStr,workStr].filter(Boolean).join(' · ')||'غير متصل حالياً';
     return{
       online:false,
       working:false,
@@ -1821,14 +1862,15 @@ function getEmpLiveStatus(p){
   const recentOrder=(Date.now()-lastWorkAt)<5*60*1000;
   const isWorking=(stateVal!=='idle'&&idleMs<6*60*1000)||recentOrder;
   const tabName=TAB_LABELS_AR[tabKey]||'الشاشة الرئيسية';
+  const sinceTs=isMe?SESSION_START:((best&&best.since)||0);
   if(isWorking){
     return{
       online:true,
       working:true,
       statusKey:'working',
       label:'فاتح وشغال الآن',
-      sub:'نشط الآن في: '+tabName,
-      dotCls:'bg-emerald-500 ring-4 ring-emerald-500/20 animate-pulse',
+      sub:'نشط الآن في: '+tabName+(sinceTs?' · متصل '+agoAr(Date.now()-sinceTs):''),
+      dotCls:'bg-emerald-500 ring-4 ring-emerald-500/20',
       badgeCls:'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800',
       todayTx:todayTx,
       todayLines:todayLines,
@@ -1841,7 +1883,7 @@ function getEmpLiveStatus(p){
     working:false,
     statusKey:'idle',
     label:'فاتح السيستم (غير نشط)',
-    sub:'خامل منذ '+(mins<60?mins+' د':Math.floor(mins/60)+' س')+' · على: '+tabName,
+    sub:'آخر نشاط '+agoAr(idleMs)+' · على: '+tabName,
     dotCls:'bg-amber-500 ring-4 ring-amber-500/20',
     badgeCls:'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800',
     todayTx:todayTx,
@@ -2545,7 +2587,7 @@ function renderHomeTab(){
         navCard('الكوميشن والتارجت','حساب الكوميشن وتارجت الموظفين','fa-bullseye','linear-gradient(135deg,#059669,#047857)',"switchTab('comm')",bPill('الشهر الحالي','bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'))+
         navCard('المنفذين','متابعة بنود وتكلفة التنفيذ','fa-user-gear','linear-gradient(135deg,#4f46e5,#3730a3)',"switchTab('exec')",bPill(allRequestLines.length+' بند','bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'))+
         navCard('الكاش','تحصيلات الكاش اليومية والتقارير','fa-wallet','linear-gradient(135deg,#d97706,#b45309)',"switchTab('cash')",bPill(cashTodayCnt+' اليوم','bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300'))+
-        navCard('المناديب','مشاوير الاستلام والتسليم والعهدة','fa-motorcycle','linear-gradient(135deg,#0f766e,#134e4a)',"switchTab('couriers')",bPill('المشاوير','bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300'))+
+        navCard('المناديب','مشاوير الاستلام والتسليم ورسوم التوصيل','fa-motorcycle','linear-gradient(135deg,#0f766e,#134e4a)',"switchTab('couriers')",bPill('المشاوير','bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300'))+
         navCard('الإيصالات','إصدار وطباعة الإيصالات الرسمية','fa-receipt','linear-gradient(135deg,#9333ea,#6b21a8)',"switchTab('receipt')",'')+
         navCard('البحث الشامل','بحث بالعميل أو التليفون أو المعاملة','fa-magnifying-glass','linear-gradient(135deg,#2563eb,#1e40af)',"switchTab('search')",'')+
         navCard('المحادثة','مراسلة الزملاء وقناة القسم','fa-comments','linear-gradient(135deg,#0891b2,#155e75)',"switchTab('chat')",unreadChat>0?bPill(unreadChat+' جديد','bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300'):bPill('متصل','bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300'))+
