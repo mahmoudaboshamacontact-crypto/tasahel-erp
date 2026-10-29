@@ -1205,8 +1205,9 @@ async function handleSaveOrder(e){
     const catComm=getServiceCommRate(service);
     const commVal=(el.dataset.comm!==''&&el.dataset.comm!=null)?Number(el.dataset.comm):(catComm!=null?catComm:0);
     const qVal=parseFloat(el.querySelector('.svc-qty').value)||1;
-    const uPrice=unitAfter(parseFloat(el.querySelector('.svc-price').value)||0,disc);
-    rows.push(Object.assign({},base,disc>0?{discount_pct:disc,list_price:parseFloat(el.querySelector('.svc-price').value)||0}:{},{service:service,service_ref:el.querySelector('.svc-ref').value.trim()||null,qty:qVal,unit_price:uPrice,
+    const rawPrice=parseFloat(el.querySelector('.svc-price').value)||0;
+    const uPrice=unitAfter(rawPrice,disc);
+    rows.push(Object.assign({},base,{discount_pct:Number(disc)||0,list_price:rawPrice,service:service,service_ref:el.querySelector('.svc-ref').value.trim()||null,qty:qVal,unit_price:uPrice,
       exec_unit_cost:parseFloat(el.querySelector('.svc-cost').value)||0,commission_per_unit:commVal,
       executor:el.querySelector('.svc-executor').value.trim()||null,duration_days:el.dataset.dur===''||el.dataset.dur==null?null:Number(el.dataset.dur),
       notes:(ln?(gen?gen+' - '+ln:ln):gen)||null}));
@@ -1237,7 +1238,7 @@ async function handleSaveOrder(e){
     }else if(saveMode==='new'){
       setTimeout(()=>{if($('client-name')){$('client-name').focus();$('client-name').scrollIntoView({behavior:'smooth',block:'center'});}},120);
     }
-  }catch(err){showError(/service_ref/.test((err&&err.message)||'')?'شغّل ملف sql/p1a-order-cycle.sql في Supabase الأول (عمود رقم الخدمة)':/discount_pct|list_price/.test((err&&err.message)||'')?'شغّل ملف phase16-discount.sql في Supabase الأول (عمود الخصم)':'فشل الحفظ',err);}
+  }catch(err){const em=((err&&err.message)||'')+' '+((err&&err.code)||'');const noCol=/42703|PGRST204|column .* does not exist|schema cache/i.test(em);showError(noCol&&/service_ref/.test(em)?'شغّل ملف sql/p1a-order-cycle.sql في Supabase الأول (عمود رقم الخدمة)':noCol&&/discount_pct|list_price/.test(em)?'شغّل ملف phase16-discount.sql في Supabase الأول (عمود الخصم)':'فشل الحفظ',err);}
   finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-check ms-1.5"></i><span>حفظ الطلب</span>';}
 }
 
@@ -1402,7 +1403,7 @@ async function saveTxEdit(){
     }
     if(q!==Number(l.qty))p.qty=q;
     if(uPrice!==Number(l.unit_price||0))p.unit_price=uPrice;
-    if(disc!==Number(l.discount_pct||0)){p.discount_pct=disc;p.list_price=disc>0?basePr:null;}
+    if(disc!==Number(l.discount_pct||0)){p.discount_pct=Number(disc)||0;p.list_price=basePr;}
     else if(disc>0&&basePr!==Number(l.list_price||0))p.list_price=basePr;
     if(sRef!==String(l.service_ref||'').trim())p.service_ref=nul(sRef);
     if(co!==Number(l.exec_unit_cost||0))p.exec_unit_cost=co;
@@ -1420,7 +1421,7 @@ async function saveTxEdit(){
     if(!(q>0))return showToast('الكمية لازم تكون رقم أكبر من صفر','error');
     if(!(basePr>=0)||!(co>=0))return showToast('السعر والتكلفة لازم يكونوا أرقام صحيحة','error');
     const cat=findCatalogService(svc),cr=getServiceCommRate(cat||svc);
-    newLines.push(Object.assign({},baseRow,disc>0?{discount_pct:disc,list_price:basePr}:{},{service:svc,service_ref:nul(sRef),qty:q,unit_price:uPrice,exec_unit_cost:co,commission_per_unit:cr!=null?cr:0,executor:nul(g('te-l-executor')),duration_days:cat&&cat.duration_days!=null?Number(cat.duration_days):null,notes:nul(g('te-l-notes'))}));
+    newLines.push(Object.assign({},baseRow,{discount_pct:Number(disc)||0,list_price:basePr,service:svc,service_ref:nul(sRef),qty:q,unit_price:uPrice,exec_unit_cost:co,commission_per_unit:cr!=null?cr:0,executor:nul(g('te-l-executor')),duration_days:cat&&cat.duration_days!=null?Number(cat.duration_days):null,notes:nul(g('te-l-notes'))}));
   }
   const tripOps=[];
   for(const blk of root.querySelectorAll('[data-tkind]')){
