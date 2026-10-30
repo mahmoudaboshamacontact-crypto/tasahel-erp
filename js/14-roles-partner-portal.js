@@ -431,7 +431,7 @@
       '<header class="bg-[#0b1b33] shadow-md sticky top-0 z-20">' +
         '<div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3.5">' +
           '<div class="flex items-center gap-3">' +
-            '<span class="rounded-xl bg-white px-2 py-1.5">' + logo-transparentImg(30) + '</span>' +
+            '<span class="rounded-xl bg-white px-2 py-1.5">' + logoImg(30) + '</span>' +
             '<div>' +
               '<div class="text-[11px] font-semibold text-emerald-300">بوابة المنفذ الخارجي</div>' +
               '<div class="text-base font-bold text-white">' + eh(name || 'منفذ خارجي') + '</div>' +
