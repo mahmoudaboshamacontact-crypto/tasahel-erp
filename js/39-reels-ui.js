@@ -23,6 +23,13 @@
   }
   boot();
 
+  /* لوجو تسجيل الدخول: شفاف وواحد */
+  (function swapLoginLogo(n) {
+    var im = document.querySelector('#tasahel-3d-overlay .t3d-logo-box img');
+    if (im) { im.src = 'logo-transparent.png'; return; }
+    if (n < 40) setTimeout(function () { swapLoginLogo(n + 1); }, 250);
+  })(0);
+
   /* 2) عدّاد أرقام الـ KPI عند رسم الرئيسية (مرة واحدة، 700ms) */
   function countUp(el) {
     var m = /^(\D*?)([\d][\d,]*(?:\.\d+)?)(.*)$/.exec(el.textContent.trim()); if (!m) return;

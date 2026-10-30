@@ -160,6 +160,8 @@
 <button id="tab-tasks-btn" onclick="switchTab('tasks')" class="tab-btn"><i class="fa-solid fa-list-check"></i><span>المهام</span><span id="tk-badge" class="hidden rounded-full bg-teal-600 text-white text-[10px] font-bold px-1.5 min-w-[18px] text-center leading-[18px]">0</span></button>
 <button id="tab-notes-btn" onclick="switchTab('notes')" class="tab-btn"><i class="fa-solid fa-note-sticky"></i><span>ملاحظاتي</span></button>
 <hr class="my-1 border-slate-100 dark:border-slate-800">
+<button type="button" onclick="toggleDarkMode()" class="tab-btn r-logout-menu"><i class="fa-solid fa-circle-half-stroke"></i><span>تبديل الوضع الليلي / النهاري</span></button>
+<button type="button" onclick="handleLogout()" class="tab-btn r-logout-menu text-rose-400"><i class="fa-solid fa-power-off"></i><span>تسجيل الخروج</span></button>
 <button onclick="openSupabaseModal()" class="tab-btn text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"><i class="fa-solid fa-database"></i><span>إعدادات قاعدة البيانات</span></button>
 <button id="backup-btn" onclick="backupAll()" class="hidden tab-btn text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"><i class="fa-solid fa-cloud-arrow-down"></i><span>نسخة احتياطية</span></button>
 </div>
