@@ -1,0 +1,10 @@
+/* css/functional-fixes.css */
+.ts-brand-box { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+#hdr-brand-logo { height: 2.25rem; width: auto; object-fit: contain; background: transparent !important; border: 0 !important; padding: 0 !important; box-shadow: none !important; }
+#hdr-clock-slot .gl-clock { padding: 2px 8px; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.3); background: transparent; gap: 6px; }
+#hdr-clock-slot .gl-clock .gc-time { font-size: 11.5px !important; font-weight: 700; }
+#hdr-clock-slot .gl-clock .gc-date { font-size: 9.5px !important; opacity: 0.75; }
+#hdr-clock-slot .gl-clock.gl-clock-analog svg { width: 24px !important; height: 24px !important; filter: none; }
+.svc-exp > summary { list-style: none; cursor: pointer; user-select: none; }
+.svc-exp > summary::-webkit-details-marker { display: none; }
+.svc-exp[open] > summary .svc-exp-ic { transform: rotate(180deg); }
