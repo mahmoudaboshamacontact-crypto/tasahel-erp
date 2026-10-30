@@ -284,15 +284,15 @@
     const cur = today().slice(0, 7);
     if (month !== cur) { month = cur; await render(); }
     if (lockedMsg()) return;
-    const me = currentUser.id, r = att.find(x => x.user_id === me && x.day === today()), d = new Date(), now = d.toISOString();
+    const me = currentUser.id, r = att.find(x => x.user_id === me && x.day === today()), d = new Date();
     if (!r) {
       const sh = shiftFor(me, today()), from = Math.max(0, mins(sh.start) - EARLY_PUNCH);
       if (d.getHours() * 60 + d.getMinutes() < from) return showToast('بدري على البصمة — تقدر تسجّل حضور من الساعة ' + hhmm(from), 'error', 6000);
-      const ok = await run(sbClient.from('hr_attendance').insert({ user_id: me, day: today(), check_in: now }), 'تم تسجيل الحضور');
+      const ok = await run(sbClient.from('hr_attendance').insert({ user_id: me, day: today() }), 'تم تسجيل الحضور');
       if (ok && weekLate(me, weekStart(today())) === LATE_ALERT) notifyManager('تأخير متكرر', nameOf(me) + ' اتأخر ' + LATE_ALERT + ' أيام هذا الأسبوع');
       return;
     }
-    if (!r.check_out) return run(sbClient.from('hr_attendance').update({ check_out: now }).eq('id', r.id), 'تم تسجيل الانصراف');
+    if (!r.check_out) return run(sbClient.rpc('hr_punch_out', { p_id: r.id }), 'تم تسجيل الانصراف');
   };
   hr.lockMonth = async () => {
     if (!locksOK || lock) return;

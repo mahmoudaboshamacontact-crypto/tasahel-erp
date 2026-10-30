@@ -218,7 +218,7 @@
     if (!body || !sbClient || !currentUser) return;
     btn.disabled = true;
     const r = await sbClient.from('tx_comments')
-      .insert({ transaction_id: tx, author_id: currentUser.id, author_name: me(), body: body })
+      .insert({ transaction_id: tx, author_id: currentUser.id, body: body })
       .select('id,transaction_id,author_id,author_name,body,created_at').single();
     btn.disabled = false;
     if (r.error) {

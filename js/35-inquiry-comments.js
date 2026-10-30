@@ -25,8 +25,7 @@
       var body = TAG + text;
       var dup = await sbClient.from('tx_comments').select('id').eq('transaction_id', tx).eq('body', body).limit(1);
       if (dup.data && dup.data.length) { btn.innerHTML = '<i class="fa-solid fa-check"></i> مضاف بالفعل'; showToast('الاستفسار مضاف قبل كده على الطلب', 'info'); return; }
-      var author = (typeof myProfile !== 'undefined' && myProfile && myProfile.full_name) || currentUser.email;
-      var r = await sbClient.from('tx_comments').insert({ transaction_id: tx, author_id: currentUser.id, author_name: author, body: body, is_public: false });
+      var r = await sbClient.from('tx_comments').insert({ transaction_id: tx, author_id: currentUser.id, body: body, is_public: false });
       if (r.error) throw r.error;
       btn.innerHTML = '<i class="fa-solid fa-check"></i> تمت الإضافة'; showToast('اتضاف الاستفسار لتعليقات الطلب');
     } catch (e) { btn.disabled = false; if (typeof showError === 'function') showError('تعذّر إضافة الاستفسار', e); }

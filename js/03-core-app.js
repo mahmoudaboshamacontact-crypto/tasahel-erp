@@ -634,45 +634,57 @@ function buildServiceDetailCard(l,idx,mode){
     ?statusSelect(l)
     :'<div class="pt-1"><label class="text-[10.5px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">تحديث حالة هذه الخدمة فقط:</label><select onchange="setLineStatus(\''+escapeHtml(l.id)+'\',this.value)" class="field !py-1.5 text-xs">'+Object.keys(STATUS_PATCH).map(s=>'<option value="'+s+'"'+(s===st?' selected':'')+'>'+statusLabel(s)+'</option>').join('')+'</select></div>';
 
-  return '<div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/90 p-3.5 space-y-2.5 shadow-2xs" data-svc-card-id="'+escapeHtml(l.id)+'">'+
-    '<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">'+
+  return '<div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/90 p-3 space-y-2 shadow-2xs" data-svc-card-id="'+escapeHtml(l.id)+'">'+
+    '<div class="flex flex-wrap items-center justify-between gap-2">'+
       '<div class="flex items-center gap-2 min-w-0">'+
-        '<span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 text-[11px] font-bold font-mono">'+(idx+1)+'</span>'+
+        '<span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-bold font-mono">'+(idx+1)+'</span>'+
         '<span class="font-bold text-xs sm:text-sm text-ink dark:text-white truncate">'+escapeHtml(l.service||'—')+'</span>'+
       '</div>'+
       '<div class="flex items-center gap-1.5 shrink-0">'+
         badge(st)+
-        '<span class="font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800" data-line-pct-lbl="'+escapeHtml(l.id)+'" style="color:'+col+'">'+pct+'%</span>'+
       '</div>'+
     '</div>'+
 
-    /* شريط تقدم مستقل للخدمة */
-    '<div class="space-y-1">'+
-      '<div class="flex items-center justify-between text-[10.5px] text-slate-500 dark:text-slate-400">'+
-        '<span>شريط تقدم الخدمة</span>'+
-        '<span data-line-st-lbl="'+escapeHtml(l.id)+'" class="font-semibold" style="color:'+col+'">'+escapeHtml(statusLabel(st))+' ('+pct+'%)</span>'+
-      '</div>'+
-      '<div class="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">'+
-        '<div data-line-bar="'+escapeHtml(l.id)+'" class="h-full rounded-full transition-all duration-300" style="width:'+pct+'%;background:'+col+'"></div>'+
-      '</div>'+
+    '<div class="flex flex-wrap items-center justify-between gap-2 text-xs pt-1 border-t border-slate-100 dark:border-slate-800">'+
+      '<div><span class="text-slate-400 ms-1">السعر:</span><span class="font-bold font-mono text-ink dark:text-white">'+escapeHtml(formatCurrency(l.total))+'</span></div>'+
+      '<div><span class="text-slate-400 ms-1">المنفذ:</span><span class="font-semibold text-ink dark:text-white">'+escapeHtml(l.executor||'—')+'</span></div>'+
     '</div>'+
 
-    /* حقول الخدمة المفصولة والواضحة */
-    '<div class="grid grid-cols-2 sm:grid-cols-3 gap-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-2.5 text-xs">'+
-      '<div><span class="text-[10.5px] text-slate-400 block">العدد</span><span class="font-bold font-mono text-ink dark:text-white">'+fmtNum(l.qty)+'</span></div>'+
-      '<div><span class="text-[10.5px] text-slate-400 block">سعر الوحدة</span><span class="font-bold font-mono text-ink dark:text-white">'+fmtNum(l.unit_price)+' ج.م'+(disc>0?' <small class="text-rose-500">(-'+fmtNum(disc)+'% من '+fmtNum(listPr)+')</small>':'')+'</span></div>'+
-      '<div><span class="text-[10.5px] text-slate-400 block">إجمالي البند</span><span class="font-bold font-mono text-brand-600 dark:text-violet-300">'+formatCurrency(l.total)+'</span></div>'+
-      '<div><span class="text-[10.5px] text-slate-400 block">المنفذ</span><span class="font-semibold text-ink dark:text-white">'+escapeHtml(l.executor||'—')+'</span></div>'+
-      '<div><span class="text-[10.5px] text-slate-400 block">تكلفة التنفيذ</span><span class="font-bold font-mono text-ink dark:text-white">'+formatCurrency(execCostOf(l))+' <small class="text-slate-400 font-normal">('+fmtNum(l.exec_unit_cost||0)+'/وحدة)</small></span></div>'+
-      '<div><span class="text-[10.5px] text-slate-400 block" dir="ltr">Service ID</span><span class="font-bold font-mono text-violet-700 dark:text-violet-300" dir="ltr">'+(l.service_ref?escapeHtml(l.service_ref):'—')+'</span></div>'+
-    '</div>'+
-    (l.notes?'<div class="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/30 rounded-lg px-2.5 py-1.5"><i class="fa-solid fa-note-sticky ms-1"></i>'+escapeHtml(l.notes)+'</div>':'')+
-    peopleHtml+
-    '<div class="space-y-1 pt-0.5">'+
-      '<div class="text-[10.5px] font-semibold text-slate-400">تواريخ مراحل التنفيذ المسجلة:</div>'+
-      '<div class="flex flex-wrap gap-1.5" data-line-events="'+escapeHtml(l.id)+'">'+formatLineStageEventsHtml(l)+'</div>'+
-    '</div>'+
-    ctrlHtml+
+    '<details class="svc-exp pt-1 border-t border-slate-100 dark:border-slate-800">'+
+      '<summary class="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400 py-1 hover:text-ink dark:hover:text-white">'+
+        '<span>تفاصيل</span>'+
+        '<i class="fa-solid fa-chevron-down text-[10px] svc-exp-ic transition-transform"></i>'+
+      '</summary>'+
+      '<div class="space-y-2.5 pt-2">'+
+        /* شريط تقدم مستقل للخدمة */
+        '<div class="space-y-1">'+
+          '<div class="flex items-center justify-between text-[10.5px] text-slate-500 dark:text-slate-400">'+
+            '<span>شريط تقدم الخدمة</span>'+
+            '<span data-line-st-lbl="'+escapeHtml(l.id)+'" class="font-semibold" style="color:'+col+'">'+escapeHtml(statusLabel(st))+' (<span data-line-pct-lbl="'+escapeHtml(l.id)+'">'+pct+'%</span>)</span>'+
+          '</div>'+
+          '<div class="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">'+
+            '<div data-line-bar="'+escapeHtml(l.id)+'" class="h-full rounded-full transition-all duration-300" style="width:'+pct+'%;background:'+col+'"></div>'+
+          '</div>'+
+        '</div>'+
+
+        /* حقول الخدمة المفصولة والواضحة */
+        '<div class="grid grid-cols-2 sm:grid-cols-3 gap-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-2.5 text-xs">'+
+          '<div><span class="text-[10.5px] text-slate-400 block">العدد</span><span class="font-bold font-mono text-ink dark:text-white">'+fmtNum(l.qty)+'</span></div>'+
+          '<div><span class="text-[10.5px] text-slate-400 block">سعر الوحدة</span><span class="font-bold font-mono text-ink dark:text-white">'+fmtNum(l.unit_price)+' ج.م'+(disc>0?' <small class="text-rose-500">(-'+fmtNum(disc)+'% من '+fmtNum(listPr)+')</small>':'')+'</span></div>'+
+          '<div><span class="text-[10.5px] text-slate-400 block">إجمالي البند</span><span class="font-bold font-mono text-brand-600 dark:text-violet-300">'+formatCurrency(l.total)+'</span></div>'+
+          '<div><span class="text-[10.5px] text-slate-400 block">المنفذ</span><span class="font-semibold text-ink dark:text-white">'+escapeHtml(l.executor||'—')+'</span></div>'+
+          '<div><span class="text-[10.5px] text-slate-400 block">تكلفة التنفيذ</span><span class="font-bold font-mono text-ink dark:text-white">'+formatCurrency(execCostOf(l))+' <small class="text-slate-400 font-normal">('+fmtNum(l.exec_unit_cost||0)+'/وحدة)</small></span></div>'+
+          '<div><span class="text-[10.5px] text-slate-400 block" dir="ltr">Service ID</span><span class="font-bold font-mono text-violet-700 dark:text-violet-300" dir="ltr">'+(l.service_ref?escapeHtml(l.service_ref):'—')+'</span></div>'+
+        '</div>'+
+        (l.notes?'<div class="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/30 rounded-lg px-2.5 py-1.5"><i class="fa-solid fa-note-sticky ms-1"></i>'+escapeHtml(l.notes)+'</div>':'')+
+        peopleHtml+
+        '<div class="space-y-1 pt-0.5">'+
+          '<div class="text-[10.5px] font-semibold text-slate-400">تواريخ مراحل التنفيذ المسجلة:</div>'+
+          '<div class="flex flex-wrap gap-1.5" data-line-events="'+escapeHtml(l.id)+'">'+formatLineStageEventsHtml(l)+'</div>'+
+        '</div>'+
+        ctrlHtml+
+      '</div>'+
+    '</details>'+
   '</div>';
 }
 
@@ -920,10 +932,9 @@ async function inspectorAddComment(e,tx){
   const inp=$('insp-cmt-in'),btn=$('insp-cmt-btn');
   if(!inp||!tx||!sbClient||!currentUser)return;
   const body=(inp.value||'').trim();if(!body)return;
-  const author=(myProfile&&myProfile.full_name)||currentUser.email||'موظف';
   if(btn)btn.disabled=true;
   try{
-    const r=await sbClient.from('tx_comments').insert({transaction_id:tx,author_id:currentUser.id,author_name:author,body:body});
+    const r=await sbClient.from('tx_comments').insert({transaction_id:tx,author_id:currentUser.id,body:body});
     if(r.error)throw r.error;
     inp.value='';
     showToast('تم إضافة التعليق');
@@ -2778,7 +2789,6 @@ function renderHomeTab(){
           '<h1 class="text-base sm:text-lg font-bold text-white">أهلاً، '+eh(meName)+'</h1>'+
           '<p class="text-[11px] text-slate-300 mt-0.5">'+eh(todayStr)+'</p>'+
         '</div>'+
-        '<div id="hm-clock-slot" class="flex items-center"></div>'+
       '</div>'+
       '<div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mt-3.5">'+
         '<button type="button" onclick="switchTab(\'tx\')" class="hm-kpi-box">'+
@@ -2864,7 +2874,6 @@ function renderHomeTab(){
     '</div>';
 
   box.innerHTML=h;
-  if(typeof window.mountHomeClock==='function')window.mountHomeClock();
 }
 window.renderHomeTab=renderHomeTab;
 

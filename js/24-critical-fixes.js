@@ -178,8 +178,7 @@
     var all = card ? card.querySelectorAll('button') : [btn];
     all.forEach(function (b) { b.disabled = true; });
     try {
-      var author = (myProfile && myProfile.full_name) || currentUser.email;
-      var r1 = await sbClient.from('tx_comments').insert({ transaction_id: tx, author_id: currentUser.id, author_name: author, body: body, is_public: pub });
+      var r1 = await sbClient.from('tx_comments').insert({ transaction_id: tx, author_id: currentUser.id, body: body, is_public: pub });
       if (r1.error) throw r1.error;
       var r2 = await sbClient.from('customer_inquiries').update({ status: pub ? 'replied' : 'converted' }).eq('id', id);
       if (r2.error) throw r2.error;

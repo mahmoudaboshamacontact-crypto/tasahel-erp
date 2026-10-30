@@ -13,11 +13,11 @@
   function build() {
     if (!el) return;
     var m = mode();
-    el.className = 'gl-clock hm-glass-clock ' + (m === 'analog' ? 'gl-clock-analog' : 'gl-clock-digital');
+    el.className = 'gl-clock ' + (m === 'analog' ? 'gl-clock-analog' : 'gl-clock-digital');
     el.innerHTML = m === 'analog'
       ? '<svg viewBox="0 0 44 44" aria-hidden="true"><circle class="gc-face" cx="22" cy="22" r="19.5" stroke-width="1.6"/><circle cx="22" cy="22" r="1.8" fill="currentColor"/><line class="gc-h" x1="22" y1="22" x2="22" y2="11.5" stroke-width="2.6"/><line class="gc-m" x1="22" y1="22" x2="22" y2="7.5" stroke-width="1.9"/><line class="gc-s" x1="22" y1="24" x2="22" y2="6.5" stroke-width="1.1"/></svg>' +
         '<div class="gc-meta"><div class="gc-time"></div><div class="gc-date"></div></div>'
-      : '<div class="gc-icon"><i class="fa-regular fa-clock"></i></div><div class="gc-meta"><div class="gc-time"></div><div class="gc-date"></div></div>';
+      : '<div class="gc-meta"><div class="gc-time"></div><div class="gc-date"></div></div>';
     el.title = 'اضغط للتبديل بين الساعة الرقمية وساعة العقارب';
     tick();
   }
@@ -50,7 +50,9 @@
   function stop() { if (timer) { clearInterval(timer); timer = null; } }
 
   function mountHomeClock() {
-    var slot = document.getElementById('hm-clock-slot');
+    var oldHome = document.getElementById('hm-clock-slot');
+    if (oldHome) oldHome.remove();
+    var slot = document.getElementById('hdr-clock-slot');
     if (!slot) return;
     if (!el) {
       el = document.createElement('div');

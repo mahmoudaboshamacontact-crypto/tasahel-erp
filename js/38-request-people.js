@@ -229,34 +229,60 @@
   };
 
   /* ---------- 3) العرض في الجداول والتفاصيل واللوحة الجانبية ---------- */
-  function cnt(tx) { return (map[String(tx)] || []).length; }
-  function badge(n, namesTip) {
-    return '<span class="rp-n" title="مستفيدون إضافيون: ' + eh(namesTip || '') + '" style="display:inline-block;margin-inline-start:6px;padding:1px 7px;border-radius:999px;background:rgba(124,58,237,.15);color:#7c3aed;font-size:10.5px;font-weight:700">+' + n + ' مستفيد</span>';
+  function nrm(s) {
+    return typeof normName === 'function' ? normName(s) : String(s || '').trim().toLowerCase();
+  }
+  function clientOfTx(tx) {
+    if (typeof groupedOrders !== 'undefined' && Array.isArray(groupedOrders)) {
+      var o = groupedOrders.find(function (x) { return String(x.transaction_id) === String(tx); });
+      if (o && o.client_name) return o.client_name;
+    }
+    return '';
+  }
+  function distinctPeople(tx, clientName) {
+    var cNorm = nrm(clientName != null ? clientName : clientOfTx(tx));
+    var seen = {};
+    return (map[String(tx)] || []).filter(function (p) {
+      var pNorm = nrm(p && p.name);
+      if (!pNorm || (cNorm && pNorm === cNorm) || seen[pNorm]) return false;
+      seen[pNorm] = true;
+      return true;
+    });
+  }
+  function subLineHtml(tx, clientName) {
+    var ps = distinctPeople(tx, clientName);
+    if (!ps.length) return '';
+    var names = ps.map(function (p) { return eh(p.name); });
+    var txt = names.length <= 2 ? names.join('، ') : (names[0] + '، ' + names[1] + ' و ' + (names.length - 2) + ' آخرين');
+    var tip = ps.map(function (p) { return p.name; }).join('، ');
+    return '<div class="rp-n text-[11px] font-normal text-slate-500 dark:text-slate-400 mt-0.5 truncate" title="المستفيدون: ' + eh(tip) + '"><i class="fa-solid fa-user-tag text-[9.5px] ms-1"></i>' + txt + '</div>';
   }
   function paint() {
     document.querySelectorAll('#recent-table-body tr').forEach(function (tr) {
       var m = /selectTxForInspector\('([^']+)'/.exec(tr.getAttribute('onclick') || ''); if (!m) return;
       var tx = m[1].replace(/&#39;/g, "'");
-      var n = cnt(tx), b = tr.querySelector('button[data-c]'); if (!b) return;
+      var b = tr.querySelector('button[data-c]'); if (!b) return;
       var old = b.parentElement.querySelector('.rp-n'); if (old) old.remove();
-      if (n) b.insertAdjacentHTML('afterend', badge(n, window.getRequestPeopleNamesText(tx)));
+      var sub = subLineHtml(tx, b.getAttribute('data-c') || b.textContent);
+      if (sub) b.insertAdjacentHTML('afterend', sub);
     });
     document.querySelectorAll('#recent-cards-container > [data-tx]').forEach(function (c) {
-      var tx = c.getAttribute('data-tx'), n = cnt(tx), t = c.querySelector('.font-bold'); if (!t) return;
-      var old = t.querySelector('.rp-n'); if (old) old.remove();
-      if (n) t.insertAdjacentHTML('beforeend', badge(n, window.getRequestPeopleNamesText(tx)));
+      var tx = c.getAttribute('data-tx'), t = c.querySelector('.font-bold'); if (!t) return;
+      var old = t.parentElement.querySelector('.rp-n'); if (old) old.remove();
+      var sub = subLineHtml(tx, t.textContent);
+      if (sub) t.insertAdjacentHTML('afterend', sub);
     });
   }
   function listHtml(tx) {
-    var ps = map[String(tx)] || []; if (!ps.length) return '';
-    return '<div class="rp-list rounded-xl border border-violet-200 dark:border-violet-800/70 bg-violet-50/40 dark:bg-violet-950/20 p-3 text-xs space-y-1.5">' +
-      '<div class="font-bold text-violet-700 dark:text-violet-300 flex items-center justify-between"><span><i class="fa-solid fa-users ms-1.5"></i>قائمة المستفيدين داخل الطلب (' + ps.length + ')</span></div>' +
-      '<div class="divide-y divide-violet-100 dark:divide-violet-900/40">' +
+    var ps = distinctPeople(tx); if (!ps.length) return '';
+    return '<div class="rp-list rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-3 text-xs space-y-1.5">' +
+      '<div class="font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between"><span><i class="fa-solid fa-users ms-1.5"></i>المستفيدون (' + ps.length + ')</span></div>' +
+      '<div class="divide-y divide-slate-200/60 dark:divide-slate-700/60">' +
       ps.map(function (p, i) {
         var svc = resolveServiceNameForLineId(tx, p.line_id);
         return '<div class="flex flex-wrap items-center justify-between gap-2 py-1.5">' +
           '<div class="flex items-center gap-2"><span class="font-mono text-[10.5px] text-slate-400">' + (i + 1) + '.</span><span class="font-bold text-ink dark:text-white">' + eh(p.name) + '</span>' +
-          (svc ? '<span class="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10.5px] font-semibold text-violet-700 dark:text-violet-300">' + eh(svc) + '</span>' : '<span class="text-[10.5px] text-slate-400">(كل الطلب)</span>') +
+          (svc ? '<span class="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10.5px] font-semibold text-slate-600 dark:text-slate-300">' + eh(svc) + '</span>' : '<span class="text-[10.5px] text-slate-400">(كل الطلب)</span>') +
           '</div>' +
           (p.phone ? '<span class="font-mono text-slate-600 dark:text-slate-300" dir="ltr">' + eh(p.phone) + '</span>' : '') +
         '</div>';
@@ -267,13 +293,26 @@
   var _ot = window.openTxModal;
   if (typeof _ot === 'function') window.openTxModal = function (tx) {
     var r = _ot.apply(this, arguments);
-    try { var b = $('tx-modal-body'), h = listHtml(tx); if (b && h && !b.querySelector('.rp-list')) b.insertAdjacentHTML('beforeend', h); } catch (e) { /* */ }
+    try {
+      var b = $('tx-modal-body'), h = listHtml(tx);
+      if (b && h && !b.querySelector('.rp-list')) {
+        var infoGrid = b.querySelector('.grid');
+        if (infoGrid) infoGrid.insertAdjacentHTML('afterend', h);
+        else b.insertAdjacentHTML('afterbegin', h);
+      }
+    } catch (e) { /* */ }
     return r;
   };
   var _ti = window.renderTxInspector;
   if (typeof _ti === 'function') window.renderTxInspector = function (tx) {
     var r = _ti.apply(this, arguments);
-    try { var p = $('tx-inspector-panel'), h = listHtml(tx), f = p && p.querySelector('form'); if (p && h && f && !p.querySelector('.rp-list')) f.insertAdjacentHTML('beforebegin', h); } catch (e) { /* */ }
+    try {
+      var p = $('tx-inspector-panel'), h = listHtml(tx), top = p && p.firstElementChild;
+      if (p && h && !p.querySelector('.rp-list')) {
+        if (top) top.insertAdjacentHTML('afterend', h);
+        else p.insertAdjacentHTML('afterbegin', h);
+      }
+    } catch (e) { /* */ }
     return r;
   };
 
