@@ -1,3 +1,4 @@
+javascript
 /* ===== المرحلة 8 (محدثة وتفاعلية بالكامل): بوابة المنفذ الخارجي المعزولة ===== */
 (function () {
   if (window.__phase8) return; window.__phase8 = true;
@@ -326,4 +327,495 @@
     const JB = JSON.stringify(B), JTX = JSON.stringify(tx);
     const wa = waLink(first.phone, 'أهلاً ' + (first.client_name || '') + '، بخصوص طلبك رقم ' + tx);
 
-    let modal = doc
+    let modal = document.getElementById('partner-tx-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'partner-tx-modal';
+      modal.className = 'fixed inset-0 z-[140] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML =
+      '<div class="relative w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 text-xs" onclick="event.stopPropagation()">' +
+        '<div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-5 py-3.5 bg-slate-50/80 dark:bg-slate-800/50">' +
+          '<div class="flex items-center gap-2.5">' +
+            '<span class="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-500 text-slate-950 font-bold text-sm"><i class="fa-solid fa-file-invoice"></i></span>' +
+            '<div>' +
+              '<div class="font-bold text-sm text-ink dark:text-white flex items-center gap-2">' +
+                '<span>معاملة رقم ' + eh(tx) + '</span>' +
+                badge(first.status || 'In Progress') +
+              '</div>' +
+              '<div class="text-[11px] text-slate-400">تاريخ المعاملة: ' + eh(formatDateTime(first.received_at)) + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<button type="button" onclick="p8.closeDetail()" class="rounded-xl p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-600 transition" title="إغلاق"><i class="fa-solid fa-xmark text-base"></i></button>' +
+        '</div>' +
+
+        '<div class="p-5 space-y-4 overflow-y-auto">' +
+          '<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">' +
+            '<div class="card p-3 bg-slate-50/60 dark:bg-slate-800/30">' +
+              '<span class="text-slate-400 block text-[10.5px]">اسم العميل</span>' +
+              '<b class="text-ink dark:text-white text-sm">' + eh(first.client_name || '—') + '</b>' +
+            '</div>' +
+            '<div class="card p-3 bg-slate-50/60 dark:bg-slate-800/30">' +
+              '<span class="text-slate-400 block text-[10.5px]">رقم التليفون</span>' +
+              (first.phone
+                ? '<div class="flex items-center gap-1.5 mt-0.5"><span class="font-mono font-bold text-ink dark:text-white" dir="ltr">' + eh(first.phone) + '</span>' + (wa ? '<a href="' + wa + '" target="_blank" rel="noopener" class="text-emerald-600"><i class="fa-brands fa-whatsapp text-sm"></i></a>' : '') + '</div>'
+                : '<span class="text-slate-400">—</span>') +
+            '</div>' +
+            '<div class="card p-3 bg-slate-50/60 dark:bg-slate-800/30 col-span-2 sm:col-span-1">' +
+              '<span class="text-slate-400 block text-[10.5px]">إجمالي تكلفة التنفيذ</span>' +
+              '<b class="font-mono text-brand-600 dark:text-violet-300 text-sm font-bold">' + formatCurrency(totalExec) + '</b>' +
+            '</div>' +
+          '</div>' +
+
+          '<div>' +
+            '<h4 class="font-bold text-xs text-slate-500 mb-2 flex items-center gap-1.5"><i class="fa-solid fa-layer-group text-brand-500"></i>الخدمات والبنود المسندة إليك في هذا الطلب</h4>' +
+            '<div class="space-y-2.5">' +
+              items.map((it, idx) => {
+                const uCost = Number(it.exec_unit_cost) || 0;
+                const itTotCost = lineExecCost(it);
+                return '<div class="card p-3.5 space-y-2 border border-slate-200/80 dark:border-slate-700/80">' +
+                  '<div class="flex items-start justify-between gap-2">' +
+                    '<div>' +
+                      '<div class="font-bold text-sm text-ink dark:text-white flex items-center gap-2">' +
+                        '<span>بند #' + (idx + 1) + ': ' + eh(it.service) + '</span>' +
+                        '<span class="font-mono text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-600 dark:text-slate-300" dir="ltr">×' + fmtNum(it.qty || 1) + '</span>' +
+                      '</div>' +
+                      (it.service_ref ? '<div class="text-[11px] font-mono font-bold text-violet-700 dark:text-violet-300 mt-0.5">Service ID: ' + eh(it.service_ref) + '</div>' : '') +
+                    '</div>' +
+                    '<div class="text-end">' +
+                      '<div class="text-[10px] text-slate-400">إجمالي التنفيذ</div>' +
+                      '<b class="font-mono text-brand-600 dark:text-violet-300 text-sm">' + formatCurrency(itTotCost) + '</b>' +
+                    '</div>' +
+                  '</div>' +
+                  (Array.isArray(it.beneficiaries) && it.beneficiaries.length ? '<div class="pt-1"><span class="text-[10.5px] text-slate-400 block mb-1">المستفيدون من هذه الخدمة:</span>' + formatBeneficiariesBadges(it.beneficiaries) + '</div>' : '') +
+                  (it.notes ? '<div class="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/60 p-2 text-[11px] text-amber-900 dark:text-amber-200 whitespace-pre-wrap"><i class="fa-solid fa-note-sticky ms-1"></i><b>ملاحظات الإدارة:</b> ' + eh(it.notes) + '</div>' : '') +
+                '</div>';
+              }).join('') +
+            '</div>' +
+          '</div>' +
+
+          '<div class="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-3">' +
+            '<div class="flex items-center justify-between">' +
+              '<h4 class="font-bold text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1.5"><i class="fa-solid fa-comments text-brand-500"></i>سجل التعليقات والمستجدات على الطلب (' + allCmts.length + ')</h4>' +
+              '<span class="text-[10px] text-slate-400">تصل التعليقات مباشرة للإدارة</span>' +
+            '</div>' +
+            '<div id="partner-tx-comments-box" class="space-y-2 max-h-52 overflow-y-auto p-2 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200/70 dark:border-slate-800">' +
+              (allCmts.length
+                ? allCmts.map(c =>
+                    '<div class="rounded-lg bg-white dark:bg-slate-900 p-2.5 border border-slate-200/80 dark:border-slate-800 space-y-1">' +
+                      '<div class="flex items-center justify-between text-[10.5px] text-slate-400">' +
+                        '<b class="text-ink dark:text-white">' + eh(c.author_name || 'تعليق') + '</b>' +
+                        '<span>' + eh(formatDateTime(c.created_at)) + '</span>' +
+                      '</div>' +
+                      '<div class="text-slate-700 dark:text-slate-200 whitespace-pre-wrap text-[11.5px]">' + eh(c.body) + '</div>' +
+                    '</div>'
+                  ).join('')
+                : '<div class="p-4 text-center text-slate-400 text-[11px]">لا توجد تعليقات سابقة على هذا الطلب</div>') +
+            '</div>' +
+
+            '<form onsubmit=\'p8.submitComment(event,' + JB + ',' + JTX + ')\' class="space-y-2 pt-1">' +
+              '<label class="label !mb-0" for="partner-comment-input">إضافة تعليق تنفيذي جديد على الطلب</label>' +
+              '<div class="flex gap-2">' +
+                '<input id="partner-comment-input" required placeholder="اكتب المستجدات أو الإفادة هنا (مثال: تم إيداع الأوراق وجاري استخراج المستند)..." class="field text-xs flex-1 !py-2">' +
+                '<button id="partner-comment-btn" class="rounded-xl bg-brand-500 hover:bg-brand-600 px-4 py-2 font-bold text-slate-950 text-xs shrink-0 flex items-center gap-1.5"><i class="fa-solid fa-paper-plane"></i><span>إرسال</span></button>' +
+              '</div>' +
+            '</form>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="border-t border-slate-100 dark:border-slate-800 px-5 py-3 bg-slate-50/80 dark:bg-slate-800/40 flex justify-end">' +
+          '<button type="button" onclick="p8.closeDetail()" class="rounded-xl bg-slate-200 dark:bg-slate-700 px-4 py-2 font-bold text-slate-700 dark:text-slate-200 text-xs hover:bg-slate-300 transition">إغلاق</button>' +
+        '</div>' +
+      '</div>';
+
+    modal.classList.remove('hidden');
+    modal.onclick = e => { if (e.target === modal) p8.closeDetail(); };
+    setTimeout(() => { const inp = document.getElementById('partner-comment-input'); if (inp) inp.focus(); }, 120);
+  }
+
+  /* ---------- عرض طلبات المنفذ الخارجي (مشترك: المنفذ + المدير) ---------- */
+  async function opsView(box, pid, mgr, fallbackName) {
+    if (!box) return;
+    const B = box.id || 'p8-box';
+    const s = st[B] = st[B] || { q: '', from: '', to: '', quickFilter: 'all', allRows: [], filtered: [] };
+    s.pid = pid;
+    s.mgr = mgr;
+    s.reload = () => opsView(box, pid, mgr, fallbackName);
+
+    box.innerHTML = '<div class="card p-8 text-center text-xs text-slate-400"><i class="fa-solid fa-spinner fa-spin ms-1.5"></i>جارٍ تحميل الطلبات المسندة للمنفذ...</div>';
+
+    let rows = null, partnerName = fallbackName || '';
+    const rpcRes = await sbClient.rpc('get_partner_requests', { p_partner_uid: mgr ? pid : null });
+
+    if (!rpcRes.error && rpcRes.data) {
+      partnerName = rpcRes.data.partner_name || partnerName;
+      rows = rpcRes.data.lines || [];
+    } else if (mgr && typeof allRequestLines !== 'undefined' && allRequestLines.length && partnerName) {
+      rows = allRequestLines.filter(l => String(l.executor || '').trim() === String(partnerName).trim()).map(l => ({
+        id: l.id,
+        transaction_id: l.transaction_id,
+        service_ref: l.service_ref,
+        client_name: l.client_name,
+        phone: l.phone,
+        service: l.service,
+        qty: l.qty || 1,
+        exec_unit_cost: l.exec_unit_cost,
+        exec_total: execCostOf(l),
+        executor: l.executor,
+        status: l.status || 'In Progress',
+        received_at: l.received_at,
+        exec_start_date: l.exec_start_date || dayKey(lineDate(l)),
+        duration_days: l.duration_days,
+        notes: l.notes,
+        beneficiaries: typeof window.getRequestPeople === 'function' ? window.getRequestPeople(l.transaction_id).filter(p => !p.line_id || String(p.line_id) === String(l.id)) : [],
+        comments: []
+      }));
+    } else {
+      box.innerHTML = miss(rpcRes.error) ? sqlHint : '<div class="card p-5 text-center text-xs text-rose-500">تعذّر تحميل الطلبات: ' + eh((rpcRes.error && rpcRes.error.message) || 'خطأ غير معروف') + '</div>';
+      return;
+    }
+
+    s.allRows = rows;
+    s.partnerName = partnerName;
+    const JB = JSON.stringify(B);
+
+    box.innerHTML =
+      '<div id="' + B + '-kpis" class="grid grid-cols-2 gap-3 lg:grid-cols-4"></div>' +
+      '<div class="card p-4 space-y-3">' +
+        '<div class="flex flex-wrap items-center justify-between gap-2">' +
+          '<div class="text-sm font-bold text-ink dark:text-white flex items-center gap-2">' +
+            '<i class="fa-solid fa-filter text-brand-600"></i>' +
+            '<span>البحث وتصفية الطلبات' + (partnerName ? ' — <b class="text-brand-600 dark:text-violet-300">' + eh(partnerName) + '</b>' : '') + '</span>' +
+          '</div>' +
+          '<div class="flex flex-wrap items-center gap-2">' +
+            '<span class="text-xs text-slate-500">إجمالي تكلفة التنفيذ المعروضة: <b id="' + B + '-cost-sum" class="font-mono font-bold text-brand-600 dark:text-violet-300">0 ج.م</b></span>' +
+            '<button type="button" onclick=\'p8.reload(' + JB + ')\' class="rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-rotate ms-1"></i>تحديث</button>' +
+            '<button type="button" onclick=\'p8.csv(' + JB + ')\' class="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm"><i class="fa-solid fa-file-excel ms-1.5"></i>تصدير Excel (CSV)</button>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="grid grid-cols-1 gap-3 sm:grid-cols-12 items-end">' +
+          '<div class="sm:col-span-5">' +
+            '<label class="label">بحث سريع</label>' +
+            '<div class="relative">' +
+              '<input id="' + B + '-q" type="search" value="' + eh(s.q) + '" oninput=\'p8.setFilter(' + JB + ',"q",this.value)\' placeholder="ابحث باسم العميل، المستفيد، رقم التليفون، رقم الطلب، الخدمة..." class="field pe-8 text-xs">' +
+              '<i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none"></i>' +
+            '</div>' +
+          '</div>' +
+          '<div class="sm:col-span-3">' +
+            '<label class="label">من تاريخ</label>' +
+            '<input id="' + B + '-from" type="date" value="' + eh(s.from) + '" onchange=\'p8.setFilter(' + JB + ',"from",this.value)\' class="field font-mono text-xs">' +
+          '</div>' +
+          '<div class="sm:col-span-3">' +
+            '<label class="label">إلى تاريخ</label>' +
+            '<input id="' + B + '-to" type="date" value="' + eh(s.to) + '" onchange=\'p8.setFilter(' + JB + ',"to",this.value)\' class="field font-mono text-xs">' +
+          '</div>' +
+          '<div class="sm:col-span-1">' +
+            '<button type="button" onclick=\'p8.clearFilters(' + JB + ')\' class="w-full rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300" title="إعادة تعيين الفلاتر">إلغاء</button>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="flex items-center justify-between text-xs pt-1 border-t border-slate-100 dark:border-slate-800 text-slate-500">' +
+          '<span id="' + B + '-count"></span>' +
+          '<span class="text-[11px] text-slate-400"><i class="fa-solid fa-circle-info ms-1"></i>انقر على أي طلب لفتح كارت التفاصيل بالكامل وإضافة تعليق</span>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="card overflow-hidden hidden md:block">' +
+        '<div class="overflow-x-auto">' +
+          '<table class="w-full text-right text-xs">' +
+            '<thead class="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800">' +
+              '<tr>' +
+                '<th class="px-3.5 py-3">العميل / رقم الطلب</th>' +
+                '<th class="px-3 py-3">المستفيدون</th>' +
+                '<th class="px-3 py-3">رقم التليفون</th>' +
+                '<th class="px-3 py-3">الخدمة</th>' +
+                '<th class="px-3 py-3 text-center">العدد</th>' +
+                '<th class="px-3 py-3">الحالة</th>' +
+                '<th class="px-3 py-3">تكلفة التنفيذ للخدمة</th>' +
+                '<th class="px-3 py-3">إجمالي التنفيذ</th>' +
+                '<th class="px-3 py-3">التاريخ</th>' +
+                '<th class="px-3 py-3">الملاحظات</th>' +
+                '<th class="px-3 py-3">التعليقات</th>' +
+              '</tr>' +
+            '</thead>' +
+            '<tbody id="' + B + '-tbody" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>' +
+          '</table>' +
+        '</div>' +
+      '</div>' +
+      '<div id="' + B + '-cards" class="space-y-3 md:hidden"></div>';
+
+    renderTableAndCards(B);
+  }
+
+  window.p8 = {
+    setFilter: (b, k, v) => {
+      if (!st[b]) return;
+      st[b][k] = v;
+      renderTableAndCards(b);
+    },
+    setQuickFilter: (b, mode) => {
+      if (!st[b]) return;
+      st[b].quickFilter = (st[b].quickFilter === mode && mode !== 'all') ? 'all' : mode;
+      renderTableAndCards(b);
+    },
+    clearFilters: b => {
+      const s = st[b];
+      if (!s) return;
+      s.q = ''; s.from = ''; s.to = ''; s.quickFilter = 'all';
+      const qEl = document.getElementById(b + '-q'); if (qEl) qEl.value = '';
+      const fEl = document.getElementById(b + '-from'); if (fEl) fEl.value = '';
+      const tEl = document.getElementById(b + '-to'); if (tEl) tEl.value = '';
+      renderTableAndCards(b);
+    },
+    reload: b => {
+      if (st[b] && typeof st[b].reload === 'function') st[b].reload();
+    },
+    openDetail: (b, tx) => {
+      renderDetailModal(b, tx);
+    },
+    closeDetail: () => {
+      const m = document.getElementById('partner-tx-modal');
+      if (m) m.classList.add('hidden');
+    },
+    submitComment: async (e, b, tx) => {
+      e.preventDefault();
+      const inp = document.getElementById('partner-comment-input');
+      const btn = document.getElementById('partner-comment-btn');
+      const body = (inp && inp.value || '').trim();
+      if (!body) return;
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>جارٍ الإرسال...</span>';
+
+      try {
+        const r = await sbClient.rpc('add_partner_comment', {
+          p_transaction_id: String(tx),
+          p_body: body
+        });
+        if (r.error) throw r.error;
+
+        showToast('تم إرسال التعليق للإدارة بنجاح');
+        inp.value = '';
+
+        const newCmt = r.data || {
+          id: Date.now(),
+          transaction_id: String(tx),
+          author_name: (st[b] && st[b].partnerName) || 'المنفذ',
+          body: body,
+          created_at: new Date().toISOString()
+        };
+
+        if (st[b] && Array.isArray(st[b].allRows)) {
+          st[b].allRows.forEach(l => {
+            if (String(l.transaction_id) === String(tx)) {
+              l.comments = l.comments || [];
+              l.comments.push(newCmt);
+            }
+          });
+        }
+
+        renderTableAndCards(b);
+        renderDetailModal(b, tx);
+      } catch (err) {
+        showError('تعذّر إرسال التعليق', err);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i><span>إرسال</span>';
+        }
+      }
+    },
+    csv: b => {
+      const s = st[b];
+      if (!s) return;
+      const rows = s.filtered || [];
+      if (!rows.length) return showToast('لا توجد بيانات لتصديرها', 'info');
+      const headers = [
+        'اسم العميل',
+        'المستفيدون',
+        'رقم التليفون',
+        'رقم الطلب (Request ID)',
+        'رقم الخدمة (Service ID)',
+        'الخدمة',
+        'العدد',
+        'الحالة',
+        'تكلفة التنفيذ للخدمة الواحدة',
+        'إجمالي التنفيذ',
+        'التاريخ',
+        'الملاحظات',
+        'التعليقات على الطلب'
+      ];
+      const data = rows.map(l => [
+        l.client_name || '',
+        formatBeneficiariesText(l.beneficiaries),
+        l.phone || '',
+        l.transaction_id || '',
+        l.service_ref || '',
+        l.service || '',
+        Number(l.qty) || 1,
+        statusLabel(l.status || 'In Progress'),
+        Number(l.exec_unit_cost) || 0,
+        lineExecCost(l),
+        lineDateKey(l),
+        l.notes || '',
+        formatCommentsText(l.comments)
+      ]);
+      const pName = (s.partnerName || 'المنفذ').replace(/\s+/g, '_');
+      const today = new Date().toISOString().slice(0, 10);
+      downloadCsvFile('طلبات_' + pName + '_' + today + '.csv', headers, data);
+    }
+  };
+
+  /* ---------- واجهة المنفذ الخارجي (شاشة كاملة معزولة تماماً) ---------- */
+  function overlay(inner) {
+    injectPartnerIsolationStyle();
+    document.body.classList.add('is-partner-mode');
+    $('app').classList.add('hidden');
+    $('login').classList.add('hidden');
+    let o = $('partner-app');
+    if (!o) {
+      o = document.createElement('div');
+      o.id = 'partner-app';
+      o.className = 'fixed inset-0 z-[120] overflow-y-auto bg-slate-50 dark:bg-slate-950';
+      document.body.appendChild(o);
+    }
+    o.classList.remove('hidden');
+    o.innerHTML = inner;
+    return o;
+  }
+
+  const logout = '<button type="button" onclick="handleLogout()" class="rounded-xl bg-white/10 hover:bg-white/20 px-3.5 py-2 text-xs font-semibold text-white transition"><i class="fa-solid fa-right-from-bracket ms-1.5"></i>تسجيل الخروج</button>';
+
+  function showPartner(name, uid) {
+    overlay(
+      '<header class="bg-[#0b1b33] shadow-md sticky top-0 z-20">' +
+        '<div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3.5">' +
+          '<div class="flex items-center gap-3">' +
+            '<span class="rounded-xl bg-white px-2 py-1.5">' + logoImg(30) + '</span>' +
+            '<div>' +
+              '<div class="text-[11px] font-semibold text-emerald-300">بوابة المنفذ الخارجي</div>' +
+              '<div class="text-base font-bold text-white">' + eh(name || 'منفذ خارجي') + '</div>' +
+            '</div>' +
+          '</div>' +
+          logout +
+        '</div>' +
+      '</header>' +
+      '<main id="p8-main" class="mx-auto max-w-7xl space-y-4 px-4 py-5"></main>'
+    );
+    opsView($('p8-main'), uid, false, name);
+  }
+
+  const _sl = window.showLoginScreen;
+  window.showLoginScreen = function () {
+    document.body.classList.remove('is-partner-mode');
+    const o = $('partner-app');
+    if (o) o.classList.add('hidden');
+    return _sl.apply(this, arguments);
+  };
+
+  /* ---------- بوابة الدور عند الدخول ---------- */
+  const _li = window.loadInitialData;
+  window.loadInitialData = async function () {
+    let role = null, err = null;
+    try { const r = await sbClient.rpc('my_role'); err = r.error; role = r.data; } catch (e) { err = e; }
+    window.__role = role;
+    if (!err && role === 'partner') {
+      const n = await sbClient.from('user_roles').select('partner_name').eq('user_id', currentUser.id).maybeSingle();
+      return showPartner(n.data && n.data.partner_name, currentUser.id);
+    }
+    document.body.classList.remove('is-partner-mode');
+    if (!err && !role) {
+      overlay('<div class="mx-auto mt-24 max-w-sm space-y-4 p-6 text-center"><i class="fa-solid fa-lock text-4xl text-slate-400"></i><div class="font-bold text-ink dark:text-white">الحساب ده لسه متفعّلش</div><div class="text-xs text-slate-500">كلّم المدير يفعّل حسابك.</div><div class="inline-block rounded-xl bg-[#0b1b33] p-0.5">' + logout + '</div></div>');
+      return;
+    }
+    if (!err && role === 'manager') addPartnersTab();
+    return _li.apply(this, arguments);
+  };
+
+  /* ---------- تاب المدير: المنفذون الخارجيون ---------- */
+  function addPartnersTab() {
+    const cb = $('tab-couriers-btn'), ct = $('tab-couriers'); if (!cb || !ct || $('tab-partners')) return;
+    cb.insertAdjacentHTML('afterend', '<button id="tab-partners-btn" onclick="switchTab(\'partners\')" class="tab-btn"><i class="fa-solid fa-handshake"></i><span>المنفذون الخارجيون</span></button>');
+    ct.insertAdjacentHTML('afterend', '<div id="tab-partners" class="hidden space-y-4"></div>');
+  }
+  const _st = window.switchTab;
+  window.switchTab = function (id) {
+    _st(id); const t = $('tab-partners'), b = $('tab-partners-btn'), on = id === 'partners'; if (!t || !b) return;
+    t.classList.toggle('hidden', !on);
+    b.className = 'tab-btn ' + (on ? 'bg-ink text-white dark:bg-brand-600 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800');
+    if (on) renderPartners();
+  };
+  let cur = null;
+  async function renderPartners() {
+    const root = $('tab-partners'); if (!root) return;
+    const r = await sbClient.rpc('list_partners'); if (r.error) { root.innerHTML = sqlHint; return; }
+    const ps = r.data || []; if (!ps.some(p => p.user_id === cur)) cur = ps[0] ? ps[0].user_id : null;
+    const curObj = ps.find(p => p.user_id === cur);
+    root.innerHTML =
+      '<div class="card space-y-3 p-4">' +
+        '<div class="text-sm font-bold text-ink dark:text-white"><i class="fa-solid fa-user-plus ms-1.5"></i>إدارة حسابات المنفذين الخارجيين</div>' +
+        '<p class="text-[11px] text-slate-500">1) اعمل الحساب الأول من Supabase (Authentication ← Add user)، وبعدين اربطه هنا بالإيميل واسم المنفذ بالظبط زي ما بتكتبه في خانة (المنفذ) داخل الطلبات.</p>' +
+        '<form onsubmit="p8.assign(event)" class="flex flex-wrap items-end gap-2">' +
+          '<input name="e" type="email" dir="ltr" required placeholder="إيميل الحساب" class="field !w-56 !py-2 text-xs">' +
+          '<input name="n" required placeholder="اسم المنفذ (مثال: سعد)" class="field !w-44 !py-2 text-xs">' +
+          '<select name="r" class="field !w-36 !py-2 text-xs"><option value="partner">منفذ خارجي</option><option value="staff">موظف داخلي</option></select>' +
+          '<button class="rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-slate-950">ربط الحساب</button>' +
+        '</form>' +
+      '</div>' +
+      (ps.length
+        ? '<div class="card flex flex-wrap items-center justify-between gap-2 p-3">' +
+            '<div class="flex flex-wrap items-center gap-2">' +
+              '<label class="text-xs font-semibold">معاينة شاشة المنفذ:</label>' +
+              '<select onchange="p8.pick(this.value)" class="field !w-64 !py-2 text-xs">' +
+                ps.map(p => '<option value="' + p.user_id + '"' + (p.user_id === cur ? ' selected' : '') + '>' + eh((p.partner_name || 'بدون اسم') + ' (' + p.email + ')') + '</option>').join('') +
+              '</select>' +
+            '</div>' +
+            '<button type="button" onclick="p8.remove()" class="rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 dark:bg-rose-950/40"><i class="fa-solid fa-user-slash ms-1"></i>إيقاف الحساب</button>' +
+          '</div>' +
+          '<div id="p8-mgr" class="space-y-4"></div>'
+        : '<div class="card p-6 text-center text-xs text-slate-400">لا يوجد منفذون خارجيون مربوطون حالياً</div>');
+    if (cur) opsView($('p8-mgr'), cur, true, curObj && curObj.partner_name);
+  }
+  p8.pick = v => { cur = v; renderPartners(); };
+  p8.assign = async e => {
+    e.preventDefault(); const f = e.target.elements;
+    const r = await sbClient.rpc('assign_role', { p_email: f.e.value.trim(), p_role: f.r.value, p_name: f.n.value.trim() || null });
+    if (r.error) return showToast(/no such account/.test(r.error.message) ? 'مفيش حساب بالإيميل ده في Supabase' : 'تعذّر الربط: ' + r.error.message, 'error', 8000);
+    showToast('تم ربط حساب المنفذ بنجاح'); renderPartners();
+  };
+  p8.remove = async () => {
+    if (!cur || !confirm('إيقاف الحساب ده؟ مش هيقدر يدخل تاني.')) return;
+    const r = await sbClient.rpc('remove_role', { p_user: cur }); if (r.error) return showError('تعذّر الإيقاف', r.error); cur = null; renderPartners();
+  };
+})();
+
+/* ===== قايمة التابات (التلات شرط) ===== */
+(function () {
+  const $m = () => document.getElementById('nav-menu'), $b = () => document.getElementById('menu-btn');
+  const idle = 'relative rounded-xl p-2.5 transition text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800', act = 'relative rounded-xl p-2.5 transition bg-ink text-white dark:bg-brand-600 shadow-sm';
+  function close() { const m = $m(); if (m && !m.classList.contains('hidden')) { m.classList.add('hidden'); $b().setAttribute('aria-expanded', 'false'); } }
+  window.closeNavMenu = close;
+  window.toggleNavMenu = function (e) {
+    if (e) e.stopPropagation();
+    const p1 = document.getElementById('ub-panel'); if (p1) p1.classList.add('hidden');
+    const p2 = document.getElementById('nt-panel'); if (p2) p2.classList.add('hidden');
+    const m = $m(); if (!m) return;
+    const open = m.classList.toggle('hidden') === false;
+    $b().setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  document.addEventListener('click', function (e) { if (!e.target.closest('#menu-wrap') || e.target.closest('#nav-menu .tab-btn')) close(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  const _st = window.switchTab;
+  window.switchTab = function (id) {
+    const r = _st.apply(this, arguments);
+    const b = $b(), tb = document.getElementById('tab-' + id + '-btn');
+    if (b) b.className = (tb && tb.closest('#nav-menu')) ? act : idle;
+    return r;
+  };
+  function dot() { const d = document.getElementById('menu-dot'); if (d) d.classList.toggle('hidden', !document.querySelector('#nav-menu #late-badge:not(.hidden), #nav-menu #tk-badge:not(.hidden)')); }
+  setInterval(dot, 2000);
+})();
+```
