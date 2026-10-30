@@ -51,6 +51,23 @@
     home.classList.remove('r-enter'); void home.offsetWidth; home.classList.add('r-enter');
     home.querySelectorAll('.hm-kpi-box > div.text-base').forEach(countUp);
   }
+
+  /* 3) ألوان الرسوم البيانية (Chart.js) تتوافق مع الهوية — بتتطبق عند كل تحديث للرسم */
+  (function chartTheme(n) {
+    if (typeof Chart === 'undefined') { if (n < 40) setTimeout(function () { chartTheme(n + 1); }, 250); return; }
+    var M = { '#0d9488': '#ff9d6c', '#2563eb': '#5fd3b3', '#3b82f6': '#5fd3b3', '#8b5cf6': '#e8c878', '#f59e0b': '#ff7a3d', '#ec4899': '#ff6b6b', '#10b981': '#5fd3b3', '#64748b': '#6f675f',
+      'rgba(13,148,136,.14)': 'rgba(255,157,108,.16)', 'rgba(13, 148, 136, 0.14)': 'rgba(255,157,108,.16)' };
+    function mc(c) { if (Array.isArray(c)) return c.map(mc); return typeof c === 'string' && M[c.toLowerCase()] ? M[c.toLowerCase()] : c; }
+    try { Chart.defaults.color = '#a0978e'; Chart.defaults.font.family = "'IBM Plex Sans Arabic', sans-serif"; } catch (e) { /* */ }
+    Chart.register({ id: 'reelsTheme', beforeUpdate: function (ch) {
+      if (!document.documentElement.classList.contains('dark')) return;
+      ch.data.datasets.forEach(function (d) {
+        if (d.borderColor) d.borderColor = mc(d.borderColor);
+        if (d.backgroundColor) d.backgroundColor = mc(d.backgroundColor);
+      });
+    } });
+  })(0);
+
   var _r = window.renderHomeTab;
   if (typeof _r === 'function') window.renderHomeTab = function () { var r = _r.apply(this, arguments); try { decorateHome(); } catch (e) { /* */ } return r; };
 })();
