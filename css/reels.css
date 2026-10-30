@@ -179,3 +179,54 @@ body.reels #tasahel-3d-overlay .t3d-logo-box img { height: 54px; width: auto; ma
 }
 body.reels #tasahel-3d-overlay .t3d-title { display: none !important; }  /* اللوجو فيه الاسم */
 @media (max-width: 767px) { body.reels #app > footer { display: none !important; } }
+
+/* ==========================================================================
+   المعاملات: حالات بلون واحد متناسق، بدون توهج، كروت موبايل أخف
+   ========================================================================== */
+html.dark body.reels .st17-b[data-s="In Progress"] { --sc: 255,157,108; --sct: 255,190,150; }
+html.dark body.reels .st17-b[data-s="Under Review"] { --sc: 232,200,120; --sct: 240,220,150; }
+html.dark body.reels .st17-b[data-s="Complete"] { --sc: 95,211,179; --sct: 150,235,215; }
+html.dark body.reels .st17-b[data-s="Delivered"] { --sc: 130,200,140; --sct: 180,230,185; }
+html.dark body.reels [data-st-bar] { --stc: 255,157,108; }
+html.dark body.reels [data-st-bar="late"] { --stc: 255,107,107; }
+html.dark body.reels [data-st-bar="ready"] { --stc: 95,211,179; }
+html.dark body.reels [data-st-bar="done"] { --stc: 130,200,140; }
+html.dark body.reels #recent-cards-container > [data-st-bar]::before { box-shadow: none !important; width: 4px; }
+html.dark body.reels [data-st17]:not(.tx-row-selected), html.dark body.reels .f16-disc:not(.tx-row-selected), html.dark body.reels .f16-cmt:not(.tx-row-selected) { background-image: none !important; }
+html.dark body.reels .rc-tx-pill { background: var(--r-card-2) !important; color: var(--r-acc) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; }
+html.dark body.reels .rc-svc-pill, html.dark body.reels .rc-phone-pill { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; color: var(--r-text) !important; }
+html.dark body.reels .rc-svc-qty { background: rgba(255,157,108,.16) !important; color: var(--r-acc) !important; box-shadow: none !important; }
+html.dark body.reels #tab-tx .grid > .card i { color: var(--r-mute) !important; }
+html.dark body.reels #tab-tx thead { background: transparent !important; }
+html.dark body.reels #tab-tx tbody tr:hover { background: var(--r-card) !important; }
+html.dark body.reels .tx-row-selected { background: rgba(255,157,108,.1) !important; }
+html.dark body.reels #tab-tx .divide-y > :not([hidden]) ~ :not([hidden]) { border-color: var(--r-line) !important; }
+
+@media (max-width: 767px) {
+  html.dark body.reels #tx-list-col { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; overflow: visible; }
+  html.dark body.reels #recent-cards-container { display: flex; flex-direction: column; gap: .7rem; padding: 0 !important; }
+  html.dark body.reels #recent-cards-container > .card { padding: .9rem 1rem !important; }
+  html.dark body.reels #tab-tx .grid.grid-cols-2 { gap: .6rem; }
+  html.dark body.reels #tab-tx .grid.grid-cols-2 > .card { padding: .65rem .8rem !important; }
+  html.dark body.reels #tab-tx .grid.grid-cols-2 > .card > div:last-child { font-size: 1.35rem; margin-top: .15rem; }
+  html.dark body.reels #tx-status-chips { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; width: 100%; padding-bottom: 2px; }
+  html.dark body.reels #tx-status-chips::-webkit-scrollbar { display: none; }
+  html.dark body.reels #tx-status-chips > * { flex-shrink: 0; }
+  html.dark body.reels #tab-tx input[type="date"] { min-width: 0; flex: 1 1 0; }
+}
+
+/* ==========================================================================
+   القائمة الجانبية (المزيد): زجاج داكن بدون ألوان أيقونات متعددة
+   ========================================================================== */
+html.dark body.reels #nav-menu {
+  background: rgba(20,18,16,.94) !important; border: 1px solid var(--r-line) !important; border-radius: 1.2rem !important;
+  box-shadow: 0 24px 60px -18px rgba(0,0,0,.8) !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+}
+html.dark body.reels #nav-menu .tab-btn { color: var(--r-text) !important; border-radius: .8rem !important; background: transparent !important; border-color: transparent !important; box-shadow: none !important; }
+html.dark body.reels #nav-menu .tab-btn i { color: var(--r-mute) !important; transition: color .2s ease; }
+html.dark body.reels #nav-menu .tab-btn:hover { background: var(--r-card-2) !important; }
+html.dark body.reels #nav-menu .tab-btn:hover i { color: var(--r-acc) !important; }
+html.dark body.reels #nav-menu .tab-btn.bg-ink { background: rgba(255,157,108,.14) !important; color: var(--r-acc) !important; box-shadow: none !important; }
+html.dark body.reels #nav-menu .tab-btn.bg-ink i { color: var(--r-acc) !important; }
+html.dark body.reels #nav-menu .text-slate-400, html.dark body.reels #nav-menu hr { color: var(--r-mute) !important; border-color: var(--r-line) !important; }
+html.dark body.reels #nav-menu .r-logout-menu.text-rose-400, html.dark body.reels #nav-menu .r-logout-menu.text-rose-400 i { color: var(--r-bad) !important; }
