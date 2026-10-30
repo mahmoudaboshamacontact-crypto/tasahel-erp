@@ -292,7 +292,7 @@
       if (ok && weekLate(me, weekStart(today())) === LATE_ALERT) notifyManager('تأخير متكرر', nameOf(me) + ' اتأخر ' + LATE_ALERT + ' أيام هذا الأسبوع');
       return;
     }
-    if (!r.check_out) return run(sbClient.rpc('hr_punch_out', { p_id: r.id }), 'تم تسجيل الانصراف');
+    if (!r.check_out) return run(sbClient.from('hr_attendance').update({ check_out: d.toISOString() }).eq('id', r.id), 'تم تسجيل الانصراف'); // الوقت الفعلي يحدده trigger السيرفر (p0-security.sql)
   };
   hr.lockMonth = async () => {
     if (!locksOK || lock) return;

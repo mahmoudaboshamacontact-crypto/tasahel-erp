@@ -1,0 +1,126 @@
+/* ==========================================================================
+   Reels theme — هوية تساهيل الجديدة (حبر دافئ + برتقالي + زجاج خفيف)
+   معزولة بالكامل: تشتغل فقط لما body.reels موجودة (js/39-reels-ui.js).
+   للرجوع للشكل القديم: شيل ملف css/reels.css من index.html أو شيل class "reels".
+   دارك فقط حاليا. بدون أنيميشن مستمر. blur على الهيدر فقط.
+   ========================================================================== */
+html.dark body.reels {
+  --r-bg: #0e0d0c; --r-card: rgba(255,255,255,.045); --r-card-2: rgba(255,255,255,.07);
+  --r-line: rgba(255,255,255,.09); --r-text: #f4eee8; --r-mute: #a0978e;
+  --r-acc: #ff9d6c; --r-acc2: #ff7a3d; --r-ok: #5fd3b3; --r-bad: #ff6b6b;
+  --r-ease: cubic-bezier(.34,1.4,.5,1);
+  background:
+    radial-gradient(900px 520px at 85% -8%, rgba(255,140,80,.13), transparent 65%),
+    radial-gradient(700px 480px at 5% 105%, rgba(255,140,80,.07), transparent 60%),
+    var(--r-bg) !important;
+  background-attachment: fixed !important;
+  color: var(--r-text) !important;
+}
+
+/* ---------- الهيدر ---------- */
+html.dark body.reels .ts-header {
+  background: rgba(14,13,12,.72) !important; border-bottom: 1px solid var(--r-line) !important;
+  backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+html.dark body.reels .ts-brand-box { gap: .7rem; }
+html.dark body.reels #hdr-brand-logo { height: 2rem; opacity: .96; }
+html.dark body.reels .ts-brand-sep { background: var(--r-line) !important; }
+html.dark body.reels #hdr-clock-slot .gl-clock { border-color: var(--r-line); color: var(--r-text); }
+
+/* ---------- شريط التنقل: كبسولة بحبة منزلقة ---------- */
+html.dark body.reels #hdr-shortcuts {
+  position: relative; display: flex; align-items: center; gap: 2px; padding: 4px;
+  border-radius: 999px; background: var(--r-card); border: 1px solid var(--r-line);
+}
+html.dark body.reels #hdr-shortcuts .tab-btn {
+  position: relative; z-index: 1; border-radius: 999px !important; background: transparent !important;
+  border-color: transparent !important; box-shadow: none !important; color: var(--r-mute) !important;
+  padding: .45rem .95rem; transition: color .25s ease;
+}
+html.dark body.reels #hdr-shortcuts .tab-btn:hover { color: var(--r-text) !important; }
+html.dark body.reels #hdr-shortcuts .tab-btn.bg-ink { color: #1b1511 !important; }
+html.dark body.reels #hdr-shortcuts .tab-btn i { font-size: .8rem; }
+html.dark body.reels .r-pill {
+  position: absolute; top: 4px; bottom: 4px; z-index: 0; border-radius: 999px; pointer-events: none;
+  background: linear-gradient(135deg, var(--r-acc), var(--r-acc2));
+  box-shadow: 0 6px 18px -6px rgba(255,122,61,.55);
+  transition: inset-inline-start .45s var(--r-ease), width .45s var(--r-ease);
+}
+html.dark body.reels .ts-hdr-icon-btn, html.dark body.reels .ts-user-pill {
+  background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important;
+}
+html.dark body.reels .ts-logout-btn { background: transparent !important; border: 1px solid var(--r-line) !important; color: var(--r-mute) !important; }
+html.dark body.reels .ts-logout-btn:hover { color: var(--r-bad) !important; border-color: rgba(255,107,107,.4) !important; }
+
+/* ---------- الرئيسية: ترحيب كبير + KPI ---------- */
+html.dark body.reels #tab-home .hm-hero {
+  background: transparent !important; border: 0 !important; box-shadow: none !important; padding: .4rem .1rem 0;
+  overflow: visible;
+}
+html.dark body.reels #tab-home .hm-hero h1 { font-size: clamp(1.7rem, 4.2vw, 2.6rem) !important; font-weight: 700; letter-spacing: -.01em; line-height: 1.15; }
+html.dark body.reels #tab-home .hm-hero h1 .r-acc { color: var(--r-acc); }
+html.dark body.reels #tab-home .hm-hero p { color: var(--r-mute) !important; font-size: .85rem !important; margin-top: .35rem; }
+html.dark body.reels #tab-home .hm-kpi-box {
+  background: var(--r-card) !important; border: 1px solid var(--r-line) !important; border-radius: 1.1rem !important;
+  padding: 1rem 1.1rem !important; transition: transform .35s var(--r-ease), border-color .2s ease, background-color .2s ease;
+}
+html.dark body.reels #tab-home .hm-kpi-box:hover { transform: translateY(-3px); border-color: rgba(255,157,108,.4) !important; background: var(--r-card-2) !important; }
+html.dark body.reels #tab-home .hm-kpi-box .text-slate-400, html.dark body.reels #tab-home .hm-kpi-box .text-slate-300 { color: var(--r-mute) !important; font-size: .72rem; }
+html.dark body.reels #tab-home .hm-kpi-box > div.text-base { color: var(--r-text) !important; font-variant-numeric: tabular-nums; }
+html.dark body.reels #tab-home .hm-kpi-box .text-violet-300 { color: var(--r-acc) !important; }
+html.dark body.reels #tab-home .hm-kpi-box .text-emerald-300 { color: var(--r-ok) !important; }
+
+/* ---------- كروت الأقسام: أيقونات موحدة بدل قوس قزح ---------- */
+html.dark body.reels #app .hm-nav-card, html.dark body.reels #app .hm-emp-card, html.dark body.reels #app .card {
+  background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important;
+  border-radius: 1.1rem !important; backdrop-filter: none !important;
+}
+html.dark body.reels #app .hm-nav-card { transition: transform .35s var(--r-ease), border-color .2s ease, background-color .2s ease; }
+html.dark body.reels #app .hm-nav-card:hover { transform: translateY(-3px); border-color: rgba(255,157,108,.4) !important; background: var(--r-card-2) !important; }
+html.dark body.reels #app .hm-nav-icon {
+  background: rgba(255,157,108,.12) !important; color: var(--r-acc) !important; border-radius: .8rem !important; box-shadow: none !important;
+}
+html.dark body.reels #app .hm-nav-card:hover .hm-nav-icon { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; }
+html.dark body.reels #app .hm-nav-card .text-violet-400, html.dark body.reels #app .group:hover .group-hover\:text-violet-400 { color: var(--r-acc) !important; }
+html.dark body.reels #app .text-ink { color: var(--r-text) !important; }
+
+/* ---------- حركة الدخول (مرة واحدة عند فتح الصفحة) ---------- */
+@keyframes r-in { from { opacity: 0; transform: translateY(10px); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+html.dark body.reels #tab-home.r-enter > * { animation: r-in .5s var(--r-ease) both; }
+html.dark body.reels #tab-home.r-enter > *:nth-child(2) { animation-delay: .06s; }
+html.dark body.reels #tab-home.r-enter > *:nth-child(3) { animation-delay: .12s; }
+html.dark body.reels #tab-home.r-enter > *:nth-child(4) { animation-delay: .18s; }
+@media (prefers-reduced-motion: reduce) {
+  html.dark body.reels *, html.dark body.reels .r-pill { animation: none !important; transition: none !important; }
+}
+@media (max-width: 767px) { html.dark body.reels #hdr-shortcuts { display: none; } }
+
+/* ---------- تنظيف البنفسجي: كل درجات violet/purple/indigo ← البرتقالي ---------- */
+html.dark body.reels #tab-home .hm-hero .grid { margin-top: 1.3rem; gap: .75rem !important; }
+html.dark body.reels .fl-stage-wrap { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+html.dark body.reels .fl-card { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; border-radius: 1.1rem !important; }
+html.dark body.reels .fl-card:hover { border-color: rgba(255,157,108,.4) !important; transform: translateY(-3px); }
+html.dark body.reels .btn-neo-pri, html.dark body.reels .bg-violet-600, html.dark body.reels .bg-violet-500,
+html.dark body.reels .bg-ink, html.dark body.reels .dark\:bg-brand-600, html.dark body.reels .tab-btn.bg-ink {
+  background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important;
+  border-color: transparent !important; box-shadow: 0 6px 18px -8px rgba(255,122,61,.6) !important;
+}
+html.dark body.reels [class*="from-violet"], html.dark body.reels [class*="from-purple"], html.dark body.reels [class*="from-indigo"] {
+  background-image: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important;
+}
+html.dark body.reels [class*="text-violet-"]:not([class*="hover:"]), html.dark body.reels [class*="text-purple-"]:not([class*="hover:"]), html.dark body.reels [class*="text-indigo-"]:not([class*="hover:"]) { color: var(--r-acc) !important; }
+html.dark body.reels [class*="border-violet"], html.dark body.reels [class*="border-purple"] { border-color: rgba(255,157,108,.35) !important; }
+html.dark body.reels [class*="bg-violet-50"], html.dark body.reels [class*="bg-violet-950"], html.dark body.reels [class*="bg-violet-100"],
+html.dark body.reels [class*="bg-purple-"], html.dark body.reels [class*="bg-indigo-"] { background-color: rgba(255,157,108,.12) !important; }
+html.dark body.reels a, html.dark body.reels .hover\:text-brand-600:hover { --r-x: 0; }
+html.dark body.reels input:focus, html.dark body.reels select:focus, html.dark body.reels textarea:focus, html.dark body.reels .field:focus {
+  border-color: var(--r-acc) !important; box-shadow: 0 0 0 3px rgba(255,157,108,.18) !important; outline: none !important;
+}
+html.dark body.reels ::selection { background: rgba(255,157,108,.35); }
+
+/* شرائح الفلتر + روابط */
+html.dark body.reels .tx-flt-chip { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; color: var(--r-mute) !important; border-radius: 999px !important; box-shadow: none !important; }
+html.dark body.reels .tx-flt-chip:hover { color: var(--r-text) !important; border-color: rgba(255,157,108,.4) !important; }
+html.dark body.reels .tx-flt-chip.on { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; border-color: transparent !important; }
+html.dark body.reels .ts-brand-box a { color: var(--r-mute) !important; }
+html.dark body.reels .ts-brand-sub .font-mono { color: var(--r-acc) !important; }
