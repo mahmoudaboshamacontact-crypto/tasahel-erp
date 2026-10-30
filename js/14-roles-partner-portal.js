@@ -1,4 +1,3 @@
-javascript
 /* ===== المرحلة 8 (محدثة وتفاعلية بالكامل): بوابة المنفذ الخارجي المعزولة ===== */
 (function () {
   if (window.__phase8) return; window.__phase8 = true;
@@ -818,4 +817,3 @@ javascript
   function dot() { const d = document.getElementById('menu-dot'); if (d) d.classList.toggle('hidden', !document.querySelector('#nav-menu #late-badge:not(.hidden), #nav-menu #tk-badge:not(.hidden)')); }
   setInterval(dot, 2000);
 })();
-```
