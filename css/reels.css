@@ -338,3 +338,46 @@ html.dark body.reels .nop-step-dot { background: var(--r-card-2) !important; col
 html.dark body.reels .nop-step-pill.active .nop-step-dot { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; }
 html.dark body.reels .label { color: var(--r-mute) !important; }
 html.dark body.reels #app :is([class~="text-brand-400"], [class~="text-brand-500"], [class~="text-brand-600"], [class~="text-brand-700"], [class~="dark:text-brand-300"], [class~="dark:text-brand-400"]):not(.tab-btn) { color: var(--r-acc) !important; }
+
+/* ==========================================================================
+   بوابة المنفذ الخارجي (#partner-app): هيدر نضيف + مسافات أوسع + تحميل المزيد
+   ========================================================================== */
+html.dark body.reels #partner-app { background: radial-gradient(900px 520px at 85% -8%, rgba(255,140,80,.12), transparent 65%), var(--r-bg) !important; color: var(--r-text); }
+html.dark body.reels #partner-app > header { background: rgba(14,13,12,.78) !important; border-bottom: 1px solid var(--r-line); box-shadow: none !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+html.dark body.reels #partner-app > header > div { padding-block: 1rem !important; }
+html.dark body.reels #partner-app .p8-logo { height: 2.1rem; width: auto; }
+html.dark body.reels #partner-app > header .text-emerald-300 { color: var(--r-acc) !important; font-weight: 600; }
+html.dark body.reels #partner-app > header button { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; border-radius: 999px !important; color: var(--r-mute) !important; }
+html.dark body.reels #p8-main { display: flex; flex-direction: column; gap: 1.4rem; padding-block: 1.6rem !important; }
+html.dark body.reels #p8-main > * { margin: 0 !important; }
+html.dark body.reels #partner-app .card { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; border-radius: 1.2rem !important; }
+html.dark body.reels #partner-app .card.p-4 { padding: 1.15rem 1.25rem !important; }
+html.dark body.reels #partner-app .partner-kpi-clickable:hover { transform: translateY(-3px); border-color: rgba(255,157,108,.4) !important; box-shadow: none !important; }
+html.dark body.reels #partner-app .partner-kpi-clickable.is-active { border-color: var(--r-acc) !important; background: rgba(255,157,108,.1) !important; box-shadow: none !important; }
+html.dark body.reels #partner-app .grid { gap: 1rem !important; }
+html.dark body.reels #partner-app thead { background: transparent !important; }
+html.dark body.reels #partner-app thead th { padding: .95rem 1rem !important; color: var(--r-mute) !important; font-weight: 600; letter-spacing: .01em; }
+html.dark body.reels #partner-app tbody td { padding: 1.05rem 1rem !important; }
+html.dark body.reels #partner-app tbody tr:hover { background: var(--r-card) !important; }
+html.dark body.reels #partner-app .divide-y > :not([hidden]) ~ :not([hidden]) { border-color: var(--r-line) !important; }
+html.dark body.reels #partner-app tbody td > .flex, html.dark body.reels #partner-app tbody td .space-y-1 > * + * { margin-top: .4rem; }
+html.dark body.reels #p8-main [id$="-cards"] { display: flex; flex-direction: column; gap: 1rem; }
+html.dark body.reels #p8-main [id$="-cards"] > .card { padding: 1.1rem 1.2rem !important; }
+html.dark body.reels #p8-main [id$="-cards"] > .card > * + * { margin-top: .85rem; }
+html.dark body.reels .p8-act { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; color: var(--r-text) !important; border-radius: 999px !important; padding: .45rem .95rem !important; font-size: .75rem; font-weight: 700; transition: border-color .2s ease, color .2s ease; }
+html.dark body.reels .p8-act:hover { border-color: rgba(255,157,108,.5) !important; color: var(--r-acc) !important; }
+html.dark body.reels .p8-more-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 220px; padding: .85rem 1.6rem; border-radius: 999px; font-weight: 700; font-size: .85rem;
+  background: var(--r-card-2); color: var(--r-acc); border: 1px solid rgba(255,157,108,.45); cursor: pointer; transition: background .2s ease, transform .3s var(--r-ease); }
+html.dark body.reels .p8-more-btn:hover:not(:disabled) { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)); color: #1b1511; transform: translateY(-2px); }
+html.dark body.reels .p8-more-btn:disabled { opacity: .7; cursor: wait; }
+@media (max-width: 767px) { html.dark body.reels .p8-more-btn { width: 100%; } html.dark body.reels #p8-main { padding-inline: .9rem !important; gap: 1.1rem; } }
+@media print { body.is-partner-mode > :not(#partner-app) { display: none !important; } }
+html.dark body.reels #partner-tx-modal { background: rgba(8,7,6,.72) !important; }
+html.dark body.reels #partner-tx-modal > div { background: #151311 !important; border: 1px solid var(--r-line) !important; box-shadow: 0 30px 80px -20px rgba(0,0,0,.85) !important; border-radius: 1.4rem !important; }
+html.dark body.reels #partner-tx-modal > div > div { border-color: var(--r-line) !important; background: transparent !important; }
+html.dark body.reels #partner-tx-modal [class*="rounded-xl"][class*="bg-brand-"], html.dark body.reels #partner-tx-modal [class*="bg-slate-50"], html.dark body.reels #partner-tx-modal [class*="dark:bg-slate-800/"], html.dark body.reels #partner-tx-modal [class*="dark:bg-slate-950/"] { background-color: var(--r-card) !important; }
+html.dark body.reels #partner-tx-modal span[class*="bg-brand-500"] { background: rgba(255,157,108,.16) !important; color: var(--r-acc) !important; }
+html.dark body.reels #partner-tx-modal button[class*="bg-brand-"] { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; border-color: transparent !important; }
+html.dark body.reels #partner-app button, html.dark body.reels #partner-app a { --r-btn: 1; }
+html.dark body.reels :is(#partner-app, #partner-tx-modal) :is([class~="text-brand-400"], [class~="text-brand-500"], [class~="text-brand-600"], [class~="text-brand-700"], [class~="dark:text-brand-300"], [class~="dark:text-brand-400"], [class*="violet-300"], [class*="violet-400"]):not([class*="hover:text"]) { color: var(--r-acc) !important; }
+html.dark body.reels #partner-tx-modal button[onclick*="closeDetail"] { background: var(--r-card-2) !important; color: var(--r-text) !important; border: 1px solid var(--r-line) !important; }
