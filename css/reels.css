@@ -337,4 +337,4 @@ html.dark body.reels .nop-step-pill.active { background: rgba(255,157,108,.12) !
 html.dark body.reels .nop-step-dot { background: var(--r-card-2) !important; color: var(--r-text) !important; box-shadow: none !important; }
 html.dark body.reels .nop-step-pill.active .nop-step-dot { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; }
 html.dark body.reels .label { color: var(--r-mute) !important; }
-html.dark body.reels #app :is([class~="text-brand-400"], [class~="text-brand-500"], [class~="text-brand-600"], [class~="text-brand-700"], [class~="dark:text-brand-300"], [class~="dark:text-brand-400"]):not(button):not(a.tab-btn) { color: var(--r-acc) !important; }
+html.dark body.reels #app :is([class~="text-brand-400"], [class~="text-brand-500"], [class~="text-brand-600"], [class~="text-brand-700"], [class~="dark:text-brand-300"], [class~="dark:text-brand-400"]):not(.tab-btn) { color: var(--r-acc) !important; }
