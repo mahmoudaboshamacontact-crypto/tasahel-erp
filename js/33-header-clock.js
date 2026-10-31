@@ -8,7 +8,7 @@
   function mode() { try { return localStorage.getItem(KEY) === 'analog' ? 'analog' : 'digital'; } catch (e) { return 'digital'; } }
   function setMode(m) { try { localStorage.setItem(KEY, m); } catch (e) {} }
   var fT = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-  var fD = new Intl.DateTimeFormat('ar-EG', { timeZone: TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  var fD = new Intl.DateTimeFormat('ar-EG', { timeZone: TZ, weekday: 'long', day: 'numeric', month: 'long' });
   function parts(d) { var p = fT.format(d).split(':'); return [+p[0], +p[1], +p[2]]; }
   function build() {
     if (!el) return;
@@ -33,8 +33,15 @@
     var h12 = (p[0] % 12) || 12;
     var mStr = (p[1] < 10 ? '0' : '') + p[1];
     var sStr = (p[2] < 10 ? '0' : '') + p[2];
-    var ampm = p[0] < 12 ? 'صباحاً' : 'مساءً';
-    if (t) t.textContent = h12 + ':' + mStr + ':' + sStr + ' ' + ampm;
+    var ampm = p[0] < 12 ? 'AM' : 'PM';
+    if (t) {
+      if (!t.firstChild || !t.querySelector('.gc-hm')) t.innerHTML = '<span class="gc-hm"></span><span class="gc-sec"></span><span class="gc-ap"></span>';
+      var hm = h12 + ':' + mStr, a = t.querySelector('.gc-hm'), b = t.querySelector('.gc-sec'), c = t.querySelector('.gc-ap');
+      if (a.textContent !== hm) a.textContent = hm;
+      b.textContent = ':' + sStr;
+      if (c.textContent !== ampm) c.textContent = ampm;
+      t.setAttribute('aria-label', h12 + ':' + mStr + ' ' + ampm);
+    }
     var rot = function (c, a) { var n = el.querySelector(c); if (n) n.setAttribute('transform', 'rotate(' + a + ' 22 22)'); };
     rot('.gc-h', (p[0] % 12) * 30 + p[1] * 0.5);
     rot('.gc-m', p[1] * 6 + p[2] * 0.1);
