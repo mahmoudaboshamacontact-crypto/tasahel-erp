@@ -381,3 +381,8 @@ html.dark body.reels #partner-tx-modal button[class*="bg-brand-"] { background: 
 html.dark body.reels #partner-app button, html.dark body.reels #partner-app a { --r-btn: 1; }
 html.dark body.reels :is(#partner-app, #partner-tx-modal) :is([class~="text-brand-400"], [class~="text-brand-500"], [class~="text-brand-600"], [class~="text-brand-700"], [class~="dark:text-brand-300"], [class~="dark:text-brand-400"], [class*="violet-300"], [class*="violet-400"]):not([class*="hover:text"]) { color: var(--r-acc) !important; }
 html.dark body.reels #partner-tx-modal button[onclick*="closeDetail"] { background: var(--r-card-2) !important; color: var(--r-text) !important; border: 1px solid var(--r-line) !important; }
+
+/* لوجو بوابة المنفذ: حجم ثابت في أي ثيم (كان بيكبر لو الثيم الفاتح) */
+.p8-logo { height: 2.1rem; width: auto; max-width: 160px; object-fit: contain; }
+html.dark body.reels :is(#partner-app, #partner-tx-modal) :is([class~="text-brand-500"], [class~="text-brand-600"], [class~="text-brand-700"], [class~="dark:text-brand-300"], [class~="dark:text-brand-400"]) { color: var(--r-acc) !important; }
+html.dark body.reels :is(#partner-app, #partner-tx-modal) :is([class*="dark:bg-slate-800"], [class*="dark:bg-slate-950"], [class*="dark:bg-violet-950"], [class*="bg-violet-100"]):not(input):not(select) { background-color: var(--r-card-2) !important; }

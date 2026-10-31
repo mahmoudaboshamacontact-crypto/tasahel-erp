@@ -773,6 +773,7 @@
   function overlay(inner) {
     injectPartnerIsolationStyle();
     document.body.classList.add('is-partner-mode');
+    document.documentElement.classList.add('dark');   /* بوابة المنفذ بالثيم الداكن دايما (الشكل الجديد) */
     $('app').classList.add('hidden');
     $('login').classList.add('hidden');
     let o = $('partner-app');
@@ -811,6 +812,7 @@
   const _sl = window.showLoginScreen;
   window.showLoginScreen = function () {
     document.body.classList.remove('is-partner-mode');
+    try { if (typeof initTheme === 'function') initTheme(); } catch (e) { /* */ }
     const o = $('partner-app');
     if (o) o.classList.add('hidden');
     return _sl.apply(this, arguments);
