@@ -250,3 +250,91 @@ html.dark body.reels .dx-card i, html.dark body.reels #dsh-kpis i { color: var(-
 html.dark body.reels .dx-ins-row { background: var(--r-card) !important; }
 html.dark body.reels #tab-dash .text-brand-600, html.dark body.reels #tab-dash .bg-brand-500 { color: var(--r-acc) !important; }
 html.dark body.reels #tab-dash .bg-brand-500 { background: linear-gradient(90deg, var(--r-acc), var(--r-acc2)) !important; }
+
+/* ==========================================================================
+   المودالات (تفاصيل المعاملة وغيرها) + الستيبر + الحقول
+   ========================================================================== */
+html.dark body.reels .modal > div, html.dark body.reels .modal > section {
+  background: #151311 !important; border: 1px solid var(--r-line) !important; box-shadow: 0 30px 80px -20px rgba(0,0,0,.85) !important; border-radius: 1.4rem;
+}
+html.dark body.reels .modal { background: rgba(8,7,6,.7) !important; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+html.dark body.reels .modal .border-b, html.dark body.reels .modal .border-t { border-color: var(--r-line) !important; }
+html.dark body.reels .tx-ring-gauge-box { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; }
+html.dark body.reels .tx-stepper-track { background: var(--r-line) !important; }
+html.dark body.reels .tx-stepper-fill { background: linear-gradient(90deg, var(--r-acc), var(--r-acc2)) !important; box-shadow: none !important; }
+html.dark body.reels .tx-step-circle { background: var(--r-card-2) !important; border-color: var(--r-line) !important; box-shadow: none !important; }
+html.dark body.reels .tx-step-node.done .tx-step-circle { background: var(--r-acc) !important; border-color: var(--r-acc) !important; }
+html.dark body.reels .tx-step-node.current .tx-step-circle { background: var(--r-acc2) !important; border-color: rgba(255,157,108,.5) !important; box-shadow: 0 0 0 4px rgba(255,157,108,.16) !important; }
+html.dark body.reels .tx-step-label { color: var(--r-mute) !important; }
+html.dark body.reels .tx-step-node.done .tx-step-label, html.dark body.reels .tx-step-node.current .tx-step-label { color: var(--r-acc) !important; }
+html.dark body.reels .field, html.dark body.reels select, html.dark body.reels textarea, html.dark body.reels input:not([type="checkbox"]):not([type="radio"]) {
+  background: rgba(255,255,255,.04) !important; border-color: var(--r-line) !important; color: var(--r-text) !important;
+}
+html.dark body.reels .field::placeholder, html.dark body.reels input::placeholder, html.dark body.reels textarea::placeholder { color: #6f675f !important; }
+/* أزرار الإجراءات الملونة (كهرماني/تيل/زمردي/سماوي...) ← حيادية؛ الأساسي برتقالي */
+html.dark body.reels :is(button, a):is([class~="bg-amber-400"], [class~="bg-amber-500"], [class~="bg-amber-600"]),
+html.dark body.reels :is(button, a)[class*="bg-teal-"], html.dark body.reels :is(button, a)[class*="bg-emerald-6"], html.dark body.reels :is(button, a)[class*="bg-emerald-5"],
+html.dark body.reels :is(button, a)[class*="bg-sky-"], html.dark body.reels :is(button, a)[class*="bg-cyan-"], html.dark body.reels :is(button, a)[class*="bg-blue-"],
+html.dark body.reels :is(button, a)[class*="bg-fuchsia-"], html.dark body.reels :is(button, a)[class*="bg-brand-"] {
+  background: var(--r-card-2) !important; color: var(--r-text) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important;
+}
+html.dark body.reels :is(button, a):is([class~="bg-amber-400"], [class~="bg-amber-500"], [class~="bg-amber-600"]):hover, html.dark body.reels :is(button, a)[class*="bg-teal-"]:hover,
+html.dark body.reels :is(button, a)[class*="bg-emerald-6"]:hover, html.dark body.reels :is(button, a)[class*="bg-brand-"]:hover { border-color: rgba(255,157,108,.5) !important; color: var(--r-acc) !important; }
+html.dark body.reels .modal :is(button)[type="submit"], html.dark body.reels #tx-modal button[onclick*="Save"], html.dark body.reels #tx-modal button[onclick*="save"] {
+  background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; border-color: transparent !important;
+}
+/* دوائر الخطوات الرقمية (1 2 3 4) في صفحة طلب جديد */
+html.dark body.reels [class*="rounded-full"][class*="bg-violet"], html.dark body.reels [class*="rounded-full"][class*="bg-purple"],
+html.dark body.reels [class*="rounded-full"][class*="bg-indigo"] { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; }
+html.dark body.reels .tx-ring-gauge-box [stroke*="#"], html.dark body.reels .tx-ring-gauge-box circle:nth-of-type(2) { stroke: var(--r-acc); }
+
+html.dark body.reels .modal :is(div, span):is([class*="bg-brand-"], [class*="bg-teal-"]):not([class*="/"]) { background: rgba(255,157,108,.14) !important; color: var(--r-acc) !important; }
+html.dark body.reels .modal [class*="dark:bg-slate-900/"], html.dark body.reels .modal [class*="dark:bg-slate-800/"] { background-color: var(--r-card) !important; }
+html.dark body.reels .modal .bg-slate-50, html.dark body.reels .modal [class*="dark:bg-slate-800/40"] { background-color: transparent !important; }
+
+/* violet/purple/indigo text tokens (match even when the element also has hover: classes) */
+html.dark body.reels [class~="text-violet-200"],
+html.dark body.reels [class~="dark:text-violet-200"],
+html.dark body.reels [class~="text-violet-300"],
+html.dark body.reels [class~="dark:text-violet-300"],
+html.dark body.reels [class~="text-violet-400"],
+html.dark body.reels [class~="dark:text-violet-400"],
+html.dark body.reels [class~="text-violet-500"],
+html.dark body.reels [class~="dark:text-violet-500"],
+html.dark body.reels [class~="text-violet-600"],
+html.dark body.reels [class~="dark:text-violet-600"],
+html.dark body.reels [class~="text-violet-700"],
+html.dark body.reels [class~="dark:text-violet-700"],
+html.dark body.reels [class~="text-purple-200"],
+html.dark body.reels [class~="dark:text-purple-200"],
+html.dark body.reels [class~="text-purple-300"],
+html.dark body.reels [class~="dark:text-purple-300"],
+html.dark body.reels [class~="text-purple-400"],
+html.dark body.reels [class~="dark:text-purple-400"],
+html.dark body.reels [class~="text-purple-500"],
+html.dark body.reels [class~="dark:text-purple-500"],
+html.dark body.reels [class~="text-purple-600"],
+html.dark body.reels [class~="dark:text-purple-600"],
+html.dark body.reels [class~="text-purple-700"],
+html.dark body.reels [class~="dark:text-purple-700"],
+html.dark body.reels [class~="text-indigo-200"],
+html.dark body.reels [class~="dark:text-indigo-200"],
+html.dark body.reels [class~="text-indigo-300"],
+html.dark body.reels [class~="dark:text-indigo-300"],
+html.dark body.reels [class~="text-indigo-400"],
+html.dark body.reels [class~="dark:text-indigo-400"],
+html.dark body.reels [class~="text-indigo-500"],
+html.dark body.reels [class~="dark:text-indigo-500"],
+html.dark body.reels [class~="text-indigo-600"],
+html.dark body.reels [class~="dark:text-indigo-600"],
+html.dark body.reels [class~="text-indigo-700"],
+html.dark body.reels [class~="dark:text-indigo-700"] { color: var(--r-acc) !important; }
+
+/* طلب جديد: خطوات وليبلز وروابط */
+html.dark body.reels .step { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; box-shadow: none !important; }
+html.dark body.reels .nop-step-pill { background: var(--r-card) !important; border-color: var(--r-line) !important; box-shadow: none !important; }
+html.dark body.reels .nop-step-pill.active { background: rgba(255,157,108,.12) !important; border-color: rgba(255,157,108,.45) !important; }
+html.dark body.reels .nop-step-dot { background: var(--r-card-2) !important; color: var(--r-text) !important; box-shadow: none !important; }
+html.dark body.reels .nop-step-pill.active .nop-step-dot { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; }
+html.dark body.reels .label { color: var(--r-mute) !important; }
+html.dark body.reels #app :is([class~="text-brand-400"], [class~="text-brand-500"], [class~="text-brand-600"], [class~="text-brand-700"], [class~="dark:text-brand-300"], [class~="dark:text-brand-400"]):not(.tab-btn) { color: var(--r-acc) !important; }
