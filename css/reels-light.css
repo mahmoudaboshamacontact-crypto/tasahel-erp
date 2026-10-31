@@ -252,9 +252,9 @@ html:not(.dark) body.reels #tab-dash .bg-brand-500 { background: linear-gradient
    المودالات (تفاصيل المعاملة وغيرها) + الستيبر + الحقول
    ========================================================================== */
 html:not(.dark) body.reels .modal > div, html:not(.dark) body.reels .modal > section {
-  background: #151311 !important; border: 1px solid var(--r-line) !important; box-shadow: 0 30px 80px -20px rgba(0,0,0,.85) !important; border-radius: 1.4rem;
+  background: #fffdfb !important; border: 1px solid var(--r-line) !important; box-shadow: 0 30px 80px -24px rgba(90,45,10,.35) !important; border-radius: 1.4rem;
 }
-html:not(.dark) body.reels .modal { background: rgba(8,7,6,.7) !important; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+html:not(.dark) body.reels .modal { background: rgba(38,32,27,.45) !important; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 html:not(.dark) body.reels .modal .border-b, html:not(.dark) body.reels .modal .border-t { border-color: var(--r-line) !important; }
 html:not(.dark) body.reels .tx-ring-gauge-box { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; }
 html:not(.dark) body.reels .tx-stepper-track { background: var(--r-line) !important; }
@@ -265,9 +265,9 @@ html:not(.dark) body.reels .tx-step-node.current .tx-step-circle { background: v
 html:not(.dark) body.reels .tx-step-label { color: var(--r-mute) !important; }
 html:not(.dark) body.reels .tx-step-node.done .tx-step-label, html:not(.dark) body.reels .tx-step-node.current .tx-step-label { color: var(--r-acc) !important; }
 html:not(.dark) body.reels .field, html:not(.dark) body.reels select, html:not(.dark) body.reels textarea, html:not(.dark) body.reels input:not([type="checkbox"]):not([type="radio"]) {
-  background: rgba(255,255,255,.04) !important; border-color: var(--r-line) !important; color: var(--r-text) !important;
+  background: #fff !important; border-color: var(--r-line) !important; color: var(--r-text) !important;
 }
-html:not(.dark) body.reels .field::placeholder, html:not(.dark) body.reels input::placeholder, html:not(.dark) body.reels textarea::placeholder { color: #6f675f !important; }
+html:not(.dark) body.reels .field::placeholder, html:not(.dark) body.reels input::placeholder, html:not(.dark) body.reels textarea::placeholder { color: #a89a8c !important; }
 /* أزرار الإجراءات الملونة (كهرماني/تيل/زمردي/سماوي...) ← حيادية؛ الأساسي برتقالي */
 html:not(.dark) body.reels :is(button, a):is([class~="bg-amber-400"], [class~="bg-amber-500"], [class~="bg-amber-600"]),
 html:not(.dark) body.reels :is(button, a)[class*="bg-teal-"], html:not(.dark) body.reels :is(button, a)[class*="bg-emerald-6"], html:not(.dark) body.reels :is(button, a)[class*="bg-emerald-5"],
@@ -380,3 +380,14 @@ html:not(.dark) body.reels :is([class~="text-violet-600"],[class~="text-violet-7
 html:not(.dark) body.reels :is([class~="bg-violet-600"],[class~="bg-violet-700"],[class~="bg-brand-600"]):not(input){background:linear-gradient(135deg,var(--r-acc2),var(--r-acc))!important;color:#fff!important}
 html:not(.dark) body.reels :is([class~="bg-violet-50"],[class~="bg-violet-100"],[class~="bg-brand-50"]){background-color:rgba(255,122,61,.1)!important;color:var(--r-acc)!important}
 html:not(.dark) body.reels input[type=date]{color-scheme:light}
+
+/* نافذة التفاصيل في الفاتح */
+html:not(.dark) body.reels #tx-modal-body{background:transparent!important}
+html:not(.dark) body.reels .modal :is(.bg-slate-50,[class*="bg-slate-50"]){background-color:var(--r-card-2)!important}
+html:not(.dark) body.reels .modal .bg-slate-900{background:linear-gradient(135deg,#3a2a1e,#26201b)!important;color:#fff!important}
+html:not(.dark) body.reels .modal [class*="rounded-xl"][class*="border-slate"]{background:var(--r-card)!important;border-color:var(--r-line)!important}
+html:not(.dark) body.reels .modal [class*="bg-white"]{background-color:var(--r-card)!important}
+html:not(.dark) body.reels .modal textarea,html:not(.dark) body.reels .modal input:not([type=checkbox]){background:#fff!important;color:var(--r-text)!important;border:1px solid var(--r-line)!important}
+html:not(.dark) body.reels .modal .bg-slate-200,html:not(.dark) body.reels .modal [class*="bg-slate-100"]{background-color:var(--r-card-2)!important}
+
+html:not(.dark) body.reels [class~="inset-[5px]"]:not(#_a):not(#_b):not(#_c) { background: #fff !important; }

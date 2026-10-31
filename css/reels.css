@@ -427,3 +427,6 @@ html.dark body.reels .pf-name{color:var(--r-text)}
 html.dark body.reels :is([class*="dark:bg-slate-800"],[class*="dark:bg-slate-900"],[class*="dark:bg-slate-950"]):not(body):not(html):not(input):not(select):not(textarea):not(option):not(.modal):not(.modal *):not(#partner-app *) { background-color: var(--r-card) !important; border-color: var(--r-line) !important; }
 html.dark body.reels :is([class*="dark:border-slate-700"],[class*="dark:border-slate-800"]):not(input):not(select):not(textarea) { border-color: var(--r-line) !important; }
 html.dark body.reels :is([class*="dark:text-slate-400"],[class*="dark:text-slate-500"]):not(input) { color: var(--r-mute) !important; }
+
+/* دوائر التارجت: الدائرة الداخلية لازم تبقى مصمتة */
+html.dark body.reels [class~="inset-[5px]"]:not(#_a):not(#_b):not(#_c) { background: #1a1816 !important; border: 0 !important; }
