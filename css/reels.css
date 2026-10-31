@@ -144,7 +144,7 @@ body.reels #tasahel-3d-overlay .t3d-logo-box img { height: 54px; width: auto; ma
   .r-logout-menu { display: flex !important; }
   body.reels .ts-hdr-inner { display: flex !important; flex-wrap: nowrap !important; align-items: center; justify-content: space-between; gap: .5rem; padding-block: .45rem; }
   body.reels .ts-hdr-start { display: flex; align-items: center; gap: .6rem; min-width: 0; flex: 0 1 auto; }
-  body.reels .ts-brand-box > div.leading-tight, body.reels .ts-brand-sep, body.reels #hdr-clock-slot,
+  body.reels .ts-brand-links, body.reels .ts-brand-sep, body.reels #hdr-clock-slot,
   body.reels #hdr-theme-btn, body.reels #hdr-logout-btn, body.reels #user-display { display: none !important; }
   body.reels #hdr-brand-logo { height: 1.75rem; }
   body.reels .ts-hdr-end { display: flex; align-items: center; gap: .45rem; flex: 0 0 auto; }
@@ -386,3 +386,44 @@ html.dark body.reels #partner-tx-modal button[onclick*="closeDetail"] { backgrou
 .p8-logo { height: 2.1rem; width: auto; max-width: 160px; object-fit: contain; }
 html.dark body.reels :is(#partner-app, #partner-tx-modal) :is([class~="text-brand-500"], [class~="text-brand-600"], [class~="text-brand-700"], [class~="dark:text-brand-300"], [class~="dark:text-brand-400"]) { color: var(--r-acc) !important; }
 html.dark body.reels :is(#partner-app, #partner-tx-modal) :is([class*="dark:bg-slate-800"], [class*="dark:bg-slate-950"], [class*="dark:bg-violet-950"], [class*="bg-violet-100"]):not(input):not(select) { background-color: var(--r-card-2) !important; }
+
+
+/* ===== هوية الهيدر: أيقونات بدل النص ===== */
+.ts-brand-links{display:flex;align-items:center;gap:.45rem}
+.ts-chip{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;height:2rem;border-radius:999px;font-size:.78rem;transition:transform .25s cubic-bezier(.34,1.4,.5,1),box-shadow .25s,background .2s;text-decoration:none}
+.ts-chip:hover{transform:translateY(-2px) scale(1.06)}
+.ts-chip-fb{width:2rem;color:#fff;background:linear-gradient(145deg,#2f8bff,#1262e0);box-shadow:0 4px 12px rgba(24,119,242,.35)}
+.ts-chip-fb i{font-size:.95rem}
+.ts-chip-no{padding:0 .75rem;font-weight:800;background:rgba(15,23,42,.06);color:#0f172a}
+.ts-chip-no i{color:#16a34a;font-size:.8rem}
+.ts-chip-no b{font-family:ui-monospace,monospace;letter-spacing:.04em}
+html.dark body.reels .ts-chip-no{background:var(--r-card);border:1px solid var(--r-line);color:var(--r-text)}
+html.dark body.reels .ts-chip-no i{color:var(--r-acc)}
+html.dark body.reels .ts-chip-fb{background:linear-gradient(145deg,rgba(47,139,255,.95),rgba(18,98,224,.95));box-shadow:0 4px 14px rgba(24,119,242,.28)}
+
+/* ===== القوائم المنسدلة (select) في الداكن ===== */
+html.dark body.reels select{color-scheme:dark;background-color:var(--r-card-2);color:var(--r-text)}
+html.dark body.reels select option,html.dark body.reels select optgroup{background:#1b1917 !important;color:var(--r-text) !important}
+html.dark body.reels select option:checked,html.dark body.reels select option:hover{background:#ff7a3d !important;color:#1a0f08 !important}
+html.dark body.reels input[type=date],html.dark body.reels input[type=time],html.dark body.reels input[type=month]{color-scheme:dark}
+html.dark body.reels datalist option{background:#1b1917;color:var(--r-text)}
+
+/* ===== أداء الموظفين ===== */
+html.dark body.reels .pf-note{background:var(--r-card);border:1px solid var(--r-line);color:var(--r-mute);opacity:1}
+html.dark body.reels .pf-card{border-radius:1.25rem}
+html.dark body.reels .pf-st{background:var(--r-card);border:1px solid var(--r-line);border-radius:.9rem;transition:transform .25s var(--r-ease),background .2s}
+html.dark body.reels .pf-st:hover{transform:translateY(-2px);background:var(--r-card-2)}
+html.dark body.reels .pf-sv{color:var(--r-text);font-size:1.05rem}
+html.dark body.reels .pf-sl,html.dark body.reels .pf-ops,html.dark body.reels .pf-date,html.dark body.reels .pf-wkh{color:var(--r-mute);opacity:1}
+html.dark body.reels .pf-warn{background:rgba(255,107,107,.1);border-color:rgba(255,107,107,.28)}
+html.dark body.reels .pf-warn .pf-sv{color:var(--r-bad)}
+html.dark body.reels .pf-wk{border-top-color:var(--r-line);color:var(--r-text)}
+html.dark body.reels .pf-good{color:var(--r-ok)}html.dark body.reels .pf-bad{color:var(--r-bad)}
+html.dark body.reels .pf-btn{background:var(--r-card);border:1px solid var(--r-line);color:var(--r-text)}
+html.dark body.reels .pf-btn:hover{background:var(--r-card-2)}
+html.dark body.reels .pf-name{color:var(--r-text)}
+
+/* ===== مربعات slate الداكنة العامة (مهام، شات، موارد بشرية…) ===== */
+html.dark body.reels :is([class*="dark:bg-slate-800"],[class*="dark:bg-slate-900"],[class*="dark:bg-slate-950"]):not(body):not(html):not(input):not(select):not(textarea):not(option):not(.modal):not(.modal *):not(#partner-app *) { background-color: var(--r-card) !important; border-color: var(--r-line) !important; }
+html.dark body.reels :is([class*="dark:border-slate-700"],[class*="dark:border-slate-800"]):not(input):not(select):not(textarea) { border-color: var(--r-line) !important; }
+html.dark body.reels :is([class*="dark:text-slate-400"],[class*="dark:text-slate-500"]):not(input) { color: var(--r-mute) !important; }
