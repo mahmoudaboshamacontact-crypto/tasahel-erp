@@ -6,6 +6,7 @@
   const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
   const sqlHint = '<div class="card p-5 text-center space-y-2 border border-amber-300 bg-amber-50/70 dark:bg-amber-950/30 dark:border-amber-800"><div class="text-sm font-bold text-amber-900 dark:text-amber-200"><i class="fa-solid fa-database ms-1.5"></i>يلزم تفعيل دوال بوابة المنفذ الخارجي في Supabase</div><div class="text-xs text-amber-800 dark:text-amber-300">شغّل ملف <b class="font-mono">sql/partner-portal-requests.sql</b> مرة واحدة في Supabase (SQL Editor) لتفعيل البوابة التفاعلية.</div></div>';
   const st = {};
+  const PAGE = 20;   /* عدد الطلبات في كل دفعة تحميل */
 
   function injectPartnerIsolationStyle() {
     if (document.getElementById('partner-isolation-style')) return;
@@ -219,7 +220,13 @@
     const tbody = document.getElementById(B + '-tbody');
     const cardsBox = document.getElementById(B + '-cards');
     const countBadge = document.getElementById(B + '-count');
-    if (countBadge) countBadge.textContent = 'معروض ' + filtered.length + ' من إجمالي ' + all.length + ' طلب مسند';
+    if (countBadge) countBadge.textContent = 'معروض ' + filtered.length + ' — تم تحميل ' + all.length + (s.total != null ? ' من ' + s.total : '') + ' طلب' + (s.hasMore && (s.q || s.from || s.to || (s.quickFilter && s.quickFilter !== 'all')) ? ' (البحث والفلاتر على المحمّل فقط)' : '');
+    const moreBox = document.getElementById(B + '-more');
+    if (moreBox) {
+      moreBox.innerHTML = s.hasMore
+        ? '<button type="button" onclick=\'p8.loadMore(' + JB + ')\' ' + (s.loadingMore ? 'disabled' : '') + ' class="p8-more-btn"><i class="fa-solid ' + (s.loadingMore ? 'fa-spinner fa-spin' : 'fa-angles-down') + ' ms-1.5"></i>' + (s.loadingMore ? 'جارٍ التحميل...' : 'تحميل المزيد') + '</button>'
+        : (all.length > PAGE ? '<div class="text-[11px] text-slate-400 py-2">تم عرض كل الطلبات</div>' : '');
+    }
 
     const costBadge = document.getElementById(B + '-cost-sum');
     if (costBadge) costBadge.textContent = formatCurrency(totalExec);
@@ -237,7 +244,7 @@
         const totCost = lineExecCost(l);
         const isLate = isLineLatePartner(l);
 
-        return '<tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 align-top cursor-pointer" onclick=\'p8.openDetail(' + JB + ',' + JSON.stringify(l.transaction_id) + ')\'>' +
+        return '<tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 align-top cursor-pointer" onclick=\'p8.openDetail(' + JB + ',' + JSON.stringify(l.transaction_id) + ',' + JSON.stringify(l.id) + ')\'>' +
           '<td class="px-3.5 py-3 font-bold text-ink dark:text-white min-w-[150px]">' +
             '<div class="hover:text-brand-600 hover:underline flex items-center gap-1.5">' +
               '<span>' + eh(l.client_name || '—') + '</span>' +
@@ -279,7 +286,7 @@
         const totCost = lineExecCost(l);
         const isLate = isLineLatePartner(l);
 
-        return '<div class="card p-4 space-y-2.5 text-xs hover:border-brand-500 transition cursor-pointer" onclick=\'p8.openDetail(' + JB + ',' + JSON.stringify(l.transaction_id) + ')\'>' +
+        return '<div class="card p-4 space-y-2.5 text-xs hover:border-brand-500 transition cursor-pointer" onclick=\'p8.openDetail(' + JB + ',' + JSON.stringify(l.transaction_id) + ',' + JSON.stringify(l.id) + ')\'>' +
           '<div class="flex items-start justify-between gap-2">' +
             '<div class="min-w-0">' +
               '<div class="font-bold text-sm text-ink dark:text-white flex items-center gap-1.5">' +
@@ -314,10 +321,10 @@
   }
 
   /* ---------- نافذة كارت تفاصيل المعاملة المخصصة للمنفذ ---------- */
-  function renderDetailModal(B, tx) {
+  function renderDetailModal(B, tx, lid) {
     const s = st[B];
     if (!s) return;
-    const items = (s.allRows || []).filter(l => String(l.transaction_id) === String(tx));
+    const items = (s.allRows || []).filter(l => (tx != null && tx !== '' && String(l.transaction_id) === String(tx)) || (lid != null && String(l.id) === String(lid)));
     if (!items.length) return showToast('تعذّر العثور على بيانات الطلب', 'error');
 
     const first = items[0];
@@ -330,7 +337,7 @@
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'partner-tx-modal';
-      modal.className = 'fixed inset-0 z-[140] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto';
+      modal.className = 'fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto'; modal.style.zIndex = '2147483000';
       document.body.appendChild(modal);
     }
 
@@ -446,11 +453,18 @@
     box.innerHTML = '<div class="card p-8 text-center text-xs text-slate-400"><i class="fa-solid fa-spinner fa-spin ms-1.5"></i>جارٍ تحميل الطلبات المسندة للمنفذ...</div>';
 
     let rows = null, partnerName = fallbackName || '';
-    const rpcRes = await sbClient.rpc('get_partner_requests', { p_partner_uid: mgr ? pid : null });
+    let hasMore = false, total = null;
+    let rpcRes = await sbClient.rpc('get_partner_requests', { p_partner_uid: mgr ? pid : null, p_limit: PAGE, p_offset: 0 });
+    /* لو الـ SQL الجديد (الترقيم) لسه ما اتشغّلش: نرجع للنسخة القديمة من غير ترقيم */
+    if (rpcRes.error && /PGRST202|Could not find|schema cache/i.test(((rpcRes.error.message) || '') + ((rpcRes.error.code) || ''))) {
+      rpcRes = await sbClient.rpc('get_partner_requests', { p_partner_uid: mgr ? pid : null });
+    }
 
     if (!rpcRes.error && rpcRes.data) {
       partnerName = rpcRes.data.partner_name || partnerName;
       rows = rpcRes.data.lines || [];
+      hasMore = !!rpcRes.data.has_more;
+      total = rpcRes.data.total_count != null ? Number(rpcRes.data.total_count) : null;
     } else if (mgr && typeof allRequestLines !== 'undefined' && allRequestLines.length && partnerName) {
       rows = allRequestLines.filter(l => String(l.executor || '').trim() === String(partnerName).trim()).map(l => ({
         id: l.id,
@@ -477,6 +491,7 @@
     }
 
     s.allRows = rows;
+    s.hasMore = hasMore; s.total = total; s.loadingMore = false;
     s.partnerName = partnerName;
     const JB = JSON.stringify(B);
 
@@ -491,6 +506,8 @@
           '<div class="flex flex-wrap items-center gap-2">' +
             '<span class="text-xs text-slate-500">إجمالي تكلفة التنفيذ المعروضة: <b id="' + B + '-cost-sum" class="font-mono font-bold text-brand-600 dark:text-violet-300">0 ج.م</b></span>' +
             '<button type="button" onclick=\'p8.reload(' + JB + ')\' class="rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-rotate ms-1"></i>تحديث</button>' +
+            '<button type="button" onclick=\'p8.print(' + JB + ')\' class="p8-act"><i class="fa-solid fa-print ms-1"></i>طباعة</button>' +
+            '<button type="button" onclick=\'p8.pdf(' + JB + ')\' class="p8-act"><i class="fa-solid fa-file-pdf ms-1"></i>PDF</button>' +
             '<button type="button" onclick=\'p8.csv(' + JB + ')\' class="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm"><i class="fa-solid fa-file-excel ms-1.5"></i>تصدير Excel (CSV)</button>' +
           '</div>' +
         '</div>' +
@@ -544,9 +561,77 @@
           '</table>' +
         '</div>' +
       '</div>' +
-      '<div id="' + B + '-cards" class="space-y-3 md:hidden"></div>';
+      '<div id="' + B + '-cards" class="space-y-3 md:hidden"></div>' +
+      '<div id="' + B + '-more" class="pt-1 text-center"></div>';
 
     renderTableAndCards(B);
+  }
+
+  /* ---------- تقرير للطباعة / PDF: الطلبات المعروضة حاليا (بعد الفلاتر) ---------- */
+  function reportHtml(s) {
+    const rows = s.filtered && s.filtered.length ? s.filtered : (s.allRows || []);
+    const totalCost = s._cost != null ? s._cost : sum(rows, lineExecCost), cnt = s._n != null ? s._n : rows.length;
+    const th = 'style="border:1px solid #d6d3cd;padding:7px 8px;background:#f3efe9;font-size:11px;text-align:right"';
+    const td = 'style="border:1px solid #e4e0da;padding:6px 8px;font-size:11px;vertical-align:top;text-align:right"';
+    const body = rows.map((l, i) => '<tr>' +
+      '<td ' + td + '>' + (i + 1) + '</td>' +
+      '<td ' + td + '><b>' + eh(l.client_name || '—') + '</b><div dir="ltr" style="color:#777;font-size:10px">' + eh(l.transaction_id || '') + (l.service_ref ? ' · ' + eh(l.service_ref) : '') + '</div></td>' +
+      '<td ' + td + '>' + eh(formatBeneficiariesText(l.beneficiaries) || '—') + '</td>' +
+      '<td ' + td + '>' + eh(l.service || '—') + '</td>' +
+      '<td ' + td + '>' + eh(String(Number(l.qty) || 1)) + '</td>' +
+      '<td ' + td + '>' + eh(statusLabel(l.status || 'In Progress')) + '</td>' +
+      '<td ' + td + '>' + eh(formatCurrency(Number(l.exec_unit_cost) || 0)) + '</td>' +
+      '<td ' + td + '><b>' + eh(formatCurrency(lineExecCost(l))) + '</b></td>' +
+      '<td ' + td + '>' + eh(lineDateKey(l) ? formatDateOnly(lineDateKey(l)) : '—') + '</td>' +
+      '<td ' + td + '>' + eh(l.notes || '') + '</td></tr>').join('');
+    return '<div dir="rtl" style="font-family:\'IBM Plex Sans Arabic\',Tahoma,sans-serif;color:#1b1511;background:#fff;padding:22px 26px;width:100%;box-sizing:border-box">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #ff7a3d;padding-bottom:10px;margin-bottom:14px">' +
+        '<div><div style="font-size:18px;font-weight:700">تقرير الطلبات المسندة — ' + eh(s.partnerName || 'المنفذ') + '</div>' +
+        '<div style="font-size:11px;color:#777;margin-top:3px">تاريخ التقرير: ' + eh(new Date().toLocaleDateString('ar-EG')) + ' · عدد الطلبات: ' + cnt + ' · إجمالي تكلفة التنفيذ: <b>' + eh(formatCurrency(totalCost)) + '</b></div></div>' +
+        '<img src="logo-transparent.png" alt="" style="height:38px" onerror="this.style.display=\'none\'"></div>' +
+      '<table style="width:100%;border-collapse:collapse"><thead><tr>' +
+        ['#', 'العميل / رقم الطلب', 'المستفيدون', 'الخدمة', 'العدد', 'الحالة', 'تكلفة الوحدة', 'الإجمالي', 'التاريخ', 'ملاحظات'].map(h => '<th ' + th + '>' + h + '</th>').join('') +
+      '</tr></thead><tbody>' + (body || '<tr><td colspan="10" ' + td + '>لا توجد طلبات</td></tr>') + '</tbody></table></div>';
+  }
+
+  function printReport(html) {
+    const f = document.createElement('iframe');
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+    document.body.appendChild(f);
+    const d = f.contentWindow.document;
+    d.open();
+    d.write('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>تقرير الطلبات</title>' +
+      '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">' +
+      '<style>@page{size:A4 landscape;margin:10mm}body{margin:0}thead{display:table-header-group}tr{page-break-inside:avoid}</style></head><body>' + html + '</body></html>');
+    d.close();
+    const go = () => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { showToast('تعذّرت الطباعة', 'error'); } setTimeout(() => f.remove(), 60000); };
+    setTimeout(go, 700);
+  }
+
+  async function exportPdf(s) {
+    if (!window.html2canvas || !window.jspdf) return showToast('مكتبة الـ PDF ماتحمّلتش — اتأكد من الإنترنت وجرّب تاني', 'error', 6000);
+    showToast('جارٍ تجهيز ملف PDF...', 'info', 3000);
+    const rows = s.filtered && s.filtered.length ? s.filtered : (s.allRows || []);
+    const per = 14, pages = Math.max(1, Math.ceil(rows.length / per));
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:-10000px;top:0;width:1123px;background:#fff;z-index:-1';
+    document.body.appendChild(host);
+    try {
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
+      const W = 297, H = 210;
+      for (let p = 0; p < pages; p++) {
+        host.innerHTML = reportHtml(Object.assign({}, s, { filtered: rows.slice(p * per, (p + 1) * per), allRows: [], _n: rows.length, _cost: sum(rows, lineExecCost) }));
+        const canvas = await window.html2canvas(host.firstElementChild, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+        let w = W, h = canvas.height * W / canvas.width;
+        if (h > H) { h = H; w = canvas.width * H / canvas.height; }
+        if (p) pdf.addPage();
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', (W - w) / 2, 0, w, h);
+      }
+      pdf.save('طلبات_' + String(s.partnerName || 'المنفذ').replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.pdf');
+      showToast('تم تحميل ملف PDF');
+    } catch (err) { showError('تعذّر إنشاء PDF', err); }
+    finally { host.remove(); }
   }
 
   window.p8 = {
@@ -572,9 +657,25 @@
     reload: b => {
       if (st[b] && typeof st[b].reload === 'function') st[b].reload();
     },
-    openDetail: (b, tx) => {
-      renderDetailModal(b, tx);
+    openDetail: (b, tx, lid) => {
+      try { renderDetailModal(b, tx, lid); }
+      catch (e) { console.error('partner detail', e); showToast('تعذّر فتح التفاصيل: ' + ((e && e.message) || ''), 'error'); }
     },
+    loadMore: async b => {
+      const s = st[b];
+      if (!s || s.loadingMore || !s.hasMore) return;
+      s.loadingMore = true; renderTableAndCards(b);
+      const r = await sbClient.rpc('get_partner_requests', { p_partner_uid: s.mgr ? s.pid : null, p_limit: PAGE, p_offset: (s.allRows || []).length });
+      s.loadingMore = false;
+      if (r.error || !r.data) { renderTableAndCards(b); return showToast('تعذّر تحميل المزيد', 'error'); }
+      const have = new Set((s.allRows || []).map(l => String(l.id)));
+      s.allRows = (s.allRows || []).concat((r.data.lines || []).filter(l => !have.has(String(l.id))));
+      s.hasMore = !!r.data.has_more;
+      if (r.data.total_count != null) s.total = Number(r.data.total_count);
+      renderTableAndCards(b);
+    },
+    print: b => { const s = st[b]; if (!s) return; printReport(reportHtml(s)); },
+    pdf: b => { const s = st[b]; if (s) exportPdf(s); },
     closeDetail: () => {
       const m = document.getElementById('partner-tx-modal');
       if (m) m.classList.add('hidden');
@@ -693,7 +794,7 @@
       '<header class="bg-[#0b1b33] shadow-md sticky top-0 z-20">' +
         '<div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3.5">' +
           '<div class="flex items-center gap-3">' +
-            '<span class="rounded-xl bg-white px-2 py-1.5">' + logoImg(30) + '</span>' +
+            '<img src="logo-transparent.png" alt="تساهيل" class="p8-logo" onerror="this.style.display=\'none\'">' +
             '<div>' +
               '<div class="text-[11px] font-semibold text-emerald-300">بوابة المنفذ الخارجي</div>' +
               '<div class="text-base font-bold text-white">' + eh(name || 'منفذ خارجي') + '</div>' +

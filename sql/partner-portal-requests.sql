@@ -3,12 +3,17 @@
 -- المبدأ: المنفذ يشوف بس البنود اللي executor بتاعها = partner_name بتاعه. الأسعار والخصومات والعمولة مش بتتبعت له أبدا.
 -- التعليقات اللي بترجع له: تعليقاته هو بس (التعليقات الداخلية للموظفين متظهرش).
 
-create or replace function public.get_partner_requests(p_partner_uid uuid default null)
+-- ترقيم: آخر p_limit طلب (الأحدث أولا) + p_offset لتحميل المزيد. بيرجع has_more وtotal_count.
+drop function if exists public.get_partner_requests(uuid);   -- النسخة القديمة بدون ترقيم
+create or replace function public.get_partner_requests(p_partner_uid uuid default null, p_limit int default 20, p_offset int default 0)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare
   v_role text := coalesce(public.my_role(), '');
   v_uid  uuid;
   v_name text;
+  v_lim  int := least(greatest(coalesce(p_limit, 20), 1), 100);
+  v_off  int := greatest(coalesce(p_offset, 0), 0);
+  v_total int;
 begin
   if auth.uid() is null then raise exception 'not authenticated' using errcode = '28000'; end if;
   if v_role = 'manager' and p_partner_uid is not null then v_uid := p_partner_uid;
@@ -16,9 +21,12 @@ begin
   else raise exception 'forbidden' using errcode = '42501'; end if;
 
   select nullif(btrim(partner_name), '') into v_name from public.user_roles where user_id = v_uid;
-  if v_name is null then return jsonb_build_object('partner_name', null, 'lines', '[]'::jsonb); end if;
+  if v_name is null then return jsonb_build_object('partner_name', null, 'lines', '[]'::jsonb, 'has_more', false, 'total_count', 0); end if;
 
-  return jsonb_build_object('partner_name', v_name, 'lines', coalesce((
+  select count(*) into v_total from public.request_lines where btrim(coalesce(executor, '')) = v_name;
+
+  return jsonb_build_object('partner_name', v_name, 'total_count', v_total, 'has_more', v_total > v_off + v_lim,
+    'lines', coalesce((
     select jsonb_agg(
       (to_jsonb(l) - 'unit_price' - 'total' - 'list_price' - 'discount_pct' - 'commission_per_unit')
       || jsonb_build_object(
@@ -33,8 +41,9 @@ begin
           from public.tx_comments c
           where c.transaction_id = l.transaction_id and c.author_id = v_uid), '[]'::jsonb))
       order by l.id desc)
-    from public.request_lines l
-    where btrim(coalesce(l.executor, '')) = v_name), '[]'::jsonb));
+    from (select * from public.request_lines
+           where btrim(coalesce(executor, '')) = v_name
+           order by id desc limit v_lim offset v_off) l), '[]'::jsonb));
 end $$;
 
 create or replace function public.add_partner_comment(p_transaction_id text, p_body text)
@@ -56,11 +65,11 @@ begin
     'author_name', v_row.author_name, 'body', v_row.body, 'created_at', v_row.created_at);
 end $$;
 
-revoke all on function public.get_partner_requests(uuid) from public;
+revoke all on function public.get_partner_requests(uuid, int, int) from public;
 revoke all on function public.add_partner_comment(text, text) from public;
-grant execute on function public.get_partner_requests(uuid) to authenticated;
+grant execute on function public.get_partner_requests(uuid, int, int) to authenticated;
 grant execute on function public.add_partner_comment(text, text) to authenticated;
 
 -- ===== Rollback =====
--- drop function if exists public.get_partner_requests(uuid);
+-- drop function if exists public.get_partner_requests(uuid, int, int);
 -- drop function if exists public.add_partner_comment(text, text);
