@@ -11,7 +11,11 @@ button,a.btn{background:var(--card);color:var(--text);border:1px solid var(--lin
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;text-align:center}
 .card h3{margin:0 0 6px;font-size:.85rem;color:var(--mute);font-weight:600}
-svg{width:100%;max-width:200px}.val{font-size:1.5rem;font-weight:700;margin-top:-34px;position:relative}
+svg{width:100%;max-width:210px;overflow:visible}.val{font-size:1.45rem;font-weight:700;margin-top:-52px;position:relative;font-variant-numeric:tabular-nums}
+.nd{transform-origin:100px 100px;transform:rotate(-135deg);transition:transform 1.3s cubic-bezier(.34,1.45,.5,1)}
+.arcv{transition:stroke-dasharray 1.3s cubic-bezier(.34,1.2,.5,1),stroke .6s}
+.live{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-inline-end:5px;animation:pl 1.6s ease-in-out infinite}
+@keyframes pl{50%{opacity:.25}}@media(prefers-reduced-motion:reduce){.nd,.arcv{transition:none}.live{animation:none}}
 .note{font-size:.72rem;color:var(--mute);margin-top:6px;min-height:1.1em}
 .sec{margin:18px 0 8px;font-weight:700}.list{font-size:.78rem;color:var(--mute);text-align:start;line-height:1.7}
 .tag{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:1px 7px;margin:2px;font-size:.72rem}
@@ -28,17 +32,31 @@ var root=document.getElementById('root'),sb=null;
 function $(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
 function msg(t,link){root.innerHTML='';var d=$('div','msg',t);if(link){d.appendChild($('br'));var a=$('a','link','فتح النظام');a.href='/';d.appendChild(a)}root.appendChild(d)}
 var NS='http://www.w3.org/2000/svg';
-function gauge(title,pct,text,color,note){ // نصف دائرة
+var G={};
+function P(a,r){return [100+r*Math.cos(a*Math.PI/180),100+r*Math.sin(a*Math.PI/180)]}
+function mk(id,title,fmt){
+  if(G[id])return G[id];
   var c=$('div','card');c.appendChild($('h3',null,title));
-  var s=document.createElementNS(NS,'svg');s.setAttribute('viewBox','0 0 200 110');
-  var p=Math.max(0,Math.min(100,pct)),L=Math.PI*80;
-  function arc(col,len){var a=document.createElementNS(NS,'path');a.setAttribute('d','M20 100 A80 80 0 0 1 180 100');a.setAttribute('fill','none');a.setAttribute('stroke',col);a.setAttribute('stroke-width','14');a.setAttribute('stroke-linecap','round');a.setAttribute('stroke-dasharray',len+' '+L);return a}
-  s.appendChild(arc('rgba(148,163,184,.25)',L));s.appendChild(arc(color,L*p/100));c.appendChild(s);
-  var v=$('div','val',text);v.dir='ltr';c.appendChild(v);c.appendChild($('div','note',note||''));return c}
+  var s=document.createElementNS(NS,'svg');s.setAttribute('viewBox','0 0 200 170');
+  var S=P(135,78),E=P(405,78),L=Math.PI*78*1.5;
+  function path(cls,col,w){var a=document.createElementNS(NS,'path');a.setAttribute('d','M'+S[0]+' '+S[1]+' A78 78 0 1 1 '+E[0]+' '+E[1]);a.setAttribute('fill','none');a.setAttribute('stroke',col);a.setAttribute('stroke-width',w);a.setAttribute('stroke-linecap','round');if(cls)a.setAttribute('class',cls);return a}
+  var bg=path(null,'rgba(148,163,184,.22)',10),fg=path('arcv','var(--ok)',10);fg.setAttribute('stroke-dasharray','0 '+L);s.appendChild(bg);s.appendChild(fg);
+  for(var i=0;i<=10;i++){var an=135+27*i,p1=P(an,64),p2=P(an,i%5?58:54),t=document.createElementNS(NS,'line');t.setAttribute('x1',p1[0]);t.setAttribute('y1',p1[1]);t.setAttribute('x2',p2[0]);t.setAttribute('y2',p2[1]);t.setAttribute('stroke','var(--mute)');t.setAttribute('stroke-width',i%5?1:2);t.setAttribute('opacity',.6);s.appendChild(t)}
+  var n=document.createElementNS(NS,'g');n.setAttribute('class','nd');var l=document.createElementNS(NS,'path');l.setAttribute('d','M97 100 L100 34 L103 100 Z');l.setAttribute('fill','var(--acc)');n.appendChild(l);s.appendChild(n);
+  var hub=document.createElementNS(NS,'circle');hub.setAttribute('cx',100);hub.setAttribute('cy',100);hub.setAttribute('r',7);hub.setAttribute('fill','var(--acc)');s.appendChild(hub);
+  c.appendChild(s);var v=$('div','val','0');v.dir='ltr';c.appendChild(v);var nt=$('div','note','');c.appendChild(nt);
+  var cur=0,raf=0,g={el:c,set:function(val,pct,color,note){
+    pct=Math.max(0,Math.min(100,pct));n.style.transform='rotate('+(-135+270*pct/100)+'deg)';
+    fg.setAttribute('stroke-dasharray',(L*pct/100)+' '+L);fg.setAttribute('stroke',color);nt.textContent=note||'';
+    var from=cur,t0=performance.now();cancelAnimationFrame(raf);
+    (function f(t){var k=Math.min(1,(t-t0)/900),e=1-Math.pow(1-k,3);cur=from+(val-from)*e;v.textContent=fmt(cur);if(k<1)raf=requestAnimationFrame(f)})(t0)}};
+  G[id]=g;return g}
 function col(p,inv){var g=inv?100-p:p;return g>=70?'var(--ok)':g>=40?'var(--warn)':'var(--bad)'}
 function fmtB(b){return b>1e9?(b/1e9).toFixed(2)+' GB':(b/1e6).toFixed(1)+' MB'}
 function median(a){a=a.slice().sort(function(x,y){return x-y});return a[Math.floor(a.length/2)]}
-async function latency(){var t=[];for(var i=0;i<5;i++){var s=performance.now();await sb.rpc('my_role');t.push(performance.now()-s)}return Math.round(median(t))}
+function setLat(l){mk('lat','سرعة الاتصال بالقاعدة (حي)',function(x){return Math.round(x)+' ms'}).set(l,Math.min(100,l/10),l<300?'var(--ok)':l<800?'var(--warn)':'var(--bad)','وسيط آخر قياسات')}
+var lats=[];async function ping(){var s=performance.now();await sb.rpc('my_role');var t=performance.now()-s;lats.push(t);if(lats.length>5)lats.shift();return t}
+async function latency(){mk('lat','سرعة الاتصال بالقاعدة (حي)',function(x){return Math.round(x)+' ms'});for(var i=0;i<5;i++){var t=await ping();if(G.lat&&G.lat.el.parentNode)setLat(Math.round(t))}return Math.round(median(lats))}
 async function run(){
   if(!KEY){msg('مفيش مفتاح Supabase محفوظ في المتصفح ده. افتح النظام وسجّل دخول الأول.',1);return}
   sb=sb||supabase.createClient(URL_,KEY);
@@ -51,17 +69,19 @@ async function run(){
   if(st.error){msg('شغّل ملف sql/owner-stats.sql في Supabase الأول. ('+(st.error.message||'')+')');return}
   var d=st.data,nav=performance.getEntriesByType('navigation')[0],load=nav?Math.round(nav.loadEventEnd||nav.domInteractive):0;
   root.innerHTML='';
-  var g=$('div','grid');
-  var dbp=d.db_bytes/(500*1048576)*100;
-  g.appendChild(gauge('حجم القاعدة (حد 500MB)',dbp,fmtB(d.db_bytes),col(dbp,1),Math.round(dbp)+'% من الباقة المجانية'));
-  var up=d.users/50000*100;
-  g.appendChild(gauge('المستخدمين (حد 50 ألف)',Math.max(up,1),String(d.users),col(up,1),'حساب مسجّل'));
-  g.appendChild(gauge('سرعة الاتصال بالقاعدة',100-Math.min(100,lat/10),lat+' ms',lat<300?'var(--ok)':lat<800?'var(--warn)':'var(--bad)','وسيط 5 محاولات'));
-  g.appendChild(gauge('تحميل الصفحة',100-Math.min(100,load/30),load+' ms',load<1500?'var(--ok)':load<3500?'var(--warn)':'var(--bad)','الصفحة دي'));
+  var g=document.getElementById('gs');if(!g){root.innerHTML='';g=$('div','grid');g.id='gs';root.appendChild(g);var tail=$('div');tail.id='tl';root.appendChild(tail)}
+  var dbp=d.db_bytes/(500*1048576)*100,up=d.users/50000*100;
+  var gm=[['db','حجم القاعدة (حد 500MB)',function(x){return fmtB(x)}],['us','المستخدمين (حد 50 ألف)',function(x){return String(Math.round(x))}],['lat','سرعة الاتصال بالقاعدة (حي)',function(x){return Math.round(x)+' ms'}],['ld','تحميل الصفحة',function(x){return Math.round(x)+' ms'}],['sec','مؤشر الأمان',function(x){return String(Math.round(x))}],['td','بنود اليوم',function(x){return String(Math.round(x))}]];
+  gm.forEach(function(x){var o=mk(x[0],x[1],x[2]);if(!o.el.parentNode)g.appendChild(o.el)});
   var sc=100;if(d.rls_off.length)sc-=25;sc-=Math.min(40,d.open_policies.length*5);sc-=Math.min(30,d.anon_funcs.length*3);sc=Math.max(0,sc);
-  g.appendChild(gauge('مؤشر الأمان',sc,String(sc),col(sc),'من 100'));
-  g.appendChild(gauge('بنود اليوم',Math.min(100,d.lines_today),String(d.lines_today),'var(--acc)','إجمالي البنود: '+d.lines_total));
-  root.appendChild(g);
+  G.db.set(d.db_bytes,dbp,col(dbp,1),Math.round(dbp)+'% من الباقة المجانية');
+  G.us.set(d.users,Math.max(up,1),col(up,1),'حساب مسجّل');
+  setLat(lat);
+  G.ld.set(load,Math.min(100,load/30),load<1500?'var(--ok)':load<3500?'var(--warn)':'var(--bad)','الصفحة دي');
+  G.sec.set(sc,sc,col(sc),'من 100');
+  G.td.set(d.lines_today,Math.min(100,d.lines_today),'var(--acc)','إجمالي البنود: '+d.lines_total);
+  var tl=document.getElementById('tl');tl.innerHTML='';var rootSave=root;root=tl;
+
   function block(t,arr,empty){root.appendChild($('div','sec',t));var b=$('div','card list');if(!arr.length)b.textContent=empty;else arr.forEach(function(x){b.appendChild($('span','tag',x))});root.appendChild(b)}
   block('مشاكل أمنية مفتوحة: جداول بدون RLS',d.rls_off,'لا يوجد ✓');
   block('سياسات كتابة مفتوحة للكل (using true)',d.open_policies,'لا يوجد ✓');
@@ -72,9 +92,10 @@ async function run(){
   var lk=$('div','card list');
   [['Vercel (الباقة المجانية: 100GB نقل / شهر)','https://vercel.com/dashboard'],['Supabase (500MB قاعدة، 5GB نقل، 50 ألف مستخدم)','https://supabase.com/dashboard/projects'],['GitHub (استخدام Actions والتخزين)','https://github.com/settings/billing']].forEach(function(x){var a=$('a','link',x[0]);a.href=x[1];a.target='_blank';a.rel='noopener noreferrer';lk.appendChild(a);lk.appendChild($('br'))});
   root.appendChild(lk);
+  root=rootSave;
   document.getElementById('upd').textContent='آخر تحديث: '+new Date().toLocaleTimeString('ar-EG');
 }
 document.getElementById('rf').onclick=function(){run().catch(function(e){msg('خطأ: '+(e&&e.message||e))})};
-run().catch(function(e){msg('خطأ: '+(e&&e.message||e))});setInterval(function(){if(!document.hidden)run().catch(function(){})},60000);
+run().catch(function(e){msg('خطأ: '+(e&&e.message||e))});setInterval(function(){if(!document.hidden)run().catch(function(){})},60000);setInterval(function(){if(!document.hidden&&sb&&G.lat&&G.lat.el.parentNode)ping().then(function(){setLat(Math.round(median(lats)))}).catch(function(){})},6000);
 })();
 </script></body></html>
