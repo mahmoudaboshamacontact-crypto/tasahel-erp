@@ -159,7 +159,7 @@
       const lines = await loadMonth(wm), sales = new Map();
       lines.forEach(l => { const p = profileByName(l.employee); if (p) sales.set(p.id, (sales.get(p.id) || 0) + (Number(l.total) || 0)); });
       box.innerHTML = rows.map(x => {
-        const p = profiles.find(q => q.id === x.user_id) || { id: x.user_id, full_name: 'موظف' }, s = sales.get(x.user_id) || 0, pct = Math.round(s / Number(x.target) * 100), col = pct >= 100 ? '#059669' : pct >= 60 ? '#0d9488' : pct >= 30 ? '#d97706' : '#dc2626';
+        const p = profiles.find(q => q.id === x.user_id) || { id: x.user_id, full_name: 'موظف' }, s = sales.get(x.user_id) || 0, pct = Math.round(s / Number(x.target) * 100), col = pct >= 100 ? 'var(--r-ok,#059669)' : pct >= 60 ? 'var(--r-acc,#0d9488)' : pct >= 30 ? 'var(--r-acc2,#d97706)' : 'var(--r-bad,#dc2626)';
         return '<div class="flex items-center gap-3"><div class="relative h-12 w-12 shrink-0 rounded-full" style="background:conic-gradient(' + col + ' ' + Math.min(100, pct) + '%,rgba(148,163,184,.25) 0)"><div class="absolute inset-[5px] flex items-center justify-center rounded-full bg-white dark:bg-slate-900 text-[11px] font-bold font-mono" style="color:' + col + '">' + pct + '%</div></div><div class="min-w-0 flex-1"><div class="truncate text-sm font-bold text-ink dark:text-white">' + eh(p.full_name) + '</div><div class="text-[11px] text-slate-400 font-mono">' + formatCurrency(s) + ' / ' + formatCurrency(x.target) + '</div></div></div>';
       }).join('');
     } catch (err) { box.innerHTML = '<div class="py-8 text-center text-xs text-slate-400">شغّل ملف phase4-commission-targets.sql علشان يظهر التارجت</div>'; }
