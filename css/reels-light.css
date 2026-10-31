@@ -1,0 +1,382 @@
+/* وضع فاتح — مُولَّد من reels.css بنفس الهوية. للإلغاء شيل الملف من index.html */
+/* ==========================================================================
+   Reels theme — هوية تساهيل الجديدة (حبر دافئ + برتقالي + زجاج خفيف)
+   معزولة بالكامل: تشتغل فقط لما body.reels موجودة (js/39-reels-ui.js).
+   للرجوع للشكل القديم: شيل ملف css/reels.css من index.html أو شيل class "reels".
+   دارك فقط حاليا. بدون أنيميشن مستمر. blur على الهيدر فقط.
+   ========================================================================== */
+html:not(.dark) body.reels {
+  --r-bg:#faf6f1; --r-card:#ffffff; --r-card-2:#f4ede5; --r-line:rgba(40,25,10,.1); --r-text:#26201b; --r-mute:#7b6f64; --r-acc:#e8590c; --r-acc2:#ff7a3d; --r-ok:#0f9d77; --r-bad:#d93636; --r-ease:cubic-bezier(.34,1.4,.5,1);
+  background:
+    radial-gradient(900px 520px at 85% -8%, rgba(255,140,80,.16), transparent 65%),
+    var(--r-bg) !important;
+  background-attachment: fixed !important;
+  color: var(--r-text) !important;
+}
+
+/* ---------- الهيدر ---------- */
+html:not(.dark) body.reels .ts-header {
+  background: rgba(250,246,241,.8) !important; border-bottom: 1px solid var(--r-line) !important;
+  backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+html:not(.dark) body.reels .ts-brand-box { gap: .7rem; }
+html:not(.dark) body.reels #hdr-brand-logo { height: 2rem; opacity: .96; }
+html:not(.dark) body.reels .ts-brand-sep { background: var(--r-line) !important; }
+html:not(.dark) body.reels #hdr-clock-slot .gl-clock { border-color: var(--r-line); color: var(--r-text); }
+
+/* ---------- شريط التنقل: كبسولة بحبة منزلقة ---------- */
+html:not(.dark) body.reels #hdr-shortcuts {
+  position: relative; display: flex; align-items: center; gap: 2px; padding: 4px;
+  border-radius: 999px; background: var(--r-card); border: 1px solid var(--r-line);
+}
+html:not(.dark) body.reels #hdr-shortcuts .tab-btn {
+  position: relative; z-index: 1; border-radius: 999px !important; background: transparent !important;
+  border-color: transparent !important; box-shadow: none !important; color: var(--r-mute) !important;
+  padding: .45rem .95rem; transition: color .25s ease;
+}
+html:not(.dark) body.reels #hdr-shortcuts .tab-btn:hover { color: var(--r-text) !important; }
+html:not(.dark) body.reels #hdr-shortcuts .tab-btn.bg-ink { color: #1b1511 !important; }
+html:not(.dark) body.reels #hdr-shortcuts .tab-btn i { font-size: .8rem; }
+html:not(.dark) body.reels .r-pill {
+  position: absolute; top: 4px; bottom: 4px; z-index: 0; border-radius: 999px; pointer-events: none;
+  background: linear-gradient(135deg, var(--r-acc), var(--r-acc2));
+  box-shadow: 0 6px 18px -6px rgba(255,122,61,.55);
+  transition: inset-inline-start .45s var(--r-ease), width .45s var(--r-ease);
+}
+html:not(.dark) body.reels .ts-hdr-icon-btn, html:not(.dark) body.reels .ts-user-pill {
+  background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important;
+}
+html:not(.dark) body.reels .ts-logout-btn { background: transparent !important; border: 1px solid var(--r-line) !important; color: var(--r-mute) !important; }
+html:not(.dark) body.reels .ts-logout-btn:hover { color: var(--r-bad) !important; border-color: rgba(255,107,107,.4) !important; }
+
+/* ---------- الرئيسية: ترحيب كبير + KPI ---------- */
+html:not(.dark) body.reels #tab-home .hm-hero {
+  background: transparent !important; border: 0 !important; box-shadow: none !important; padding: .4rem .1rem 0;
+  overflow: visible;
+}
+html:not(.dark) body.reels #tab-home .hm-hero h1 { font-size: clamp(1.7rem, 4.2vw, 2.6rem) !important; font-weight: 700; letter-spacing: -.01em; line-height: 1.15; }
+html:not(.dark) body.reels #tab-home .hm-hero h1 .r-acc { color: var(--r-acc); }
+html:not(.dark) body.reels #tab-home .hm-hero p { color: var(--r-mute) !important; font-size: .85rem !important; margin-top: .35rem; }
+html:not(.dark) body.reels #tab-home .hm-kpi-box {
+  background: var(--r-card) !important; border: 1px solid var(--r-line) !important; border-radius: 1.1rem !important;
+  padding: 1rem 1.1rem !important; transition: transform .35s var(--r-ease), border-color .2s ease, background-color .2s ease;
+}
+html:not(.dark) body.reels #tab-home .hm-kpi-box:hover { transform: translateY(-3px); border-color: rgba(255,157,108,.4) !important; background: var(--r-card-2) !important; }
+html:not(.dark) body.reels #tab-home .hm-kpi-box .text-slate-400, html:not(.dark) body.reels #tab-home .hm-kpi-box .text-slate-300 { color: var(--r-mute) !important; font-size: .72rem; }
+html:not(.dark) body.reels #tab-home .hm-kpi-box > div.text-base { color: var(--r-text) !important; font-variant-numeric: tabular-nums; }
+html:not(.dark) body.reels #tab-home .hm-kpi-box .text-violet-300 { color: var(--r-acc) !important; }
+html:not(.dark) body.reels #tab-home .hm-kpi-box .text-emerald-300 { color: var(--r-ok) !important; }
+
+/* ---------- كروت الأقسام: أيقونات موحدة بدل قوس قزح ---------- */
+html:not(.dark) body.reels #app .hm-nav-card, html:not(.dark) body.reels #app .hm-emp-card, html:not(.dark) body.reels #app .card {
+  background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important;
+  border-radius: 1.1rem !important; backdrop-filter: none !important;
+}
+html:not(.dark) body.reels #app .hm-nav-card { transition: transform .35s var(--r-ease), border-color .2s ease, background-color .2s ease; }
+html:not(.dark) body.reels #app .hm-nav-card:hover { transform: translateY(-3px); border-color: rgba(255,157,108,.4) !important; background: var(--r-card-2) !important; }
+html:not(.dark) body.reels #app .hm-nav-icon {
+  background: rgba(255,157,108,.12) !important; color: var(--r-acc) !important; border-radius: .8rem !important; box-shadow: none !important;
+}
+html:not(.dark) body.reels #app .hm-nav-card:hover .hm-nav-icon { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; }
+html:not(.dark) body.reels #app .hm-nav-card .text-violet-400, html:not(.dark) body.reels #app .group:hover .group-hover\:text-violet-400 { color: var(--r-acc) !important; }
+html:not(.dark) body.reels #app .text-ink { color: var(--r-text) !important; }
+
+/* ---------- حركة الدخول (مرة واحدة عند فتح الصفحة) ---------- */
+@keyframes r-in { from { opacity: 0; transform: translateY(10px); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+html:not(.dark) body.reels #tab-home.r-enter > * { animation: r-in .5s var(--r-ease) both; }
+html:not(.dark) body.reels #tab-home.r-enter > *:nth-child(2) { animation-delay: .06s; }
+html:not(.dark) body.reels #tab-home.r-enter > *:nth-child(3) { animation-delay: .12s; }
+html:not(.dark) body.reels #tab-home.r-enter > *:nth-child(4) { animation-delay: .18s; }
+@media (prefers-reduced-motion: reduce) {
+  html:not(.dark) body.reels *, html:not(.dark) body.reels .r-pill { animation: none !important; transition: none !important; }
+}
+@media (max-width: 767px) { html:not(.dark) body.reels #hdr-shortcuts { display: none; } }
+
+/* ---------- تنظيف البنفسجي: كل درجات violet/purple/indigo ← البرتقالي ---------- */
+html:not(.dark) body.reels #tab-home .hm-hero .grid { margin-top: 1.3rem; gap: .75rem !important; }
+html:not(.dark) body.reels .fl-stage-wrap { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+html:not(.dark) body.reels .fl-card { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; border-radius: 1.1rem !important; }
+html:not(.dark) body.reels .fl-card:hover { border-color: rgba(255,157,108,.4) !important; transform: translateY(-3px); }
+html:not(.dark) body.reels .btn-neo-pri, html:not(.dark) body.reels .bg-violet-600, html:not(.dark) body.reels .bg-violet-500,
+html:not(.dark) body.reels .bg-ink, html:not(.dark) body.reels .dark\:bg-brand-600, html:not(.dark) body.reels .tab-btn.bg-ink {
+  background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important;
+  border-color: transparent !important; box-shadow: 0 6px 18px -8px rgba(255,122,61,.6) !important;
+}
+html:not(.dark) body.reels [class*="from-violet"], html:not(.dark) body.reels [class*="from-purple"], html:not(.dark) body.reels [class*="from-indigo"] {
+  background-image: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important;
+}
+html:not(.dark) body.reels [class*="text-violet-"]:not([class*="hover:"]), html:not(.dark) body.reels [class*="text-purple-"]:not([class*="hover:"]), html:not(.dark) body.reels [class*="text-indigo-"]:not([class*="hover:"]) { color: var(--r-acc) !important; }
+html:not(.dark) body.reels [class*="border-violet"], html:not(.dark) body.reels [class*="border-purple"] { border-color: rgba(255,157,108,.35) !important; }
+html:not(.dark) body.reels [class*="bg-violet-50"], html:not(.dark) body.reels [class*="bg-violet-950"], html:not(.dark) body.reels [class*="bg-violet-100"],
+html:not(.dark) body.reels [class*="bg-purple-"], html:not(.dark) body.reels [class*="bg-indigo-"] { background-color: rgba(255,157,108,.12) !important; }
+html:not(.dark) body.reels a, html:not(.dark) body.reels .hover\:text-brand-600:hover { --r-x: 0; }
+html:not(.dark) body.reels input:focus, html:not(.dark) body.reels select:focus, html:not(.dark) body.reels textarea:focus, html:not(.dark) body.reels .field:focus {
+  border-color: var(--r-acc) !important; box-shadow: 0 0 0 3px rgba(255,157,108,.18) !important; outline: none !important;
+}
+html:not(.dark) body.reels ::selection { background: rgba(255,157,108,.35); }
+
+/* شرائح الفلتر + روابط */
+html:not(.dark) body.reels .tx-flt-chip { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; color: var(--r-mute) !important; border-radius: 999px !important; box-shadow: none !important; }
+html:not(.dark) body.reels .tx-flt-chip:hover { color: var(--r-text) !important; border-color: rgba(255,157,108,.4) !important; }
+html:not(.dark) body.reels .tx-flt-chip.on { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; border-color: transparent !important; }
+html:not(.dark) body.reels .ts-brand-box a { color: var(--r-mute) !important; }
+html:not(.dark) body.reels .ts-brand-sub .font-mono { color: var(--r-acc) !important; }
+
+/* ==========================================================================
+   تسجيل الدخول: لوجو واحد نظيف بدل اللوجوهين (الأيقونة + اللوجو الأخضر)
+   ========================================================================== */
+body.reels #tasahel-3d-overlay .t3d-logos { margin-bottom: 14px; }
+body.reels #tasahel-3d-overlay .t3d-logos > :nth-child(n+2) { display: none !important; }
+body.reels #tasahel-3d-overlay .t3d-logo-box {
+  width: auto !important; height: auto !important; background: transparent !important; border: 0 !important;
+  box-shadow: none !important; padding: 0 !important; border-radius: 0 !important;
+}
+body.reels #tasahel-3d-overlay .t3d-logo-box img { height: 54px; width: auto; max-width: 220px; border-radius: 0 !important; }
+
+/* ==========================================================================
+   الموبايل (≤767px): هيدر صف واحد + دوك سفلي + أزرار عائمة هادية
+   ========================================================================== */
+.r-logout-menu { display: none !important; }
+@media (max-width: 767px) {
+  .r-logout-menu { display: flex !important; }
+  body.reels .ts-hdr-inner { display: flex !important; flex-wrap: nowrap !important; align-items: center; justify-content: space-between; gap: .5rem; padding-block: .45rem; }
+  body.reels .ts-hdr-start { display: flex; align-items: center; gap: .6rem; min-width: 0; flex: 0 1 auto; }
+  body.reels .ts-brand-links, body.reels .ts-brand-sep, body.reels #hdr-clock-slot,
+  body.reels #hdr-theme-btn, body.reels #hdr-logout-btn, body.reels #user-display { display: none !important; }
+  body.reels #hdr-brand-logo { height: 1.75rem; }
+  body.reels .ts-hdr-end { display: flex; align-items: center; gap: .45rem; flex: 0 0 auto; }
+  body.reels .ts-hdr-icon-btn { width: 2.25rem; height: 2.25rem; border-radius: 999px !important; }
+  body.reels .ts-user-pill { padding: 2px !important; gap: 0 !important; border-radius: 999px !important; }
+  body.reels #menu-btn { border-radius: 999px !important; background: var(--r-card) !important; border-color: var(--r-line) !important; }
+}
+@media (max-width: 767px) {
+  html:not(.dark) body.reels.gl-bn-pad { padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
+  html:not(.dark) body.reels #gl-bn.gl-bn-on {
+    height: 58px; border-radius: 999px; padding: 5px; left: 14px; right: 14px;
+    background: rgba(255,255,255,.86); border: 1px solid var(--r-line);
+    box-shadow: 0 14px 34px -12px rgba(120,60,20,.35); backdrop-filter: blur(14px);
+  }
+  html:not(.dark) body.reels #gl-bn button { color: var(--r-mute); border-radius: 999px; font-size: 9.5px; }
+  html:not(.dark) body.reels #gl-bn button.is-active {
+    color: #fff; background: linear-gradient(135deg, var(--r-acc2), var(--r-acc)); box-shadow: 0 6px 16px -6px rgba(255,122,61,.6);
+  }
+  html:not(.dark) body.reels #gl-bn button.is-active i { color: #fff; }
+  html:not(.dark) body.reels #gl-bn .gl-bn-new i { background: var(--r-card-2); color: var(--r-acc); box-shadow: none; }
+  html:not(.dark) body.reels #gl-bn .gl-bn-new.is-active i { background: rgba(255,255,255,.25); color: #fff; }
+  html:not(.dark) body.reels #gl-bn .gl-bn-badge { background: var(--r-acc2); color: #1b1511; font-weight: 700; }
+  /* الأزرار العائمة: أصغر وفوق الدوك ومش على الكروت */
+  html:not(.dark) body.reels .ai-fab { width: 2.75rem !important; height: 2.75rem !important; right: 14px !important; bottom: calc(82px + env(safe-area-inset-bottom, 0px)) !important;
+    background: var(--r-card-2) !important; border: 1px solid rgba(255,157,108,.4) !important; box-shadow: 0 8px 20px -8px rgba(0,0,0,.7) !important; }
+  html:not(.dark) body.reels .ai-fab svg { filter: none; width: 20px; height: 20px; }
+  html:not(.dark) body.reels #gl-calc-fab { width: 2.75rem !important; height: 2.75rem !important; opacity: .92; border-radius: 999px !important;
+    background: var(--r-card-2) !important; color: var(--r-acc) !important; border: 1px solid var(--r-line) !important; box-shadow: 0 8px 20px -8px rgba(0,0,0,.7) !important; }
+  /* كروت الأرقام وشرائح الفلتر أهدى على الشاشة الصغيرة */
+  html:not(.dark) body.reels #tab-home .hm-hero h1 { font-size: 1.7rem !important; }
+  html:not(.dark) body.reels .tx-flt-chip { padding: .35rem .8rem; font-size: .78rem; }
+}
+body.reels #tasahel-3d-overlay .t3d-title { display: none !important; }  /* اللوجو فيه الاسم */
+@media (max-width: 767px) { body.reels #app > footer { display: none !important; } }
+
+/* ==========================================================================
+   المعاملات: حالات بلون واحد متناسق، بدون توهج، كروت موبايل أخف
+   ========================================================================== */
+html:not(.dark) body.reels .st17-b[data-s="In Progress"] { --sc: 232,89,12; --sct: 170,60,5; }
+html:not(.dark) body.reels .st17-b[data-s="Under Review"] { --sc: 202,138,4; --sct: 133,90,0; }
+html:not(.dark) body.reels .st17-b[data-s="Complete"] { --sc: 15,157,119; --sct: 8,100,76; }
+html:not(.dark) body.reels .st17-b[data-s="Delivered"] { --sc: 46,150,70; --sct: 28,100,45; }
+html:not(.dark) body.reels [data-st-bar] { --stc: 232,89,12; }
+html:not(.dark) body.reels [data-st-bar="late"] { --stc: 217,54,54; }
+html:not(.dark) body.reels [data-st-bar="ready"] { --stc: 15,157,119; }
+html:not(.dark) body.reels [data-st-bar="done"] { --stc: 46,150,70; }
+html:not(.dark) body.reels #recent-cards-container > [data-st-bar]::before { box-shadow: none !important; width: 4px; }
+html:not(.dark) body.reels [data-st17]:not(.tx-row-selected), html:not(.dark) body.reels .f16-disc:not(.tx-row-selected), html:not(.dark) body.reels .f16-cmt:not(.tx-row-selected) { background-image: none !important; }
+html:not(.dark) body.reels .rc-tx-pill { background: var(--r-card-2) !important; color: var(--r-acc) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; }
+html:not(.dark) body.reels .rc-svc-pill, html:not(.dark) body.reels .rc-phone-pill { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; color: var(--r-text) !important; }
+html:not(.dark) body.reels .rc-svc-qty { background: rgba(255,157,108,.16) !important; color: var(--r-acc) !important; box-shadow: none !important; }
+html:not(.dark) body.reels #tab-tx .grid > .card i { color: var(--r-mute) !important; }
+html:not(.dark) body.reels #tab-tx thead { background: transparent !important; }
+html:not(.dark) body.reels #tab-tx tbody tr:hover { background: var(--r-card) !important; }
+html:not(.dark) body.reels .tx-row-selected { background: rgba(255,157,108,.1) !important; }
+html:not(.dark) body.reels #tab-tx .divide-y > :not([hidden]) ~ :not([hidden]) { border-color: var(--r-line) !important; }
+
+@media (max-width: 767px) {
+  html:not(.dark) body.reels #tx-list-col { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; overflow: visible; }
+  html:not(.dark) body.reels #recent-cards-container { display: flex; flex-direction: column; gap: .7rem; padding: 0 !important; }
+  html:not(.dark) body.reels #recent-cards-container > .card { padding: .9rem 1rem !important; }
+  html:not(.dark) body.reels #tab-tx .grid.grid-cols-2 { gap: .6rem; }
+  html:not(.dark) body.reels #tab-tx .grid.grid-cols-2 > .card { padding: .65rem .8rem !important; }
+  html:not(.dark) body.reels #tab-tx .grid.grid-cols-2 > .card > div:last-child { font-size: 1.35rem; margin-top: .15rem; }
+  html:not(.dark) body.reels #tx-status-chips { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; width: 100%; padding-bottom: 2px; }
+  html:not(.dark) body.reels #tx-status-chips::-webkit-scrollbar { display: none; }
+  html:not(.dark) body.reels #tx-status-chips > * { flex-shrink: 0; }
+  html:not(.dark) body.reels #tab-tx input[type="date"] { min-width: 0; flex: 1 1 0; }
+}
+
+/* ==========================================================================
+   القائمة الجانبية (المزيد): زجاج داكن بدون ألوان أيقونات متعددة
+   ========================================================================== */
+html:not(.dark) body.reels #nav-menu {
+  background: rgba(20,18,16,.94) !important; border: 1px solid var(--r-line) !important; border-radius: 1.2rem !important;
+  box-shadow: 0 24px 60px -18px rgba(0,0,0,.8) !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+}
+html:not(.dark) body.reels #nav-menu .tab-btn { color: var(--r-text) !important; border-radius: .8rem !important; background: transparent !important; border-color: transparent !important; box-shadow: none !important; }
+html:not(.dark) body.reels #nav-menu .tab-btn i { color: var(--r-mute) !important; transition: color .2s ease; }
+html:not(.dark) body.reels #nav-menu .tab-btn:hover { background: var(--r-card-2) !important; }
+html:not(.dark) body.reels #nav-menu .tab-btn:hover i { color: var(--r-acc) !important; }
+html:not(.dark) body.reels #nav-menu .tab-btn.bg-ink { background: rgba(255,157,108,.14) !important; color: var(--r-acc) !important; box-shadow: none !important; }
+html:not(.dark) body.reels #nav-menu .tab-btn.bg-ink i { color: var(--r-acc) !important; }
+html:not(.dark) body.reels #nav-menu .text-slate-400, html:not(.dark) body.reels #nav-menu hr { color: var(--r-mute) !important; border-color: var(--r-line) !important; }
+html:not(.dark) body.reels #nav-menu .r-logout-menu.text-rose-400, html:not(.dark) body.reels #nav-menu .r-logout-menu.text-rose-400 i { color: var(--r-bad) !important; }
+
+/* ==========================================================================
+   الداشبورد (لوحة المتابعة): نفس لغة الكروت، أيقونات برتقالية موحدة
+   ========================================================================== */
+html:not(.dark) body.reels #tab-dash .hm-hero { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: .2rem 0 !important; }
+html:not(.dark) body.reels #tab-dash .hm-hero h2 { font-size: clamp(1.5rem, 3.4vw, 2.2rem) !important; letter-spacing: -.01em; }
+html:not(.dark) body.reels #tab-dash .hm-hero p, html:not(.dark) body.reels #tab-dash .hm-hero .text-slate-300 { color: var(--r-mute) !important; }
+html:not(.dark) body.reels #tab-dash .hm-hero .bg-white\/10 { background: var(--r-card) !important; border: 1px solid var(--r-line); border-radius: 999px !important; padding: 3px !important; }
+html:not(.dark) body.reels #tab-dash .hm-hero .bg-white\/10 > button, html:not(.dark) body.reels #tab-dash .hm-hero button { border-radius: 999px !important; }
+html:not(.dark) body.reels .dx-card, html:not(.dark) body.reels #dsh-kpis > div {
+  background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; border-radius: 1.1rem !important;
+}
+html:not(.dark) body.reels .dx-card:hover, html:not(.dark) body.reels #dsh-kpis > div:hover { border-color: rgba(255,157,108,.35) !important; }
+html:not(.dark) body.reels .dx-ico, html:not(.dark) body.reels #dsh-kpis [class*="rounded-xl"][style*="background"], html:not(.dark) body.reels #dsh-kpis [class*="rounded-xl"][class*="bg-"] {
+  background: rgba(255,157,108,.14) !important; color: var(--r-acc) !important; box-shadow: none !important;
+}
+html:not(.dark) body.reels .dx-card i, html:not(.dark) body.reels #dsh-kpis i { color: var(--r-acc) !important; }
+html:not(.dark) body.reels .dx-ins-row { background: var(--r-card) !important; }
+html:not(.dark) body.reels #tab-dash .text-brand-600, html:not(.dark) body.reels #tab-dash .bg-brand-500 { color: var(--r-acc) !important; }
+html:not(.dark) body.reels #tab-dash .bg-brand-500 { background: linear-gradient(90deg, var(--r-acc), var(--r-acc2)) !important; }
+
+/* ==========================================================================
+   المودالات (تفاصيل المعاملة وغيرها) + الستيبر + الحقول
+   ========================================================================== */
+html:not(.dark) body.reels .modal > div, html:not(.dark) body.reels .modal > section {
+  background: #151311 !important; border: 1px solid var(--r-line) !important; box-shadow: 0 30px 80px -20px rgba(0,0,0,.85) !important; border-radius: 1.4rem;
+}
+html:not(.dark) body.reels .modal { background: rgba(8,7,6,.7) !important; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+html:not(.dark) body.reels .modal .border-b, html:not(.dark) body.reels .modal .border-t { border-color: var(--r-line) !important; }
+html:not(.dark) body.reels .tx-ring-gauge-box { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; }
+html:not(.dark) body.reels .tx-stepper-track { background: var(--r-line) !important; }
+html:not(.dark) body.reels .tx-stepper-fill { background: linear-gradient(90deg, var(--r-acc), var(--r-acc2)) !important; box-shadow: none !important; }
+html:not(.dark) body.reels .tx-step-circle { background: var(--r-card-2) !important; border-color: var(--r-line) !important; box-shadow: none !important; }
+html:not(.dark) body.reels .tx-step-node.done .tx-step-circle { background: var(--r-acc) !important; border-color: var(--r-acc) !important; }
+html:not(.dark) body.reels .tx-step-node.current .tx-step-circle { background: var(--r-acc2) !important; border-color: rgba(255,157,108,.5) !important; box-shadow: 0 0 0 4px rgba(255,157,108,.16) !important; }
+html:not(.dark) body.reels .tx-step-label { color: var(--r-mute) !important; }
+html:not(.dark) body.reels .tx-step-node.done .tx-step-label, html:not(.dark) body.reels .tx-step-node.current .tx-step-label { color: var(--r-acc) !important; }
+html:not(.dark) body.reels .field, html:not(.dark) body.reels select, html:not(.dark) body.reels textarea, html:not(.dark) body.reels input:not([type="checkbox"]):not([type="radio"]) {
+  background: rgba(255,255,255,.04) !important; border-color: var(--r-line) !important; color: var(--r-text) !important;
+}
+html:not(.dark) body.reels .field::placeholder, html:not(.dark) body.reels input::placeholder, html:not(.dark) body.reels textarea::placeholder { color: #6f675f !important; }
+/* أزرار الإجراءات الملونة (كهرماني/تيل/زمردي/سماوي...) ← حيادية؛ الأساسي برتقالي */
+html:not(.dark) body.reels :is(button, a):is([class~="bg-amber-400"], [class~="bg-amber-500"], [class~="bg-amber-600"]),
+html:not(.dark) body.reels :is(button, a)[class*="bg-teal-"], html:not(.dark) body.reels :is(button, a)[class*="bg-emerald-6"], html:not(.dark) body.reels :is(button, a)[class*="bg-emerald-5"],
+html:not(.dark) body.reels :is(button, a)[class*="bg-sky-"], html:not(.dark) body.reels :is(button, a)[class*="bg-cyan-"], html:not(.dark) body.reels :is(button, a)[class*="bg-blue-"],
+html:not(.dark) body.reels :is(button, a)[class*="bg-fuchsia-"], html:not(.dark) body.reels :is(button, a)[class*="bg-brand-"] {
+  background: var(--r-card-2) !important; color: var(--r-text) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important;
+}
+html:not(.dark) body.reels :is(button, a):is([class~="bg-amber-400"], [class~="bg-amber-500"], [class~="bg-amber-600"]):hover, html:not(.dark) body.reels :is(button, a)[class*="bg-teal-"]:hover,
+html:not(.dark) body.reels :is(button, a)[class*="bg-emerald-6"]:hover, html:not(.dark) body.reels :is(button, a)[class*="bg-brand-"]:hover { border-color: rgba(255,157,108,.5) !important; color: var(--r-acc) !important; }
+html:not(.dark) body.reels .modal :is(button)[type="submit"], html:not(.dark) body.reels #tx-modal button[onclick*="Save"], html:not(.dark) body.reels #tx-modal button[onclick*="save"] {
+  background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; border-color: transparent !important;
+}
+/* دوائر الخطوات الرقمية (1 2 3 4) في صفحة طلب جديد */
+html:not(.dark) body.reels [class*="rounded-full"][class*="bg-violet"], html:not(.dark) body.reels [class*="rounded-full"][class*="bg-purple"],
+html:not(.dark) body.reels [class*="rounded-full"][class*="bg-indigo"] { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; }
+html:not(.dark) body.reels .tx-ring-gauge-box [stroke*="#"], html:not(.dark) body.reels .tx-ring-gauge-box circle:nth-of-type(2) { stroke: var(--r-acc); }
+
+html:not(.dark) body.reels .modal :is(div, span):is([class*="bg-brand-"], [class*="bg-teal-"]):not([class*="/"]) { background: rgba(255,157,108,.14) !important; color: var(--r-acc) !important; }
+
+/* طلب جديد: خطوات وليبلز وروابط */
+html:not(.dark) body.reels .step { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; box-shadow: none !important; }
+html:not(.dark) body.reels .nop-step-pill { background: var(--r-card) !important; border-color: var(--r-line) !important; box-shadow: none !important; }
+html:not(.dark) body.reels .nop-step-pill.active { background: rgba(255,157,108,.12) !important; border-color: rgba(255,157,108,.45) !important; }
+html:not(.dark) body.reels .nop-step-dot { background: var(--r-card-2) !important; color: var(--r-text) !important; box-shadow: none !important; }
+html:not(.dark) body.reels .nop-step-pill.active .nop-step-dot { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; }
+html:not(.dark) body.reels .label { color: var(--r-mute) !important; }
+
+/* ==========================================================================
+   بوابة المنفذ الخارجي (#partner-app): هيدر نضيف + مسافات أوسع + تحميل المزيد
+   ========================================================================== */
+html:not(.dark) body.reels #partner-app { background: radial-gradient(900px 520px at 85% -8%, rgba(255,140,80,.12), transparent 65%), var(--r-bg) !important; color: var(--r-text); }
+html:not(.dark) body.reels #partner-app > header { background: rgba(14,13,12,.78) !important; border-bottom: 1px solid var(--r-line); box-shadow: none !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+html:not(.dark) body.reels #partner-app > header > div { padding-block: 1rem !important; }
+html:not(.dark) body.reels #partner-app .p8-logo { height: 2.1rem; width: auto; }
+html:not(.dark) body.reels #partner-app > header .text-emerald-300 { color: var(--r-acc) !important; font-weight: 600; }
+html:not(.dark) body.reels #partner-app > header button { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; border-radius: 999px !important; color: var(--r-mute) !important; }
+html:not(.dark) body.reels #p8-main { display: flex; flex-direction: column; gap: 1.4rem; padding-block: 1.6rem !important; }
+html:not(.dark) body.reels #p8-main > * { margin: 0 !important; }
+html:not(.dark) body.reels #partner-app .card { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; border-radius: 1.2rem !important; }
+html:not(.dark) body.reels #partner-app .card.p-4 { padding: 1.15rem 1.25rem !important; }
+html:not(.dark) body.reels #partner-app .partner-kpi-clickable:hover { transform: translateY(-3px); border-color: rgba(255,157,108,.4) !important; box-shadow: none !important; }
+html:not(.dark) body.reels #partner-app .partner-kpi-clickable.is-active { border-color: var(--r-acc) !important; background: rgba(255,157,108,.1) !important; box-shadow: none !important; }
+html:not(.dark) body.reels #partner-app .grid { gap: 1rem !important; }
+html:not(.dark) body.reels #partner-app thead { background: transparent !important; }
+html:not(.dark) body.reels #partner-app thead th { padding: .95rem 1rem !important; color: var(--r-mute) !important; font-weight: 600; letter-spacing: .01em; }
+html:not(.dark) body.reels #partner-app tbody td { padding: 1.05rem 1rem !important; }
+html:not(.dark) body.reels #partner-app tbody tr:hover { background: var(--r-card) !important; }
+html:not(.dark) body.reels #partner-app .divide-y > :not([hidden]) ~ :not([hidden]) { border-color: var(--r-line) !important; }
+html:not(.dark) body.reels #partner-app tbody td > .flex, html:not(.dark) body.reels #partner-app tbody td .space-y-1 > * + * { margin-top: .4rem; }
+html:not(.dark) body.reels #p8-main [id$="-cards"] { display: flex; flex-direction: column; gap: 1rem; }
+html:not(.dark) body.reels #p8-main [id$="-cards"] > .card { padding: 1.1rem 1.2rem !important; }
+html:not(.dark) body.reels #p8-main [id$="-cards"] > .card > * + * { margin-top: .85rem; }
+html:not(.dark) body.reels .p8-act { background: var(--r-card) !important; border: 1px solid var(--r-line) !important; color: var(--r-text) !important; border-radius: 999px !important; padding: .45rem .95rem !important; font-size: .75rem; font-weight: 700; transition: border-color .2s ease, color .2s ease; }
+html:not(.dark) body.reels .p8-act:hover { border-color: rgba(255,157,108,.5) !important; color: var(--r-acc) !important; }
+html:not(.dark) body.reels .p8-more-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 220px; padding: .85rem 1.6rem; border-radius: 999px; font-weight: 700; font-size: .85rem;
+  background: var(--r-card-2); color: var(--r-acc); border: 1px solid rgba(255,157,108,.45); cursor: pointer; transition: background .2s ease, transform .3s var(--r-ease); }
+html:not(.dark) body.reels .p8-more-btn:hover:not(:disabled) { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)); color: #1b1511; transform: translateY(-2px); }
+html:not(.dark) body.reels .p8-more-btn:disabled { opacity: .7; cursor: wait; }
+@media (max-width: 767px) { html:not(.dark) body.reels .p8-more-btn { width: 100%; } html:not(.dark) body.reels #p8-main { padding-inline: .9rem !important; gap: 1.1rem; } }
+@media print { body.is-partner-mode > :not(#partner-app) { display: none !important; } }
+html:not(.dark) body.reels #partner-tx-modal { background: rgba(8,7,6,.72) !important; }
+html:not(.dark) body.reels #partner-tx-modal > div { background: #151311 !important; border: 1px solid var(--r-line) !important; box-shadow: 0 30px 80px -20px rgba(0,0,0,.85) !important; border-radius: 1.4rem !important; }
+html:not(.dark) body.reels #partner-tx-modal > div > div { border-color: var(--r-line) !important; background: transparent !important; }
+html:not(.dark) body.reels #partner-tx-modal span[class*="bg-brand-500"] { background: rgba(255,157,108,.16) !important; color: var(--r-acc) !important; }
+html:not(.dark) body.reels #partner-tx-modal button[class*="bg-brand-"] { background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)) !important; color: #1b1511 !important; border-color: transparent !important; }
+html:not(.dark) body.reels #partner-app button, html:not(.dark) body.reels #partner-app a { --r-btn: 1; }
+html:not(.dark) body.reels #partner-tx-modal button[onclick*="closeDetail"] { background: var(--r-card-2) !important; color: var(--r-text) !important; border: 1px solid var(--r-line) !important; }
+
+/* لوجو بوابة المنفذ: حجم ثابت في أي ثيم (كان بيكبر لو الثيم الفاتح) */
+.p8-logo { height: 2.1rem; width: auto; max-width: 160px; object-fit: contain; }
+
+
+/* ===== هوية الهيدر: أيقونات بدل النص ===== */
+.ts-brand-links{display:flex;align-items:center;gap:.45rem}
+.ts-chip{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;height:2rem;border-radius:999px;font-size:.78rem;transition:transform .25s cubic-bezier(.34,1.4,.5,1),box-shadow .25s,background .2s;text-decoration:none}
+.ts-chip:hover{transform:translateY(-2px) scale(1.06)}
+.ts-chip-fb{width:2rem;color:#fff;background:linear-gradient(145deg,#2f8bff,#1262e0);box-shadow:0 4px 12px rgba(24,119,242,.35)}
+.ts-chip-fb i{font-size:.95rem}
+.ts-chip-no{padding:0 .75rem;font-weight:800;background:rgba(15,23,42,.06);color:#0f172a}
+.ts-chip-no i{color:#16a34a;font-size:.8rem}
+.ts-chip-no b{font-family:ui-monospace,monospace;letter-spacing:.04em}
+html:not(.dark) body.reels .ts-chip-no{background:var(--r-card);border:1px solid var(--r-line);color:var(--r-text)}
+html:not(.dark) body.reels .ts-chip-no i{color:var(--r-acc)}
+html:not(.dark) body.reels .ts-chip-fb{background:linear-gradient(145deg,rgba(47,139,255,.95),rgba(18,98,224,.95));box-shadow:0 4px 14px rgba(24,119,242,.28)}
+
+/* ===== القوائم المنسدلة (select) في الداكن ===== */
+html:not(.dark) body.reels select{color-scheme:light;background-color:var(--r-card-2);color:var(--r-text)}
+html:not(.dark) body.reels select option,html:not(.dark) body.reels select optgroup{background:#ffffff !important;color:var(--r-text) !important}
+html:not(.dark) body.reels select option:checked,html:not(.dark) body.reels select option:hover{background:#ff7a3d !important;color:#fff !important}
+html:not(.dark) body.reels input[type=date],html:not(.dark) body.reels input[type=time],html:not(.dark) body.reels input[type=month]{color-scheme:light}
+html:not(.dark) body.reels datalist option{background:#ffffff;color:var(--r-text)}
+
+/* ===== أداء الموظفين ===== */
+html:not(.dark) body.reels .pf-note{background:var(--r-card);border:1px solid var(--r-line);color:var(--r-mute);opacity:1}
+html:not(.dark) body.reels .pf-card{border-radius:1.25rem}
+html:not(.dark) body.reels .pf-st{background:var(--r-card);border:1px solid var(--r-line);border-radius:.9rem;transition:transform .25s var(--r-ease),background .2s}
+html:not(.dark) body.reels .pf-st:hover{transform:translateY(-2px);background:var(--r-card-2)}
+html:not(.dark) body.reels .pf-sv{color:var(--r-text);font-size:1.05rem}
+html:not(.dark) body.reels .pf-sl,html:not(.dark) body.reels .pf-ops,html:not(.dark) body.reels .pf-date,html:not(.dark) body.reels .pf-wkh{color:var(--r-mute);opacity:1}
+html:not(.dark) body.reels .pf-warn{background:rgba(255,107,107,.1);border-color:rgba(255,107,107,.28)}
+html:not(.dark) body.reels .pf-warn .pf-sv{color:var(--r-bad)}
+html:not(.dark) body.reels .pf-wk{border-top-color:var(--r-line);color:var(--r-text)}
+html:not(.dark) body.reels .pf-good{color:var(--r-ok)}html:not(.dark) body.reels .pf-bad{color:var(--r-bad)}
+html:not(.dark) body.reels .pf-btn{background:var(--r-card);border:1px solid var(--r-line);color:var(--r-text)}
+html:not(.dark) body.reels .pf-btn:hover{background:var(--r-card-2)}
+html:not(.dark) body.reels .pf-name{color:var(--r-text)}
+
+/* بقايا البنفسجي في الفاتح */
+html:not(.dark) body.reels :is([class~="text-violet-600"],[class~="text-violet-700"],[class~="text-brand-600"],[class~="text-brand-700"]){color:var(--r-acc)!important}
+html:not(.dark) body.reels :is([class~="bg-violet-600"],[class~="bg-violet-700"],[class~="bg-brand-600"]):not(input){background:linear-gradient(135deg,var(--r-acc2),var(--r-acc))!important;color:#fff!important}
+html:not(.dark) body.reels :is([class~="bg-violet-50"],[class~="bg-violet-100"],[class~="bg-brand-50"]){background-color:rgba(255,122,61,.1)!important;color:var(--r-acc)!important}
+html:not(.dark) body.reels input[type=date]{color-scheme:light}
