@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>عدادات المالك — تساهيل</title>
+<style>
+:root{--bg:#0e0d0c;--card:rgba(255,255,255,.05);--line:rgba(255,255,255,.1);--text:#f4eee8;--mute:#a0978e;--acc:#ff9d6c;--ok:#5fd3b3;--warn:#f5c15a;--bad:#ff6b6b}
+@media(prefers-color-scheme:light){:root{--bg:#faf6f1;--card:#fff;--line:rgba(40,25,10,.1);--text:#26201b;--mute:#7b6f64;--acc:#e8590c;--ok:#0f9d77;--warn:#ca8a04;--bad:#d93636}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;padding:16px;max-width:1100px;margin-inline:auto}
+h1{font-size:1.3rem;margin:.2rem 0}.sub{color:var(--mute);font-size:.8rem}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+button,a.btn{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:.5rem 1rem;font:inherit;font-size:.8rem;cursor:pointer;text-decoration:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;text-align:center}
+.card h3{margin:0 0 6px;font-size:.85rem;color:var(--mute);font-weight:600}
+svg{width:100%;max-width:200px}.val{font-size:1.5rem;font-weight:700;margin-top:-34px;position:relative}
+.note{font-size:.72rem;color:var(--mute);margin-top:6px;min-height:1.1em}
+.sec{margin:18px 0 8px;font-weight:700}.list{font-size:.78rem;color:var(--mute);text-align:start;line-height:1.7}
+.tag{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:1px 7px;margin:2px;font-size:.72rem}
+.msg{padding:2rem;text-align:center;color:var(--mute)}.link{color:var(--acc)}
+</style></head><body>
+<div class="bar"><div><h1>عدادات المالك</h1><div class="sub" id="upd">—</div></div><div><button id="rf">تحديث</button> <a class="btn" href="/">النظام</a></div></div>
+<div id="root"><div class="msg">جارٍ التحميل…</div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(function(){
+'use strict';
+var URL_=localStorage.getItem('sb_url')||'https://avehvjqifswsyayckpvx.supabase.co',KEY=localStorage.getItem('sb_key')||'';
+var root=document.getElementById('root'),sb=null;
+function $(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function msg(t,link){root.innerHTML='';var d=$('div','msg',t);if(link){d.appendChild($('br'));var a=$('a','link','فتح النظام');a.href='/';d.appendChild(a)}root.appendChild(d)}
+var NS='http://www.w3.org/2000/svg';
+function gauge(title,pct,text,color,note){ // نصف دائرة
+  var c=$('div','card');c.appendChild($('h3',null,title));
+  var s=document.createElementNS(NS,'svg');s.setAttribute('viewBox','0 0 200 110');
+  var p=Math.max(0,Math.min(100,pct)),L=Math.PI*80;
+  function arc(col,len){var a=document.createElementNS(NS,'path');a.setAttribute('d','M20 100 A80 80 0 0 1 180 100');a.setAttribute('fill','none');a.setAttribute('stroke',col);a.setAttribute('stroke-width','14');a.setAttribute('stroke-linecap','round');a.setAttribute('stroke-dasharray',len+' '+L);return a}
+  s.appendChild(arc('rgba(148,163,184,.25)',L));s.appendChild(arc(color,L*p/100));c.appendChild(s);
+  var v=$('div','val',text);v.dir='ltr';c.appendChild(v);c.appendChild($('div','note',note||''));return c}
+function col(p,inv){var g=inv?100-p:p;return g>=70?'var(--ok)':g>=40?'var(--warn)':'var(--bad)'}
+function fmtB(b){return b>1e9?(b/1e9).toFixed(2)+' GB':(b/1e6).toFixed(1)+' MB'}
+function median(a){a=a.slice().sort(function(x,y){return x-y});return a[Math.floor(a.length/2)]}
+async function latency(){var t=[];for(var i=0;i<5;i++){var s=performance.now();await sb.rpc('my_role');t.push(performance.now()-s)}return Math.round(median(t))}
+async function run(){
+  if(!KEY){msg('مفيش مفتاح Supabase محفوظ في المتصفح ده. افتح النظام وسجّل دخول الأول.',1);return}
+  sb=sb||supabase.createClient(URL_,KEY);
+  var ses=(await sb.auth.getSession()).data.session;
+  if(!ses){msg('سجّل دخول من النظام الأول بحساب المدير.',1);return}
+  var role=(await sb.rpc('my_role')).data;
+  if(role!=='manager'){msg('الصفحة دي للمدير بس.');return}
+  var lat=await latency();
+  var st=await sb.rpc('owner_stats');
+  if(st.error){msg('شغّل ملف sql/owner-stats.sql في Supabase الأول. ('+(st.error.message||'')+')');return}
+  var d=st.data,nav=performance.getEntriesByType('navigation')[0],load=nav?Math.round(nav.loadEventEnd||nav.domInteractive):0;
+  root.innerHTML='';
+  var g=$('div','grid');
+  var dbp=d.db_bytes/(500*1048576)*100;
+  g.appendChild(gauge('حجم القاعدة (حد 500MB)',dbp,fmtB(d.db_bytes),col(dbp,1),Math.round(dbp)+'% من الباقة المجانية'));
+  var up=d.users/50000*100;
+  g.appendChild(gauge('المستخدمين (حد 50 ألف)',Math.max(up,1),String(d.users),col(up,1),'حساب مسجّل'));
+  g.appendChild(gauge('سرعة الاتصال بالقاعدة',100-Math.min(100,lat/10),lat+' ms',lat<300?'var(--ok)':lat<800?'var(--warn)':'var(--bad)','وسيط 5 محاولات'));
+  g.appendChild(gauge('تحميل الصفحة',100-Math.min(100,load/30),load+' ms',load<1500?'var(--ok)':load<3500?'var(--warn)':'var(--bad)','الصفحة دي'));
+  var sc=100;if(d.rls_off.length)sc-=25;sc-=Math.min(40,d.open_policies.length*5);sc-=Math.min(30,d.anon_funcs.length*3);sc=Math.max(0,sc);
+  g.appendChild(gauge('مؤشر الأمان',sc,String(sc),col(sc),'من 100'));
+  g.appendChild(gauge('بنود اليوم',Math.min(100,d.lines_today),String(d.lines_today),'var(--acc)','إجمالي البنود: '+d.lines_total));
+  root.appendChild(g);
+  function block(t,arr,empty){root.appendChild($('div','sec',t));var b=$('div','card list');if(!arr.length)b.textContent=empty;else arr.forEach(function(x){b.appendChild($('span','tag',x))});root.appendChild(b)}
+  block('مشاكل أمنية مفتوحة: جداول بدون RLS',d.rls_off,'لا يوجد ✓');
+  block('سياسات كتابة مفتوحة للكل (using true)',d.open_policies,'لا يوجد ✓');
+  block('دوال متاحة للزائر (anon) بدون داعي',d.anon_funcs,'لا يوجد ✓');
+  root.appendChild($('div','sec','أكبر الجداول'));var tb=$('div','card list');
+  d.tables.forEach(function(t){tb.appendChild($('div',null,t.name+' — '+t.rows+' صف — '+fmtB(t.bytes)))});root.appendChild(tb);
+  root.appendChild($('div','sec','حدود لا تُقاس لحظياً (محتاجة مفتاح سري، فمش هنحطه في صفحة ويب)'));
+  var lk=$('div','card list');
+  [['Vercel (الباقة المجانية: 100GB نقل / شهر)','https://vercel.com/dashboard'],['Supabase (500MB قاعدة، 5GB نقل، 50 ألف مستخدم)','https://supabase.com/dashboard/projects'],['GitHub (استخدام Actions والتخزين)','https://github.com/settings/billing']].forEach(function(x){var a=$('a','link',x[0]);a.href=x[1];a.target='_blank';a.rel='noopener noreferrer';lk.appendChild(a);lk.appendChild($('br'))});
+  root.appendChild(lk);
+  document.getElementById('upd').textContent='آخر تحديث: '+new Date().toLocaleTimeString('ar-EG');
+}
+document.getElementById('rf').onclick=function(){run().catch(function(e){msg('خطأ: '+(e&&e.message||e))})};
+run().catch(function(e){msg('خطأ: '+(e&&e.message||e))});setInterval(function(){if(!document.hidden)run().catch(function(){})},60000);
+})();
+</script></body></html>
