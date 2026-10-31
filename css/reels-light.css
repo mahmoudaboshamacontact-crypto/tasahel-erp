@@ -153,16 +153,16 @@ body.reels #tasahel-3d-overlay .t3d-logo-box img { height: 54px; width: auto; ma
   html:not(.dark) body.reels.gl-bn-pad { padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
   html:not(.dark) body.reels #gl-bn.gl-bn-on {
     height: 58px; border-radius: 999px; padding: 5px; left: 14px; right: 14px;
-    background: rgba(20,18,16,.82); border: 1px solid var(--r-line);
-    box-shadow: 0 14px 34px -10px rgba(0,0,0,.7);
+    background: rgba(255,255,255,.86); border: 1px solid var(--r-line);
+    box-shadow: 0 14px 34px -12px rgba(120,60,20,.35); backdrop-filter: blur(14px);
   }
   html:not(.dark) body.reels #gl-bn button { color: var(--r-mute); border-radius: 999px; font-size: 9.5px; }
   html:not(.dark) body.reels #gl-bn button.is-active {
-    color: #1b1511; background: linear-gradient(135deg, var(--r-acc), var(--r-acc2)); box-shadow: 0 6px 16px -6px rgba(255,122,61,.6);
+    color: #fff; background: linear-gradient(135deg, var(--r-acc2), var(--r-acc)); box-shadow: 0 6px 16px -6px rgba(255,122,61,.6);
   }
-  html:not(.dark) body.reels #gl-bn button.is-active i { color: #1b1511; }
+  html:not(.dark) body.reels #gl-bn button.is-active i { color: #fff; }
   html:not(.dark) body.reels #gl-bn .gl-bn-new i { background: var(--r-card-2); color: var(--r-acc); box-shadow: none; }
-  html:not(.dark) body.reels #gl-bn .gl-bn-new.is-active i { background: rgba(27,21,17,.14); color: #1b1511; }
+  html:not(.dark) body.reels #gl-bn .gl-bn-new.is-active i { background: rgba(255,255,255,.25); color: #fff; }
   html:not(.dark) body.reels #gl-bn .gl-bn-badge { background: var(--r-acc2); color: #1b1511; font-weight: 700; }
   /* الأزرار العائمة: أصغر وفوق الدوك ومش على الكروت */
   html:not(.dark) body.reels .ai-fab { width: 2.75rem !important; height: 2.75rem !important; right: 14px !important; bottom: calc(82px + env(safe-area-inset-bottom, 0px)) !important;

@@ -57,10 +57,12 @@
     if (typeof Chart === 'undefined') { if (n < 40) setTimeout(function () { chartTheme(n + 1); }, 250); return; }
     var M = { '#0d9488': '#ff9d6c', '#2563eb': '#5fd3b3', '#3b82f6': '#5fd3b3', '#8b5cf6': '#e8c878', '#f59e0b': '#ff7a3d', '#ec4899': '#ff6b6b', '#10b981': '#5fd3b3', '#64748b': '#6f675f',
       'rgba(13,148,136,.14)': 'rgba(255,157,108,.16)', 'rgba(13, 148, 136, 0.14)': 'rgba(255,157,108,.16)' };
-    function mc(c) { if (Array.isArray(c)) return c.map(mc); return typeof c === 'string' && M[c.toLowerCase()] ? M[c.toLowerCase()] : c; }
+    var ML = { '#0d9488': '#e8590c', '#2563eb': '#0f9d77', '#3b82f6': '#0f9d77', '#8b5cf6': '#ca8a04', '#f59e0b': '#ff7a3d', '#ec4899': '#d93636', '#10b981': '#0f9d77', '#64748b': '#a89a8c',
+      'rgba(13,148,136,.14)': 'rgba(232,89,12,.12)', 'rgba(13, 148, 136, 0.14)': 'rgba(232,89,12,.12)' };
+    function mc(c) { var m = document.documentElement.classList.contains('dark') ? M : ML; if (Array.isArray(c)) return c.map(mc); return typeof c === 'string' && m[c.toLowerCase()] ? m[c.toLowerCase()] : c; }
     try { Chart.defaults.color = '#a0978e'; Chart.defaults.font.family = "'IBM Plex Sans Arabic', sans-serif"; } catch (e) { /* */ }
     Chart.register({ id: 'reelsTheme', beforeUpdate: function (ch) {
-      if (!document.documentElement.classList.contains('dark')) return;
+      try { Chart.defaults.color = document.documentElement.classList.contains('dark') ? '#a0978e' : '#7b6f64'; } catch (e) { /* */ }
       ch.data.datasets.forEach(function (d) {
         if (d.borderColor) d.borderColor = mc(d.borderColor);
         if (d.backgroundColor) d.backgroundColor = mc(d.backgroundColor);
