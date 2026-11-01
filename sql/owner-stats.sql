@@ -13,9 +13,16 @@ begin
         select relname as name, n_live_tup as rows, pg_total_relation_size(relid) as bytes
         from pg_stat_user_tables where schemaname = 'public' order by pg_total_relation_size(relid) desc limit 8) t), '[]'::jsonb),
     'rls_off', coalesce((select jsonb_agg(tablename) from pg_tables where schemaname = 'public' and rowsecurity = false), '[]'::jsonb),
-    'open_policies', coalesce((select jsonb_agg(tablename || '.' || policyname) from pg_policies
-        where schemaname = 'public' and permissive = 'PERMISSIVE' and cmd <> 'SELECT'
-          and (qual = 'true' or with_check = 'true')), '[]'::jsonb),
+    'open_policies', coalesce((select jsonb_agg(p.tablename || '.' || p.policyname) from pg_policies p
+        where p.schemaname = 'public' and p.permissive = 'PERMISSIVE' and p.cmd <> 'SELECT'
+          and (p.qual = 'true' or p.with_check = 'true')
+          and not exists (select 1 from pg_policies r where r.schemaname = 'public' and r.tablename = p.tablename
+                          and r.permissive = 'RESTRICTIVE' and r.qual ~ 'is_staff|is_manager')), '[]'::jsonb),
+    'open_staff', coalesce((select jsonb_agg(p.tablename || '.' || p.policyname) from pg_policies p
+        where p.schemaname = 'public' and p.permissive = 'PERMISSIVE' and p.cmd <> 'SELECT'
+          and (p.qual = 'true' or p.with_check = 'true')
+          and exists (select 1 from pg_policies r where r.schemaname = 'public' and r.tablename = p.tablename
+                      and r.permissive = 'RESTRICTIVE' and r.qual ~ 'is_staff|is_manager')), '[]'::jsonb),
     'anon_funcs', coalesce((select jsonb_agg(p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.prokind = 'f' and p.prorettype <> 'trigger'::regtype
           and has_function_privilege('anon', p.oid, 'execute')

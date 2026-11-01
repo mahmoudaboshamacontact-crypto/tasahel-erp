@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><title>عدادات المالك — تساهيل</title>
 <style>
-:root{--bg:#0e0d0c;--card:rgba(255,255,255,.05);--line:rgba(255,255,255,.1);--text:#f4eee8;--mute:#a0978e;--acc:#ff9d6c;--ok:#5fd3b3;--warn:#f5c15a;--bad:#ff6b6b}
+:root{--bg:#0e0d0c;--card:#1a1816;--line:rgba(255,255,255,.1);--text:#f4eee8;--mute:#a0978e;--acc:#ff9d6c;--ok:#5fd3b3;--warn:#f5c15a;--bad:#ff6b6b}
 @media(prefers-color-scheme:light){:root{--bg:#faf6f1;--card:#fff;--line:rgba(40,25,10,.1);--text:#26201b;--mute:#7b6f64;--acc:#e8590c;--ok:#0f9d77;--warn:#ca8a04;--bad:#d93636}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;padding:16px;max-width:1100px;margin-inline:auto}
 h1{font-size:1.3rem;margin:.2rem 0}.sub{color:var(--mute);font-size:.8rem}
@@ -73,7 +73,7 @@ async function run(){
   var dbp=d.db_bytes/(500*1048576)*100,up=d.users/50000*100;
   var gm=[['db','حجم القاعدة (حد 500MB)',function(x){return fmtB(x)}],['us','المستخدمين (حد 50 ألف)',function(x){return String(Math.round(x))}],['lat','سرعة الاتصال بالقاعدة (حي)',function(x){return Math.round(x)+' ms'}],['ld','تحميل الصفحة',function(x){return Math.round(x)+' ms'}],['sec','مؤشر الأمان',function(x){return String(Math.round(x))}],['td','بنود اليوم',function(x){return String(Math.round(x))}]];
   gm.forEach(function(x){var o=mk(x[0],x[1],x[2]);if(!o.el.parentNode)g.appendChild(o.el)});
-  var sc=100;if(d.rls_off.length)sc-=25;sc-=Math.min(40,d.open_policies.length*5);sc-=Math.min(30,d.anon_funcs.length*3);sc=Math.max(0,sc);
+  var sc=100;if(d.rls_off.length)sc-=25;sc-=Math.min(40,d.open_policies.length*8);sc-=Math.min(15,(d.open_staff||[]).length);sc-=Math.min(20,d.anon_funcs.length*3);sc=Math.max(0,sc);
   G.db.set(d.db_bytes,dbp,col(dbp,1),Math.round(dbp)+'% من الباقة المجانية');
   G.us.set(d.users,Math.max(up,1),col(up,1),'حساب مسجّل');
   setLat(lat);
@@ -84,7 +84,8 @@ async function run(){
 
   function block(t,arr,empty){root.appendChild($('div','sec',t));var b=$('div','card list');if(!arr.length)b.textContent=empty;else arr.forEach(function(x){b.appendChild($('span','tag',x))});root.appendChild(b)}
   block('مشاكل أمنية مفتوحة: جداول بدون RLS',d.rls_off,'لا يوجد ✓');
-  block('سياسات كتابة مفتوحة للكل (using true)',d.open_policies,'لا يوجد ✓');
+  block('كتابة مفتوحة لأي مستخدم مسجّل (خطر)',d.open_policies,'لا يوجد ✓');
+  block('كتابة مفتوحة لأي موظف (غالباً مقصودة للشغل)',d.open_staff||[],'لا يوجد ✓');
   block('دوال متاحة للزائر (anon) بدون داعي',d.anon_funcs,'لا يوجد ✓');
   root.appendChild($('div','sec','أكبر الجداول'));var tb=$('div','card list');
   d.tables.forEach(function(t){tb.appendChild($('div',null,t.name+' — '+t.rows+' صف — '+fmtB(t.bytes)))});root.appendChild(tb);
