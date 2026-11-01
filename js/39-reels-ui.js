@@ -70,6 +70,35 @@
     } });
   })(0);
 
+
+  /* 4) القائمة الجانبية: حبة تمييز زجاجية بتنزلق مع الماوس (ريل 1) + الدوك السفلي: كرة بتنزلق للتاب النشط (ريل 2) */
+  (function slidingHighlights() {
+    if (reduce) return;
+    function hl(menuSel, itemSel, cls, mode) {
+      var menu = document.querySelector(menuSel); if (!menu || menu.__rHl) return !!menu; menu.__rHl = true;
+      var el = document.createElement('i'); el.className = cls; el.setAttribute('aria-hidden', 'true'); menu.insertBefore(el, menu.firstChild);
+      if (getComputedStyle(menu).position === 'static') menu.style.position = 'relative';
+      function to(b) {
+        if (!b) { el.style.opacity = 0; return; }
+        el.style.opacity = 1; el.style.width = b.offsetWidth + 'px'; el.style.height = b.offsetHeight + 'px';
+        el.style.transform = 'translate(' + b.offsetLeft + 'px,' + b.offsetTop + 'px)';
+      }
+      if (mode === 'hover') {
+        menu.addEventListener('mouseover', function (e) { var b = e.target.closest(itemSel); if (b && menu.contains(b)) to(b); });
+        menu.addEventListener('mouseleave', function () { el.style.opacity = 0; });
+      } else {
+        var sync = function () { to(menu.querySelector(itemSel + '.is-active')); };
+        new MutationObserver(function () { requestAnimationFrame(sync); }).observe(menu, { attributes: true, subtree: true, attributeFilter: ['class'] });
+        window.addEventListener('resize', sync); setTimeout(sync, 300);
+      }
+      return true;
+    }
+    (function wait(n) {
+      var a = hl('#nav-menu', '.tab-btn', 'r-hl', 'hover'), b = hl('#gl-bn', 'button', 'r-bead', 'active');
+      if ((!a || !b) && n < 40) setTimeout(function () { wait(n + 1); }, 400);
+    })(0);
+  })();
+
   var _r = window.renderHomeTab;
   if (typeof _r === 'function') window.renderHomeTab = function () { var r = _r.apply(this, arguments); try { decorateHome(); } catch (e) { /* */ } return r; };
 })();
