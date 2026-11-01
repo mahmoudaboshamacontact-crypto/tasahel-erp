@@ -7,7 +7,7 @@ drop policy if exists staff_only on public.backup_log;
 create policy staff_only on public.backup_log as restrictive for all to authenticated using (public.is_manager()) with check (public.is_manager());
 
 -- (ب) دوال ما لازم تكون متاحة للزائر (anon). التتبع العام وطلب الاستفسار العام بيفضلوا زي ما هم.
-do $$
+do $body$
 declare r record;
 begin
   for r in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace
@@ -16,7 +16,8 @@ begin
     execute format('revoke execute on function %s from public, anon', r.sig);
     execute format('grant execute on function %s to authenticated', r.sig);
   end loop;
-end $$;
+end
+$body$;
 
 -- ===== Rollback =====
 -- drop policy if exists staff_only on public.customer_inquiries;
