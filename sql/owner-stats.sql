@@ -23,6 +23,18 @@ begin
           and (p.qual = 'true' or p.with_check = 'true')
           and exists (select 1 from pg_policies r where r.schemaname = 'public' and r.tablename = p.tablename
                       and r.permissive = 'RESTRICTIVE' and r.qual ~ 'is_staff|is_manager')), '[]'::jsonb),
+    'checks', jsonb_build_object(
+      'user_roles_rls_ok', coalesce((select c.relrowsecurity from pg_class c where c.oid = 'public.user_roles'::regclass), false)
+          and not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'user_roles' and cmd in ('INSERT','UPDATE','DELETE','ALL')),
+      'profiles_role_writable', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'role')
+          and has_column_privilege('authenticated', 'public.profiles', 'role', 'UPDATE'),
+      'profiles_role_in_fn', coalesce((select jsonb_agg(distinct p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.prosrc ~* 'profiles[^;]{0,80}role'), '[]'::jsonb),
+      'anon_tables', (select count(*) from information_schema.role_table_grants where table_schema = 'public' and grantee = 'anon'),
+      'public_create', has_schema_privilege('anon', 'public', 'CREATE') or has_schema_privilege('authenticated', 'public', 'CREATE'),
+      'secdef_no_path', coalesce((select jsonb_agg(p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.prosecdef and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')), '[]'::jsonb)
+    ),
     'anon_funcs', coalesce((select jsonb_agg(p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.prokind = 'f' and p.prorettype <> 'trigger'::regtype
           and has_function_privilege('anon', p.oid, 'execute')
