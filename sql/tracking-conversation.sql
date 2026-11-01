@@ -1,8 +1,8 @@
 -- إصلاح: ردود الإدارة واستفسارات العميل ما كانتش بتظهر في صفحة التتبع (Track.html بتقرا d.conversation والدالة ما كانتش بترجّعها).
--- بيضيف conversation = استفسارات العميل + التعليقات العامة بس. آمن لو اتشغل أكتر من مرة. نسخة احتياطية الأول.
+-- بيضيف conversation = استفسارات العميل + التعليقات العامة بس، وحقول الملخص (المرحلة العامة، عدد الخدمات، آخر تحديث، الموعد التقديري) لو ناقصة. آمن لو اتشغل أكتر من مرة. نسخة احتياطية الأول.
 create or replace function public.get_public_tracking_v2(p_token text)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare base jsonb; tx text; svc jsonb; pct int; conv jsonb;
+declare base jsonb; tx text; svc jsonb; pct int; conv jsonb; ost int; tot int; dlv int; lu timestamptz; ef date; et date; lt boolean;
 begin
   base := public.get_public_tracking(p_token)::jsonb;
   if base is null then return null; end if;
@@ -37,7 +37,26 @@ begin
       from public.tx_comments c where c.transaction_id::text = tx and c.is_public = true and c.deleted_at is null
   ) m;
 
-  return base || jsonb_build_object('services', svc, 'order_pct', pct, 'conversation', conv);
+  -- حقول ملخص الطلب اللي صفحة العميل بتعرضها (لو الدالة القديمة بترجّعها بتفضل هي الأصل)
+  select count(*), count(*) filter (where st = 3), coalesce(min(st), 1) into tot, dlv, ost from (
+    select case public.line_stage_of(l.delivered, l.complete, l.under_review) when 'delivered' then 3 when 'complete' then 2 else 1 end as st
+    from public.request_lines l where l.transaction_id::text = tx and l.deleted_at is null) z;
+  select coalesce(max(e.at), (select max(l.received_at) from public.request_lines l where l.transaction_id::text = tx)) into lu
+    from public.line_stage_events e where e.transaction_id = tx;
+  begin  -- الموعد التقديري: بداية التنفيذ + المدة (لو متسجلين). أي خطأ هنا ما بيوقفش باقي الصفحة
+    select min(coalesce(l.exec_start_date::date, l.received_at::date)),
+           max(coalesce(l.exec_start_date::date, l.received_at::date) + coalesce(l.duration_days, 0)::int)
+      into ef, et from public.request_lines l
+     where l.transaction_id::text = tx and l.deleted_at is null and l.duration_days is not null
+       and public.line_stage_of(l.delivered, l.complete, l.under_review) <> 'delivered';
+    lt := et is not null and et < (now() at time zone 'Africa/Cairo')::date;
+  exception when others then ef := null; et := null; lt := false;
+  end;
+
+  return jsonb_strip_nulls(jsonb_build_object('overall_stage', ost, 'total_services', tot, 'delivered_count', dlv,
+                                              'last_update', lu, 'expected_from', ef, 'expected_to', et, 'expected_late', coalesce(lt, false)))
+         || base
+         || jsonb_build_object('services', svc, 'order_pct', pct, 'conversation', conv);
 end $$;
 
 
