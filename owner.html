@@ -68,11 +68,10 @@ async function run(){
   var st=await sb.rpc('owner_stats');
   if(st.error){msg('شغّل ملف sql/owner-stats.sql في Supabase الأول. ('+(st.error.message||'')+')');return}
   var d=st.data,nav=performance.getEntriesByType('navigation')[0],load=nav?Math.round(nav.loadEventEnd||nav.domInteractive):0;
-  root.innerHTML='';
   var g=document.getElementById('gs');if(!g){root.innerHTML='';g=$('div','grid');g.id='gs';root.appendChild(g);var tail=$('div');tail.id='tl';root.appendChild(tail)}
   var dbp=d.db_bytes/(500*1048576)*100,up=d.users/50000*100;
   var gm=[['db','حجم القاعدة (حد 500MB)',function(x){return fmtB(x)}],['us','المستخدمين (حد 50 ألف)',function(x){return String(Math.round(x))}],['lat','سرعة الاتصال بالقاعدة (حي)',function(x){return Math.round(x)+' ms'}],['ld','تحميل الصفحة',function(x){return Math.round(x)+' ms'}],['sec','مؤشر الأمان',function(x){return String(Math.round(x))}],['td','بنود اليوم',function(x){return String(Math.round(x))}]];
-  gm.forEach(function(x){var o=mk(x[0],x[1],x[2]);if(!o.el.parentNode)g.appendChild(o.el)});
+  gm.forEach(function(x){var o=mk(x[0],x[1],x[2]);if(o.el.parentNode!==g)g.appendChild(o.el)});
   var sc=100;if(d.rls_off.length)sc-=25;sc-=Math.min(40,d.open_policies.length*8);sc-=Math.min(15,(d.open_staff||[]).length);sc-=Math.min(20,d.anon_funcs.length*3);sc=Math.max(0,sc);
   G.db.set(d.db_bytes,dbp,col(dbp,1),Math.round(dbp)+'% من الباقة المجانية');
   G.us.set(d.users,Math.max(up,1),col(up,1),'حساب مسجّل');
