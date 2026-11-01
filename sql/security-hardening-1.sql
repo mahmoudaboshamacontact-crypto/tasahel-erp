@@ -19,7 +19,6 @@ begin
 end
 $body$;
 
--- ===== Rollback =====
--- drop policy if exists staff_only on public.customer_inquiries;
--- drop policy if exists staff_only on public.backup_log;
--- grant execute on function public.get_partner_requests(uuid,int,int) to anon;  -- (لو احتجت ترجّع أي دالة)
+-- ملحوظة (2026-11-01): الملف ده اتطبّق فعلاً على قاعدتك (فحصنا الحالة الحية: staff_only موجودة، و anon مش بيقدر ينفّذ الدوال). ما تشغّلوش تاني.
+-- ===== Rollback (مش بسيط، اطلب مساعدة قبل ما تنفّذه) =====
+-- الرجوع الحقيقي محتاج استعادة السياسات والصلاحيات السابقة بدقة، وحذف staff_only وحدها ممكن يفتح القراءة. اطلب مني ملف رجوع مخصص وقتها.
