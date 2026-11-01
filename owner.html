@@ -17,7 +17,11 @@ svg{width:100%;max-width:210px;overflow:visible}.val{font-size:1.45rem;font-weig
 .live{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-inline-end:5px;animation:pl 1.6s ease-in-out infinite}
 @keyframes pl{50%{opacity:.25}}@media(prefers-reduced-motion:reduce){.nd,.arcv{transition:none}.live{animation:none}}
 .note{font-size:.72rem;color:var(--mute);margin-top:6px;min-height:1.1em}
-.sec{margin:18px 0 8px;font-weight:700}.list{font-size:.78rem;color:var(--mute);text-align:start;line-height:1.7}
+.desc{font-size:.72rem;color:var(--mute);margin:-2px 0 4px;line-height:1.5;min-height:2.2em}
+.sec{margin:18px 0 8px;font-weight:700}
+.chk{display:flex;gap:10px;text-align:start;align-items:flex-start;padding:10px 4px;border-top:1px solid var(--line)}.chk:first-child{border-top:0}
+.dot{flex:none;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.8rem;font-weight:700;margin-top:2px}
+.chk b{display:block;font-size:.85rem;color:var(--text)}.chk span{font-size:.75rem;color:var(--mute);line-height:1.6}.list{font-size:.78rem;color:var(--mute);text-align:start;line-height:1.7}
 .tag{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:1px 7px;margin:2px;font-size:.72rem}
 .msg{padding:2rem;text-align:center;color:var(--mute)}.link{color:var(--acc)}
 </style></head><body>
@@ -34,9 +38,9 @@ function msg(t,link){root.innerHTML='';var d=$('div','msg',t);if(link){d.appendC
 var NS='http://www.w3.org/2000/svg';
 var G={};
 function P(a,r){return [100+r*Math.cos(a*Math.PI/180),100+r*Math.sin(a*Math.PI/180)]}
-function mk(id,title,fmt){
+function mk(id,title,fmt,desc){
   if(G[id])return G[id];
-  var c=$('div','card');c.appendChild($('h3',null,title));
+  var c=$('div','card');c.appendChild($('h3',null,title));c.appendChild($('div','desc',desc||''));
   var s=document.createElementNS(NS,'svg');s.setAttribute('viewBox','0 0 200 170');
   var S=P(135,78),E=P(405,78),L=Math.PI*78*1.5;
   function path(cls,col,w){var a=document.createElementNS(NS,'path');a.setAttribute('d','M'+S[0]+' '+S[1]+' A78 78 0 1 1 '+E[0]+' '+E[1]);a.setAttribute('fill','none');a.setAttribute('stroke',col);a.setAttribute('stroke-width',w);a.setAttribute('stroke-linecap','round');if(cls)a.setAttribute('class',cls);return a}
@@ -70,9 +74,9 @@ async function run(){
   var d=st.data,nav=performance.getEntriesByType('navigation')[0],load=nav?Math.round(nav.loadEventEnd||nav.domInteractive):0;
   var g=document.getElementById('gs');if(!g){root.innerHTML='';g=$('div','grid');g.id='gs';root.appendChild(g);var tail=$('div');tail.id='tl';root.appendChild(tail)}
   var dbp=d.db_bytes/(500*1048576)*100,up=d.users/50000*100;
-  var gm=[['db','حجم القاعدة (حد 500MB)',function(x){return fmtB(x)}],['us','المستخدمين (حد 50 ألف)',function(x){return String(Math.round(x))}],['lat','سرعة الاتصال بالقاعدة (حي)',function(x){return Math.round(x)+' ms'}],['ld','تحميل الصفحة',function(x){return Math.round(x)+' ms'}],['sec','مؤشر الأمان',function(x){return String(Math.round(x))}],['td','بنود اليوم',function(x){return String(Math.round(x))}]];
-  gm.forEach(function(x){var o=mk(x[0],x[1],x[2]);if(o.el.parentNode!==g)g.appendChild(o.el)});
-  var sc=100;if(d.rls_off.length)sc-=25;sc-=Math.min(40,d.open_policies.length*8);sc-=Math.min(15,(d.open_staff||[]).length);sc-=Math.min(20,d.anon_funcs.length*3);sc=Math.max(0,sc);
+  var gm=[['db','حجم القاعدة (حد 500MB)',function(x){return fmtB(x)},'مساحة بياناتك على Supabase. لو قربت من 500MB النظام هيتوقف عن الحفظ.'],['us','المستخدمين (حد 50 ألف)',function(x){return String(Math.round(x))},'عدد الحسابات المسجّلة (موظفين ومنفذين). مش هتقرب من الحد.'],['lat','سرعة الاتصال بالقاعدة (حي)',function(x){return Math.round(x)+' ms'},'كام ملّي ثانية بياخد الرد من Supabase. أقل من 300 ممتاز، فوق 800 بطيء.'],['ld','تحميل الصفحة',function(x){return Math.round(x)+' ms'},'وقت فتح الصفحة دي من جهازك. بيتأثر بسرعة النت عندك.'],['sec','مؤشر الأمان',function(x){return String(Math.round(x))},'ملخص فحوصات الأمان تحت. 100 = مفيش مشاكل ظاهرة، وأقل معناه فيه حاجة محتاجة نظرة.'],['td','بنود اليوم',function(x){return String(Math.round(x))},'عدد الخدمات اللي اتسجّلت النهارده. مؤشر على حجم الشغل.']];
+  gm.forEach(function(x){var o=mk(x[0],x[1],x[2],x[3]);if(o.el.parentNode!==g)g.appendChild(o.el)});
+  var sc=100;if(d.rls_off.length)sc-=25;sc-=Math.min(40,d.open_policies.length*8);sc-=Math.min(15,(d.open_staff||[]).length);sc-=Math.min(20,d.anon_funcs.length*3);if(d.checks&&d.checks.user_roles_rls_ok===false)sc-=30;if(d.checks&&d.checks.public_create)sc-=20;sc=Math.max(0,sc);
   G.db.set(d.db_bytes,dbp,col(dbp,1),Math.round(dbp)+'% من الباقة المجانية');
   G.us.set(d.users,Math.max(up,1),col(up,1),'حساب مسجّل');
   setLat(lat);
@@ -82,11 +86,22 @@ async function run(){
   var tl=document.getElementById('tl');tl.innerHTML='';var rootSave=root;root=tl;
 
   function block(t,arr,empty){root.appendChild($('div','sec',t));var b=$('div','card list');if(!arr.length)b.textContent=empty;else arr.forEach(function(x){b.appendChild($('span','tag',x))});root.appendChild(b)}
-  block('مشاكل أمنية مفتوحة: جداول بدون RLS',d.rls_off,'لا يوجد ✓');
-  block('كتابة مفتوحة لأي مستخدم مسجّل (خطر)',d.open_policies,'لا يوجد ✓');
-  block('كتابة مفتوحة لأي موظف (غالباً مقصودة للشغل)',d.open_staff||[],'لا يوجد ✓');
-  block('دوال متاحة للزائر (anon) بدون داعي',d.anon_funcs,'لا يوجد ✓');
-  root.appendChild($('div','sec','أكبر الجداول'));var tb=$('div','card list');
+  (function(){var c=d.checks||{},rows=[];
+    function add(ok,t,why,bad){rows.push([ok,t,ok===true?why:(bad||why)])}
+    add(d.rls_off.length===0,'كل الجداول محمية بنظام الصلاحيات (RLS)','كل جدول في قاعدتك مقفول، ومحدش يقرأ أو يكتب فيه إلا بإذن.','فيه جداول مش محمية: '+d.rls_off.join('، '));
+    add(c.user_roles_rls_ok===true,'محدش يقدر يغيّر الأدوار (مدير/موظف) بنفسه','جدول الأدوار محمي، وتغيير الأدوار بيتم من خلال دوال خاصة بالمدير بس.','جدول الأدوار ممكن يتعدّل من حساب عادي. ده خطير، ابعتلي لقطة فوراً.');
+    add(!c.public_create,'محدش من الزوار أو الموظفين يقدر ينشئ حاجة جوه قاعدة البيانات','صلاحية الإنشاء مقفولة.','فيه صلاحية إنشاء مفتوحة على قاعدة البيانات.');
+    add(Number(c.anon_tables||0)===0,'الزائر (من غير تسجيل دخول) ما يقدرش يقرأ أي جدول','الجداول كلها محتاجة تسجيل دخول.','الزائر عنده صلاحية على '+c.anon_tables+' جدول.');
+    add(d.anon_funcs.length===0,'الزائر ما يقدرش يشغّل دوال داخلية','الدوال العامة الوحيدة هي صفحة التتبع واستفسار العميل.','دوال مفتوحة للزائر: '+d.anon_funcs.join('، '));
+    add(d.open_policies.length===0,'مفيش كتابة مفتوحة لأي حساب مسجّل','أي كتابة محتاجة تكون موظف على الأقل.','سياسات مفتوحة: '+d.open_policies.join('، '));
+    var sp=(c.secdef_no_path||[]);add(sp.length===0,'الدوال الحساسة مثبّتة على مكان آمن','كل الدوال الحساسة ليها إعداد أمان ثابت.','دوال من غير إعداد ثابت: '+sp.join('، '));
+    var pr=(c.profiles_role_in_fn||[]);var risky=c.profiles_role_writable===true&&pr.length>0;
+    rows.push([risky?null:true,'الدور المكتوب في صفحة الموظف مش بيتحكم في الصلاحيات',risky?'الدوال دي بتقرا الدور من صفحة الموظف نفسها وده ممكن يتعدّل: '+pr.join('، ')+'. تأثيرها صغير (تذكيرات) لكن الأفضل نخليها تقرا من جدول الأدوار. ابعتلي وأصلحها.':'الصلاحيات الحقيقية بتتحدد من جدول الأدوار، مش من بيانات الموظف.',null]);
+    root.appendChild($('div','sec','فحوصات الأمان (كل بند بيقولك معناه)'));var cb=$('div','card');
+    rows.forEach(function(r){var ok=r[0],e=$('div','chk'),dt=$('div','dot',ok===true?'✓':ok===false?'!':'؟');dt.style.background=ok===true?'var(--ok)':ok===false?'var(--bad)':'var(--warn)';var tx=$('div');tx.appendChild($('b',null,r[1]));tx.appendChild($('span',null,ok===true?r[2]:(r[3]||r[2])));e.appendChild(dt);e.appendChild(tx);cb.appendChild(e)});
+    root.appendChild(cb);})();
+      block('كتابة مفتوحة لأي موظف (غالباً مقصودة لشغل الفريق، للعلم بس)',d.open_staff||[],'لا يوجد ✓');
+    root.appendChild($('div','sec','أكبر الجداول'));var tb=$('div','card list');
   d.tables.forEach(function(t){tb.appendChild($('div',null,t.name+' — '+t.rows+' صف — '+fmtB(t.bytes)))});root.appendChild(tb);
   root.appendChild($('div','sec','حدود لا تُقاس لحظياً (محتاجة مفتاح سري، فمش هنحطه في صفحة ويب)'));
   var lk=$('div','card list');
