@@ -440,7 +440,6 @@ html.dark body.reels [class~="inset-[5px]"]:not(#_a):not(#_b):not(#_c) { backgro
 #hdr-clock-slot .gl-clock .gc-ap { font-size: 9px; font-weight: 800; letter-spacing: .06em; padding: 2px 5px; border-radius: 6px; margin-inline-start: 2px; align-self: center; background: rgba(255,122,61,.16); color: var(--r-acc, #e8590c); }
 #hdr-clock-slot .gl-clock .gc-date { font-size: 9.5px !important; opacity: .6; line-height: 1; }
 
- final-touches
 /* ===== حبة التمييز المنزلقة (القائمة الجانبية + الدوك) ===== */
 #nav-menu .r-hl { position: absolute; top: 0; left: 0; z-index: 0; border-radius: .8rem; pointer-events: none; opacity: 0;
   background: rgba(255,122,61,.14); border: 1px solid rgba(255,157,108,.28);
@@ -452,7 +451,7 @@ html.dark body.reels [class~="inset-[5px]"]:not(#_a):not(#_b):not(#_c) { backgro
 #gl-bn > button { position: relative; z-index: 1; }
 body.reels #gl-bn button.is-active { background: transparent !important; box-shadow: none !important; }
 html.dark body.reels #nav-menu .tab-btn:hover:not(#_x):not(#_y) { background: transparent !important; }
-=======
+
 /* ===== كروت الموبايل: ما تزيدش عن عرض الشاشة (من غير لف الموبايل) ===== */
 @media (max-width: 767px) {
   /* الطلبات المتأخرة / أي صف .md-row: العميل فوق، والتفاصيل تحته بعرض كامل */
