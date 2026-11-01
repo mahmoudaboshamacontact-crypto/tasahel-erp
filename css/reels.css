@@ -439,3 +439,15 @@ html.dark body.reels [class~="inset-[5px]"]:not(#_a):not(#_b):not(#_c) { backgro
 #hdr-clock-slot .gl-clock .gc-sec { font-size: 10.5px; font-weight: 500; opacity: .5; min-width: 1.6em; }
 #hdr-clock-slot .gl-clock .gc-ap { font-size: 9px; font-weight: 800; letter-spacing: .06em; padding: 2px 5px; border-radius: 6px; margin-inline-start: 2px; align-self: center; background: rgba(255,122,61,.16); color: var(--r-acc, #e8590c); }
 #hdr-clock-slot .gl-clock .gc-date { font-size: 9.5px !important; opacity: .6; line-height: 1; }
+
+/* ===== حبة التمييز المنزلقة (القائمة الجانبية + الدوك) ===== */
+#nav-menu .r-hl { position: absolute; top: 0; left: 0; z-index: 0; border-radius: .8rem; pointer-events: none; opacity: 0;
+  background: rgba(255,122,61,.14); border: 1px solid rgba(255,157,108,.28);
+  transition: transform .32s var(--r-ease, cubic-bezier(.34,1.4,.5,1)), width .32s, height .32s, opacity .2s; }
+#nav-menu > *:not(.r-hl) { position: relative; z-index: 1; }
+#gl-bn .r-bead { position: absolute; top: 5px; left: 0; z-index: 0; border-radius: 999px; pointer-events: none; opacity: 0;
+  background: linear-gradient(135deg, var(--r-acc2, #ff7a3d), var(--r-acc, #ff9d6c)); box-shadow: 0 6px 16px -6px rgba(255,122,61,.6);
+  transition: transform .45s var(--r-ease, cubic-bezier(.34,1.4,.5,1)), width .45s var(--r-ease, cubic-bezier(.34,1.4,.5,1)), height .45s, opacity .2s; }
+#gl-bn > button { position: relative; z-index: 1; }
+body.reels #gl-bn button.is-active { background: transparent !important; box-shadow: none !important; }
+html.dark body.reels #nav-menu .tab-btn:hover:not(#_x):not(#_y) { background: transparent !important; }
