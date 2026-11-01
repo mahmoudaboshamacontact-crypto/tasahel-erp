@@ -492,7 +492,7 @@
 <div id="tab-search" class="space-y-5 hidden">
 <div class="card p-4 sm:p-5 space-y-3.5">
 <div class="flex flex-wrap items-end gap-3">
-<div class="flex-1 min-w-[240px]"><label class="label" for="search-key">بحث بالتليفون أو اسم العميل أو رقم المعاملة أو الخدمة</label><input id="search-key" placeholder="اكتب للبحث الفوري..." class="field" oninput="executeSearch()"></div>
+<div class="flex-1 min-w-[240px]"><label class="label" for="search-key">بحث بالتليفون أو اسم العميل أو رقم المعاملة أو الخدمة</label><input id="search-key" placeholder="اكتب للبحث الفوري..." class="field" oninput="searchDebounced()"></div>
 <div class="min-w-[140px]"><label class="label" for="search-status-filter">حالة المعاملة</label><select id="search-status-filter" class="field" onchange="executeSearch()"><option value="all">كل الحالات</option><option value="In Progress">قيد التنفيذ</option><option value="Complete">مكتمل</option><option value="Delivered">تم التسليم</option><option value="Under Review">قيد المراجعة</option></select></div>
 <div class="flex items-center gap-2"><button onclick="executeSearch()" class="btn-neo-pri"><i class="fa-solid fa-magnifying-glass"></i><span>بحث</span></button>
 <button onclick="exportSearchResultsCsv()" class="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2 font-bold text-white text-xs shadow-sm"><i class="fa-solid fa-file-excel ms-1"></i> Excel</button></div>
@@ -649,5 +649,6 @@
 <script src="js/37-order-cycle.js?v=1" defer></script>
 <script src="js/38-request-people.js?v=2" defer></script>
 <script src="js/39-reels-ui.js?v=2" defer></script>
+<script src="js/40-fast-suggest.js?v=1" defer></script>
 </body>
 </html>
