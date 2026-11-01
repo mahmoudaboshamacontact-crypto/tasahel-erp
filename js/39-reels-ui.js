@@ -48,7 +48,10 @@
     var h1 = home.querySelector('.hm-hero h1');
     if (h1 && !h1.querySelector('.r-acc')) h1.innerHTML = h1.innerHTML.replace(/^(\s*أهلاً،\s*)(.+)$/, '$1<span class="r-acc">$2</span>');
     if (reduce) return;
+    if (home.__rAt && Date.now() - home.__rAt < 30000) return; /* تحديث تلقائي للبيانات: بلا حركة ولا عدّاد (كان بيعمل اهتزاز) */
+    home.__rAt = Date.now();
     home.classList.remove('r-enter'); void home.offsetWidth; home.classList.add('r-enter');
+    setTimeout(function () { home.classList.remove('r-enter'); }, 900);
     home.querySelectorAll('.hm-kpi-box > div.text-base').forEach(countUp);
   }
 
@@ -77,7 +80,7 @@
     function hl(menuSel, itemSel, cls, mode) {
       var menu = document.querySelector(menuSel); if (!menu || menu.__rHl) return !!menu; menu.__rHl = true;
       var el = document.createElement('i'); el.className = cls; el.setAttribute('aria-hidden', 'true'); menu.insertBefore(el, menu.firstChild);
-      if (getComputedStyle(menu).position === 'static') menu.style.position = 'relative';
+      if (menuSel !== '#gl-bn' && getComputedStyle(menu).position === 'static') menu.style.position = 'relative';
       function to(b) {
         if (!b) { el.style.opacity = 0; return; }
         el.style.opacity = 1; el.style.width = b.offsetWidth + 'px'; el.style.height = b.offsetHeight + 'px';
