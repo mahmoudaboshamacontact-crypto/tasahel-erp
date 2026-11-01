@@ -1719,12 +1719,15 @@ function searchResults(){
     return [l.client_name,pTxt,l.transaction_id,l.service_ref,l.service,l.employee,l.notes,l.rn_nm].some(v=>(v||'').toLowerCase().includes(q))||(l.phone||'').replace(/\s+/g,'').includes(q.replace(/\s+/g,''));
   });
 }
+function searchMore(){window.__searchLim=(window.__searchLim||40)+60;executeSearch();}
+let __sTimer=0;function searchDebounced(){clearTimeout(__sTimer);__sTimer=setTimeout(function(){window.__searchLim=40;executeSearch();},150);}
 function executeSearch(){
   const q=$('search-key').value.trim(),st=$('search-status-filter').value;
   if(!q&&st==='all'){const m='اكتب في خانة البحث لعرض المعاملات المطابقة...';$('search-results-table').innerHTML='<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400">'+m+'</td></tr>';$('search-results-cards').innerHTML='<div class="card p-6 text-center text-slate-400 text-xs">'+m+'</div>';$('search-results-count').textContent='أدخل كلمة البحث للبدء...';return;}
   const r=searchResults();$('search-results-count').textContent='تم العثور على '+r.length+' نتيجة';
+  const lim=window.__searchLim||40,rv=r.slice(0,lim),moreBtn=r.length>lim?'<button type="button" onclick="searchMore()" class="btn-neo-pri text-xs">عرض المزيد ('+(r.length-lim)+' نتيجة)</button>':'';
   const none='لم يتم العثور على نتائج مطابقة';
-  $('search-results-table').innerHTML=r.map(l=>{
+  $('search-results-table').innerHTML=rv.map(l=>{
     const stVal=l.status||'In Progress';
     const wa=waLink(l.phone,'أهلاً '+(l.client_name||'')+'، بخصوص معاملتك رقم '+(l.transaction_id||'')+' — تساهيل');
     const phHtml=l.phone?'<div class="rc-phone-pill"><span>'+escapeHtml(l.phone)+'</span>'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="text-emerald-600 hover:text-emerald-700 text-sm leading-none" title="مراسلة واتساب"><i class="fa-brands fa-whatsapp"></i></a>':'')+'</div>':'<span class="text-slate-300">—</span>';
@@ -1739,15 +1742,15 @@ function executeSearch(){
       '<td class="px-3 py-3.5 whitespace-nowrap">'+badge(stVal)+'</td>'+
       '<td class="px-3 py-3.5 text-xs text-slate-600 dark:text-slate-300 max-w-[200px] break-words">'+(l.notes?escapeHtml(l.notes):'<span class="text-slate-300">—</span>')+'</td>'+
       '<td class="px-3 py-3.5 text-center whitespace-nowrap"><div class="inline-flex items-center justify-center gap-1.5">'+(wa?'<a href="'+wa+'" target="_blank" rel="noopener" class="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 hover:bg-emerald-100 transition"><i class="fa-brands fa-whatsapp text-xs"></i></a>':'')+'<button '+at(l.transaction_id)+' class="p-2 rounded-lg bg-slate-100/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 transition" title="التفاصيل"><i class="fa-solid fa-eye text-xs"></i></button></div></td></tr>';
-  }).join('')||'<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400">'+none+'</td></tr>';
+  }).join('')+(moreBtn?'<tr><td colspan="9" class="px-6 py-4 text-center">'+moreBtn+'</td></tr>':'')||'<tr><td colspan="9" class="px-6 py-10 text-center text-slate-400">'+none+'</td></tr>';
 
-  $('search-results-cards').innerHTML=r.map(l=>{
+  $('search-results-cards').innerHTML=rv.map(l=>{
     const stVal=l.status||'In Progress';
     return '<div data-st17="'+escapeHtml(stVal)+'" class="card lift p-4 space-y-2.5 text-xs">'+
       '<div class="flex items-start justify-between gap-2"><button '+ac(l.client_name)+' class="font-bold text-ink dark:text-white leading-snug text-start hover:text-brand-600">'+escapeHtml(l.client_name)+'</button><button '+at(l.transaction_id)+' class="rc-tx-pill !py-0.5 !px-2 !text-[11px]" dir="ltr">'+escapeHtml(l.transaction_id)+'</button></div>'+
       '<div class="rc-svc-pill w-full"><span class="rc-svc-name">'+escapeHtml(l.service||'—')+'</span><span class="rc-svc-qty" dir="ltr">×'+fmtNum(l.qty)+'</span></div>'+
       '<div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500"><span>'+empCell(l.employee)+'</span><div class="flex items-center gap-2">'+badge(stVal)+'<span class="font-bold text-sm text-brand-600 dark:text-violet-300 whitespace-nowrap">'+formatCurrency(l.total)+'</span></div></div></div>';
-  }).join('')||'<div class="card p-6 text-center text-slate-400 text-xs">'+none+'</div>';
+  }).join('')+(moreBtn?'<div class="text-center py-2">'+moreBtn+'</div>':'')||'<div class="card p-6 text-center text-slate-400 text-xs">'+none+'</div>';
 }
 function exportSearchResultsCsv(){
   const r=searchResults();if(!r.length)return showToast('لا توجد نتائج للتصدير','info');
