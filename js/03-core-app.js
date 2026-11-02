@@ -1501,11 +1501,25 @@ let openTxCurrent=null,txDirty=false;
 const STATUS_PATCH={'In Progress':{delivered:false,complete:false,under_review:false},'Under Review':{delivered:false,complete:false,under_review:true},'Complete':{delivered:false,complete:true,under_review:false},'Delivered':{delivered:true,complete:true,under_review:false}};
 function statusSelect(l){return '<select data-id="'+escapeHtml(l.id)+'" data-orig="'+escapeHtml(l.status||'In Progress')+'" onchange="markTxDirty()" class="field st-sel mt-2 !py-1.5 text-xs">'+Object.keys(STATUS_PATCH).map(s=>'<option value="'+s+'"'+(s===l.status?' selected':'')+'>'+statusLabel(s)+'</option>').join('')+'</select>';}
 async function applyStatus(ids,status){
-  const patch=STATUS_PATCH[status];if(!patch||!ids.length)return false;
-  const r=await sbClient.from('request_lines').update(patch).in('id',ids).select('id,status,delivered,complete,under_review');
+  const basePatch=STATUS_PATCH[status];if(!basePatch||!ids.length)return false;
+  const patch=Object.assign({},basePatch);
+  if(status==='Delivered'){
+    patch.delivered_date=new Date().toLocaleDateString('en-CA');
+  }
+  let r=await sbClient.from('request_lines').update(patch).in('id',ids).select('id,status,delivered,complete,under_review,delivered_date');
+  if(r.error&&/delivered_date|column|schema/i.test((r.error.message||'')+' '+(r.error.details||''))){
+    r=await sbClient.from('request_lines').update(basePatch).in('id',ids).select('id,status,delivered,complete,under_review');
+  }
   if(r.error){showError('تعذّر تغيير الحالة',r.error);return false;}
   if(!r.data||r.data.length!==ids.length){showToast('التعديل ماتحفظش: غالباً صلاحية التعديل (UPDATE) مش مفعّلة في Supabase','error',12000);return false;}
-  r.data.forEach(row=>{const l=allRequestLines.find(x=>String(x.id)===String(row.id));if(l)Object.assign(l,row);});
+  const todayIso=new Date().toLocaleDateString('en-CA');
+  r.data.forEach(row=>{
+    const l=allRequestLines.find(x=>String(x.id)===String(row.id));
+    if(l){
+      Object.assign(l,row);
+      if(status==='Delivered'&&!l.delivered_date)l.delivered_date=todayIso;
+    }
+  });
   return true;
 }
 function afterStatusChange(){

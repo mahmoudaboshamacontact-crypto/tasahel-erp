@@ -4,7 +4,7 @@
   window.__phase4 = true;
   const eh = escapeHtml, MANAGER_EMAIL = 'mahmoud.aboshama@tasahel.com.eg';
   const isMgr = () => window.__role ? window.__role === 'manager' : !!(currentUser && ['mahmoud.aboshama@tasahel.com.eg', 'mahmoud.aboshama.contact@gmail.com'].includes(String(currentUser.email || '').toLowerCase()));
-  let closures = [], snaps = [], targets = [], svcTargetsFallback = {}, live = null, rawMonthLines = [], viewMonth = null, setupNeeded = false, busy = false, seq = 0;
+  let closures = [], snaps = [], targets = [], svcTargetsFallback = {}, live = null, rawMonthLines = [], rawMonthRefunds = [], viewMonth = null, setupNeeded = false, busy = false, seq = 0;
   let filterFrom = '', filterTo = '', filterEmpId = 'all';
   let modalState = { uid: null, mode: 'all', q: '' };
 
@@ -104,15 +104,56 @@
     return out;
   }
 
-  function aggregate(lines) {
+  /* جلب الاستردادات المعتمدة (approved) حسب تاريخ القرار decided_at داخل الفترة + البنود الأصلية المرتبطة بها */
+  async function fetchRangeRefunds(startDay, endDay, existingLines) {
+    const a = startDay + 'T00:00:00';
+    const endDateObj = new Date(endDay + 'T00:00:00');
+    endDateObj.setDate(endDateObj.getDate() + 1);
+    const b = endDateObj.toLocaleDateString('en-CA') + 'T00:00:00';
+    let refs = [];
+    try {
+      const r = await sbClient.from('line_refunds')
+        .select('id,line_id,kind,qty,sales_amount,unit_comm_hint,exec_amount,exec_forfeit,reason,status,requested_by,requested_at,decided_by,decided_at')
+        .eq('status', 'approved')
+        .gte('decided_at', a)
+        .lt('decided_at', b)
+        .order('decided_at', { ascending: false });
+      if (r.error) return [];
+      refs = r.data || [];
+    } catch (e) { return []; }
+    if (!refs.length) return [];
+
+    const lineMap = new Map();
+    (existingLines || []).forEach(l => lineMap.set(String(l.id), l));
+    if (typeof allRequestLines !== 'undefined' && Array.isArray(allRequestLines)) {
+      allRequestLines.forEach(l => { if (!lineMap.has(String(l.id))) lineMap.set(String(l.id), l); });
+    }
+    const missingIds = [...new Set(refs.map(rf => rf.line_id).filter(id => id != null && !lineMap.has(String(id))))];
+    if (missingIds.length) {
+      try {
+        const lr = await sbClient.from('request_lines')
+          .select('id,employee,qty,total,commission,commission_per_unit,transaction_id,received_at,client_name,phone,service,status,delivered,complete,under_review')
+          .in('id', missingIds);
+        if (!lr.error && Array.isArray(lr.data)) {
+          lr.data.forEach(l => lineMap.set(String(l.id), l));
+        }
+      } catch (e) {}
+    }
+    return refs.map(rf => Object.assign({}, rf, { _line: lineMap.get(String(rf.line_id)) || null }));
+  }
+
+  function aggregate(lines, refunds) {
     const by = new Map(), lost = new Map(), lostLines = [];
+    const ensureEmp = p => {
+      if (!by.has(p.id)) by.set(p.id, { sales: 0, comm: 0, lines: 0, units: 0, commUnits: 0, refundUnits: 0, refundSales: 0, refundComm: 0, refundCount: 0, tx: new Set(), bySvc: new Map(), reqLines: [], refundLines: [] });
+      return by.get(p.id);
+    };
     lines.forEach(l => {
       const p = profileByName(l.employee), sales = Number(l.total) || 0, q = Math.max(0, Number(l.qty) || 0), rate = unitCommOf(l), c = rate * q;
       const st = resolveLineStatus(l), ph = resolveLinePhone(l);
       const richLine = Object.assign({}, l, { _rate: rate, _comm: c, _qty: q, _sales: sales, _status: st, _phone: ph });
       if (!p) { const k = (l.employee || 'بدون موظف').trim(); lost.set(k, (lost.get(k) || 0) + 1); lostLines.push(richLine); return; }
-      if (!by.has(p.id)) by.set(p.id, { sales: 0, comm: 0, lines: 0, units: 0, commUnits: 0, tx: new Set(), bySvc: new Map(), reqLines: [] });
-      const d = by.get(p.id);
+      const d = ensureEmp(p);
       d.sales += sales;
       d.comm += c;
       d.lines++;
@@ -128,6 +169,60 @@
       sv.sales += sales;
       sv.comm += c;
     });
+
+    /* خصم الاستردادات المعتمدة (approved) التي decided_at في نفس الفترة لكل موظف */
+    const refList = Array.isArray(refunds) ? refunds : (rawMonthRefunds || []);
+    refList.forEach(rf => {
+      if (!rf || rf.status !== 'approved') return;
+      const orig = rf._line || (typeof allRequestLines !== 'undefined' && Array.isArray(allRequestLines) ? allRequestLines.find(x => String(x.id) === String(rf.line_id)) : null);
+      if (!orig) return;
+      const p = profileByName(orig.employee);
+      if (!p) return;
+      const d = ensureEmp(p);
+      const rQty = Math.max(0, Number(rf.qty) || 0);
+      const rSales = Number(rf.sales_amount) || 0;
+      const hint = rf.unit_comm_hint != null && rf.unit_comm_hint !== '' ? rf.unit_comm_hint : orig.commission_per_unit;
+      const rComm = window.lineComm({ service: orig.service, qty: rQty, commission_per_unit: hint });
+      const rRate = rQty > 0 ? (rComm / rQty) : unitCommOf({ service: orig.service, commission_per_unit: hint });
+
+      d.units -= rQty;
+      d.sales -= rSales;
+      d.comm -= rComm;
+      if (rRate > 0) d.commUnits = Math.max(0, d.commUnits - rQty);
+      d.refundUnits += rQty;
+      d.refundSales += rSales;
+      d.refundComm += rComm;
+      d.refundCount++;
+
+      const sn = (orig.service || 'خدمة غير مسماة').trim();
+      if (!d.bySvc.has(sn)) d.bySvc.set(sn, { name: sn, lines: 0, units: 0, rate: rRate, sales: 0, comm: 0 });
+      const sv = d.bySvc.get(sn);
+      sv.units -= rQty;
+      sv.sales -= rSales;
+      sv.comm -= rComm;
+
+      const refRich = {
+        id: 'REF-' + rf.id,
+        line_id: orig.id,
+        transaction_id: orig.transaction_id,
+        client_name: orig.client_name,
+        phone: resolveLinePhone(orig),
+        service: (orig.service || 'خدمة') + ' (' + (rf.kind === 'full' ? 'استرداد كلي' : 'استرداد جزئي') + ')',
+        received_at: rf.decided_at || rf.requested_at || orig.received_at,
+        _rate: rRate,
+        _comm: -rComm,
+        _qty: -rQty,
+        _sales: -rSales,
+        _status: rf.kind === 'full' ? 'مسترد كليًا' : 'مسترد جزئيًا',
+        _phone: resolveLinePhone(orig),
+        _isRefund: true,
+        _refundKind: rf.kind,
+        _refundReason: rf.reason || ''
+      };
+      d.reqLines.push(refRich);
+      d.refundLines.push(refRich);
+    });
+
     return { by: by, lost: lost, lostLines: lostLines };
   }
 
@@ -171,8 +266,10 @@
     const customRange = (filterFrom && filterTo) && (filterFrom !== bounds[0] || filterTo !== bounds[1]);
     live = null;
     if (!isClosed(viewMonth) || customRange) {
-      rawMonthLines = await fetchRangeLines(filterFrom || bounds[0], filterTo || bounds[1]);
-      live = aggregate(rawMonthLines);
+      const fFrom = filterFrom || bounds[0], fTo = filterTo || bounds[1];
+      rawMonthLines = await fetchRangeLines(fFrom, fTo);
+      rawMonthRefunds = await fetchRangeRefunds(fFrom, fTo, rawMonthLines);
+      live = aggregate(rawMonthLines, rawMonthRefunds);
     }
     return true;
   }
@@ -208,11 +305,16 @@
         lines: d ? d.lines : 0,
         units: d ? d.units : 0,
         commUnits: d ? d.commUnits : 0,
+        refundUnits: d ? d.refundUnits : 0,
+        refundSales: d ? d.refundSales : 0,
+        refundComm: d ? d.refundComm : 0,
+        refundCount: d ? d.refundCount : 0,
         tx: d ? d.tx.size : 0,
         target: t ? Number(t.target) : 0,
         svcTarget: getEmpSvcTarget(p.id, t),
         bySvc: d ? d.bySvc : new Map(),
-        reqLines: d ? d.reqLines : []
+        reqLines: d ? d.reqLines : [],
+        refundLines: d ? d.refundLines : []
       };
     }).sort((a, b) => b.sales - a.sales);
   }
@@ -528,6 +630,9 @@
   };
 
   function commPillHtml(rate, commVal) {
+    if (commVal < 0) {
+      return '<span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold whitespace-nowrap" style="background:rgba(255,107,107,.14);color:var(--r-bad,#ff6b6b);border:1px solid rgba(255,107,107,.35)"><i class="fa-solid fa-rotate-left text-[10px]"></i><span>خصم استرداد (' + eh(formatCurrency(commVal)) + ')</span></span>';
+    }
     if (rate > 0) {
       return '<span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 text-[11px] font-bold whitespace-nowrap"><i class="fa-solid fa-circle-check text-[10px]"></i><span>نعم · بكوميشن (' + eh(formatCurrency(commVal)) + ')</span></span>';
     }
@@ -929,6 +1034,8 @@
     if (window.loadRecentRequests) loadRecentRequests();
   };
 
+  window.getCommRowsForPeriod = allRowsForPeriod;
+  window.getCommViewMonth = () => viewMonth || workingMonth();
   window.commChangeMonth = function (m) {
     viewMonth = m;
     const bounds = monthBounds(m);
@@ -996,7 +1103,9 @@
     busy = true;
     try {
       const bounds = monthBounds(viewMonth);
-      const fresh = aggregate(await fetchRangeLines(bounds[0], bounds[1]));
+      const mLines = await fetchRangeLines(bounds[0], bounds[1]);
+      const mRefs = await fetchRangeRefunds(bounds[0], bounds[1], mLines);
+      const fresh = aggregate(mLines, mRefs);
       const rows = profiles.map(p => {
         const d = fresh.by.get(p.id), t = targets.find(x => x.user_id === p.id);
         return {

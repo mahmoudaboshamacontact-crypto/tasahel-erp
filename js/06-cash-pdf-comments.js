@@ -69,9 +69,27 @@
      ===================================================================== */
   function getCashLines() {
     const dt = $('cash-date').value;
-    return allRequestLines
-      .filter(l => (l.payment_method || '').trim() === 'كاش' && (!dt || dayKey(lineDate(l)) === dt))
-      .sort((a, b) => String(lineDate(a)).localeCompare(String(lineDate(b))));
+    const out = [];
+    allRequestLines.forEach(l => {
+      if ((l.payment_method || '').trim() !== 'كاش') return;
+      if (dt && dayKey(lineDate(l)) !== dt) return;
+      const rf = typeof window.getLineRefundSummary === 'function' ? window.getLineRefundSummary(l.id) : null;
+      if (rf && rf.approvedCount > 0) {
+        if (rf.isFull || rf.remQty <= 0 || rf.remSales <= 0) return; /* الاسترداد الكلي: الكاش بينزل من ورقة الكاش */
+        out.push(Object.assign({}, l, {
+          qty: rf.remQty,
+          total: rf.remSales,
+          _origQty: l.qty,
+          _origTotal: l.total,
+          _refundedQty: rf.qty,
+          _refundedSales: rf.sales_amount,
+          _isPartialRefund: true
+        }));
+      } else {
+        out.push(l);
+      }
+    });
+    return out.sort((a, b) => String(lineDate(a)).localeCompare(String(lineDate(b))));
   }
   function clientWithPeopleText(l) {
     const pTxt = typeof window.getRequestPeopleNamesText === 'function' ? window.getRequestPeopleNamesText(l.transaction_id, l.id, l.service) : '';
@@ -103,7 +121,7 @@
       '<td class="px-3 py-3 text-xs max-w-[180px]">' + dash(l.address) + '</td>' +
       '<td class="px-3 py-3 font-mono text-xs font-semibold text-brand-600" dir="ltr"><button ' + at(l.transaction_id) + ' class="hover:underline">' + eh(l.transaction_id) + '</button></td>' +
       '<td class="px-3 py-3 font-mono text-xs font-bold" dir="ltr">' + dash(l.rn_nm) + '</td>' +
-      '<td class="px-3 py-3 text-xs font-medium">' + eh(l.service) + '</td>' +
+      '<td class="px-3 py-3 text-xs font-medium">' + eh(l.service) + (typeof window.getLineRefundBadgeHtml === 'function' ? ' ' + window.getLineRefundBadgeHtml(l.id) : '') + '</td>' +
       '<td class="px-3 py-3 text-center font-mono font-bold">' + eh(l.qty) + '</td>' +
       '<td class="px-3 py-3 font-mono font-bold text-brand-600">' + formatCurrency(l.total) + '</td>' +
       '<td class="px-3 py-3 text-xs">' + empCell(l.employee) + '</td>' +
@@ -115,7 +133,7 @@
       '<div class="flex items-center justify-between gap-2"><button ' + ac(l.client_name) + ' class="font-bold text-ink dark:text-white text-start">' + eh(l.client_name) + '</button><button ' + at(l.transaction_id) + ' class="font-mono text-brand-600 font-bold" dir="ltr">' + eh(l.transaction_id) + '</button></div>' +
       '<div class="text-slate-500" dir="ltr" style="text-align:right">' + eh(l.phone || '—') + '</div>' +
       (l.address ? '<div class="text-slate-500">' + eh(l.address) + '</div>' : '') +
-      '<div class="font-medium">' + eh(l.service) + ' (×' + eh(l.qty) + ') — <b class="text-brand-600">' + formatCurrency(l.total) + '</b></div>' +
+      '<div class="font-medium">' + eh(l.service) + ' (×' + eh(l.qty) + ') — <b class="text-brand-600">' + formatCurrency(l.total) + '</b>' + (typeof window.getLineRefundBadgeHtml === 'function' ? ' ' + window.getLineRefundBadgeHtml(l.id) : '') + '</div>' +
       '<div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500"><span>رقم الإيصال: <b class="font-mono text-ink dark:text-white">' + eh(l.rn_nm || '—') + '</b></span><span>المستلم: ' + eh(l.receiver || '—') + '</span></div>' +
       '<div class="flex items-center justify-between text-[11px] text-slate-400"><span>الموظف: ' + eh(l.employee || '—') + '</span><span>' + formatDateTime(lineDate(l)) + '</span></div></div>'
     ).join('') || '<div class="card p-6 text-center text-slate-400 text-xs">لا توجد معاملات كاش في هذا التاريخ</div>';
@@ -134,14 +152,15 @@
   /* =====================================================================
      3) شيت المنفذين: تصدير PDF
      ===================================================================== */
+  const netExecCost06 = l => typeof window.netExecCostOf === 'function' ? window.netExecCostOf(l) : execCostOf(l);
   function execDef() {
-    const ex = $('f-exec').value || 'all', dt = $('f-date').value, f = getFilteredExecLines(), cost = f.reduce((s, l) => s + execCostOf(l), 0);
+    const ex = $('f-exec').value || 'all', dt = $('f-date').value, f = getFilteredExecLines(), cost = f.reduce((s, l) => s + netExecCost06(l), 0);
     return {
       title: 'شيت متابعة المنفذين',
       meta: ['المنفذ: ' + (ex === 'all' ? 'كل المنفذين' : ex), 'تاريخ بداية التنفيذ: ' + (dt ? formatDateOnly(dt) : 'كل التواريخ')],
       stats: [['عدد بنود التنفيذ', f.length], ['إجمالي تكلفة التنفيذ', formatCurrency(cost)]],
       headers: ['العميل والمستفيدون', 'الهاتف', 'Request ID', 'Service ID', 'الخدمة', 'العدد', 'المنفذ', 'تكلفة الوحدة', 'إجمالي التنفيذ', 'بداية التنفيذ', 'ملاحظات'],
-      rows: f.map(l => [clientWithPeopleText(l), l.phone, l.transaction_id, l.service_ref || '—', l.service, l.qty, l.executor, formatCurrency(Number(l.exec_unit_cost) || 0), formatCurrency(execCostOf(l)), formatDateOnly(l.exec_start_date || lineDate(l)), l.notes]),
+      rows: f.map(l => [clientWithPeopleText(l), l.phone, l.transaction_id, l.service_ref || '—', l.service, l.qty, l.executor, formatCurrency(Number(l.exec_unit_cost) || 0), formatCurrency(netExecCost06(l)), formatDateOnly(l.exec_start_date || lineDate(l)), l.notes]),
       filename: 'شيت_المنفذين_' + (ex === 'all' ? 'الكل' : ex) + '_' + (dt || dayKey(new Date())) + '.pdf',
       perPage: 14
     };

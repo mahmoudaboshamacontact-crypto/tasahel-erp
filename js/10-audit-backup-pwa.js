@@ -14,9 +14,29 @@
   const fmtAt = s => new Intl.DateTimeFormat('ar-EG', { weekday: 'long', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(s));
   function audRow(a) {
     let body;
+    const d = a.details || {};
     if (a.action === 'created') body = 'أضاف بند <b>' + eh(a.service || '') + '</b>';
     else if (a.action === 'deleted') body = '<span class="text-rose-600">حذف بند ' + eh(a.service || '') + '</span>';
-    else body = Object.keys(a.details || {}).map(k => '<div>' + eh(a.service || '') + ' — <b>' + eh(FIELDS[k] || k) + '</b>: <span class="text-slate-400 line-through">' + eh(val(a.details[k].old)) + '</span> ← <b>' + eh(val(a.details[k].new)) + '</b></div>').join('');
+    else if (a.action === 'refund' || a.action === 'refund_approved') {
+      const kLbl = d.kind === 'full' ? 'استرداد كلي' : 'استرداد جزئي';
+      body = '<span style="color:var(--r-bad,#ff6b6b);font-weight:700"><i class="fa-solid fa-rotate-left ms-1"></i>' + kLbl + ' معتمد — ' + eh(a.service || '') + '</span>' +
+        (d.qty ? ' · الكمية: <b>' + eh(String(d.qty)) + '</b>' : '') +
+        (d.sales_amount != null ? ' · المبلغ: <b>' + eh(formatCurrency(d.sales_amount)) + '</b>' : '') +
+        (d.reason ? '<div class="mt-0.5 text-[11px]">السبب: ' + eh(d.reason) + '</div>' : '');
+    } else if (a.action === 'refund_request') {
+      const kLbl = d.kind === 'full' ? 'استرداد كلي' : 'استرداد جزئي';
+      body = '<span style="color:var(--r-acc,#ff9d6c);font-weight:700"><i class="fa-solid fa-clock-rotate-left ms-1"></i>طلب ' + kLbl + ' — ' + eh(a.service || '') + '</span>' +
+        (d.qty ? ' · الكمية: <b>' + eh(String(d.qty)) + '</b>' : '') +
+        (d.reason ? '<div class="mt-0.5 text-[11px]">السبب: ' + eh(d.reason) + '</div>' : '');
+    } else if (a.action === 'refund_rejected') {
+      body = '<span class="text-slate-500 font-bold"><i class="fa-solid fa-ban ms-1"></i>رفض طلب استرداد — ' + eh(a.service || '') + '</span>' +
+        (d.note || d.reason ? '<div class="mt-0.5 text-[11px]">ملاحظة: ' + eh(d.note || d.reason) + '</div>' : '');
+    } else body = Object.keys(d).map(k => {
+      if (d[k] && typeof d[k] === 'object' && ('old' in d[k] || 'new' in d[k])) {
+        return '<div>' + eh(a.service || '') + ' — <b>' + eh(FIELDS[k] || k) + '</b>: <span class="text-slate-400 line-through">' + eh(val(d[k].old)) + '</span> ← <b>' + eh(val(d[k].new)) + '</b></div>';
+      }
+      return '<div>' + eh(a.service || '') + ' — <b>' + eh(FIELDS[k] || k) + '</b>: <b>' + eh(val(d[k])) + '</b></div>';
+    }).join('');
     return '<div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 text-xs"><div class="flex flex-wrap justify-between gap-2 text-[11px] text-slate-400"><span class="font-bold text-ink dark:text-white">' + eh(a.user_name || 'غير معروف') + '</span><span><bdi>' + eh(fmtAt(a.at)) + '</bdi></span></div><div class="mt-1 text-slate-600 dark:text-slate-300">' + body + '</div></div>';
   }
   const _ot = window.openTxModal;
@@ -108,7 +128,7 @@
   window.filterCashSheet = function () { _fc(); renderCashClose(); };
 
   /* ---------- 4) نسخة احتياطية (للمدير) ---------- */
-  const BK_TABLES = ['request_lines', 'services', 'profiles', 'tx_comments', 'emp_targets', 'month_closures', 'month_snapshots', 'cash_closings', 'audit_log', 'couriers', 'courier_trips', 'courier_cash', 'courier_closings', 'partner_ops', 'tasks'], BK_DAYS = 7;
+  const BK_TABLES = ['request_lines', 'line_refunds', 'services', 'profiles', 'tx_comments', 'emp_targets', 'month_closures', 'month_snapshots', 'cash_closings', 'audit_log', 'couriers', 'courier_trips', 'courier_cash', 'courier_closings', 'partner_ops', 'tasks'], BK_DAYS = 7;
   let bkBusy = false;
   /* بتقرأ الجدول كله. أي خطأ حقيقي بيوقف النسخة (مفيش نسخة ناقصة تتحفظ على إنها كاملة). الجدول الغايب بس بيتتخطى. */
   async function fetchAll(table) {

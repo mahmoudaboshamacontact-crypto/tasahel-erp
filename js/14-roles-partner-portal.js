@@ -55,8 +55,35 @@
       .replace(/ى/g, 'ي');
   }
 
-  function lineExecCost(l) {
-    return Number(l.exec_total) || ((Number(l.exec_unit_cost) || 0) * (Number(l.qty) || 1)) || 0;
+  function partnerRefundInfo(s, lineId, lineQty) {
+    const map = s && s.refundsByLine;
+    const arr = map && map.get(String(lineId));
+    if (!arr || !arr.length) return null;
+    let qty = 0, execForfeited = 0, hasFull = false;
+    arr.forEach(r => {
+      qty += Math.max(0, Number(r.qty) || 0);
+      if (r.kind === 'full') hasFull = true;
+      if (r.exec_forfeit) execForfeited += Math.max(0, Number(r.exec_amount) || 0);
+    });
+    const origQ = Math.max(1, Number(lineQty) || 1);
+    const isFull = hasFull || qty >= origQ;
+    return { isFull: isFull, qty: qty, origQty: origQ, execForfeited: execForfeited, list: arr };
+  }
+
+  function partnerRefundBadgeHtml(s, l) {
+    const rf = partnerRefundInfo(s, l.id, l.qty);
+    if (!rf) return '';
+    if (rf.isFull) {
+      return '<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap" style="background:rgba(255,107,107,.16);color:var(--r-bad,#ff6b6b);border:1px solid rgba(255,107,107,.38)"><i class="fa-solid fa-rotate-left"></i><span>مسترد كليًا</span></span>';
+    }
+    return '<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap" style="background:rgba(255,157,108,.16);color:var(--r-acc,#ff9d6c);border:1px solid rgba(255,157,108,.38)"><i class="fa-solid fa-rotate-left"></i><span>مسترد جزئيًا (' + fmtNum(rf.qty) + ' من ' + fmtNum(rf.origQty) + ')</span></span>';
+  }
+
+  function lineExecCost(l, sRef) {
+    const base = Number(l.exec_total) || ((Number(l.exec_unit_cost) || 0) * (Number(l.qty) || 1)) || 0;
+    const rf = sRef ? partnerRefundInfo(sRef, l.id, l.qty) : (l._rfInfo || null);
+    if (!rf || !(rf.execForfeited > 0)) return base;
+    return Math.max(0, base - rf.execForfeited);
   }
 
   function lineDateKey(l) {
@@ -166,8 +193,9 @@
     if (!s) return;
     const all = s.allRows || [];
     const filtered = s.filtered = applyFilters(s);
-    const totalExec = sum(filtered, lineExecCost);
-    const totalAllExec = sum(all, lineExecCost);
+    all.forEach(l => { l._rfInfo = partnerRefundInfo(s, l.id, l.qty); });
+    const totalExec = sum(filtered, l => lineExecCost(l, s));
+    const totalAllExec = sum(all, l => lineExecCost(l, s));
 
     const inProgCount = all.filter(l => (l.status || 'In Progress') === 'In Progress').length;
     const reviewCount = all.filter(l => (l.status || 'In Progress') === 'Under Review').length;
@@ -259,6 +287,7 @@
           '<td class="px-3 py-3 whitespace-nowrap" dir="ltr" onclick="event.stopPropagation()">' + phHtml + '</td>' +
           '<td class="px-3 py-3 font-semibold text-ink dark:text-white min-w-[140px]">' +
             '<div class="rc-svc-pill"><span class="rc-svc-name">' + eh(l.service || '—') + '</span></div>' +
+            (l._rfInfo ? '<div class="mt-1">' + partnerRefundBadgeHtml(s, l) + '</div>' : '') +
           '</td>' +
           '<td class="px-3 py-3 text-center font-mono font-bold whitespace-nowrap" dir="ltr">×' + fmtNum(l.qty || 1) + '</td>' +
           '<td class="px-3 py-3 whitespace-nowrap">' +
@@ -301,6 +330,7 @@
             '</div>' +
             '<div class="shrink-0 flex flex-col items-end gap-1">' +
               badge(stVal) +
+              partnerRefundBadgeHtml(s, l) +
               (isLate ? '<span class="rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 px-2 py-0.5 text-[10px] font-bold"><i class="fa-solid fa-clock ms-1"></i>متأخر</span>' : '') +
             '</div>' +
           '</div>' +
@@ -384,9 +414,10 @@
                 return '<div class="card p-3.5 space-y-2 border border-slate-200/80 dark:border-slate-700/80">' +
                   '<div class="flex items-start justify-between gap-2">' +
                     '<div>' +
-                      '<div class="font-bold text-sm text-ink dark:text-white flex items-center gap-2">' +
+                      '<div class="font-bold text-sm text-ink dark:text-white flex flex-wrap items-center gap-2">' +
                         '<span>بند #' + (idx + 1) + ': ' + eh(it.service) + '</span>' +
                         '<span class="font-mono text-xs bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-600 dark:text-slate-300" dir="ltr">×' + fmtNum(it.qty || 1) + '</span>' +
+                        partnerRefundBadgeHtml(s, it) +
                       '</div>' +
                       (it.service_ref ? '<div class="text-[11px] font-mono font-bold text-violet-700 dark:text-violet-300 mt-0.5">Service ID: ' + eh(it.service_ref) + '</div>' : '') +
                     '</div>' +
@@ -454,7 +485,26 @@
 
     let rows = null, partnerName = fallbackName || '';
     let hasMore = false, total = null;
-    let rpcRes = await sbClient.rpc('get_partner_requests', { p_partner_uid: mgr ? pid : null, p_limit: PAGE, p_offset: 0 });
+    const [rpcRes0, refRes] = await Promise.all([
+      sbClient.rpc('get_partner_requests', { p_partner_uid: mgr ? pid : null, p_limit: PAGE, p_offset: 0 }),
+      sbClient.rpc('get_partner_refunds', { p_partner_uid: mgr ? pid : null }).catch(() => ({ error: true }))
+    ]);
+    let rpcRes = rpcRes0;
+    const refMap = new Map();
+    if (refRes && !refRes.error && refRes.data && Array.isArray(refRes.data.refunds)) {
+      refRes.data.refunds.forEach(rf => {
+        const k = String(rf.line_id);
+        if (!refMap.has(k)) refMap.set(k, []);
+        refMap.get(k).push(rf);
+      });
+    } else if (typeof window.getApprovedRefundsForLine === 'function') {
+      /* احتياطي للمدير لو الدالة لسه متشغلتش في Supabase */
+      (typeof allRequestLines !== 'undefined' ? allRequestLines : []).forEach(l => {
+        const arr = window.getApprovedRefundsForLine(l.id);
+        if (arr && arr.length) refMap.set(String(l.id), arr);
+      });
+    }
+    s.refundsByLine = refMap;
     /* لو الـ SQL الجديد (الترقيم) لسه ما اتشغّلش: نرجع للنسخة القديمة من غير ترقيم */
     if (rpcRes.error && /PGRST202|Could not find|schema cache/i.test(((rpcRes.error.message) || '') + ((rpcRes.error.code) || ''))) {
       rpcRes = await sbClient.rpc('get_partner_requests', { p_partner_uid: mgr ? pid : null });
