@@ -66,6 +66,24 @@
       sales += num(l.total); units += Math.max(0, num(l.qty));
       try { if (typeof window.lineComm === 'function') comm += num(window.lineComm(l)); } catch (e) { /* */ }
     });
+    /* خصم الاستردادات المعتمدة (approved) التي decided_at في الشهر الحالي */
+    if (typeof window.getAllApprovedRefunds === 'function') {
+      window.getAllApprovedRefunds().forEach(rf => {
+        if (String(rf.decided_at || '').slice(0, 7) !== st.month) return;
+        const orig = lines.find(x => String(x.id) === String(rf.line_id));
+        if (!orig) return;
+        const p = profFor(orig.employee); if (!p || p.id !== uid) return;
+        const rq = Math.max(0, num(rf.qty));
+        units -= rq;
+        sales -= num(rf.sales_amount);
+        try {
+          if (typeof window.lineComm === 'function') {
+            const hint = rf.unit_comm_hint != null && rf.unit_comm_hint !== '' ? rf.unit_comm_hint : orig.commission_per_unit;
+            comm -= num(window.lineComm({ service: orig.service, qty: rq, commission_per_unit: hint }));
+          }
+        } catch (e) { /* */ }
+      });
+    }
     const t = st.targets.find(x => x.user_id === uid) || {}, target = num(t.target), svc = num(t.services_target);
     const pct = svc > 0 ? Math.round(units / svc * 100) : (target > 0 ? Math.round(sales / target * 100) : null);
     return { sales, units, comm, target, svc, pct };

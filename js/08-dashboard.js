@@ -13,6 +13,38 @@
   const AN = () => (window.__p18anim ? 700 : 0); /* الحركة بتشتغل وقت الضغط/الإجراء بس */
   const C = { brand: '#0d9488', ink: '#0b1b33', pal: ['#0d9488', '#2563eb', '#8b5cf6', '#f59e0b', '#ec4899', '#64748b'] };
 
+  let refCache = {};
+  async function loadMonthRefunds(m, force) {
+    const c = refCache[m];
+    if (c && !force && Date.now() - c.t < 60000) return c.rows;
+    const a = m + '-01T00:00:00', b = addM(m, 1) + '-01T00:00:00';
+    let refs = [];
+    try {
+      const r = await sbClient.from('line_refunds')
+        .select('id,line_id,kind,qty,sales_amount,unit_comm_hint,exec_amount,exec_forfeit,reason,status,decided_at')
+        .eq('status', 'approved')
+        .gte('decided_at', a)
+        .lt('decided_at', b);
+      if (!r.error && Array.isArray(r.data)) refs = r.data;
+    } catch (e) {}
+    if (refs.length) {
+      const map = new Map();
+      if (typeof allRequestLines !== 'undefined' && Array.isArray(allRequestLines)) {
+        allRequestLines.forEach(l => map.set(String(l.id), l));
+      }
+      const missIds = [...new Set(refs.map(x => x.line_id).filter(id => id != null && !map.has(String(id))))];
+      if (missIds.length) {
+        try {
+          const lr = await sbClient.from('request_lines').select('*').in('id', missIds);
+          if (!lr.error && Array.isArray(lr.data)) lr.data.forEach(l => map.set(String(l.id), l));
+        } catch (e) {}
+      }
+      refs = refs.map(rf => Object.assign({}, rf, { _line: map.get(String(rf.line_id)) || null }));
+    }
+    refCache[m] = { t: Date.now(), rows: refs };
+    return refs;
+  }
+
   async function loadMonth(m, force) {
     const c = cache[m];
     if (c && !force && Date.now() - c.t < 60000) return c.rows;
@@ -24,6 +56,36 @@
       out.push.apply(out, r.data || []);
       if ((r.data || []).length < 1000) break;
     }
+    /* إدراج الاستردادات المعتمدة في هذا الشهر حسب decided_at كقيود خصم سالبة */
+    const refs = await loadMonthRefunds(m, force);
+    refs.forEach(rf => {
+      const orig = rf._line || out.find(x => String(x.id) === String(rf.line_id));
+      if (!orig) return;
+      const rQty = Math.max(0, Number(rf.qty) || 0);
+      const rSales = Number(rf.sales_amount) || 0;
+      const rExec = rf.exec_forfeit ? (Number(rf.exec_amount) || 0) : 0;
+      const hint = rf.unit_comm_hint != null && rf.unit_comm_hint !== '' ? rf.unit_comm_hint : orig.commission_per_unit;
+      const rComm = typeof window.lineComm === 'function'
+        ? window.lineComm({ service: orig.service, qty: rQty, commission_per_unit: hint })
+        : (Number(hint) || 0) * rQty;
+      out.push({
+        id: 'REF-' + rf.id,
+        _isRefundEntry: true,
+        _refundKind: rf.kind,
+        line_id: orig.id,
+        transaction_id: null, /* لا يزيد عدد المعاملات */
+        received_at: rf.decided_at,
+        employee: orig.employee,
+        service: orig.service,
+        payment_method: orig.payment_method,
+        qty: -rQty,
+        total: -rSales,
+        exec_total: -rExec,
+        exec_unit_cost: 0,
+        commission: -rComm,
+        commission_per_unit: hint
+      });
+    });
     cache[m] = { t: Date.now(), rows: out };
     return out;
   }
@@ -134,7 +196,7 @@
   function renderHeat(monthLines) {
     const order = [6, 0, 1, 2, 3, 4, 5], names = { 6: 'السبت', 0: 'الأحد', 1: 'الاثنين', 2: 'الثلاثاء', 3: 'الأربعاء', 4: 'الخميس', 5: 'الجمعة' };
     const g = Array.from({ length: 7 }, () => new Array(24).fill(0)); let mn = 24, mx = -1, top = 0;
-    monthLines.forEach(l => { const d = new Date(l.received_at); if (isNaN(d)) return; const v = ++g[d.getDay()][d.getHours()]; if (v > top) top = v; if (d.getHours() < mn) mn = d.getHours(); if (d.getHours() > mx) mx = d.getHours(); });
+    monthLines.forEach(l => { if (l._isRefundEntry) return; const d = new Date(l.received_at); if (isNaN(d)) return; const v = ++g[d.getDay()][d.getHours()]; if (v > top) top = v; if (d.getHours() < mn) mn = d.getHours(); if (d.getHours() > mx) mx = d.getHours(); });
     if (mx < 0) { $('dsh-heat').innerHTML = '<div class="py-8 text-center text-xs text-slate-400">لا توجد بيانات كافية</div>'; return; }
     const hrs = []; for (let h = mn; h <= mx; h++) hrs.push(h);
     let h = '<div class="grid gap-1 text-[10px] min-w-[460px]" style="grid-template-columns:64px repeat(' + hrs.length + ',minmax(0,1fr))"><span></span>' + hrs.map(x => '<span class="text-center text-slate-400 font-mono">' + x + '</span>').join('');
@@ -186,7 +248,7 @@
     ['today', 'week', 'month'].forEach(r => { const b = $('dash-btn-' + r); if (b) b.className = 'rounded-lg px-3.5 py-1.5 font-semibold transition ' + (r === range ? 'bg-white text-ink shadow' : 'text-white/80 hover:text-white'); });
   };
   window.setDashboardRange = function (r) { range = r; styleDashButtons(); renderDashboardMetrics(); };
-  window.dashRefresh = function () { cache = {}; renderDashboardMetrics(); };
+  window.dashRefresh = function () { cache = {}; refCache = {}; renderDashboardMetrics(); };
   window.renderDashboardMetrics = async function () {
     if (!sbClient || !$('dsh-kpis')) return;
     const my = ++seq, P = period(), dark = document.documentElement.classList.contains('dark');
@@ -219,5 +281,5 @@
   const _tg = window.toggleDarkMode;
   window.toggleDarkMode = function () { const r = _tg.apply(this, arguments); if (currentTab === 'dash') { try { recolor(); } catch (e) { /* */ } } return r; };
   const _lr2 = window.loadRecentRequests;
-  window.loadRecentRequests = async function () { const x = await _lr2(); cache = {}; return x; };
+  window.loadRecentRequests = async function () { const x = await _lr2(); cache = {}; refCache = {}; return x; };
 })();
