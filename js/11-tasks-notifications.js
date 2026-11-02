@@ -28,7 +28,7 @@
     const x = notes.find(n => String(n.id) === String(id)); if (!x) return;
     $('nt-panel').classList.add('hidden');
     if (!x.read) { x.read = true; renderBell(); sbClient.from('notifications').update({ read: true }).eq('id', x.id).then(() => {}); }
-    if (String(x.kind).indexOf('task') === 0) switchTab('tasks');
+    if (String(x.kind).indexOf('task') === 0) switchTab('tasks'); else if (x.kind === 'weekly_summary' && typeof window.openWeeklySummary === 'function') window.openWeeklySummary();
   };
   window.ntReadAll = async function () {
     notes.forEach(n => n.read = true); renderBell();

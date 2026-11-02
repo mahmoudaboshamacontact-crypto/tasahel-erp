@@ -1,0 +1,4 @@
+-- الملخص الأسبوعي (المرحلة 22). اتطبّق على Supabase بالفعل كـ migrations:
+--   weekly_summaries_v1  : جدول weekly_summaries + RLS + دوال _wk_metrics / generate_weekly_summaries / generate_weekly_summaries_now
+--   weekly_summaries_cron: تفعيل pg_cron + جدولة كل سبت 07:00 UTC (9 ص القاهرة شتاءً)
+-- النص الكامل موجود في Supabase (list_migrations). الملف ده للتوثيق بس.
