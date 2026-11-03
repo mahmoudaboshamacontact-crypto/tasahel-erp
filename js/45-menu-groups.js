@@ -34,7 +34,8 @@
   }
 
   const CSS =
-    '#nav-menu .mg{display:block}' +
+    '#nav-menu > section.mg{display:block;position:static!important;z-index:auto!important}' +
+    '#nav-menu .mg-body{position:static}' +
     '#nav-menu .mg:not(:has(.tab-btn:not(.hidden))){display:none}' +
     '#nav-menu .mg:not(.open) .mg-body{display:none}' +
     '#nav-menu .mg-head{display:flex;width:100%;align-items:center;gap:8px;padding:8px 10px;margin-top:4px;border:0;background:transparent;cursor:pointer;font-size:11px;font-weight:700;color:var(--r-mute,#8b85a3);text-align:right;position:relative}' +
