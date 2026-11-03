@@ -14,6 +14,10 @@
   const BTN_OFF = 'tab-btn text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800';
   const st = { m: '', svc: 'all', ex: 'all', f: 'all', g: 'svc', open: null };
   const isPartner = () => window.__role === 'partner';
+  const isMgr = () => { try { return typeof canEditTx === 'function' && !!canEditTx(); } catch (e) { return false; } };
+  const PKEY = 'ts_wt_presets';
+  const presets = () => { try { const a = JSON.parse(localStorage.getItem(PKEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+  const savePresets = a => { try { localStorage.setItem(PKEY, JSON.stringify(a.slice(0, 12))); } catch (e) { /* */ } };
   const stOf = l => l.status || 'In Progress';
   const isDone = l => stOf(l) === 'Complete' || stOf(l) === 'Delivered';
   const monthOf = l => String(lineDate(l) || '').slice(0, 7);
@@ -63,7 +67,7 @@
     '.wt-tb{width:100%;border-collapse:collapse;font-size:14px}.wt-tb th,.wt-tb td{padding:9px 8px;text-align:center;border-bottom:1px solid var(--r-line,#e5e7eb)}' +
     '.wt-tb th{font-size:12px;color:var(--r-mute,#8a8178);font-weight:700}.wt-tb td:first-child,.wt-tb th:first-child{text-align:right}.wt-tb tbody tr{cursor:pointer}' +
     '.wt-tot td{font-weight:800;border-top:2px solid var(--r-line,#e5e7eb)}.wt-ok{color:var(--r-ok,#5fd3b3);font-weight:700}.wt-warn{color:var(--r-acc,#ff9d6c);font-weight:700}.wt-bad{color:#e5484d;font-weight:700}' +
-    '.wt-sub{font-size:13px;padding:6px 10px;border-bottom:1px dashed var(--r-line,#e5e7eb);display:flex;gap:8px;justify-content:space-between;cursor:pointer}.wt-sum{font-size:15px;line-height:1.9}';
+    '.wt-sub{font-size:13px;padding:6px 10px;border-bottom:1px dashed var(--r-line,#e5e7eb);display:flex;gap:8px;justify-content:space-between;cursor:pointer}.wt-sum{font-size:15px;line-height:1.9}.wt-chip{display:inline-flex;border:1px solid var(--r-line,#e5e7eb);border-radius:999px;overflow:hidden;font-size:13px}.wt-chip button{padding:5px 10px;background:transparent;color:inherit;cursor:pointer}.wt-chip button+button{opacity:.6;border-inline-start:1px solid var(--r-line,#e5e7eb)}';
 
   function opt(v, cur, label) { return '<option value="' + eh(v) + '"' + (v === cur ? ' selected' : '') + '>' + eh(label == null ? v : label) + '</option>'; }
   function sel(id, label, html) { return '<label>' + label + '<select id="' + id + '">' + html + '</select></label>'; }
@@ -78,7 +82,11 @@
       sel('wt-f', 'الحالة', opt('all', st.f, 'الكل') + opt('done', st.f, 'اتنفذ') + opt('left', st.f, 'فاضل') + opt('late', st.f, 'متأخر')) +
       sel('wt-g', 'تقسيم حسب', opt('svc', st.g, 'الخدمة') + opt('ex', st.g, 'المنفذ') + opt('both', st.g, 'الخدمة والمنفذ')) +
       '<button type="button" class="wt-btn" data-wt="xlsx"><i class="fa-solid fa-file-excel"></i> تحميل Excel</button>' +
-      '<button type="button" class="wt-btn" data-wt="xlsxd" style="background:transparent;color:inherit">تفاصيل البنود</button></div>';
+      '<button type="button" class="wt-btn" data-wt="xlsxd" style="background:transparent;color:inherit">تفاصيل البنود</button>' +
+      (isMgr() ? '<button type="button" class="wt-btn" data-wt="report" style="background:transparent;color:inherit"><i class="fa-solid fa-file-invoice"></i> تقرير الشهر للمدير</button>' : '') + '</div>' +
+      '<div class="wt-card" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span style="font-size:12px;color:var(--r-mute,#8a8178)">اختصاراتي:</span>' +
+      presets().map((x, i) => '<span class="wt-chip"><button type="button" data-wt-pre="' + i + '">' + eh(x.n) + '</button><button type="button" data-wt-del="' + i + '" title="مسح">×</button></span>').join('') +
+      '<button type="button" class="wt-btn" data-wt="save" style="background:transparent;color:inherit;padding:5px 10px;font-size:12px">＋ احفظ الفلتر الحالي</button></div>';
     const summary = '<div class="wt-card wt-sum">' + (st.m ? mLabel(st.m) : 'كل الفترة') + ': استلمنا <b>' + fmt(t.got) + '</b>، اتنفذ <b class="wt-ok">' + fmt(t.done) +
       '</b> (منها اتسلّم ' + fmt(t.del) + ')، فاضل <b class="wt-warn">' + fmt(t.left) + '</b>' + (t.late ? '، منهم متأخر <b class="wt-bad">' + fmt(t.late) + '</b>' : '') + '.</div>';
     let body;
@@ -94,7 +102,16 @@
 
   function onClick(e) {
     const t = e.target && e.target.closest ? e.target : null; if (!t) return;
-    const b = t.closest('[data-wt]'); if (b) { b.getAttribute('data-wt') === 'xlsx' ? xlsxSummary() : xlsxDetails(); return; }
+    const pre = t.closest('[data-wt-pre]'); if (pre) { const x = presets()[+pre.getAttribute('data-wt-pre')]; if (x) { st.svc = x.svc; st.ex = x.ex; st.f = x.f; st.g = x.g; st.open = null; paint(); } return; }
+    const del = t.closest('[data-wt-del]'); if (del) { const a = presets(); a.splice(+del.getAttribute('data-wt-del'), 1); savePresets(a); paint(); return; }
+    const b = t.closest('[data-wt]');
+    if (b) {
+      const k = b.getAttribute('data-wt');
+      if (k === 'xlsx') xlsxSummary(); else if (k === 'xlsxd') xlsxDetails();
+      else if (k === 'report') { if (typeof window.monthlyReport === 'function') window.monthlyReport(st.m); }
+      else if (k === 'save') { const n = (window.prompt('اسم الاختصار؟ (مثال: السفارة الإماراتية)') || '').trim().slice(0, 30); if (n) { const a = presets(); a.push({ n: n, svc: st.svc, ex: st.ex, f: st.f, g: st.g }); savePresets(a); paint(); } }
+      return;
+    }
     const tx = t.closest('[data-wt-tx]'); if (tx) { const id = tx.getAttribute('data-wt-tx'); if (id && typeof window.openTxModal === 'function') window.openTxModal(id); return; }
     const r = t.closest('[data-wt-open]'); if (r) { const k = r.getAttribute('data-wt-open'); st.open = st.open === k ? null : k; paint(); }
   }
