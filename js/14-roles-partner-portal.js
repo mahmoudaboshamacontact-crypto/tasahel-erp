@@ -840,6 +840,16 @@
 
   const logout = '<button type="button" onclick="handleLogout()" class="rounded-xl bg-white/10 hover:bg-white/20 px-3.5 py-2 text-xs font-semibold text-white transition"><i class="fa-solid fa-right-from-bracket ms-1.5"></i>تسجيل الخروج</button>';
 
+  /* شبكة أمان: لو حصل أي خطأ غير متوقع نعرض رسالة واضحة وزرار إعادة المحاولة بدل التحميل اللانهائي */
+  function safeOps(box, pid, mgr, name) {
+    if (!box) return;
+    opsView(box, pid, mgr, name).catch(function (e) {
+      console.warn('opsView', e);
+      box.innerHTML = '<div class="card p-5 text-center text-xs text-rose-500">حصل خطأ في تحميل الطلبات. <button type="button" class="font-bold underline" id="p8-retry">إعادة المحاولة</button></div>';
+      const r = box.querySelector('#p8-retry'); if (r) r.onclick = function () { safeOps(box, pid, mgr, name); };
+    });
+  }
+
   function showPartner(name, uid) {
     overlay(
       '<header class="bg-[#0b1b33] shadow-md sticky top-0 z-20">' +
@@ -856,7 +866,7 @@
       '</header>' +
       '<main id="p8-main" class="mx-auto max-w-7xl space-y-4 px-4 py-5"></main>'
     );
-    opsView($('p8-main'), uid, false, name);
+    safeOps($('p8-main'), uid, false, name);
   }
 
   const _sl = window.showLoginScreen;
@@ -929,7 +939,7 @@
           '</div>' +
           '<div id="p8-mgr" class="space-y-4"></div>'
         : '<div class="card p-6 text-center text-xs text-slate-400">لا يوجد منفذون خارجيون مربوطون حالياً</div>');
-    if (cur) opsView($('p8-mgr'), cur, true, curObj && curObj.partner_name);
+    if (cur) safeOps($('p8-mgr'), cur, true, curObj && curObj.partner_name);
   }
   p8.pick = v => { cur = v; renderPartners(); };
   p8.assign = async e => {
