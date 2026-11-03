@@ -183,8 +183,8 @@
       const menu = document.getElementById('nav-menu'); if (!menu) return false;
       const b = document.createElement('button'); b.id = 'tab-wtrack-btn'; b.type = 'button'; b.className = BTN_OFF;
       b.setAttribute('onclick', "switchTab('wtrack')"); b.innerHTML = '<i class="fa-solid fa-list-check"></i><span>متابعة الشغل</span>';
-      const a = document.getElementById('tab-exec-btn');
-      if (a && a.parentElement === menu) a.insertAdjacentElement('afterend', b); else menu.appendChild(b);
+      const a = menu.querySelector('[data-tab-target="exec"]');
+      if (a) a.insertAdjacentElement('afterend', b); else menu.insertBefore(b, menu.firstChild);
     }
     return true;
   }
