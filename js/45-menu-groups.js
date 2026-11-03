@@ -10,7 +10,7 @@
   if (window.__menuGroups) return; window.__menuGroups = true;
   const KEY = 'ts_menu_groups';
   const GROUPS = [
-    { id: 'daily', title: 'الشغل اليومي', icon: 'fa-sun', keys: ['home', 'new', 'tx', 'exec', 'wtrack', 'cash', 'receipt', 'myday', 'late'] },
+    { id: 'daily', title: 'الشغل اليومي', icon: 'fa-sun', keys: ['home', 'new', 'tx', 'exec', 'wtrack', 'cash', 'receipt', 'batchprint', 'myday', 'late'] },
     { id: 'follow', title: 'متابعة وتواصل', icon: 'fa-comments', keys: ['chat', 'tasks', 'notes', 'inquiries', 'search'] },
     { id: 'perf', title: 'أداء وتقارير', icon: 'fa-chart-line', keys: ['comm', 'dash', 'perf', 'wk', 'team'] },
     { id: 'admin', title: 'إدارة', icon: 'fa-sliders', keys: ['hr', 'couriers', 'partners', 'calc', 'db', 'backup'] }
