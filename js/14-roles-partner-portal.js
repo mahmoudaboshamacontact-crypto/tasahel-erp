@@ -487,7 +487,7 @@
     let hasMore = false, total = null;
     const [rpcRes0, refRes] = await Promise.all([
       sbClient.rpc('get_partner_requests', { p_partner_uid: mgr ? pid : null, p_limit: PAGE, p_offset: 0 }),
-      sbClient.rpc('get_partner_refunds', { p_partner_uid: mgr ? pid : null }).catch(() => ({ error: true }))
+      (async () => { try { return await sbClient.rpc('get_partner_refunds', { p_partner_uid: mgr ? pid : null }); } catch (e) { return { error: true }; } })()
     ]);
     let rpcRes = rpcRes0;
     const refMap = new Map();
