@@ -89,22 +89,59 @@
     } else if (k === 'Enter' && sel >= 0) { ev.preventDefault(); pick(sel); }
     else if (k === 'Escape') hide();
   }
+  function clearHeavyDatalists() {
+    ['clients-datalist', 'phones-datalist', 'receipt-clients-datalist'].forEach(function (id) {
+      var d = document.getElementById(id);
+      if (d && d.firstChild) d.innerHTML = '';
+    });
+  }
+  function lightRenderDatalists() {
+    try {
+      clearHeavyDatalists();
+      if (typeof uniq !== 'function' || typeof opts !== 'function') return;
+      var empEl = document.getElementById('emp-datalist');
+      if (empEl) {
+        var profNames = (typeof profiles !== 'undefined' && Array.isArray(profiles)) ? profiles.map(function (p) { return (p.full_name || '').trim(); }).filter(Boolean) : [];
+        empEl.innerHTML = opts(Array.from(new Set(profNames.concat(uniq('employee')))));
+      }
+      var recEl = document.getElementById('rec-datalist');
+      if (recEl) recEl.innerHTML = opts(uniq('receiver'));
+      var exEl = document.getElementById('exec-datalist');
+      if (!exEl) { exEl = document.createElement('datalist'); exEl.id = 'exec-datalist'; document.body.appendChild(exEl); }
+      var svcEx = (typeof allServices !== 'undefined' && Array.isArray(allServices)) ? allServices.map(function (s) { return s.executor; }).filter(Boolean) : [];
+      exEl.innerHTML = opts(Array.from(new Set(uniq('executor').concat(svcEx))));
+
+      var svcEl = document.getElementById('svc-datalist');
+      if (svcEl && typeof allServices !== 'undefined' && allServices.length) {
+        var counts = new Map();
+        lines().forEach(function (l) {
+          var k = norm(l.service);
+          if (k) counts.set(k, (counts.get(k) || 0) + 1);
+        });
+        var sorted = allServices.slice().sort(function (a, b) {
+          return (counts.get(norm(b.name)) || 0) - (counts.get(norm(a.name)) || 0) || String(a.name).localeCompare(String(b.name), 'ar');
+        });
+        var eh = typeof escapeHtml === 'function' ? escapeHtml : String;
+        svcEl.innerHTML = sorted.map(function (s) {
+          var cnt = counts.get(norm(s.name)) || 0;
+          var priceTxt = (s.unit_price != null && typeof fmtNum === 'function') ? (fmtNum(s.unit_price) + ' ج.م') : '';
+          var lbl = priceTxt + (cnt ? ' · اتطلبت ' + cnt + ' مرة' : '');
+          return '<option value="' + eh(s.name) + '" label="' + eh(lbl) + '"></option>';
+        }).join('');
+      }
+    } catch (e) { /* */ }
+  }
   function init() {
     Object.keys(CFG).forEach(function (id) {
       var el = document.getElementById(id); if (!el) return;
       el.removeAttribute('list'); el.setAttribute('autocomplete', 'off');
     });
+    clearHeavyDatalists();
     document.addEventListener('input', onInput, true);
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('focusout', function (e) { if (CFG[e.target.id]) setTimeout(hide, 120); }, true);
     window.addEventListener('resize', place); window.addEventListener('scroll', function () { if (box && !box.hidden) place(); }, true);
-    /* فضّي القوايم الضخمة القديمة (مش مستخدمة دلوقتي) */
-    var o = window.renderClientDatalists;
-    if (typeof o === 'function') window.renderClientDatalists = function () {
-      var r = o.apply(this, arguments);
-      ['clients-datalist', 'phones-datalist', 'receipt-clients-datalist'].forEach(function (id) { var d = document.getElementById(id); if (d && d.firstChild) d.innerHTML = ''; });
-      return r;
-    };
+    window.renderClientDatalists = lightRenderDatalists;
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
