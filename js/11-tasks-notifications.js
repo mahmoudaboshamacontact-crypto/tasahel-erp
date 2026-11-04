@@ -1,11 +1,10 @@
-
-/* ===== المرحلة 9: المهام + جرس الإشعارات اللحظي + تنبيه التأخير ===== */
+/* ===== المرحلة 9: المهام + تنبيه التأخير (الإشعارات الموحدة انتقلت إلى 19-phase17.js) ===== */
 (function () {
   if (window.__phase9) return; window.__phase9 = true;
-  const eh = escapeHtml, MGR = 'mahmoud.aboshama@tasahel.com.eg';
+  const eh = escapeHtml;
   const isMgr = () => window.__role ? window.__role === 'manager' : !!(currentUser && ['mahmoud.aboshama@tasahel.com.eg','mahmoud.aboshama.contact@gmail.com'].includes(String(currentUser.email || '').toLowerCase()));
   const missing = err => /42P01|PGRST205|does not exist|schema cache/i.test(((err && err.message) || '') + ' ' + ((err && err.code) || ''));
-  let tasks = [], notes = [], ntCh = null, tkCh = null, tick = null, uid = null, filt = 'open', tkMissing = false, ntMissing = false;
+  let tasks = [], tkCh = null, tick = null, uid = null, filt = 'open', tkMissing = false;
   const asked = new Set();
   const fmt = s => new Intl.DateTimeFormat('ar-EG', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(s));
   const nameOf = id => { const p = profiles.find(x => x.id === id); return p ? p.full_name : 'موظف'; };
@@ -15,38 +14,8 @@
   function localInput(d) { const p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); }
   function defaultDue() { let d = new Date(); d.setHours(17, 0, 0, 0); if (d < new Date()) { d = new Date(Date.now() + 3600000); d.setMinutes(0, 0, 0); } return d; }
 
-  /* ---------- الإشعارات ---------- */
-  function renderBell() {
-    const c = $('nt-count'); if (!c) return;
-    const n = notes.filter(x => !x.read).length;
-    c.textContent = n > 99 ? '99+' : String(n); c.classList.toggle('hidden', !n);
-    const p = $('nt-panel'); if (!p) return;
-    const items = notes.map(x => '<button type="button" data-id="' + x.id + '" onclick="ntOpen(this.dataset.id)" class="flex w-full items-start gap-2 border-b border-slate-100 dark:border-slate-800 px-3 py-2.5 text-right hover:bg-slate-50 dark:hover:bg-slate-800/60 ' + (x.read ? 'opacity-60' : '') + '"><span class="mt-1.5 h-2 w-2 shrink-0 rounded-full ' + (x.read ? 'bg-transparent' : x.kind === 'task_late' ? 'bg-rose-500' : 'bg-teal-500') + '"></span><span class="min-w-0 flex-1"><span class="block text-xs font-bold text-ink dark:text-white">' + eh(x.title) + '</span>' + (x.body ? '<span class="block text-[11px] text-slate-500">' + eh(x.body) + '</span>' : '') + '<span class="block text-[10px] text-slate-400 mt-0.5"><bdi>' + eh(fmt(x.created_at)) + '</bdi></span></span></button>').join('');
-    p.innerHTML = '<div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-3 py-2.5"><b class="text-sm text-ink dark:text-white">الإشعارات</b><button type="button" onclick="ntReadAll()" class="text-[11px] text-teal-600 hover:underline">تعليم الكل كمقروء</button></div><div class="max-h-80 overflow-y-auto">' + (ntMissing ? '<div class="p-5 text-center text-xs text-slate-500">شغّل ملف <b class="font-mono">phase6-tasks-notifications.sql</b> الأول</div>' : items || '<div class="p-6 text-center text-xs text-slate-400">لا توجد إشعارات</div>') + '</div>';
-  }
-  window.ntOpen = async function (id) {
-    const x = notes.find(n => String(n.id) === String(id)); if (!x) return;
-    $('nt-panel').classList.add('hidden');
-    if (!x.read) { x.read = true; renderBell(); sbClient.from('notifications').update({ read: true }).eq('id', x.id).then(() => {}); }
-    if (String(x.kind).indexOf('task') === 0) switchTab('tasks'); else if (x.kind === 'weekly_summary' && typeof window.openWeeklySummary === 'function') window.openWeeklySummary();
-  };
-  window.ntReadAll = async function () {
-    notes.forEach(n => n.read = true); renderBell();
-    await sbClient.from('notifications').update({ read: true }).eq('user_id', uid).eq('read', false);
-  };
-  async function loadNotes() {
-    const r = await sbClient.from('notifications').select('*').order('created_at', { ascending: false }).limit(30);
-    if (r.error) { ntMissing = missing(r.error); renderBell(); return; }
-    ntMissing = false; notes = r.data || []; renderBell();
-  }
   function subscribe() {
-    try { if (ntCh) sbClient.removeChannel(ntCh); if (tkCh) sbClient.removeChannel(tkCh); } catch (e) { /* */ }
-    ntCh = sbClient.channel('p9-notes-' + uid).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + uid }, p => {
-      if (notes.some(n => n.id === p.new.id)) return;
-      notes.unshift(p.new); notes = notes.slice(0, 30); renderBell();
-      showToast(p.new.title + (p.new.body ? ' — ' + p.new.body : ''), p.new.kind === 'task_late' ? 'error' : 'info', 7000);
-      if (String(p.new.kind).indexOf('task') === 0) loadTasks();
-    }).subscribe();
+    try { if (tkCh) sbClient.removeChannel(tkCh); } catch (e) { /* */ }
     tkCh = sbClient.channel('p9-tasks-' + uid).on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => loadTasks()).subscribe();
   }
 
@@ -126,20 +95,15 @@
   async function init() {
     if (!sbClient || !currentUser || uid === currentUser.id) return;
     uid = currentUser.id; asked.clear();
-    await Promise.all([loadNotes(), loadTasks()]); subscribe();
+    await loadTasks(); subscribe();
     clearInterval(tick);
     tick = setInterval(() => { badge(); if (currentTab === 'tasks' && !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) renderTasks(); checkLate(); }, 60000);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) { loadNotes(); loadTasks(); } });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) loadTasks(); });
   }
   function stop() {
     clearInterval(tick); tick = null;
-    try { if (ntCh) sbClient.removeChannel(ntCh); if (tkCh) sbClient.removeChannel(tkCh); } catch (e) { /* */ }
-    ntCh = tkCh = null; uid = null; tasks = []; notes = []; renderBell(); badge();
-  }
-  const bell = $('nt-bell');
-  if (bell) {
-    bell.addEventListener('click', e => { e.stopPropagation(); $('nt-panel').classList.toggle('hidden'); renderBell(); });
-    document.addEventListener('click', e => { const p = $('nt-panel'); if (p && !p.classList.contains('hidden') && !p.contains(e.target)) p.classList.add('hidden'); });
+    try { if (tkCh) sbClient.removeChannel(tkCh); } catch (e) { /* */ }
+    tkCh = null; uid = null; tasks = []; badge();
   }
   const _li = window.loadInitialData;
   window.loadInitialData = async function () { const x = await _li.apply(this, arguments); init(); return x; };
@@ -147,5 +111,4 @@
   window.loadProfiles = async function () { const x = await _lp.apply(this, arguments); if (currentTab === 'tasks') renderTasks(); return x; };
   const _lo = window.handleLogout;
   window.handleLogout = function () { stop(); return _lo.apply(this, arguments); };
-  renderBell();
 })();
