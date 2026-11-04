@@ -1,4 +1,4 @@
-/* phase24: حذف ناعم + سجل أخطاء + قفل أسعار + استفسارات العملاء + رابط المتابعة */
+/* phase24: حذف ناعم + قفل أسعار البنود المسلّمة + استفسارات العملاء */
 (function () {
   if (window.__phase24) return;
   window.__phase24 = true;
@@ -30,27 +30,6 @@
     sbClient.__phase24 = true;
   }
 
-  var errCount = 0, errSeen = {};
-  async function logError(err, ctx) {
-    try {
-      if (!haveDb() || typeof currentUser === 'undefined' || !currentUser) return;
-      var msg = String(err && err.message ? err.message : err).slice(0, 500);
-      if (errCount >= 20 || errSeen[msg]) return;
-      errSeen[msg] = 1; errCount++;
-      await sbClient.from('error_log').insert({
-        user_id: currentUser.id,
-        user_email: currentUser.email,
-        message: msg,
-        stack: err && err.stack ? String(err.stack).slice(0, 2000) : null,
-        context: ctx || null,
-        user_agent: navigator.userAgent,
-        url: location.href
-      });
-    } catch (e) { /* */ }
-  }
-  window.addEventListener('error', function (e) { logError(e.error || new Error(e.message), { kind: 'window.error' }); });
-  window.addEventListener('unhandledrejection', function (e) { logError(e.reason || new Error('unhandled promise'), { kind: 'promise' }); });
-
   var _ote = window.openTxEdit;
   if (typeof _ote === 'function') {
     window.openTxEdit = async function (tx) {
@@ -74,24 +53,10 @@
     };
   }
 
-  function copyLink(o) {
-    var l = o.lines.find(function (x) { return x.tracking_token; });
-    if (!l) return showToast('المعاملة دي قديمة وملهاش رابط متابعة', 'error', 6000);
-    var url = location.origin + location.pathname.replace(/[^\/]*$/, '') + 'Track.html?token=' + encodeURIComponent(l.tracking_token);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(function () { showToast('تم نسخ رابط المتابعة'); }, function () { prompt('انسخ الرابط:', url); });
-    } else { prompt('انسخ الرابط:', url); }
-  }
-  function decorateTxModal(tx) {
+  function decorateTxModal() {
     var ta = document.getElementById('txc-input');
     if (ta && !document.getElementById('txc-public')) {
       ta.insertAdjacentHTML('afterend', '<label class="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-300"><input id="txc-public" type="checkbox" class="h-4 w-4 rounded"> يظهر للعميل في صفحة المتابعة</label>');
-    }
-    var bar = document.getElementById('tx-modal-actions-left');
-    var o = groupedOrders.find(function (x) { return String(x.transaction_id) === String(tx); });
-    if (bar && o && !document.getElementById('p24-link')) {
-      bar.insertAdjacentHTML('beforeend', '<button id="p24-link" type="button" class="px-3 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-link"></i><span>رابط المتابعة</span></button>');
-      document.getElementById('p24-link').onclick = function () { copyLink(o); };
     }
   }
   var _otm = window.openTxModal;
