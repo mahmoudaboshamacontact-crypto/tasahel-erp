@@ -301,7 +301,43 @@
   }
 
   /* ---------------------------------------------------------------
-     3) جلب بيانات حالة النظام (عند فتح التاب أو الضغط على تحديث فقط)
+     3) المفسّر الذكي للأخطاء بالعربي
+     --------------------------------------------------------------- */
+  function explainError(msg) {
+    var m = String(msg || '').toLowerCase();
+    if (m.indexOf('is not defined') !== -1) {
+      var varName = (msg.match(/([a-zA-Z0-9_$]+)\s+is not defined/) || [])[1] || 'عنصر';
+      return {
+        cause: 'خطأ برمجي: العنصر (' + varName + ') غير معرَّف في الكود أو ممسوح من أحد الملفات.',
+        fix: 'تعديل أو إضافة تعريف العنصر في ملف الكود المذكور وسطر الخطأ.'
+      };
+    }
+    if (m.indexOf('failed to fetch') !== -1 || m.indexOf('networkerror') !== -1 || m.indexOf('load failed') !== -1) {
+      return {
+        cause: 'انقطاع لحظي في الإنترنت أو تعذر الوصول لسيرفر قاعدة البيانات (Supabase).',
+        fix: 'تأكد من اتصال الراوتر والنت بالجهاز، ثم اضغط F5 لتحديث الصفحة.'
+      };
+    }
+    if (m.indexOf('jwt') !== -1 || m.indexOf('permission') !== -1 || m.indexOf('unauthorized') !== -1) {
+      return {
+        cause: 'انتهاء مدة تسجيل الدخول أو نقص في صلاحيات حساب الموظف.',
+        fix: 'تسجيل خروج من السيستم وإعادة الدخول، أو مراجعة صلاحيات الموظف.'
+      };
+    }
+    if (m.indexOf('null') !== -1 || m.indexOf('cannot read') !== -1 || m.indexOf('undefined') !== -1) {
+      return {
+        cause: 'بيانات ناقصة: الكود بيحاول يقرأ حقل فاضي في الطلب/المعاملة.',
+        fix: 'التأكد من ملء الحقول الأساسية في المعاملة قبل الضغط على حفظ.'
+      };
+    }
+    return {
+      cause: 'تنبيه تشغيلي أثناء عمل الصفحة.',
+      fix: 'أعد تحميل الصفحة (F5)، وإذا تكرر راجع المطور برقم السطر.'
+    };
+  }
+
+  /* ---------------------------------------------------------------
+     4) جلب بيانات حالة النظام (عند فتح التاب أو الضغط على تحديث فقط)
      --------------------------------------------------------------- */
   async function fetchAndRenderSystemStatus() {
     const pane = $('tab-status');
@@ -426,7 +462,7 @@
                 '<th class="p-2.5 whitespace-nowrap">الوقت</th>' +
                 '<th class="p-2.5 whitespace-nowrap">الموظف</th>' +
                 '<th class="p-2.5 whitespace-nowrap">التاب</th>' +
-                '<th class="p-2.5">الرسالة والمصدر</th>' +
+                '<th class="p-2.5">الرسالة والمصدر والشرح الذكي</th>' +
               '</tr>' +
             '</thead>' +
             '<tbody class="divide-y divide-slate-100 dark:divide-slate-800">' +
@@ -435,13 +471,23 @@
                 const emp = resolveUserName(er.user_id, er.role);
                 const tabLbl = resolveTabLabel(er.tab);
                 const loc = [er.source, er.line != null ? ('سطر ' + er.line) : null, er.app_version].filter(Boolean).join(' · ');
+                const exp = explainError(er.message);
                 return '<tr>' +
-                  '<td class="p-2.5 whitespace-nowrap text-[11px] text-slate-500 dark:text-slate-400">' + eh(when) + '</td>' +
-                  '<td class="p-2.5 whitespace-nowrap font-bold text-ink dark:text-white">' + eh(emp) + '</td>' +
-                  '<td class="p-2.5 whitespace-nowrap"><span class="rounded-lg bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-semibold">' + eh(tabLbl) + '</span></td>' +
-                  '<td class="p-2.5 break-words">' +
+                  '<td class="p-2.5 whitespace-nowrap text-[11px] text-slate-500 dark:text-slate-400 align-top">' + eh(when) + '</td>' +
+                  '<td class="p-2.5 whitespace-nowrap font-bold text-ink dark:text-white align-top">' + eh(emp) + '</td>' +
+                  '<td class="p-2.5 whitespace-nowrap align-top"><span class="rounded-lg bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-semibold">' + eh(tabLbl) + '</span></td>' +
+                  '<td class="p-2.5 break-words align-top">' +
                     '<div class="font-mono text-xs text-rose-600 dark:text-rose-300 font-semibold" dir="ltr">' + eh(er.message || '—') + '</div>' +
                     (loc ? '<div class="text-[10.5px] text-slate-400 font-mono mt-0.5" dir="ltr">' + eh(loc) + '</div>' : '') +
+                    '<div class="mt-2 rounded-xl bg-amber-500/10 border border-amber-500/20 p-2.5 text-[11px] leading-relaxed">' +
+                      '<div class="font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">' +
+                        '<i class="fa-solid fa-circle-info text-xs"></i>' +
+                        '<span>السبب: ' + eh(exp.cause) + '</span>' +
+                      '</div>' +
+                      '<div class="text-slate-600 dark:text-slate-300 mt-1 font-medium">' +
+                        '💡 الحل: ' + eh(exp.fix) +
+                      '</div>' +
+                    '</div>' +
                   '</td>' +
                 '</tr>';
               }).join('') +
@@ -581,7 +627,7 @@
   }
 
   /* ---------------------------------------------------------------
-     4) حقن التاب والزر في القائمة الجانبية (للمدير فقط)
+     5) حقن التاب والزر في القائمة الجانبية (للمدير فقط)
      --------------------------------------------------------------- */
   function placeBtnInAdminGroup(btn) {
     const menu = $('nav-menu');
