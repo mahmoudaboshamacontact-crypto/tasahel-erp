@@ -1,0 +1,177 @@
+/* =====================================================================
+   الجزء ج: المرحلة 8 الفلوس والعمولات (css/part-c-money-commissions.css)
+   - ثيم برتقالي (--r-*) متوافق مع الوضع الليلي والنهاري
+   - بدون أي أنيميشن دايم
+   ===================================================================== */
+
+.p52-wrap {
+  direction: rtl;
+  color: var(--r-text, inherit);
+}
+
+.p52-card {
+  background: var(--r-card, rgba(255, 255, 255, 0.045));
+  border: 1px solid var(--r-line, rgba(255, 255, 255, 0.1));
+  border-radius: 16px;
+  padding: 15px;
+}
+
+html:not(.dark) .p52-card {
+  background: var(--r-card, #ffffff);
+  border-color: var(--r-line, rgba(40, 25, 10, 0.1));
+}
+
+.p52-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 10px;
+}
+
+.p52-kpi {
+  background: var(--r-card-2, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--r-line, rgba(255, 255, 255, 0.1));
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+html:not(.dark) .p52-kpi {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.p52-kpi-lbl {
+  font-size: 11px;
+  color: var(--r-mute, #a0978e);
+  font-weight: 600;
+}
+
+.p52-kpi-val {
+  font-size: 18px;
+  font-weight: 800;
+  margin-top: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.p52-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--r-line, rgba(255, 255, 255, 0.14));
+  background: var(--r-card-2, rgba(255, 255, 255, 0.06));
+  color: var(--r-text, inherit);
+  cursor: pointer;
+}
+
+.p52-btn:hover {
+  border-color: var(--r-acc, #ff9d6c);
+}
+
+.p52-btn-pri {
+  background: linear-gradient(135deg, var(--r-acc, #ff9d6c), var(--r-acc2, #ff7a3d));
+  color: #1b130c;
+  border-color: transparent;
+}
+
+.p52-btn-ok {
+  background: rgba(95, 211, 179, 0.18);
+  color: var(--r-ok, #5fd3b3);
+  border-color: rgba(95, 211, 179, 0.4);
+}
+
+.p52-btn-bad {
+  background: rgba(255, 107, 107, 0.16);
+  color: var(--r-bad, #ff6b6b);
+  border-color: rgba(255, 107, 107, 0.36);
+}
+
+.p52-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--r-card, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--r-line, rgba(255, 255, 255, 0.1));
+}
+
+.p52-subnav button {
+  padding: 7px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--r-mute, #a0978e);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.p52-subnav button.is-on {
+  background: var(--r-acc, #ff9d6c);
+  color: #1b130c;
+}
+
+.p52-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.p52-table th,
+.p52-table td {
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--r-line, rgba(255, 255, 255, 0.09));
+  text-align: right;
+}
+
+.p52-table th {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--r-mute, #a0978e);
+  white-space: nowrap;
+}
+
+.p52-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.p52-pill-warn {
+  background: rgba(255, 157, 108, 0.18);
+  color: var(--r-acc, #ff9d6c);
+  border: 1px solid rgba(255, 157, 108, 0.42);
+}
+
+.p52-pill-ok {
+  background: rgba(95, 211, 179, 0.16);
+  color: var(--r-ok, #5fd3b3);
+  border: 1px solid rgba(95, 211, 179, 0.38);
+}
+
+.p52-pill-bad {
+  background: rgba(255, 107, 107, 0.16);
+  color: var(--r-bad, #ff6b6b);
+  border: 1px solid rgba(255, 107, 107, 0.38);
+}
+
+.p52-alert-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 107, 107, 0.12);
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  font-size: 12px;
+}
