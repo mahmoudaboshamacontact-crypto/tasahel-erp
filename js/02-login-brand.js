@@ -10,7 +10,7 @@ document.getElementById('login-brand').src=window.TASAHEL_BRAND;
  *    <script src="26-login-3d-upgrade.js"></script>
  */
 
-(function () {
+(function () { return; /* تعطيل واجهة الدخول 3D: كانت بتنسخ بيانات وتغطي نموذج الدخول الحقيقي وتخفي رسالة الخطأ */
   "use strict";
   if (window.__tasahel3DLoginInstalled) return;
   window.__tasahel3DLoginInstalled = true;
