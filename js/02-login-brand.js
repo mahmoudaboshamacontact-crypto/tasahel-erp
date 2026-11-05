@@ -720,15 +720,6 @@ document.getElementById('login-brand').src=window.TASAHEL_BRAND;
     `;
     document.body.appendChild(portal);
 
-    let angle = 0;
-    const cardWrap = document.getElementById("t3dCardWrap");
-    function spinLaser() {
-      angle = (angle + 2.4) % 360;
-      if (cardWrap) cardWrap.style.setProperty("--t3d-angle", angle + "deg");
-      requestAnimationFrame(spinLaser);
-    }
-    requestAnimationFrame(spinLaser);
-
     const rig = document.getElementById("t3dSceneRig");
     overlay.addEventListener("mousemove", function (e) {
       if (overlay.classList.contains("t3d-tilted") || overlay.classList.contains("t3d-entering")) return;
