@@ -1,0 +1,338 @@
+/* =====================================================================
+   الجزء ب: المرحلة 4 متابعة الشغل (css/part-b-work-tracking.css)
+   - ثيم برتقالي (--r-*) متوافق مع الوضع الليلي والنهاري
+   - بدون أي أنيميشن دايم (الحركة وقت الضغط أو السحب فقط)
+   - يحافظ على أيقونات وتدرجات الخصم (.f16-disc) والتعليق (.f16-cmt)
+   ===================================================================== */
+
+.p51-wrap {
+  direction: rtl;
+  color: var(--r-text, inherit);
+}
+
+.p51-card {
+  background: var(--r-card, rgba(255, 255, 255, 0.045));
+  border: 1px solid var(--r-line, rgba(255, 255, 255, 0.1));
+  border-radius: 16px;
+  padding: 14px;
+}
+
+html:not(.dark) .p51-card {
+  background: var(--r-card, #ffffff);
+  border-color: var(--r-line, rgba(40, 25, 10, 0.1));
+}
+
+.p51-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--r-card, rgba(255, 255, 255, 0.045));
+  border: 1px solid var(--r-line, rgba(255, 255, 255, 0.1));
+}
+
+.p51-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--r-line, rgba(255, 255, 255, 0.12));
+  background: var(--r-card-2, rgba(255, 255, 255, 0.06));
+  color: var(--r-text, inherit);
+  cursor: pointer;
+}
+
+.p51-btn:hover {
+  border-color: var(--r-acc, #ff9d6c);
+}
+
+.p51-btn-pri {
+  background: linear-gradient(135deg, var(--r-acc, #ff9d6c), var(--r-acc2, #ff7a3d));
+  color: #1b130c;
+  border-color: transparent;
+}
+
+.p51-btn-active {
+  background: var(--r-acc, #ff9d6c);
+  color: #1b130c;
+  border-color: var(--r-acc, #ff9d6c);
+}
+
+/* شارة التنبيه للمعاملات الواقفة */
+.p51-stuck-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  background: rgba(255, 157, 108, 0.11);
+  border: 1px solid rgba(255, 157, 108, 0.38);
+  font-size: 12px;
+}
+
+.p51-stuck-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: rgba(255, 107, 107, 0.16);
+  color: var(--r-bad, #ff6b6b);
+  border: 1px solid rgba(255, 107, 107, 0.35);
+}
+
+.p51-pin-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: rgba(255, 157, 108, 0.18);
+  color: var(--r-acc, #ff9d6c);
+  border: 1px solid rgba(255, 157, 108, 0.42);
+}
+
+.p51-pin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid var(--r-line, rgba(255, 255, 255, 0.12));
+  background: transparent;
+  color: var(--r-mute, #a0978e);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.p51-pin-btn.is-pinned {
+  background: rgba(255, 157, 108, 0.18);
+  color: var(--r-acc, #ff9d6c);
+  border-color: rgba(255, 157, 108, 0.48);
+}
+
+/* لوحة الكانبان */
+.p51-kanban-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(260px, 1fr));
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .p51-kanban-grid {
+    grid-template-columns: repeat(4, minmax(272px, 82vw));
+    scroll-snap-type: x mandatory;
+  }
+  .p51-kb-col {
+    scroll-snap-align: start;
+  }
+}
+
+.p51-kb-col {
+  background: var(--r-card, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--r-line, rgba(255, 255, 255, 0.1));
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  max-height: 76vh;
+}
+
+.p51-kb-col.is-drop-target {
+  border-color: var(--r-acc, #ff9d6c);
+  box-shadow: 0 0 0 2px rgba(255, 157, 108, 0.35);
+}
+
+.p51-kb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--r-line, rgba(255, 255, 255, 0.09));
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.p51-kb-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--r-card-2, rgba(255, 255, 255, 0.08));
+  color: var(--r-acc, #ff9d6c);
+}
+
+.p51-kb-body {
+  padding: 10px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  flex: 1;
+}
+
+.p51-kb-card {
+  position: relative;
+  border-radius: 14px;
+  padding: 11px;
+  background: var(--r-card-2, rgba(255, 255, 255, 0.055));
+  border: 1px solid var(--r-line, rgba(255, 255, 255, 0.1));
+  font-size: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html:not(.dark) .p51-kb-card {
+  background: #ffffff;
+  border-color: rgba(40, 25, 10, 0.12);
+}
+
+.p51-kb-card.is-pinned {
+  border-color: rgba(255, 157, 108, 0.55);
+  box-shadow: inset 0 2px 0 0 var(--r-acc, #ff9d6c);
+}
+
+.p51-kb-card.is-dragging {
+  opacity: 0.45;
+  border-style: dashed;
+}
+
+.p51-drag-handle {
+  cursor: grab;
+  touch-action: none;
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: var(--r-mute, #a0978e);
+}
+
+.p51-drag-handle:active {
+  cursor: grabbing;
+}
+
+.p51-touch-ghost {
+  position: fixed;
+  z-index: 2147483600;
+  pointer-events: none;
+  width: 260px;
+  max-width: 82vw;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--r-bg, #181411);
+  color: var(--r-text, #f4eee8);
+  border: 2px solid var(--r-acc, #ff9d6c);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  direction: rtl;
+}
+
+/* شريط التعديل الجماعي العائم */
+.p51-bulk-bar {
+  position: sticky;
+  bottom: 14px;
+  z-index: 85;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: #181411;
+  color: #f4eee8;
+  border: 1px solid var(--r-acc, #ff9d6c);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.45);
+}
+
+/* السجل الزمني المتكامل */
+.p51-tl-list {
+  position: relative;
+  padding-inline-start: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.p51-tl-list::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 6px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--r-line, rgba(255, 255, 255, 0.14));
+}
+
+.p51-tl-item {
+  position: relative;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--r-card, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--r-line, rgba(255, 255, 255, 0.09));
+  font-size: 12px;
+}
+
+.p51-tl-dot {
+  position: absolute;
+  inset-inline-start: -16px;
+  top: 13px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--r-acc, #ff9d6c);
+  border: 2px solid var(--r-bg, #0e0d0c);
+}
+
+/* النوافذ المنبثقة الخاصة بالمرحلة 4 */
+.p51-modal-ov {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483200;
+  background: rgba(0, 0, 0, 0.68);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  direction: rtl;
+}
+
+.p51-modal-card {
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 20px;
+  padding: 20px;
+  background: var(--r-bg, #141210);
+  color: var(--r-text, #f4eee8);
+  border: 1px solid var(--r-line, rgba(255, 255, 255, 0.14));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+html:not(.dark) .p51-modal-card {
+  background: #ffffff;
+  color: #1e293b;
+  border-color: #e2e8f0;
+}
