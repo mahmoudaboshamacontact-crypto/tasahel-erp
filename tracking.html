@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#e97415">
+<title>تتبع المعاملة | تساهيل</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--o:#e97415;--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--bg:#faf7f3;--card:#fff}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+body{font-family:'IBM Plex Sans Arabic',Tahoma,'Segoe UI',sans-serif;background:var(--bg);color:var(--ink);line-height:1.7;min-height:100vh;display:flex;flex-direction:column}
+/* Header */
+.hdr{background:linear-gradient(135deg,#e97415 0%,#f59e0b 100%);padding:14px 0 40px;border-radius:0 0 30px 30px;box-shadow:0 14px 30px -18px rgba(233,116,21,.7);text-align:center}
+.hdr img{height:48px;background:#fff;padding:6px 16px;border-radius:14px;box-shadow:0 6px 16px -8px rgba(0,0,0,.35)}
+.hdr h1{color:#fff;font-size:16px;margin-top:10px;font-weight:700}
+.hdr p{color:rgba(255,255,255,.85);font-size:12px;margin-top:2px}
+/* Wrap */
+.wrap{max-width:480px;width:100%;margin:-22px auto 0;padding:0 14px 28px;flex:1}
+.card{background:var(--card);border-radius:22px;padding:22px;box-shadow:0 12px 32px -18px rgba(15,23,42,.3),0 1px 2px rgba(15,23,42,.05);margin-bottom:16px}
+/* Form */
+.field-group{margin-bottom:14px}
+.field-group label{display:block;font-size:12px;font-weight:700;color:var(--mut);margin-bottom:4px}
+.field-group input{width:100%;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;font:inherit;font-size:15px;font-weight:600;background:#f8fafc;transition:border-color .2s,box-shadow .2s;direction:ltr;text-align:right}
+.field-group input:focus{outline:none;border-color:var(--o);box-shadow:0 0 0 3px rgba(233,116,21,.15)}
+.field-group input::placeholder{color:#94a3b8;font-weight:400}
+.field-group .hint{font-size:11px;color:var(--mut);margin-top:3px}
+.submit-btn{width:100%;border:0;border-radius:14px;padding:13px;font:inherit;font-weight:700;font-size:15px;color:#fff;background:linear-gradient(135deg,#e97415,#f59e0b);cursor:pointer;box-shadow:0 8px 18px -10px rgba(233,116,21,.8);transition:opacity .2s}
+.submit-btn:disabled{opacity:.5;cursor:default}
+/* Alert messages */
+.alert{border-radius:14px;padding:12px 16px;font-size:13px;font-weight:600;margin-bottom:14px}
+.alert-error{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+.alert-info{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}
+/* Result */
+.result-header{text-align:center;margin-bottom:16px}
+.result-header .status-label{font-size:12px;font-weight:700;color:var(--mut)}
+.result-header .status-text{font-size:24px;font-weight:700;color:var(--o);margin:4px 0}
+.result-header .pct-badge{display:inline-block;background:rgba(233,116,21,.12);color:var(--o);border:1px solid rgba(233,116,21,.3);border-radius:999px;padding:2px 14px;font-size:13px;font-weight:700;font-family:Consolas,monospace}
+.progress-bar{display:flex;gap:6px;margin:14px 0}
+.progress-bar span{flex:1;height:10px;border-radius:10px;background:#e2e8f0}
+.progress-bar span.filled{background:linear-gradient(90deg,var(--o),#f59e0b)}
+.progress-labels{display:flex;gap:6px;margin:-4px 0 16px}
+.progress-labels span{flex:1;text-align:center;font-size:10px;font-weight:600;color:var(--mut)}
+.progress-labels span.filled{color:var(--o)}
+/* Info grid */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.info-item small{display:block;font-size:11px;color:var(--mut);font-weight:600}
+.info-item b{display:block;font-size:14px;margin-top:1px}
+/* Services */
+.svc-title{font-size:17px;font-weight:700;margin-bottom:12px}
+.svc-item{background:#f8fafc;border-radius:14px;padding:12px 14px;margin-bottom:8px}
+.svc-item:last-child{margin-bottom:0}
+.svc-item .svc-name{font-size:14px;font-weight:700}
+.svc-item .svc-status{font-size:12px;font-weight:700;margin-top:4px}
+.svc-item .svc-bar{height:8px;border-radius:8px;background:#e2e8f0;margin-top:6px;overflow:hidden}
+.svc-item .svc-bar i{display:block;height:100%;border-radius:8px;background:var(--c,var(--o))}
+/* Footer */
+.ft{background:linear-gradient(135deg,#0f172a,#1e293b);color:#fff;padding:18px;text-align:center;font-size:13px;font-weight:600;margin-top:auto}
+.ft a{color:#fff;text-decoration:none;margin:0 10px}
+/* Back button */
+.back-btn{display:inline-flex;align-items:center;gap:6px;background:none;border:1px solid var(--line);border-radius:999px;padding:6px 16px;font:inherit;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;margin-bottom:14px}
+.back-btn:hover{background:#f1f5f9}
+/* Spinner */
+.spin-sm{display:inline-block;width:18px;height:18px;border:3px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;margin-inline-end:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media(max-width:500px){.wrap{padding:0 10px 20px}.card{padding:18px;border-radius:18px}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <img src="logo.png" alt="تساهيل">
+  <h1>تتبع حالة المعاملة</h1>
+  <p>ادخل بياناتك لمتابعة طلبك</p>
+</div>
+
+<div class="wrap">
+  <!-- Search form -->
+  <div id="search-card" class="card">
+    <form id="track-form" autocomplete="off">
+      <div class="field-group">
+        <label for="f-tx">رقم المعاملة</label>
+        <input id="f-tx" type="text" required placeholder="مثال: TX-2026-1234" maxlength="40" autocomplete="off">
+      </div>
+      <div class="field-group">
+        <label for="f-code">كود التتبع (8 خانات)</label>
+        <input id="f-code" type="text" required placeholder="مثال: A1B2C3D4" maxlength="8" minlength="8" style="font-family:Consolas,monospace;letter-spacing:3px;text-align:center" autocomplete="off">
+        <div class="hint">الكود اللي وصلك في رسالة الواتساب</div>
+      </div>
+      <div class="field-group">
+        <label for="f-phone">آخر 4 أرقام من رقم التليفون</label>
+        <input id="f-phone" type="text" required placeholder="مثال: 5678" maxlength="4" minlength="4" inputmode="numeric" pattern="\d{4}" style="font-family:Consolas,monospace;letter-spacing:6px;text-align:center" autocomplete="off">
+      </div>
+      <div id="form-error" hidden></div>
+      <button id="submit-btn" type="submit" class="submit-btn">تتبع المعاملة</button>
+    </form>
+  </div>
+
+  <!-- Result card -->
+  <div id="result-card" hidden>
+    <button type="button" class="back-btn" id="back-btn">→ بحث جديد</button>
+
+    <div class="card">
+      <div class="result-header">
+        <div class="status-label">حالة الطلب</div>
+        <div class="status-text" id="r-status"></div>
+        <div class="pct-badge" id="r-pct"></div>
+      </div>
+      <div class="progress-bar" id="r-bar">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="progress-labels" id="r-labels">
+        <span>استلام</span><span>تنفيذ</span><span>جاهز</span><span>تسليم</span>
+      </div>
+      <div class="info-grid">
+        <div class="info-item"><small>رقم المعاملة</small><b id="r-tx" dir="ltr" style="text-align:right;font-family:Consolas,monospace;color:var(--o)"></b></div>
+        <div class="info-item"><small>تاريخ الاستلام</small><b id="r-recv"></b></div>
+        <div class="info-item"><small>الموعد المتوقع</small><b id="r-expected"></b></div>
+        <div class="info-item"><small>نسبة التقدم</small><b id="r-pct2"></b></div>
+      </div>
+    </div>
+
+    <div class="card" id="svcs-card" hidden>
+      <div class="svc-title">خدمات طلبك</div>
+      <div id="svcs-list"></div>
+    </div>
+  </div>
+</div>
+
+<div class="ft">
+  <a href="tel:15439" dir="ltr">15439</a> | <a href="https://tasahel.com.eg" target="_blank" rel="noopener noreferrer" dir="ltr">tasahel.com.eg</a>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  /* Supabase anon key — same public key used in the project */
+  var SB_URL = 'https://avehvjqifswsyayckpvx.supabase.co';
+  var SB_KEY = 'sb_publishable_nTqT3u9TIwx-YnoKA9fCQg_7hybo_Kw';
+
+  var STEPS = ['تم الاستلام', 'قيد التنفيذ', 'جاهز للتسليم', 'تم التسليم'];
+  var SVC_LABELS = { in_progress: 'قيد التنفيذ', under_review: 'قيد المراجعة', complete: 'جاهز للتسليم', delivered: 'تم التسليم' };
+  var SVC_COLORS = { in_progress: '#f08a00', under_review: '#0e8f86', complete: '#0a7b3e', delivered: '#0a7b3e' };
+  var SVC_PCT   = { in_progress: 25, under_review: 50, complete: 75, delivered: 100 };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function fmtDate(s) {
+    if (!s) return '—';
+    try {
+      var d = new Date(String(s).length === 10 ? s + 'T00:00:00Z' : s);
+      if (isNaN(d)) return '—';
+      return new Intl.DateTimeFormat('ar-EG', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' }).format(d);
+    } catch (e) { return '—'; }
+  }
+
+  function rpc(name, args) {
+    return fetch(SB_URL + '/rest/v1/rpc/' + name, {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+      cache: 'no-store',
+      referrerPolicy: 'no-referrer'
+    }).then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    });
+  }
+
+  function showError(msg) {
+    var el = $('form-error');
+    el.hidden = false;
+    el.className = 'alert alert-error';
+    el.textContent = msg;
+  }
+  function hideError() { $('form-error').hidden = true; }
+
+  function showResult(d) {
+    $('search-card').hidden = true;
+    $('result-card').hidden = false;
+
+    var stage = Number(d.overall_stage) || 1;
+    if (stage < 1) stage = 1;
+    if (stage > 3) stage = 3;
+    var pct = Number(d.order_pct) || 0;
+
+    $('r-status').textContent = STEPS[stage];
+    $('r-pct').textContent = pct + '%';
+    $('r-tx').textContent = d.transaction_id || '';
+    $('r-recv').textContent = fmtDate(d.received_date);
+    $('r-expected').textContent = fmtDate(d.expected_to);
+    $('r-pct2').textContent = pct + '%';
+
+    /* Progress bar */
+    var bars = $('r-bar').children;
+    var labels = $('r-labels').children;
+    for (var i = 0; i < 4; i++) {
+      bars[i].className = i <= stage ? 'filled' : '';
+      labels[i].className = i <= stage ? 'filled' : '';
+    }
+
+    /* Services list */
+    var svcs = d.services || [];
+    var svcCard = $('svcs-card');
+    var svcList = $('svcs-list');
+    if (svcs.length) {
+      svcCard.hidden = false;
+      svcList.innerHTML = '';
+      svcs.forEach(function (s) {
+        var status = s.status || 'in_progress';
+        var color = SVC_COLORS[status] || '#f08a00';
+        var p = SVC_PCT[status] || 25;
+        var div = document.createElement('div');
+        div.className = 'svc-item';
+        div.innerHTML =
+          '<div class="svc-name">' + esc(s.service || '') + '</div>' +
+          '<div class="svc-status" style="color:' + color + '">' + esc(SVC_LABELS[status] || status) + '</div>' +
+          '<div class="svc-bar"><i style="width:' + p + '%;background:' + color + '"></i></div>';
+        svcList.appendChild(div);
+      });
+    } else {
+      svcCard.hidden = true;
+    }
+  }
+
+  function resetToSearch() {
+    $('search-card').hidden = false;
+    $('result-card').hidden = true;
+    hideError();
+  }
+
+  /* Check URL params for pre-filled data */
+  var params = new URLSearchParams(location.search);
+  if (params.get('tx')) $('f-tx').value = params.get('tx');
+  if (params.get('code')) $('f-code').value = params.get('code');
+
+  $('back-btn').addEventListener('click', resetToSearch);
+
+  $('track-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    hideError();
+
+    var txId = $('f-tx').value.trim().toUpperCase();
+    var code = $('f-code').value.trim().toUpperCase();
+    var phone4 = $('f-phone').value.trim();
+
+    /* Validate */
+    if (!txId) { showError('ادخل رقم المعاملة.'); return; }
+    if (!/^[0-9A-F]{8}$/.test(code)) { showError('كود التتبع لازم يكون 8 خانات (حروف وأرقام).'); return; }
+    if (!/^\d{4}$/.test(phone4)) { showError('ادخل آخر 4 أرقام من رقم التليفون.'); return; }
+
+    var btn = $('submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin-sm"></span>جارٍ البحث...';
+
+    rpc('lookup_public_tracking_by_code_and_phone4', {
+      p_transaction_id: txId,
+      p_code: code,
+      p_phone_last4: phone4
+    }).then(function (result) {
+      btn.disabled = false;
+      btn.textContent = 'تتبع المعاملة';
+
+      if (!result || !result.ok) {
+        var err = (result && result.error) || 'unknown';
+        if (err === 'rate_limited') {
+          showError(result.message || 'تم تجاوز الحد المسموح للمحاولات. يرجى الانتظار والمحاولة لاحقاً.');
+        } else if (err === 'not_found_or_mismatch') {
+          showError(result.message || 'بيانات المعاملة غير صحيحة. تأكد من رقم المعاملة والكود وآخر 4 أرقام من التليفون.');
+        } else if (err === 'invalid_input') {
+          showError('البيانات المدخلة غير صحيحة. تأكد من صحة الكود (8 خانات) وآخر 4 أرقام من التليفون.');
+        } else {
+          showError('حدث خطأ غير متوقع. يرجى المحاولة لاحقاً أو الاتصال بـ 15439.');
+        }
+        return;
+      }
+
+      showResult(result);
+    }).catch(function (err) {
+      btn.disabled = false;
+      btn.textContent = 'تتبع المعاملة';
+      showError('تعذّر الاتصال بالسيرفر. تأكد من الإنترنت وحاول مرة أخرى.');
+    });
+  });
+
+  /* Auto-uppercase code field */
+  $('f-code').addEventListener('input', function () {
+    this.value = this.value.toUpperCase().replace(/[^0-9A-F]/g, '');
+  });
+  /* Phone field: digits only */
+  $('f-phone').addEventListener('input', function () {
+    this.value = this.value.replace(/\D/g, '').slice(0, 4);
+  });
+})();
+</script>
+</body>
+</html>
