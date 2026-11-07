@@ -1,0 +1,23 @@
+/* الجزء ح: الروح المعنوية — css/part-h-morale.css (بدون أنيميشن دايم) */
+#tab-morale .p56-card{background:var(--r-card,#fff);border:1px solid var(--r-line,#e2e8f0);border-radius:18px;padding:16px}
+#tab-morale .p56-hero{background:linear-gradient(135deg,rgba(233,116,21,.12),rgba(245,158,11,.10))}
+#tab-morale .p56-h{font-weight:800;font-size:14px;display:flex;align-items:center;gap:8px;margin-bottom:6px}
+#tab-morale .p56-sub{font-size:12px;color:var(--r-mute,#64748b);line-height:1.8}
+#tab-morale .p56-bar{height:12px;border-radius:12px;background:rgba(148,163,184,.25);overflow:hidden;margin:10px 0 4px}
+#tab-morale .p56-bar i{display:block;height:100%;border-radius:12px;background:linear-gradient(90deg,#e97415,#f59e0b)}
+#tab-morale .p56-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#tab-morale .p56-in{border:1.5px solid var(--r-line,#e2e8f0);border-radius:12px;padding:9px 12px;font:inherit;font-size:13px;background:transparent;color:inherit;min-width:0}
+#tab-morale .p56-in:focus{outline:none;border-color:#e97415}
+#tab-morale .p56-btn{border:0;border-radius:12px;padding:9px 16px;font:inherit;font-size:12px;font-weight:700;color:#fff;background:#e97415;cursor:pointer}
+#tab-morale .p56-btn:disabled{opacity:.5;cursor:default}
+#tab-morale .p56-btn.sec{background:rgba(148,163,184,.2);color:inherit}
+#tab-morale .p56-thx{border-top:1px solid var(--r-line,#e2e8f0);padding:10px 0;font-size:13px}
+#tab-morale .p56-thx:first-child{border-top:0}
+#tab-morale .p56-thx small{color:var(--r-mute,#64748b);font-size:11px}
+#tab-morale textarea.p56-in{width:100%;min-height:84px;resize:vertical}
+/* احتفال لحظي: مرة واحدة فقط ثم يتشال */
+#p56-cele{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;pointer-events:none}
+#p56-cele .p56-pop{background:rgba(15,23,42,.88);color:#fff;border-radius:24px;padding:22px 30px;text-align:center;font-weight:800;font-size:18px;box-shadow:0 20px 50px -20px rgba(0,0,0,.6);animation:p56pop 2.8s ease 1 forwards}
+#p56-cele .p56-pop span{display:block;font-size:40px;margin-bottom:6px}
+@keyframes p56pop{0%{opacity:0;transform:scale(.8)}15%{opacity:1;transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:scale(1.02)}}
+@media (prefers-reduced-motion:reduce){#p56-cele .p56-pop{animation:none}}
