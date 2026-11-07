@@ -136,28 +136,6 @@
     return false;
   }
 
-  function guardLegacyErrorInsert() {
-    if (!haveDb() || sbClient.__phase48Guarded) return;
-    try {
-      const origFrom = sbClient.from.bind(sbClient);
-      sbClient.from = function (table) {
-        const builder = origFrom(table);
-        if (table === 'error_log' && builder && typeof builder.insert === 'function' && !builder.__p48) {
-          const origIns = builder.insert.bind(builder);
-          builder.insert = function (row, opts) {
-            if (row && !Array.isArray(row) && ('user_email' in row || 'stack' in row || 'user_agent' in row || 'url' in row)) {
-              return Promise.resolve({ data: null, error: null });
-            }
-            return origIns(row, opts);
-          };
-          builder.__p48 = true;
-        }
-        return builder;
-      };
-      sbClient.__phase48Guarded = true;
-    } catch (e) { /* تجاهل بصمت */ }
-  }
-
   function recordClientError(rawMsg, rawSource, lineNo, colNo) {
     try {
       if (sessionErrorCount >= MAX_SESSION_ERRORS) return;
@@ -173,8 +151,6 @@
       if (seenErrorHashes.has(h)) return;
       seenErrorHashes.add(h);
       sessionErrorCount++;
-
-      guardLegacyErrorInsert();
 
       const payload = {
         user_id: uid,
@@ -734,10 +710,8 @@
 
   wrap('loadInitialData', function (orig) {
     return async function () {
-      guardLegacyErrorInsert();
       const res = await orig.apply(this, arguments);
       try {
-        guardLegacyErrorInsert();
         ensureStatusTab();
       } catch (e) { /* */ }
       return res;
