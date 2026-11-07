@@ -6,7 +6,7 @@
   if (window.__phase57) return; window.__phase57 = true;
 
   /* المفتاح العام (VAPID public) — آمن يتحط في الكود. لو فاضي الزر بيتخفى. */
-  var VAPID_PUBLIC_KEY = '';
+  var VAPID_PUBLIC_KEY = 'BLcrBLwE24uSU7J0jg0SYP98hhBQwfN5eo-NCEwnIhQIjzv4t6NlN2q0Ci9O6Gypwuj7jB4fF6hq-gUW0mgHrGc';
 
   var supported = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
   if (!supported || !VAPID_PUBLIC_KEY) return;
