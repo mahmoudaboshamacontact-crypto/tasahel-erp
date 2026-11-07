@@ -77,8 +77,8 @@
     if (busy || !isMgr() || !sbClient) return;
     msgs.push({ role: 'user', text: q }); busy = true; paint();
     try {
-      const c = await buildCtx();
-      const r = await sbClient.functions.invoke('ask-ai', { body: { question: q, context: c, history: hist } });
+      /* المرحلة 12: الدالة بقت بتجيب الأرقام بنفسها بأدوات (sql/part-l-ai-tools.sql) من غير ما نسحب البنود كلها للمتصفح */
+      const r = await sbClient.functions.invoke('ask-ai', { body: { question: q, history: hist } });
       let err = r.error && (r.error.message || String(r.error));
       if (r.error && r.error.context && r.error.context.json) { try { const j = await r.error.context.json(); if (j && j.error) err = j.error; } catch (e) { /* */ } }
       if (!err && r.data && r.data.error) err = r.data.error;
