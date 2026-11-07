@@ -2,7 +2,7 @@
 // - ملفات التطبيق: من النت الأول (عشان التحديثات توصل)، ولو النت اتأخر أكتر من 4 ثواني يفتح من النسخة المحفوظة.
 // - مكتبات الـ CDN (supabase / chart.js / خطوط / أيقونات): من الكاش فوراً وتتحدث في الخلفية.
 // - Supabase وأي API تاني: مش بنكاشه.
-const CACHE = 'tasahel-shell-v20261107-fix-markers';
+const CACHE = 'tasahel-shell-v20261107-part-j-push';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'css/style.css?v=p1b1', 'css/phase17.css?v=20261040', 'css/phase18.css?v=20261040', 'css/phase19.css?v=20261040', 'css/phase21.css?v=1', 'css/tailwind.css?v=20261040'];
 const CDN = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
@@ -40,4 +40,20 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   if (url.origin === location.origin) { e.respondWith(networkFirst(req)); return; }
   if (CDN.indexOf(url.hostname) !== -1) { e.respondWith(staleWhileRevalidate(req)); return; }
+});
+
+// إشعارات الدفع (الجزء ي): عنوان ونص قصير بس، والضغط عليه يفتح التطبيق.
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { /* نص عادي */ }
+  e.waitUntil(self.registration.showNotification(String(d.title || 'تساهيل').slice(0, 80), {
+    body: String(d.body || '').slice(0, 160), tag: d.tag || 'notif', icon: 'icon-192.png', badge: 'icon-192.png', dir: 'rtl', lang: 'ar'
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+    for (const c of cs) { if ('focus' in c) return c.focus(); }
+    return self.clients.openWindow('./');
+  }));
 });
