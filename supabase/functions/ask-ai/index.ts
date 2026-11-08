@@ -81,7 +81,7 @@ async function runTool(sb: any, name: string, a: Record<string, unknown>) {
   return out;
 }
 
-const MODEL_DEFAULT = 'gemini-3.8-flash';
+const MODEL_DEFAULT = 'gemini-3.5-flash-lite';
 async function gemini(key: string, model: string, body: Record<string, unknown>) {
   const gen = { ...((body.generationConfig as Record<string, unknown>) || {}) };
   if (/gemini-2/.test(model)) gen.temperature = 0.2; else delete gen.temperature;
@@ -89,7 +89,7 @@ async function gemini(key: string, model: string, body: Record<string, unknown>)
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({ ...body, generationConfig: gen }),
-    signal: AbortSignal.timeout(40000),
+    signal: AbortSignal.timeout(15000),
   });
   const j = await r.json();
   if (!r.ok) throw Object.assign(new Error((j.error && j.error.message) || 'خطأ من Gemini'), { status: r.status });
@@ -133,15 +133,15 @@ Deno.serve(async (req) => {
     const contents: any[] = [...history, { role: 'user', parts: [{ text: question }] }];
     const system = { parts: [{ text: systemTools(today) }] };
     let calls = 0;
-    for (let round = 0; round < 5; round++) {
-      const last = round === 4; // آخر دورة من غير أدوات عشان يرد
+    for (let round = 0; round < 3; round++) {
+      const last = round === 2; // آخر دورة من غير أدوات عشان يرد
       const j = await gemini(key, model, { systemInstruction: system, contents, ...(last ? {} : { tools: TOOLS }), generationConfig: gen });
       const content = j.candidates?.[0]?.content;
       const fcs = ((content && content.parts) || []).filter((p: any) => p.functionCall);
       if (!fcs.length || last) return json({ answer: textOf(content) || 'مفيش رد من النموذج، جرّب صياغة تانية.', tool_calls: calls });
       contents.push(content); // بنرجّع رد النموذج كما هو (بما فيه أي thought signature)
       const parts: any[] = [];
-      for (const p of fcs.slice(0, 4)) {
+      for (const p of fcs.slice(0, 2)) {
         calls++;
         const out = await runTool(sb, p.functionCall.name, p.functionCall.args || {});
         parts.push({ functionResponse: { name: p.functionCall.name, response: { result: out } } });
