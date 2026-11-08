@@ -150,7 +150,7 @@
     if (window.jsQR) return Promise.resolve(window.jsQR);
     if (!jsQrPromise) jsQrPromise = new Promise(function (res, rej) {
       var s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js';
+      s.src = 'js/vendor/jsqr-1.4.0.js';
       s.onload = function () { res(window.jsQR); };
       s.onerror = function () { jsQrPromise = null; rej(new Error('jsqr')); };
       document.head.appendChild(s);
