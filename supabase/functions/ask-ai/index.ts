@@ -89,7 +89,7 @@ async function gemini(key: string, model: string, body: Record<string, unknown>)
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({ ...body, generationConfig: gen }),
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(120000),
   });
   const j = await r.json();
   if (!r.ok) throw Object.assign(new Error((j.error && j.error.message) || 'خطأ من Gemini'), { status: r.status });
