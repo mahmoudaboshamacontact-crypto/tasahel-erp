@@ -1,4 +1,4 @@
-// Edge Function: ask-ai (v4) — للمدير فقط. بتجاوب بأرقام مجمّعة (من غير أسماء عملاء ولا تليفونات).
+// Edge Function: ask-ai (v8) — للمدير فقط. بتجاوب بأرقام مجمّعة (من غير أسماء عملاء ولا تليفونات).
 // وضعين:
 //  1) الجديد (الافتراضي): الـ AI بينادي أدوات get_report / get_late_orders → دوال SQL للمدير بس (sql/part-l-ai-tools.sql).
 //  2) القديم (لو الواجهة بعتت context): نفس سلوك v3، عشان النسخ القديمة من الواجهة متتكسرش.
@@ -81,16 +81,29 @@ async function runTool(sb: any, name: string, a: Record<string, unknown>) {
   return out;
 }
 
-async function gemini(key: string, model: string, body: Record<string, unknown>) {
+const FALLBACK = 'gemini-2.5-flash';
+async function callGemini(key: string, model: string, body: Record<string, unknown>, ms: number) {
+  const gen = { ...((body.generationConfig as Record<string, unknown>) || {}) };
+  if (/gemini-2/.test(model)) gen.temperature = 0.2; else delete gen.temperature;
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(25000), // مهلة: النموذج لو علّق منستناش 150 ثانية لحد ما Supabase يقطع
+    body: JSON.stringify({ ...body, generationConfig: gen }),
+    signal: AbortSignal.timeout(ms),
   });
   const j = await r.json();
   if (!r.ok) throw Object.assign(new Error((j.error && j.error.message) || 'خطأ من Gemini'), { status: r.status });
   return j;
+}
+// النموذج الأساسي بمهلة 15 ثانية؛ لو علّق أو رجّع خطأ (غير 429) نكمّل بـ gemini-2.5-flash بدل ما السؤال يفشل.
+async function gemini(key: string, model: string, body: Record<string, unknown>) {
+  if (model === FALLBACK) return callGemini(key, model, body, 40000);
+  try {
+    return await callGemini(key, model, body, 15000);
+  } catch (e) {
+    if ((e as any).status === 429) throw e;
+    return await callGemini(key, FALLBACK, body, 40000);
+  }
 }
 const textOf = (c: any) => ((c && c.parts) || []).map((p: any) => p.text || '').join('').trim();
 
@@ -104,9 +117,8 @@ Deno.serve(async (req) => {
 
     const key = Deno.env.get('GEMINI_API_KEY');
     if (!key) return json({ error: 'GEMINI_API_KEY مش متضاف في Secrets' }, 500);
-    const model = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
+    const model = Deno.env.get('GEMINI_MODEL') || FALLBACK;
     const gen: Record<string, unknown> = { maxOutputTokens: 1200 };
-    if (/gemini-2/.test(model)) gen.temperature = 0.2; // نماذج 3 وما بعدها: الافتراضي أفضل
 
     const body = await req.json();
     const question = String(body.question || '').slice(0, 500).trim();
@@ -148,7 +160,7 @@ Deno.serve(async (req) => {
     }
     return json({ answer: 'معرفتش أوصل لإجابة، جرّب سؤال أبسط.' });
   } catch (e) {
-    if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') return json({ error: 'النموذج تأخر في الرد (أكتر من 25 ثانية). جرّب تاني، أو غيّر GEMINI_MODEL لـ gemini-2.5-flash.' }, 504);
+    if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') return json({ error: 'النموذج تأخر في الرد. جرّب تاني.' }, 504);
     return json({ error: String((e as Error).message || e) }, (e as any).status === 429 ? 429 : 500);
   }
 });

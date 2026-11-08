@@ -143,14 +143,19 @@
    * بيفتح modal فيه كاميرا، لما يلاقي QR بيملا حقل tx-id
    * يشتغل فقط لو BarcodeDetector متاح في المتصفح
    * ================================================================ */
-  var qrSupported = typeof window.BarcodeDetector !== 'undefined';
-
-  /* نتحقق من الدعم بشكل async */
-  if (!qrSupported && typeof window.BarcodeDetector !== 'undefined') {
-    window.BarcodeDetector.getSupportedFormats().then(function (formats) {
-      qrSupported = formats.indexOf('qr_code') !== -1;
-      if (qrSupported) injectQrButton();
-    }).catch(function () { /* */ });
+  /* الزرار بيظهر دايماً: لو BarcodeDetector مش موجود (كروم ويندوز / سفاري) بنحمّل jsQR كبديل */
+  var qrSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  var jsQrPromise = null;
+  function loadJsQr() {
+    if (window.jsQR) return Promise.resolve(window.jsQR);
+    if (!jsQrPromise) jsQrPromise = new Promise(function (res, rej) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js';
+      s.onload = function () { res(window.jsQR); };
+      s.onerror = function () { jsQrPromise = null; rej(new Error('jsqr')); };
+      document.head.appendChild(s);
+    });
+    return jsQrPromise;
   }
 
   var qrStream = null, qrDetector = null, qrAnim = null;
@@ -191,32 +196,41 @@
     video.srcObject = qrStream;
     document.getElementById('qr-close').addEventListener('click', stopQrCamera);
 
-    try {
-      qrDetector = new window.BarcodeDetector({ formats: ['qr_code'] });
-    } catch (e) { stopQrCamera(); return; }
-
-    function scanFrame() {
-      if (!video || video.readyState < 2) { qrAnim = requestAnimationFrame(scanFrame); return; }
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0);
-      qrDetector.detect(canvas).then(function (codes) {
-        if (codes && codes.length > 0) {
-          var raw = codes[0].rawValue || '';
-          stopQrCamera();
-          onResult(raw);
-        } else {
-          qrAnim = requestAnimationFrame(scanFrame);
-        }
-      }).catch(function () {
-        qrAnim = requestAnimationFrame(scanFrame);
-      });
+    qrDetector = null;
+    if (typeof window.BarcodeDetector !== 'undefined') {
+      try { qrDetector = new window.BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { qrDetector = null; }
+    }
+    var jsqr = null;
+    if (!qrDetector) {
+      try { jsqr = await loadJsQr(); } catch (e) {
+        stopQrCamera();
+        if (typeof showToast === 'function') showToast('تعذّر تحميل قارئ الـ QR، تأكد من الإنترنت', 'error');
+        return;
+      }
     }
 
-    video.addEventListener('loadeddata', function () {
-      qrAnim = requestAnimationFrame(scanFrame);
-    });
+    function done(raw) { stopQrCamera(); onResult(raw); }
+    function next() { qrAnim = requestAnimationFrame(scanFrame); }
+    function scanFrame() {
+      if (!document.getElementById('qr-scan-modal')) return;
+      if (!video || video.readyState < 2 || !video.videoWidth) { next(); return; }
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      var ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(video, 0, 0);
+      if (qrDetector) {
+        qrDetector.detect(canvas).then(function (codes) {
+          if (codes && codes.length > 0) done(codes[0].rawValue || ''); else next();
+        }).catch(next);
+      } else {
+        var img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        var c = jsqr(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+        if (c && c.data) done(c.data); else setTimeout(next, 80);
+      }
+    }
+
+    video.addEventListener('loadeddata', next);
+    if (video.readyState >= 2) next();
   }
 
   /* استخراج رقم المعاملة من QR — ممكن يكون رابط أو نص مباشر */
@@ -247,7 +261,7 @@
     btn.id = 'qr-scan-btn';
     btn.type = 'button';
     btn.title = 'مسح QR لرقم المعاملة';
-    btn.style.cssText = 'position:absolute;left:8px;top:50%;transform:translateY(-50%);border:0;background:none;cursor:pointer;color:#e97415;font-size:18px;line-height:1;padding:4px';
+    btn.style.cssText = 'position:absolute;left:8px;top:calc(100% - 22px);transform:translateY(-50%);border:0;background:none;cursor:pointer;color:#e97415;font-size:18px;line-height:1;padding:4px;z-index:2';
     btn.innerHTML = '<i class="fa-solid fa-qrcode"></i>';
     btn.addEventListener('click', function () {
       openQrScanner(function (raw) {
