@@ -86,6 +86,7 @@ async function gemini(key: string, model: string, body: Record<string, unknown>)
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(25000), // مهلة: النموذج لو علّق منستناش 150 ثانية لحد ما Supabase يقطع
   });
   const j = await r.json();
   if (!r.ok) throw Object.assign(new Error((j.error && j.error.message) || 'خطأ من Gemini'), { status: r.status });
@@ -147,6 +148,7 @@ Deno.serve(async (req) => {
     }
     return json({ answer: 'معرفتش أوصل لإجابة، جرّب سؤال أبسط.' });
   } catch (e) {
+    if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') return json({ error: 'النموذج تأخر في الرد (أكتر من 25 ثانية). جرّب تاني، أو غيّر GEMINI_MODEL لـ gemini-2.5-flash.' }, 504);
     return json({ error: String((e as Error).message || e) }, (e as any).status === 429 ? 429 : 500);
   }
 });
