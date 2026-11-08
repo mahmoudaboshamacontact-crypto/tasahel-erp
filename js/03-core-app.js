@@ -108,7 +108,7 @@ async function handleLogin(e){
   }catch(err){box.textContent=err.message==='Invalid login credentials'?'البريد أو كلمة المرور غير صحيحة.':'خطأ في الدخول: '+(err.message||'');box.classList.remove('hidden');}
   finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-arrow-right-to-bracket"></i><span>تسجيل الدخول</span>';}
 }
-async function handleLogout(){if(sbClient)await sbClient.auth.signOut();currentUser=null;resetLinesCache();myProfile=null;profiles=[];avatarUrls={};renderHeaderAvatar();teardownChat();showToast('تم تسجيل الخروج','info');showLoginScreen();}
+async function handleLogout(){if(typeof window.clearOfflineReadCache==='function')await window.clearOfflineReadCache();if(sbClient)await sbClient.auth.signOut();currentUser=null;resetLinesCache();myProfile=null;profiles=[];avatarUrls={};renderHeaderAvatar();teardownChat();showToast('تم تسجيل الخروج','info');showLoginScreen();}
 
 /* ---------- تحميل البيانات ---------- */
 let receivedAtManual=false,receivedAtTimer=null;
