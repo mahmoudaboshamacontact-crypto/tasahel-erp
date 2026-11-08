@@ -10,6 +10,8 @@
 
   var DB_NAME = 'tasahel-offline', STORE = 'kv';
   var KEY_LINES = 'lines', KEY_SERVICES = 'services';
+  function scope() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.id) ? String(currentUser.id) : null; }
+  function scopedKey(key) { var userId = scope(); return userId ? key + ':' + userId : null; }
   var SAVE_DELAY_MS = 3000;
 
   /* ---------- IndexedDB صغيرة ---------- */
@@ -34,6 +36,15 @@
       });
     });
   }
+  function clearOfflineCache() {
+    if (!('indexedDB' in window)) return Promise.resolve();
+    dbPromise = null;
+    return new Promise(function (resolve) {
+      var req = indexedDB.deleteDatabase(DB_NAME);
+      req.onsuccess = req.onerror = req.onblocked = function () { resolve(); };
+    });
+  }
+  window.clearOfflineReadCache = clearOfflineCache;
   function idbGet(key) {
     return db().then(function (d) {
       return new Promise(function (res, rej) {
@@ -67,20 +78,21 @@
   function scheduleSaveLines() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
-      if (!allRequestLines || !allRequestLines.length) return;
-      idbSet(KEY_LINES, { ts: Date.now(), rows: allRequestLines }).catch(function () {});
+      var userId = scope(); if (!userId || !allRequestLines || !allRequestLines.length) return;
+      idbSet(scopedKey(KEY_LINES), { ts: Date.now(), user_id: userId, rows: allRequestLines }).catch(function () {});
     }, SAVE_DELAY_MS);
   }
   function saveServices() {
-    if (!allServices || !allServices.length) return;
-    idbSet(KEY_SERVICES, { ts: Date.now(), rows: allServices }).catch(function () {});
+    var userId = scope(); if (!userId || !allServices || !allServices.length) return;
+    idbSet(scopedKey(KEY_SERVICES), { ts: Date.now(), user_id: userId, rows: allServices }).catch(function () {});
   }
 
   /* ---------- تطبيق النسخة المحفوظة على الشاشة ---------- */
   var lastLinesTs = null;
   function restoreLines() {
-    return idbGet(KEY_LINES).then(function (snap) {
-      if (!snap || !snap.rows || !snap.rows.length) return false;
+    var userId = scope(); if (!userId) return Promise.resolve(false);
+    return idbGet(scopedKey(KEY_LINES)).then(function (snap) {
+      if (!snap || snap.user_id !== userId || !snap.rows || !snap.rows.length) return false;
       allRequestLines = snap.rows;
       lastLinesTs = snap.ts;
       if (typeof archiveState !== 'undefined') { archiveState.done = true; archiveState.loading = false; archiveState.failed = false; }
@@ -90,8 +102,9 @@
     }).catch(function () { return false; });
   }
   function restoreServices() {
-    return idbGet(KEY_SERVICES).then(function (snap) {
-      if (!snap || !snap.rows || !snap.rows.length) return false;
+    var userId = scope(); if (!userId) return Promise.resolve(false);
+    return idbGet(scopedKey(KEY_SERVICES)).then(function (snap) {
+      if (!snap || snap.user_id !== userId || !snap.rows || !snap.rows.length) return false;
       allServices = snap.rows;
       var dl = document.getElementById('svc-datalist');
       if (dl) dl.innerHTML = snap.rows.map(function (s) {
