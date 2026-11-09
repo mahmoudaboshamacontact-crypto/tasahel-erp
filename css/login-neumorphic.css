@@ -1,58 +1,151 @@
-/* شاشة الدخول بتصميم Neumorphic فاتح — طبقة CSS فوق overlay الموجود (js/02-login-brand.js).
-   مبتغيّرش أي ID ولا منطق دخول. شيل سطر الـ link من index.html عشان ترجع للقديم. */
-#tasahel-3d-overlay {
-  background: #e0e5ec !important;
-  --nm-dark: #a3b1c6; --nm-light: #ffffff; --nm-ink: #31456a; --nm-accent: #2563eb;
-}
-#tasahel-3d-overlay *, #tasahel-3d-overlay *::before, #tasahel-3d-overlay *::after { animation: none !important; }
-/* إخفاء الزخارف القديمة */
-#tasahel-3d-overlay .t3d-circuit-bg, #tasahel-3d-overlay .t3d-sparkle, #tasahel-3d-overlay .t3d-wing,
-#tasahel-3d-overlay .t3d-laser-border, #tasahel-3d-overlay .t3d-divider,
-#tasahel-3d-overlay #t3dToggle3DBtn { display: none !important; }
-/* دوائر الخلفية */
-#tasahel-3d-overlay::before, #tasahel-3d-overlay::after {
-  content: ""; position: absolute; border-radius: 50%; pointer-events: none; background: #e0e5ec;
-  box-shadow: 14px 14px 30px var(--nm-dark), -14px -14px 30px var(--nm-light);
-}
-#tasahel-3d-overlay::before { width: 190px; height: 190px; top: 12%; left: 14%; }
-#tasahel-3d-overlay::after { width: 120px; height: 120px; bottom: 12%; right: 16%; }
+/* ==========================================================================
+   شاشة الدخول — تصميم الزجاجي الفاخر (Dark Glassmorphism)
+   - نفس المعرفات الأصلية (#login, #login-email, #login-password, #login-btn, #login-error)
+   - بدون أي طبقات وسيطة أو حقول مخفية (أمان واستقرار 100% للدخول)
+   - الشعار وهوية تساهيل الأصلية بالكامل
+   ========================================================================== */
 
-#tasahel-3d-overlay .t3d-scene-rig, #tasahel-3d-overlay .t3d-card-wrap { transform: none !important; }
-#tasahel-3d-overlay .t3d-card {
-  background: #e0e5ec !important; border: 0 !important; border-radius: 30px !important; color: var(--nm-ink) !important;
-  box-shadow: 12px 12px 28px var(--nm-dark), -12px -12px 28px var(--nm-light) !important;
-  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+#login {
+  background: #070a12 radial-gradient(circle at 50% 18%, rgba(234, 88, 12, 0.22), transparent 42%),
+              radial-gradient(circle at 20% 85%, rgba(249, 115, 22, 0.14), transparent 45%),
+              radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.08), transparent 40%) !important;
+  min-height: 100vh !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 1.5rem !important;
+  position: relative !important;
+  overflow: hidden !important;
 }
-#tasahel-3d-overlay .t3d-logos { gap: 14px; justify-content: center; }
-#tasahel-3d-overlay .t3d-logo-box {
-  background: #e0e5ec !important; border: 0 !important; border-radius: 50% !important;
-  box-shadow: 6px 6px 12px var(--nm-dark), -6px -6px 12px var(--nm-light) !important;
+
+/* الكارت الزجاجي المصنفر */
+#login > div {
+  background: rgba(15, 23, 42, 0.72) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 1.5rem !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.85),
+              0 0 35px rgba(234, 88, 12, 0.14) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  backdrop-filter: blur(20px) !important;
+  padding: 2.25rem 2rem !important;
+  width: 100% !important;
+  max-width: 25rem !important;
+  position: relative !important;
+  z-index: 10 !important;
 }
-#tasahel-3d-overlay .t3d-title { color: var(--nm-ink) !important; text-shadow: none !important; background: none !important; -webkit-text-fill-color: var(--nm-ink) !important; }
-#tasahel-3d-overlay .t3d-subtitle { color: #6b7a99 !important; background: none !important; border: 0 !important; }
-#tasahel-3d-overlay .t3d-label { color: #4a5a7a !important; }
-#tasahel-3d-overlay .t3d-input {
-  background: #e0e5ec !important; border: 0 !important; border-radius: 14px !important; color: var(--nm-ink) !important;
-  box-shadow: inset 5px 5px 10px var(--nm-dark), inset -5px -5px 10px var(--nm-light) !important;
+
+/* الشعار وهوية تساهيل */
+#login #login-brand {
+  height: 2.5rem !important;
+  width: auto !important;
 }
-#tasahel-3d-overlay .t3d-input::placeholder { color: #94a1b8 !important; }
-#tasahel-3d-overlay .t3d-input:focus { outline: 2px solid rgba(37, 99, 235, .35) !important; outline-offset: 1px; }
-#tasahel-3d-overlay .t3d-icon-right, #tasahel-3d-overlay .t3d-eye { color: #7d8ca8 !important; background: transparent !important; box-shadow: none !important; }
-#tasahel-3d-overlay .t3d-link-btn { color: var(--nm-accent) !important; }
-#tasahel-3d-overlay .t3d-util-row { justify-content: center !important; }
-#tasahel-3d-overlay .t3d-submit {
-  background: #e0e5ec !important; color: var(--nm-accent) !important; border: 0 !important; border-radius: 16px !important;
-  font-weight: 800; text-shadow: none !important;
-  box-shadow: 7px 7px 14px var(--nm-dark), -7px -7px 14px var(--nm-light) !important;
-  transition: box-shadow .15s ease;
+
+#login span.ring-1 {
+  background: #ffffff !important;
+  padding: 0.4rem 0.85rem !important;
+  border-radius: 0.85rem !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
 }
-#tasahel-3d-overlay .t3d-submit:active { box-shadow: inset 5px 5px 10px var(--nm-dark), inset -5px -5px 10px var(--nm-light) !important; }
-#tasahel-3d-overlay .t3d-supa-bar { border-top: 1px solid rgba(163, 177, 198, .45) !important; }
-#tasahel-3d-overlay .t3d-supa-btn {
-  background: #e0e5ec !important; color: #5b6b8a !important; border: 0 !important; border-radius: 12px !important;
-  box-shadow: 4px 4px 9px var(--nm-dark), -4px -4px 9px var(--nm-light) !important;
+
+#login img[src*="icon.png"] {
+  border-radius: 0.85rem !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4) !important;
 }
-#tasahel-3d-overlay .t3d-error-msg { color: #dc2626 !important; }
-#tasahel-3d-overlay .t3d-input-wrap, #tasahel-3d-overlay .t3d-icon-right, #tasahel-3d-overlay .t3d-eye {
-  background: transparent !important; border: 0 !important; box-shadow: none !important; outline: 0 !important;
+
+#login .text-ink, #login .dark\:text-white {
+  color: #ffffff !important;
+  font-size: 1.35rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.01em !important;
+}
+
+#login .text-slate-500, #login .dark\:text-slate-400 {
+  color: #94a3b8 !important;
+  font-size: 0.82rem !important;
+  margin-top: 0.25rem !important;
+}
+
+/* تنبيه الخطأ */
+#login #login-error {
+  background: rgba(239, 68, 68, 0.14) !important;
+  border: 1px solid rgba(239, 68, 68, 0.4) !important;
+  color: #fca5a5 !important;
+  border-radius: 0.85rem !important;
+  padding: 0.75rem 1rem !important;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+}
+
+/* تسميات الحقول */
+#login label.label {
+  color: #cbd5e1 !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 0.35rem !important;
+  display: block !important;
+}
+
+/* حقول الإدخال */
+#login input.field {
+  background: rgba(30, 41, 59, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #ffffff !important;
+  border-radius: 0.85rem !important;
+  padding: 0.65rem 0.95rem !important;
+  font-size: 0.88rem !important;
+  transition: all 0.2s ease !important;
+  width: 100% !important;
+}
+
+#login input.field::placeholder {
+  color: #64748b !important;
+}
+
+#login input.field:focus {
+  background: rgba(30, 41, 59, 0.95) !important;
+  border-color: #ea580c !important;
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.25) !important;
+  outline: none !important;
+}
+
+/* زر تسجيل الدخول الرئيسي */
+#login #login-btn, #login .btn-neo-pri {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+  border-radius: 0.85rem !important;
+  padding: 0.75rem 1rem !important;
+  font-size: 0.92rem !important;
+  font-weight: 700 !important;
+  box-shadow: 0 10px 25px -5px rgba(234, 88, 12, 0.5) !important;
+  transition: all 0.2s cubic-bezier(0.34, 1.4, 0.5, 1) !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+}
+
+#login #login-btn:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 15px 30px -5px rgba(234, 88, 12, 0.65) !important;
+}
+
+#login #login-btn:active {
+  transform: translateY(1px) !important;
+}
+
+/* زر إعدادات Supabase */
+#login .border-t {
+  border-top-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+#login button[onclick*="openSupabaseModal"] {
+  color: #94a3b8 !important;
+  font-size: 0.76rem !important;
+  transition: color 0.15s ease !important;
+}
+
+#login button[onclick*="openSupabaseModal"]:hover {
+  color: #f97316 !important;
 }

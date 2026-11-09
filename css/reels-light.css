@@ -216,8 +216,8 @@ html:not(.dark) body.reels #tab-tx .divide-y > :not([hidden]) ~ :not([hidden]) {
    القائمة الجانبية (المزيد): زجاج داكن بدون ألوان أيقونات متعددة
    ========================================================================== */
 html:not(.dark) body.reels #nav-menu {
-  background: rgba(20,18,16,.94) !important; border: 1px solid var(--r-line) !important; border-radius: 1.2rem !important;
-  box-shadow: 0 24px 60px -18px rgba(0,0,0,.8) !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  background: #ffffff !important; border: 1px solid var(--r-line) !important; border-radius: 1.2rem !important;
+  box-shadow: 0 20px 50px -10px rgba(0,0,0,.15) !important; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
 }
 html:not(.dark) body.reels #nav-menu .tab-btn { color: var(--r-text) !important; border-radius: .8rem !important; background: transparent !important; border-color: transparent !important; box-shadow: none !important; }
 html:not(.dark) body.reels #nav-menu .tab-btn i { color: var(--r-mute) !important; transition: color .2s ease; }
@@ -227,6 +227,14 @@ html:not(.dark) body.reels #nav-menu .tab-btn.bg-ink { background: rgba(255,157,
 html:not(.dark) body.reels #nav-menu .tab-btn.bg-ink i { color: var(--r-acc) !important; }
 html:not(.dark) body.reels #nav-menu .text-slate-400, html:not(.dark) body.reels #nav-menu hr { color: var(--r-mute) !important; border-color: var(--r-line) !important; }
 html:not(.dark) body.reels #nav-menu .r-logout-menu.text-rose-400, html:not(.dark) body.reels #nav-menu .r-logout-menu.text-rose-400 i { color: var(--r-bad) !important; }
+html:not(.dark) body.reels #ub-panel {
+  background: #ffffff !important;
+  border: 1px solid var(--r-line) !important;
+  border-radius: 1.2rem !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 
 /* ==========================================================================
    الداشبورد (لوحة المتابعة): نفس لغة الكروت، أيقونات برتقالية موحدة

@@ -157,7 +157,7 @@
   if (!isMgr()) return;
   const l = bkLast(), age = l ? (Date.now() - l.at) / 864e5 : Infinity, b = $('backup-btn');
   if (b) b.title = 'نسخة احتياطية' + (l ? ' (آخر نسخة: ' + new Date(l.at).toLocaleDateString('ar-EG') + ')' : ' (لم تؤخذ نسخة بعد)');
-  if (age < BK_DAYS) return;
+  return; // تم إيقاف البانر التلقائي عند الريفرش بناءً على طلب محمود — النسخ الاحتياطي متاح دائماً من السايد بار
   document.body.insertAdjacentHTML('beforeend', '<div id="bk-banner" class="fixed bottom-2 left-2 right-2 z-[90] flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 shadow-lg dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100 sm:bottom-14 sm:left-3 sm:right-auto sm:max-w-xs sm:flex-col sm:items-stretch sm:rounded-2xl sm:p-3 sm:text-xs"><div class="font-bold">' + (l ? 'آخر نسخة احتياطية من ' + Math.floor(age) + ' يوم' : 'لم تؤخذ نسخة احتياطية على الجهاز ده بعد') + '</div><div class="flex shrink-0 gap-1.5 sm:mt-2 sm:gap-2"><button type="button" onclick="backupAll()" class="rounded-lg bg-amber-500 px-2.5 py-1 font-bold text-slate-950 sm:px-3 sm:py-1.5">خد نسخة الآن</button><button type="button" onclick="this.closest(\'#bk-banner\').remove()" class="rounded-lg px-2 py-1 font-semibold sm:px-3 sm:py-1.5">لاحقاً</button></div></div>');
 }
   window.backupAll = async function () {

@@ -230,6 +230,14 @@ html.dark body.reels #nav-menu .tab-btn.bg-ink { background: rgba(255,157,108,.1
 html.dark body.reels #nav-menu .tab-btn.bg-ink i { color: var(--r-acc) !important; }
 html.dark body.reels #nav-menu .text-slate-400, html.dark body.reels #nav-menu hr { color: var(--r-mute) !important; border-color: var(--r-line) !important; }
 html.dark body.reels #nav-menu .r-logout-menu.text-rose-400, html.dark body.reels #nav-menu .r-logout-menu.text-rose-400 i { color: var(--r-bad) !important; }
+html.dark body.reels #ub-panel {
+  background: #141210 !important;
+  border: 1px solid var(--r-line) !important;
+  border-radius: 1.2rem !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 
 /* ==========================================================================
    الداشبورد (لوحة المتابعة): نفس لغة الكروت، أيقونات برتقالية موحدة
