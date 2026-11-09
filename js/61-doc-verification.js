@@ -16,6 +16,12 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  function getAllLines() {
+    if (typeof allRequestLines !== 'undefined' && Array.isArray(allRequestLines)) return allRequestLines;
+    if (window.allRequestLines && Array.isArray(window.allRequestLines)) return window.allRequestLines;
+    return [];
+  }
+
   function wrap(name, make) {
     var o = window[name];
     if (typeof o !== 'function') return;
@@ -222,10 +228,18 @@
 
   window.openDocVerificationModal = async function (lineId) {
     var line = null;
-    (window.allRequestLines || []).some(function (l) {
+    var allLines = getAllLines();
+    allLines.some(function (l) {
       if (String(l.id) === String(lineId)) { line = l; return true; }
       return false;
     });
+
+    if (!line && window.sbClient) {
+      try {
+        var lr = await window.sbClient.from('request_lines').select('*').eq('id', lineId).single();
+        line = lr.data;
+      } catch (e) { /* ignore */ }
+    }
 
     if (!line) {
       if (typeof window.showToast === 'function') window.showToast('تعذر العثور على بيانات الخدمة', 'error');
@@ -296,7 +310,7 @@
     $('dve-body').innerHTML = checkItems.map(function (it, idx) {
       var v = verifMap[it.id] || {};
       var isPresent = v.is_present === true;
-      var isValid = v.is_valid !== false; // default true if not verified
+      var isValid = v.is_valid !== false;
       var isStamped = v.is_stamped !== false;
       var isMatched = v.is_matched !== false;
       var note = v.notes || '';
@@ -437,7 +451,6 @@
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> حفظ...'; }
 
     try {
-      // حذف الفحص القديم لهذا البند واستبداله بالجديد
       await window.sbClient.from('request_line_doc_verifications').delete().eq('line_id', lineId);
       if (records.length) {
         var ins = await window.sbClient.from('request_line_doc_verifications').insert(records);
@@ -463,22 +476,6 @@
     }
   };
 
-  // =========================================================================
-  // 3. دمج الزر وبوابة المنع التلقائية (Quality Gate Guard)
-  // =========================================================================
-
-  // التحقق قبل تحويل حالة الطلب إلى التنفيذ
-  window.canProceedToExecution = async function (lineId) {
-    if (!lineId || !window.sbClient) return true;
-    try {
-      var r = await window.sbClient.rpc('is_line_docs_cleared', { p_line_id: Number(lineId) });
-      if (r && r.data === false) return false;
-      return true;
-    } catch (e) {
-      return true; // في حالة عدم تشغيل دالة الـ RPC بعد
-    }
-  };
-
   // حقن زر فحص المستندات في تفاصيل كل خدمة داخل مودال المعاملة
   wrap('buildServiceDetailCard', function (orig) {
     return function (line, index, context) {
@@ -496,7 +493,7 @@
     };
   });
 
-  // إضافة زر إعداد القوالب في قائمة المدير
+  // إضافة زر إعداد القوالب في قائمة المدير داخل قسم الإدارة
   function injectManagerMenuButton() {
     var menu = $('nav-menu');
     if (!menu || !isMgr()) return;
@@ -512,28 +509,35 @@
       window.openDocChecklistManagerModal();
     };
 
-    // وضعه قبل زر سلة المحذوفات أو في نهاية قائمة المدير
-    var trashBtn = $('tab-trash-btn') || menu.lastElementChild;
-    if (trashBtn && trashBtn.parentNode) {
-      trashBtn.parentNode.insertBefore(btn, trashBtn);
+    var body = menu.querySelector(':scope > section[data-mg="admin"] .mg-body');
+    if (body) {
+      body.appendChild(btn);
     } else {
-      menu.appendChild(btn);
+      var foot = menu.querySelector(':scope > .r-logout-menu');
+      if (foot) menu.insertBefore(btn, foot); else menu.appendChild(btn);
     }
   }
+
+  wrap('toggleNavMenu', function (orig) {
+    return function () {
+      var r = orig.apply(this, arguments);
+      injectManagerMenuButton();
+      return r;
+    };
+  });
 
   wrap('loadInitialData', function (orig) {
     return function () {
       var res = orig.apply(this, arguments);
-      setTimeout(injectManagerMenuButton, 100);
+      setTimeout(injectManagerMenuButton, 300);
       return res;
     };
   });
 
-  // تشغيل عند أول تحميل
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', injectManagerMenuButton);
   } else {
-    setTimeout(injectManagerMenuButton, 150);
+    setTimeout(injectManagerMenuButton, 400);
   }
 
 })();

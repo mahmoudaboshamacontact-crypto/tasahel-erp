@@ -23,6 +23,12 @@
     window[name] = make(o);
   }
 
+  function getAllLines() {
+    if (typeof allRequestLines !== 'undefined' && Array.isArray(allRequestLines)) return allRequestLines;
+    if (window.allRequestLines && Array.isArray(window.allRequestLines)) return window.allRequestLines;
+    return [];
+  }
+
   var DEFAULT_STAGES = [
     { name: 'فحص المستندات', sla_hours: 12 },
     { name: 'إرسال للمنفذ', sla_hours: 24 },
@@ -34,10 +40,17 @@
   // فتح نافذة مسار العمل التفصيلي للبند
   window.openWorkflowStagesModal = async function (lineId) {
     var line = null;
-    (window.allRequestLines || []).some(function (l) {
+    getAllLines().some(function (l) {
       if (String(l.id) === String(lineId)) { line = l; return true; }
       return false;
     });
+
+    if (!line && window.sbClient) {
+      try {
+        var r = await window.sbClient.from('request_lines').select('*').eq('id', lineId).maybeSingle();
+        if (r && r.data) line = r.data;
+      } catch (_) {}
+    }
 
     if (!line) {
       if (typeof window.showToast === 'function') window.showToast('تعذر العثور على بيانات الخدمة', 'error');

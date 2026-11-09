@@ -1,7 +1,8 @@
 // =====================================================================
 // js/63-customer-360.js
 // ملف العميل الشامل (Customer 360 Profile)
-// - كشف حساب متكامل وفوري لكل عميل برقم هاتفه
+// - كشف حساب متكامل وفوري لكل عميل برقم هاتفه أو اسمه
+// - بحث فوري من الذاكرة المحلية وقاعدة البيانات مباشرة
 // - تاريخ المعاملات السابقة وحالاتها ومواعيدها
 // - سجل الشكاوى والاستفسارات وملاحظات خدمة العملاء
 // =====================================================================
@@ -18,6 +19,12 @@
 
   function fmtCur(n) {
     return (Number(n) || 0).toLocaleString('ar-EG') + ' ج.م';
+  }
+
+  function getAllLines() {
+    if (typeof allRequestLines !== 'undefined' && Array.isArray(allRequestLines)) return allRequestLines;
+    if (window.allRequestLines && Array.isArray(window.allRequestLines)) return window.allRequestLines;
+    return [];
   }
 
   function wrap(name, make) {
@@ -45,11 +52,11 @@
         '      <button type="button" onclick="window.closeCustomer360Modal()" class="h-8 w-8 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>' +
         '    </div>' +
         '    <div class="py-3 border-b border-slate-200 dark:border-slate-800 flex gap-2">' +
-        '      <input id="c360-search-input" class="field flex-1 text-xs" placeholder="ابحث برقم تليفون العميل أو اسمه..." onkeydown="if(event.key===\'Enter\')window.searchCustomer360()">' +
-        '      <button type="button" onclick="window.searchCustomer360()" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs"><i class="fa-solid fa-magnifying-glass"></i> بحث</button>' +
+        '      <input id="c360-search-input" class="field flex-1 text-xs" placeholder="أدخل رقم تليفون العميل (مثال: 010...) أو اسمه..." onkeydown="if(event.key===\'Enter\')window.searchCustomer360()">' +
+        '      <button type="button" onclick="window.searchCustomer360()" class="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs flex items-center gap-1.5 shadow"><i class="fa-solid fa-magnifying-glass"></i> بحث شامل</button>' +
         '    </div>' +
         '    <div class="py-4 space-y-4 overflow-y-auto flex-1" id="c360-body">' +
-        '      <div class="p-8 text-center text-xs text-slate-400">أدخل رقم هاتف العميل لعرض ملفه الشامل.</div>' +
+        '      <div class="p-8 text-center text-xs text-slate-400">أدخل رقم هاتف العميل للبحث الفوري في قاعدة البيانات والطلبات الحالية.</div>' +
         '    </div>' +
         '    <div class="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end">' +
         '      <button type="button" onclick="window.closeCustomer360Modal()" class="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-xs">إغلاق</button>' +
@@ -80,25 +87,62 @@
     var body = $('c360-body');
     if (!q || !body) return;
 
-    body.innerHTML = '<div class="p-8 text-center text-xs text-slate-400">جارٍ جلب وتجميع بيانات العميل...</div>';
+    body.innerHTML = '<div class="p-8 text-center text-xs text-slate-400"><i class="fa-solid fa-spinner fa-spin text-xl text-sky-500 mb-2 block"></i>جارٍ جلب وتجميع سجلات العميل من قاعدة البيانات...</div>';
 
     var clean = q.replace(/\D/g, '');
-    var lines = (window.allRequestLines || []).filter(function (l) {
-      if (clean.length >= 6 && l.phone && String(l.phone).replace(/\D/g, '').indexOf(clean) !== -1) return true;
-      if (l.client_name && l.client_name.toLowerCase().indexOf(q.toLowerCase()) !== -1) return true;
-      return false;
+    var allLines = getAllLines();
+    var matchedLines = [];
+    var seenIds = new Set();
+
+    // 1. بحث في الذاكرة المحلية أولاً
+    allLines.forEach(function (l) {
+      var p = String(l.phone || '').replace(/\D/g, '');
+      var matchPhone = clean.length >= 6 && p.indexOf(clean) !== -1;
+      var matchName = l.client_name && l.client_name.toLowerCase().indexOf(q.toLowerCase()) !== -1;
+      if (matchPhone || matchName) {
+        if (!seenIds.has(l.id)) { seenIds.add(l.id); matchedLines.push(l); }
+      }
     });
 
-    if (!lines.length) {
-      body.innerHTML = '<div class="p-8 text-center text-xs text-slate-400 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">لم يتم العثور على أي معاملات مسجلة بهذا الرقم أو الاسم.</div>';
+    // 2. بحث مباشر وسريع في Supabase لضمان جلب كل المعاملات حتى لو لم تكن محملة في الذاكرة
+    if (window.sbClient) {
+      try {
+        var query = window.sbClient.from('request_lines').select('*').is('deleted_at', null);
+        if (clean.length >= 6) {
+          query = query.ilike('phone', '%' + clean + '%');
+        } else {
+          query = query.ilike('client_name', '%' + q + '%');
+        }
+        var res = await query.order('received_at', { ascending: false }).limit(60);
+        if (res.data && res.data.length) {
+          res.data.forEach(function (l) {
+            if (!seenIds.has(l.id)) { seenIds.add(l.id); matchedLines.push(l); }
+          });
+        }
+      } catch (e) {
+        console.warn('Supabase C360 search:', e);
+      }
+    }
+
+    if (!matchedLines.length) {
+      body.innerHTML = '<div class="p-8 text-center text-xs text-slate-400 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">' +
+        '<i class="fa-solid fa-user-slash text-2xl text-slate-300 dark:text-slate-600 mb-2 block"></i>' +
+        'لم يتم العثور على أي معاملات مسجلة برقم الهاتف "' + eh(q) + '". تأكد من صحة الرقم وجرب مرة أخرى.</div>';
       return;
     }
 
-    var clientName = lines[0].client_name || 'عميل';
-    var clientPhone = lines[0].phone || q;
-    var totalSpent = lines.reduce(function (sum, l) { return sum + (Number(l.total) || 0); }, 0);
-    var activeCount = lines.filter(function (l) { return ['Under Review', 'In Progress', 'Pending Exec', 'Pending Client'].indexOf(l.status) !== -1; }).length;
-    var doneCount = lines.filter(function (l) { return ['Delivered', 'Complete'].indexOf(l.status) !== -1; }).length;
+    // ترتيب المعاملات من الأحدث للأقدم
+    matchedLines.sort(function (a, b) {
+      var da = new Date(b.received_at || b.created_at || 0);
+      var db = new Date(a.received_at || a.created_at || 0);
+      return da - db;
+    });
+
+    var clientName = matchedLines[0].client_name || 'عميل';
+    var clientPhone = matchedLines[0].phone || q;
+    var totalSpent = matchedLines.reduce(function (sum, l) { return sum + (Number(l.total) || 0); }, 0);
+    var activeCount = matchedLines.filter(function (l) { return ['Under Review', 'In Progress', 'Pending Exec', 'Pending Client'].indexOf(l.status) !== -1; }).length;
+    var doneCount = matchedLines.filter(function (l) { return ['Delivered', 'Complete'].indexOf(l.status) !== -1; }).length;
 
     // جلب الشكاوى والملاحظات من السيرفر
     var notes = [];
@@ -123,12 +167,12 @@
       '  <div>' +
       '    <div class="flex items-center gap-2">' +
       '      <h4 class="font-bold text-sm text-slate-900 dark:text-white">' + eh(clientName) + '</h4>' +
-      '      <span class="font-mono text-xs text-slate-500 dir-ltr">' + eh(clientPhone) + '</span>' +
+      '      <span class="font-mono text-xs text-slate-500 dir-ltr bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">' + eh(clientPhone) + '</span>' +
       '    </div>' +
-      '    <p class="text-xs text-slate-400 mt-0.5">عميل مسجل لدى تساهيل • ' + lines.length + ' طلب مسجل</p>' +
+      '    <p class="text-xs text-slate-400 mt-0.5">عميل مسجل لدى تساهيل • ' + matchedLines.length + ' بند / طلب مسجل</p>' +
       '  </div>' +
       '  <div class="flex items-center gap-2">' +
-      '    <a href="' + waUrl + '" target="_blank" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' +
+      '    <a href="' + waUrl + '" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' +
       '    <a href="tel:' + eh(clientPhone) + '" class="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-phone"></i> اتصال</a>' +
       '  </div>' +
       '</div>' +
@@ -160,7 +204,7 @@
       '  </div>' +
       '  <div class="flex gap-2">' +
       '    <input id="c360-new-note" class="field flex-1 text-xs" placeholder="أضف ملاحظة أو شكوى جديدة للعميل...">' +
-      '    <button type="button" onclick="window.saveCustomer360Note(\'' + eh(clientPhone) + '\')" class="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs"><i class="fa-solid fa-plus"></i> إضافة</button>' +
+      '    <button type="button" onclick="window.saveCustomer360Note(\'' + eh(clientPhone) + '\')" class="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs"><i class="fa-solid fa-plus"></i> إضافة</button>' +
       '  </div>' +
       '  <div class="space-y-2">' +
       (notes.length ?
@@ -175,9 +219,9 @@
 
       // 4. جدول المعاملات التاريخي
       '<div class="space-y-2">' +
-      '  <h5 class="text-xs font-bold text-slate-800 dark:text-slate-100"><i class="fa-solid fa-clock-rotate-left text-slate-400 ms-1"></i> جميع المعاملات السابقة (' + lines.length + '):</h5>' +
+      '  <h5 class="text-xs font-bold text-slate-800 dark:text-slate-100"><i class="fa-solid fa-clock-rotate-left text-slate-400 ms-1"></i> جميع المعاملات السابقة (' + matchedLines.length + '):</h5>' +
       '  <div class="space-y-1.5 max-h-60 overflow-y-auto">' +
-      lines.map(function (l) {
+      matchedLines.map(function (l) {
         return '<div class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/40 flex items-center justify-between text-xs cursor-pointer hover:border-sky-500 transition" onclick="window.closeCustomer360Modal(); if(window.openTxModal) window.openTxModal(\'' + eh(l.transaction_id) + '\');">' +
           '  <div>' +
           '    <b class="text-slate-900 dark:text-white">' + eh(l.service) + '</b>' +
@@ -211,8 +255,8 @@
     }
   };
 
-  // حقن زر Customer 360 في القائمة الجانبية
-  function injectC360MenuBtn() {
+  // حقن زر Customer 360 داخل القائمة
+  function placeC360Btn() {
     var menu = $('nav-menu');
     if (!menu || $('nav-c360-btn')) return;
 
@@ -226,21 +270,36 @@
       window.openCustomer360Modal();
     };
 
-    menu.appendChild(btn);
+    var body = menu.querySelector(':scope > section[data-mg="ops"] .mg-body') ||
+               menu.querySelector(':scope > section[data-mg="follow"] .mg-body');
+    if (body) {
+      body.appendChild(btn);
+    } else {
+      var foot = menu.querySelector(':scope > .r-logout-menu');
+      if (foot) menu.insertBefore(btn, foot); else menu.appendChild(btn);
+    }
   }
+
+  wrap('toggleNavMenu', function (orig) {
+    return function () {
+      var r = orig.apply(this, arguments);
+      placeC360Btn();
+      return r;
+    };
+  });
 
   wrap('loadInitialData', function (orig) {
     return function () {
       var res = orig.apply(this, arguments);
-      setTimeout(injectC360MenuBtn, 120);
+      setTimeout(placeC360Btn, 200);
       return res;
     };
   });
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', injectC360MenuBtn);
+    document.addEventListener('DOMContentLoaded', placeC360Btn);
   } else {
-    setTimeout(injectC360MenuBtn, 200);
+    setTimeout(placeC360Btn, 300);
   }
 
 })();

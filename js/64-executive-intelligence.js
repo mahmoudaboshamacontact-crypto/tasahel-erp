@@ -26,6 +26,12 @@
     window[name] = make(o);
   }
 
+  function getAllLines() {
+    if (typeof allRequestLines !== 'undefined' && Array.isArray(allRequestLines)) return allRequestLines;
+    if (window.allRequestLines && Array.isArray(window.allRequestLines)) return window.allRequestLines;
+    return [];
+  }
+
   window.openExecutiveIntelligenceModal = async function () {
     if (!isMgr()) {
       if (typeof window.showToast === 'function') window.showToast('هذه اللوحة خاصة بالإدارة العليا فقط', 'error');
@@ -83,7 +89,7 @@
 
     // fallback حسابي محلي إذا لم تكن دوال الـ SQL قد شُغلت بعد
     if (!stats) {
-      var lines = (window.allRequestLines || []).filter(function (l) { return !l.deleted_at; });
+      var lines = getAllLines().filter(function (l) { return !l.deleted_at; });
       var rev = lines.reduce(function (s, l) { return s + (Number(l.total) || 0); }, 0);
       var cost = lines.reduce(function (s, l) { return s + ((Number(l.exec_unit_cost) || 0) * (Number(l.qty) || 1)); }, 0);
       var prof = rev - cost;
@@ -101,10 +107,11 @@
     }
 
     if (!forecast) {
+      var allL = getAllLines();
       forecast = {
-        predicted_weekly_orders: Math.round((window.allRequestLines || []).length / 4),
-        daily_order_velocity: Math.round((window.allRequestLines || []).length / 30),
-        high_risk_late_orders: (window.allRequestLines || []).filter(function (l) { return l.status === 'In Progress'; }).length,
+        predicted_weekly_orders: Math.round(allL.length / 4),
+        daily_order_velocity: Math.round(allL.length / 30),
+        high_risk_late_orders: allL.filter(function (l) { return l.status === 'In Progress'; }).length,
         staff_capacity_status: 'طاقة تشغيلية مستقرة',
         trending_services: []
       };
@@ -208,18 +215,32 @@
       window.openExecutiveIntelligenceModal();
     };
 
-    var trashBtn = $('tab-trash-btn') || menu.lastElementChild;
-    if (trashBtn && trashBtn.parentNode) {
-      trashBtn.parentNode.insertBefore(btn, trashBtn);
+    var body = menu.querySelector(':scope > section[data-mg="perf"] .mg-body') ||
+               menu.querySelector(':scope > section[data-mg="admin"] .mg-body');
+    if (body) {
+      body.appendChild(btn);
     } else {
-      menu.appendChild(btn);
+      var trashBtn = $('tab-trash-btn') || menu.lastElementChild;
+      if (trashBtn && trashBtn.parentNode) {
+        trashBtn.parentNode.insertBefore(btn, trashBtn);
+      } else {
+        menu.appendChild(btn);
+      }
     }
   }
+
+  wrap('toggleNavMenu', function (orig) {
+    return function () {
+      var r = orig.apply(this, arguments);
+      injectExecIntelMenuBtn();
+      return r;
+    };
+  });
 
   wrap('loadInitialData', function (orig) {
     return function () {
       var res = orig.apply(this, arguments);
-      setTimeout(injectExecIntelMenuBtn, 150);
+      setTimeout(injectExecIntelMenuBtn, 200);
       return res;
     };
   });
@@ -227,7 +248,7 @@
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', injectExecIntelMenuBtn);
   } else {
-    setTimeout(injectExecIntelMenuBtn, 250);
+    setTimeout(injectExecIntelMenuBtn, 300);
   }
 
 })();
