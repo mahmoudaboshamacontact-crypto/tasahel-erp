@@ -93,7 +93,7 @@
   let xl = null;
   function loadX() {
     if (window.ExcelJS) return Promise.resolve(window.ExcelJS); if (xl) return xl;
-    xl = new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'; s.onload = () => window.ExcelJS ? ok(window.ExcelJS) : no(new Error('ExcelJS')); s.onerror = () => { xl = null; no(new Error('load')); }; document.head.appendChild(s); });
+    xl = new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'js/vendor/exceljs-4.4.0.min.js'; s.onload = () => window.ExcelJS ? ok(window.ExcelJS) : no(new Error('ExcelJS')); s.onerror = () => { xl = null; no(new Error('load')); }; document.head.appendChild(s); });
     return xl;
   }
   function sheet(wb, name, title, sub, heads, widths, rows, opt) {

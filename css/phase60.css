@@ -1,0 +1,32 @@
+/* تقفيل الشهر — css/phase60.css (يعتمد على متغيرات الثيم --r-*، بدون أنيميشن) */
+.p60 { color: var(--r-text, #26201b); }
+.p60-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; background: var(--r-card, #fff); border: 1px solid var(--r-line, rgba(40,25,10,.1)); border-radius: 16px; padding: 14px; }
+.p60-title { display: flex; gap: 10px; align-items: center; }
+.p60-title i { font-size: 20px; color: var(--r-acc, #e8590c); }
+.p60-title h2 { font-size: 16px; font-weight: 800; margin: 0; }
+.p60-title p { font-size: 11px; color: var(--r-mute, #7b6f64); margin: 2px 0 0; }
+.p60-modes { display: flex; gap: 6px; flex-wrap: wrap; }
+.p60-mode { border: 1px solid var(--r-line, rgba(40,25,10,.1)); background: var(--r-card-2, #f4ede5); color: var(--r-text, #26201b); border-radius: 10px; padding: 7px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.p60-mode.on { background: var(--r-acc, #e8590c); color: #fff; border-color: transparent; }
+.p60-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.p60-form label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--r-mute, #7b6f64); }
+.p60-form input[type="date"] { border: 1px solid var(--r-line, rgba(40,25,10,.1)); background: var(--r-card-2, #f4ede5); color: var(--r-text, #26201b); border-radius: 10px; padding: 7px 9px; font-size: 12px; }
+.p60-btn { border: 0; border-radius: 10px; padding: 9px 14px; font-size: 12px; font-weight: 800; cursor: pointer; background: var(--r-acc, #e8590c); color: #fff; }
+.p60-btn:disabled { opacity: .5; cursor: not-allowed; }
+.p60-xl { background: #15803d; }
+.p60-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.p60-card { background: var(--r-card, #fff); border: 1px solid var(--r-line, rgba(40,25,10,.1)); border-radius: 14px; padding: 12px; }
+.p60-k { font-size: 11px; color: var(--r-mute, #7b6f64); font-weight: 700; }
+.p60-v { font-size: 22px; font-weight: 800; margin-top: 4px; }
+.p60-s { font-size: 10px; color: var(--r-mute, #7b6f64); margin-top: 2px; }
+.p60-acc .p60-v { color: var(--r-acc, #e8590c); }
+.p60-bad .p60-v { color: var(--r-bad, #d93636); }
+.p60-warn .p60-v { color: #b45309; }
+.p60-sec { background: var(--r-card, #fff); border: 1px solid var(--r-line, rgba(40,25,10,.1)); border-radius: 16px; padding: 12px; }
+.p60-sec h3 { font-size: 13px; font-weight: 800; margin: 0 0 8px; }
+.p60-tw { overflow-x: auto; }
+.p60-t { width: 100%; border-collapse: collapse; font-size: 12px; }
+.p60-t th { text-align: start; color: var(--r-mute, #7b6f64); font-weight: 700; padding: 7px 8px; border-bottom: 1px solid var(--r-line, rgba(40,25,10,.1)); white-space: nowrap; }
+.p60-t td { padding: 7px 8px; border-bottom: 1px solid var(--r-line, rgba(40,25,10,.06)); white-space: nowrap; }
+.p60-note { font-size: 12px; color: var(--r-mute, #7b6f64); padding: 10px; }
+.p60-bad-t { color: var(--r-bad, #d93636); }

@@ -8,6 +8,7 @@
 | chart-4.4.1.umd.js | chart.js | 4.4.1 | dist/chart.umd.js |
 | html2canvas-1.4.1.min.js | html2canvas | 1.4.1 | dist/html2canvas.min.js |
 | jspdf-2.5.1.umd.min.js | jspdf | 2.5.1 | dist/jspdf.umd.min.js |
+| exceljs-4.4.0.min.js | exceljs | 4.4.0 | dist/exceljs.min.js |
 | jsqr-1.4.0.js | jsQR | 1.4.0 | — |
 
 ملاحظة أمنية: jspdf 2.5.1 عليه تحذيرات معروفة (npm audit). الترقية لـ 4.x محتاجة اختبار تصدير PDF قبل ما تتعمل.
