@@ -30,3 +30,10 @@
 .p60-t td { padding: 7px 8px; border-bottom: 1px solid var(--r-line, rgba(40,25,10,.06)); white-space: nowrap; }
 .p60-note { font-size: 12px; color: var(--r-mute, #7b6f64); padding: 10px; }
 .p60-bad-t { color: var(--r-bad, #d93636); }
+.p60-ban { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; border-radius: 14px; padding: 12px 14px; font-size: 12px; border: 1px solid var(--r-line, rgba(40,25,10,.1)); background: var(--r-card, #fff); }
+.p60-ban span { color: var(--r-mute, #7b6f64); }
+.p60-ban-ok { border-color: #15803d; }
+.p60-ban-warn { border-color: #b45309; }
+.p60-ban-bad { border-color: var(--r-bad, #d93636); color: var(--r-bad, #d93636); }
+.p60-ban-info { color: var(--r-mute, #7b6f64); }
+.p60-ghost { background: transparent; color: var(--r-text, #26201b); border: 1px solid var(--r-line, rgba(40,25,10,.2)); }

@@ -14,7 +14,7 @@
   };
   var BTN_ON = 'tab-btn bg-ink text-white dark:bg-brand-600 shadow-sm';
   var BTN_OFF = 'tab-btn text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800';
-  var st = { mode: 'month', from: '', to: '', data: null, loading: false, error: '' };
+  var st = { mode: 'month', from: '', to: '', data: null, loading: false, error: '', closings: [], sqlMissing: false, busy: false };
 
   function isMgr() { return window.__role === 'manager'; }
   function db() { return typeof sbClient !== 'undefined' ? sbClient : window.sbClient; }
@@ -161,6 +161,7 @@
       tot: {
         lines: itemRows.length, sales: rows.reduce(function (a, r) { return a + r.sales; }, 0),
         comm: rows.reduce(function (a, r) { return a + r.qty * r.rate; }, 0),
+        itemsSales: itemRows.reduce(function (a, r) { return a + r.sales; }, 0),
         counted: itemRows.filter(function (r) { return r.rate > 0; }).length,
         uncounted: itemRows.filter(function (r) { return !(r.rate > 0); }).length,
         pickup: namedTrips.filter(function (t) { return t.kind === 'pickup'; }).length,
@@ -170,6 +171,79 @@
         refunds: refundCount, far: farRows.length, farFee: farRows.reduce(function (a, r) { return a + r.fee; }, 0)
       }
     };
+  }
+
+  /* ---------- اعتماد التقفيل (sql/part-n-month-closing.sql) ---------- */
+  async function fetchClosings() {
+    st.closings = []; st.sqlMissing = false;
+    try {
+      var r = await db().from('month_closings')
+        .select('id,period_from,period_to,summary,lines_count,items_sales,note,closed_by_name,closed_at,reopened_at,reopen_reason')
+        .order('closed_at', { ascending: false }).limit(24);
+      if (r.error) {
+        var m = String(r.error.message || '') + ' ' + String(r.error.code || '');
+        if (/42P01|does not exist|schema cache|relation/i.test(m)) st.sqlMissing = true;
+        return;
+      }
+      st.closings = r.data || [];
+    } catch (e) { /* الميزة اختيارية، الشاشة تكمل من غيرها */ }
+  }
+  function activeFor(from, to) {
+    var out = { exact: null, overlap: null };
+    st.closings.forEach(function (c) {
+      if (c.reopened_at) return;
+      if (c.period_from === from && c.period_to === to) out.exact = c;
+      else if (c.period_from <= to && c.period_to >= from) out.overlap = out.overlap || c;
+    });
+    return out;
+  }
+  function r2(n) { return Math.round(num(n) * 100) / 100; }
+  function buildSummary(d) {
+    var t = d.tot;
+    return {
+      version: 1, period: d.period, generated_at: new Date().toISOString(),
+      data_from: typeof DATA_FROM !== 'undefined' ? String(DATA_FROM) : null,
+      lines_count: t.lines, items_sales: r2(t.itemsSales),
+      totals: { sales: r2(t.sales), commission: r2(t.comm), counted: t.counted, uncounted: t.uncounted, pickup: t.pickup, delivery: t.delivery, dup_sure: t.dupSure, dup_maybe: t.dupMaybe, refunds: t.refunds },
+      employees: d.byEmp.map(function (g) { return { name: g.key, lines: g.lines, qty: r2(g.qty), sales: r2(g.sales), commission: r2(g.comm), counted: g.counted, uncounted: g.uncounted }; }),
+      services: d.bySvc.map(function (g) { return { name: g.key, counted: g.counted > 0, lines: g.lines, qty: r2(g.qty), sales: r2(g.sales), commission: r2(g.comm) }; }),
+      statuses: d.byStatus,
+      couriers: d.couriers.map(function (g) { return { name: g.name, pickup: g.pickup, delivery: g.delivery, fee: r2(g.fee) }; })
+    };
+  }
+  async function doClose() {
+    if (st.busy || !st.data || st.mode !== 'month') return;
+    var note = '';
+    var ok = window.confirm('هتعتمد تقفيل الفترة ' + st.from + ' → ' + st.to + '\n\nبعد الاعتماد مينفعش تعديل (الموظف، الخدمة، الكمية، المبلغ، العمولة، التاريخ) لبنود الفترة دي، ولا إضافة أو حذف بنود فيها، إلا بإعادة فتح التقفيل بسبب مكتوب.\nتغيير الحالة والتسليم وبيانات العميل هيفضل شغال.\n\nتكمل؟');
+    if (!ok) return;
+    note = window.prompt('ملاحظة على التقفيل (اختياري):', '') || '';
+    st.busy = true; render();
+    try {
+      var r = await db().rpc('close_month', { p_from: st.from, p_to: st.to, p_summary: buildSummary(st.data), p_note: note.trim() || null });
+      if (r.error) throw r.error;
+      toast('تم اعتماد التقفيل ✅', 'success');
+      await fetchClosings();
+    } catch (e) {
+      console.warn('p60 close', e);
+      toast(String((e && e.message) || e).slice(0, 220), 'error');
+    }
+    st.busy = false; render();
+  }
+  async function doReopen(id) {
+    if (st.busy || !id) return;
+    var reason = window.prompt('سبب إعادة فتح التقفيل (5 حروف على الأقل):', '');
+    if (reason == null) return;
+    st.busy = true; render();
+    try {
+      var r = await db().rpc('reopen_month_closing', { p_id: id, p_reason: reason.trim() });
+      if (r.error) throw r.error;
+      toast('اتفتح التقفيل. الفترة بقت قابلة للتعديل.', 'success');
+      await fetchClosings();
+    } catch (e) {
+      console.warn('p60 reopen', e);
+      toast(String((e && e.message) || e).slice(0, 220), 'error');
+    }
+    st.busy = false; render();
   }
 
   async function load() {
@@ -184,6 +258,7 @@
       var trips = st.mode === 'month' ? await fetchTrips(st.from, st.to) : [];
       st.data = compute(lines, refunds, trips, lineMap);
       st.data.period = st.from + ' → ' + st.to;
+      if (st.mode === 'month') await fetchClosings();
     } catch (e) {
       console.warn('p60 load', e); st.data = null;
       st.error = 'تعذّر تحميل البيانات: ' + String((e && e.message) || e).slice(0, 160);
@@ -201,8 +276,30 @@
   function tr(cells) { return '<tr>' + cells.map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>'; }
   function section(title, body) { return '<section class="p60-sec"><h3>' + eh(title) + '</h3>' + body + '</section>'; }
 
+  function closeBanner(d) {
+    var t = d.tot, a;
+    if (st.sqlMissing) return '<div class="p60-ban p60-ban-info"><div>اعتماد التقفيل مش مفعّل لسه. شغّل الملف <b>sql/part-n-month-closing.sql</b> في Supabase (SQL Editor) مرة واحدة.</div></div>';
+    a = activeFor(st.from, st.to);
+    if (a.exact) {
+      var c = a.exact, same = Number(c.lines_count) === t.lines && Math.abs(num(c.items_sales) - t.itemsSales) <= 0.01;
+      return '<div class="p60-ban p60-ban-ok"><div><b>✅ التقفيل معتمد</b> — ' + eh(String(c.closed_at || '').slice(0, 10)) + (c.closed_by_name ? ' بواسطة ' + eh(c.closed_by_name) : '') + (c.note ? '<br><span>' + eh(c.note) + '</span>' : '') +
+        '</div><button type="button" class="p60-btn p60-ghost" data-p60-reopen="' + eh(c.id) + '"' + (st.busy ? ' disabled' : '') + '>إعادة فتح</button></div>' +
+        (same ? '' : '<div class="p60-ban p60-ban-bad"><div>⚠️ الأرقام الحالية (' + t.lines + ' بند / ' + fmt(t.itemsSales) + ') مختلفة عن المعتمدة (' + eh(c.lines_count) + ' بند / ' + fmt(c.items_sales) + '). ممكن بنود اتأرشفت أو اتغيّرت بعد الاعتماد.</div></div>');
+    }
+    if (a.overlap) return '<div class="p60-ban p60-ban-warn"><div>الفترة دي بتتداخل مع تقفيل معتمد (' + eh(a.overlap.period_from) + ' → ' + eh(a.overlap.period_to) + '). اختار نفس الفترة بالظبط، أو افتح التقفيل القديم الأول.</div></div>';
+    if (st.to >= today()) return '<div class="p60-ban p60-ban-info"><div>الفترة لسه ما خلصتش. تقدر تعتمدها بعد آخر يوم فيها.</div></div>';
+    return '<div class="p60-ban p60-ban-warn"><div>التقفيل ده <b>غير معتمد</b> لسه. راجع الأرقام، وبعدين اعتمده عشان يتقفل.</div><button type="button" class="p60-btn" id="p60-close"' + (st.busy ? ' disabled' : '') + '>اعتماد التقفيل</button></div>';
+  }
+  function closingsHtml() {
+    if (!st.closings.length) return '';
+    return section('التقفيلات السابقة', table(['الفترة', 'الحالة', 'بواسطة', 'تاريخ الاعتماد', 'البنود', 'المبيعات', 'ملاحظة'],
+      st.closings.map(function (c) {
+        return tr([eh(c.period_from) + ' → ' + eh(c.period_to), c.reopened_at ? 'اتفتح: ' + eh(c.reopen_reason || '') : 'معتمد', eh(c.closed_by_name || '—'), eh(String(c.closed_at || '').slice(0, 10)), eh(c.lines_count), fmt(c.items_sales), eh(c.note || '')]);
+      }).join('')));
+  }
+
   function monthHtml(d) {
-    var t = d.tot, h = '';
+    var t = d.tot, h = closeBanner(d);
     h += '<div class="p60-cards">' +
       card('إجمالي البنود', t.lines, 'بدون رسوم التوصيل') +
       card('إجمالي المبيعات', fmt(t.sales), 'بعد خصم الاستردادات') +
@@ -227,7 +324,7 @@
     h += section('المكرر (' + dups.length + ')', dups.length ? table(['النوع', 'التاريخ', 'المعاملة', 'الموظف', 'الخدمة', 'الكمية', 'المبلغ'],
       dups.slice(0, 200).map(function (r) { return tr([eh(r.dup), eh(r.day), eh(r.tx), eh(r.emp), eh(r.service), r.qty, fmt(r.sales)]); }).join('')) +
       (dups.length > 200 ? '<p class="p60-note">معروض أول 200 فقط، الباقي في ملف Excel.</p>' : '') : '<p class="p60-note">مفيش تكرار في الفترة دي ✅</p>');
-    return h;
+    return h + closingsHtml();
   }
 
   function feesHtml(d) {
@@ -319,7 +416,8 @@
     ws.views = [{ rightToLeft: true }];
     ws.addRow(['تقفيل الشهر — ' + d.period]); ws.getRow(1).font = { bold: true, size: 14 };
     ws.addRow(['رسوم التوصيل غير مشمولة هنا (ليها تقفيل أسبوعي منفصل). الاستردادات داخلة بالسالب.']);
-    ws.addRow([]);
+    var cl = activeFor(st.from, st.to).exact;
+    ws.addRow([cl ? 'حالة التقفيل: معتمد بتاريخ ' + String(cl.closed_at || '').slice(0, 10) + (cl.closed_by_name ? ' — ' + cl.closed_by_name : '') : 'حالة التقفيل: غير معتمد']);
     var r0 = ws.addRow(['الموظف', 'عدد البنود', 'الكمية', 'المبيعات', 'العمولة', 'محسوبة بعمولة', 'غير محسوبة']).number; head(ws, r0);
     var e1 = r0 + 1;
     d.byEmp.forEach(function (g) {
@@ -466,7 +564,10 @@
         var m = e.target.closest('[data-p60-mode]');
         if (m) { setMode(m.getAttribute('data-p60-mode')); return; }
         if (e.target.closest('#p60-go')) { st.from = $('p60-from').value; st.to = $('p60-to').value; load(); return; }
-        if (e.target.closest('#p60-xl')) window.p60Export();
+        if (e.target.closest('#p60-xl')) { window.p60Export(); return; }
+        if (e.target.closest('#p60-close')) { doClose(); return; }
+        var ro = e.target.closest('[data-p60-reopen]');
+        if (ro) doReopen(ro.getAttribute('data-p60-reopen'));
       });
     }
     if (!$('tab-monthclose-btn') && $('nav-menu')) {
