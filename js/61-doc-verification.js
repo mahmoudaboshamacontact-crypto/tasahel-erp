@@ -482,10 +482,9 @@
       var html = orig.apply(this, arguments);
       if (!line || !line.id) return html;
 
-      var btnHtml = '<div class="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">' +
-        '  <span class="text-slate-400"><i class="fa-solid fa-shield-halved text-orange-500 ms-1"></i> بوابة مراجعة المستندات</span>' +
+      var btnHtml = '<div class="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2 text-[11px]">' +
         '  <button type="button" onclick="window.openDocVerificationModal(' + line.id + ')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/60 text-orange-700 dark:text-orange-300 font-bold transition">' +
-        '    <i class="fa-solid fa-clipboard-check"></i> فحص المستندات والاستيفاء' +
+        '    <i class="fa-solid fa-clipboard-check"></i> المستندات' +
         '  </button>' +
         '</div>';
 
