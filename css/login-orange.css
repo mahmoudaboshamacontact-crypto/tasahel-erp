@@ -61,28 +61,37 @@ html body #login #login-brand { height: 3.4rem; filter: drop-shadow(0 4px 16px r
 html body #login .text-lg.font-bold { display: none !important; }
 html body #login .text-xs.font-medium { letter-spacing: .04em; margin-top: .35rem; }
 
-/* ===== السلك والنور (يشتغل بس لما js/login-lamp.js يضيف .lamp-ready) ===== */
-html body #login.lamp-ready { background: #070606 !important; }
-html body #login.lamp-ready > div:not(.lamp-beam) { opacity: 0; transform: translateY(14px) scale(.98); pointer-events: none; transition: opacity .7s ease .15s, transform .7s ease .15s; animation: none !important; }
-html body #login.lamp-ready.lamp-on > div:not(.lamp-beam) { opacity: 1; transform: none; pointer-events: auto; }
+/* ===== الأباجورة (تشتغل بس لما js/login-lamp.js يضيف .lamp-ready) ===== */
+html body #login.lamp-ready { background: #070606 !important; direction: ltr; justify-content: flex-end; padding-inline: 9vw !important; overflow: hidden; transition: background .9s ease; }
 html body #login.lamp-ready.lamp-on { background:
-    radial-gradient(520px 420px at 88% 8%, rgba(255,122,61,.18), transparent 70%),
-    radial-gradient(rgba(255,255,255,.05) 1px, transparent 1.4px) 0 0 / 22px 22px, #0e0d0c !important; transition: background .8s ease; }
+    radial-gradient(900px 600px at 22% 55%, rgba(255,150,80,.30), transparent 70%),
+    radial-gradient(rgba(255,255,255,.04) 1px, transparent 1.4px) 0 0 / 22px 22px, #0d0b0a !important; }
+html body #login.lamp-ready > div:not(.lamp-stage) { direction: rtl; opacity: 0; transform: translateX(24px) scale(.98); pointer-events: none; transition: opacity .8s ease .2s, transform .8s ease .2s; animation: none !important; z-index: 2; }
+html body #login.lamp-ready.lamp-on > div:not(.lamp-stage) { opacity: 1; transform: none; pointer-events: auto; }
 
-#login .lamp-beam { position: absolute; top: 0; left: 50%; width: min(760px, 120vw); height: 100%; transform: translateX(-50%); pointer-events: none; z-index: 0; opacity: 0; transition: opacity .8s ease;
-  background: radial-gradient(ellipse 55% 70% at 50% 0%, rgba(255,157,108,.38), rgba(255,122,61,.10) 55%, transparent 80%);
-  clip-path: polygon(46% 0, 54% 0, 100% 100%, 0 100%); animation: none !important; }
-#login.lamp-on .lamp-beam { opacity: 1; }
+#login .lamp-stage { position: absolute; z-index: 1; left: 12vw; top: 50%; transform: translateY(-50%); width: calc(var(--lh, 70vh) * .385); height: var(--lh, 70vh); --lh: min(74vh, 560px); animation: none !important; }
+#login .lamp-stage svg { width: 100%; height: 100%; overflow: visible; display: block; }
+#login .lamp-shade { fill: #1d1a18; transition: fill .6s ease; }
+#login .lamp-bulb { fill: #ffe9cf; opacity: 0; transition: opacity .6s ease; }
+#login.lamp-on .lamp-shade { fill: url(#lampGlow); }
+#login.lamp-on .lamp-bulb { opacity: 1; }
+#login .lamp-cone { position: absolute; left: 50%; top: 27%; width: 330%; height: 72%; transform: translateX(-50%); pointer-events: none; opacity: 0; transition: opacity .9s ease;
+  background: linear-gradient(rgba(255,190,130,.50), rgba(255,140,70,.06) 85%, transparent); clip-path: polygon(41% 0, 59% 0, 100% 100%, 0 100%); }
+#login.lamp-on .lamp-cone { opacity: 1; }
+#login .lamp-halo { position: absolute; left: 50%; top: 10%; width: 150%; height: 30%; transform: translateX(-50%); pointer-events: none; opacity: 0; transition: opacity .9s ease;
+  background: radial-gradient(ellipse at 50% 55%, rgba(255,190,130,.55), transparent 70%); }
+#login.lamp-on .lamp-halo { opacity: 1; }
 
-#login .lamp-cord { position: absolute; top: 0; left: 50%; z-index: 3; width: 44px; margin-left: -22px; height: calc(18vh + var(--pull, 0px));
-  display: flex; flex-direction: column; align-items: center; cursor: grab; touch-action: none; border: 0; background: none; padding: 0; user-select: none; -webkit-user-select: none; }
-#login .lamp-cord:active { cursor: grabbing; }
-#login .lamp-cord::before { content: ""; flex: 1; width: 2px; background: linear-gradient(#5a3a28, #ff9d6c); }
-#login .lamp-knob { width: 22px; height: 22px; border-radius: 50%; background: #ff9d6c; box-shadow: 0 0 0 4px rgba(255,157,108,.18), 0 0 18px rgba(255,122,61,.55); transition: box-shadow .5s ease, background .5s ease; }
-#login.lamp-on .lamp-knob { background: #fff3e8; box-shadow: 0 0 0 5px rgba(255,157,108,.3), 0 0 38px 8px rgba(255,157,108,.8); }
-#login .lamp-cord.snap { transition: height .35s cubic-bezier(.3,1.6,.5,1); }
-#login .lamp-hint { position: absolute; top: calc(18vh + 40px); left: 50%; transform: translateX(-50%); z-index: 3; color: #a0978e; font-size: .8rem; letter-spacing: .04em; transition: opacity .4s; pointer-events: none; white-space: nowrap; }
-#login.lamp-on .lamp-hint { opacity: 0; }
-#login.lamp-on .lamp-cord { opacity: .9; }
-@media (prefers-reduced-motion: reduce) { html body #login.lamp-ready > div:not(.lamp-beam), #login .lamp-beam, #login .lamp-cord.snap { transition: none; } }
-#login.lamp-on .lamp-cord { height: calc(7vh + var(--pull, 0px)); transition: height .6s ease; }
+#login .lamp-chain { position: absolute; left: 66%; top: 28.5%; width: 30px; margin-left: -15px; height: calc(var(--lh) * .1 + var(--pull, 0px)); display: flex; flex-direction: column; align-items: center; cursor: grab; touch-action: none; border: 0; background: none; padding: 0; user-select: none; -webkit-user-select: none; z-index: 3; }
+#login .lamp-chain:active { cursor: grabbing; }
+#login .lamp-chain::before { content: ""; flex: 1; width: 2px; background: repeating-linear-gradient(#a98866 0 3px, #6e563f 3px 5px); }
+#login .lamp-bead { width: 12px; height: 18px; border-radius: 6px; background: #ff9d6c; box-shadow: 0 0 10px rgba(255,157,108,.6); }
+#login .lamp-chain.snap { transition: height .35s cubic-bezier(.3,1.6,.5,1); }
+#login .lamp-hint { position: absolute; left: 50%; bottom: -6%; transform: translateX(-50%); color: #8d857c; font-size: .78rem; white-space: nowrap; transition: opacity .4s; pointer-events: none; }
+#login.lamp-on .lamp-hint { opacity: .0; }
+@media (max-width: 860px) {
+  html body #login.lamp-ready { justify-content: center; align-items: flex-end; padding: 0 1rem 1.2rem !important; }
+  #login .lamp-stage { left: 50%; top: 1.5vh; transform: translateX(-50%); --lh: 30vh; }
+  html body #login.lamp-ready > div:not(.lamp-stage) { transform: translateY(20px) scale(.98); }
+}
+@media (prefers-reduced-motion: reduce) { html body #login.lamp-ready > div:not(.lamp-stage), #login .lamp-cone, #login .lamp-halo, #login .lamp-chain.snap { transition: none; } }
