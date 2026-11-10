@@ -14,9 +14,8 @@ html:not(.dark) body.reels #nt-panel {
 /* 2) زرار طريقة الدفع المختار: نص غامق واضح على خلفية الأكسنت (كان نفس اللون) */
 #pay-group button[class*="border-violet-400"] {
   background: var(--r-acc) !important; background-image: none !important;
-  color: var(--r-on-acc, #fff) !important; border-color: var(--r-acc) !important; box-shadow: none !important;
+  color: #1b1511 !important; border-color: var(--r-acc) !important; box-shadow: none !important;
 }
-html.dark body.reels #pay-group button[class*="border-violet-400"] { color: #1b1511 !important; }
 
 /* 3) مركز الذكاء الإداري: كارت التحليلات التنبؤية — خلفية هادية ونص مقروء */
 #exec-intel-modal [class*="from-indigo"] {
@@ -30,9 +29,18 @@ html.dark body.reels #pay-group button[class*="border-violet-400"] { color: #1b1
   background: var(--r-line) !important; color: var(--r-text, inherit) !important;
 }
 #exec-intel-modal [class*="from-indigo"] > div > div > span[class*="bg-indigo-600"] {
-  background: var(--r-acc) !important; color: var(--r-on-acc, #fff) !important;
+  background: var(--r-acc) !important; color: #1b1511 !important;
 }
 #exec-intel-modal [class*="from-indigo"] [class*="bg-white"],
 html.dark #exec-intel-modal [class*="from-indigo"] [class*="dark:bg-slate"] {
   background: var(--r-card, #fff) !important; border: 1px solid var(--r-line) !important;
+}
+
+/* 4) القاعدة العامة: أي نص بنفسجي/أزرق جوه عنصر الثيم حوّله لبرتقالي-gradient
+   كان بياخد لون الأكسنت (برتقالي على برتقالي). هنا بياخد لون النص الصح فوق الأكسنت. */
+html.dark body.reels :is([class*="from-violet"],[class*="from-purple"],[class*="from-indigo"]) :is([class*="text-violet-"],[class*="text-purple-"],[class*="text-indigo-"],[class*="text-slate-"],[class*="text-gray-"]):not([class*="hover:"]) {
+  color: #1b1511 !important;
+}
+html:not(.dark) body.reels :is([class*="from-violet"],[class*="from-purple"],[class*="from-indigo"]) :is([class*="text-violet-"],[class*="text-purple-"],[class*="text-indigo-"],[class*="text-slate-"],[class*="text-gray-"]):not([class*="hover:"]) {
+  color: #1b1511 !important;
 }
