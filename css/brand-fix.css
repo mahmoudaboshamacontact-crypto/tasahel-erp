@@ -44,3 +44,27 @@ html.dark body.reels :is([class*="from-violet"],[class*="from-purple"],[class*="
 html:not(.dark) body.reels :is([class*="from-violet"],[class*="from-purple"],[class*="from-indigo"]) :is([class*="text-violet-"],[class*="text-purple-"],[class*="text-indigo-"],[class*="text-slate-"],[class*="text-gray-"]):not([class*="hover:"]) {
   color: #1b1511 !important;
 }
+
+/* 5) كارت الخدمة: تصغير أزرار استرداد ومسار العمل والمستندات وفي صف واحد على الكمبيوتر */
+[data-svc-card-id] .rf-btn-trigger,
+[data-svc-card-id] button[onclick*="openWorkflowStagesModal"],
+[data-svc-card-id] button[onclick*="openDocVerificationModal"] {
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+  line-height: 1.4 !important;
+  white-space: nowrap !important;
+}
+
+@media (min-width: 640px) {
+  [data-svc-card-id] .mt-2.pt-2.border-t.flex {
+    flex-wrap: nowrap !important;
+    gap: .5rem !important;
+  }
+}
+@media (max-width: 639px) {
+  [data-svc-card-id] .mt-2.pt-2.border-t.flex {
+    flex-wrap: wrap !important;
+    gap: .35rem !important;
+  }
+}
+
