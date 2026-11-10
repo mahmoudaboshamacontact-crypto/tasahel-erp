@@ -51,8 +51,8 @@
 
   var STAGES = [
     { key: 'In Progress', label: 'قيد التنفيذ', icon: 'fa-gears', color: '#8b5cf6' },
-    { key: 'Under Review', label: 'قيد المراجعة', icon: 'fa-magnifying-glass', color: '#f59e0b' },
-    { key: 'Complete', label: 'جاهز للتسليم', icon: 'fa-box-open', color: '#14b8a6' },
+    { key: 'Under Review', label: 'تحت المراجعة', icon: 'fa-magnifying-glass', color: '#f59e0b' },
+    { key: 'Complete', label: 'مكتمل', icon: 'fa-box-open', color: '#14b8a6' },
     { key: 'Delivered', label: 'تم التسليم', icon: 'fa-circle-check', color: '#10b981' }
   ];
 

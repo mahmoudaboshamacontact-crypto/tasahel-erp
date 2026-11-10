@@ -110,6 +110,22 @@
       });
     });
 
+    /* توحيد اسم الموظف: نفس الاسم بهمزة/من غير همزة/مسافات زيادة = موظف واحد */
+    (function () {
+      var canon = new Map();
+      rows.forEach(function (r) {
+        var k = nn(r.emp); if (!k) return;
+        var c = canon.get(k); if (!c) { c = { names: {}, prof: null }; canon.set(k, c); }
+        c.names[r.emp] = (c.names[r.emp] || 0) + 1;
+      });
+      canon.forEach(function (c, k) {
+        var p = typeof profileByName === 'function' ? profileByName(Object.keys(c.names)[0]) : null;
+        var best = Object.keys(c.names).sort(function (a, b) { return c.names[b] - c.names[a]; })[0];
+        c.show = (p && p.full_name) ? String(p.full_name).trim() : String(best).trim().replace(/\s+/g, ' ');
+      });
+      rows.forEach(function (r) { var c = canon.get(nn(r.emp)); if (c) r.emp = c.show; });
+    })();
+
     /* المكرر: (أ) نفس المعاملة + الخدمة + الكمية + المبلغ. (ب) نفس التليفون + الخدمة + اليوم في معاملتين مختلفتين */
     var A = new Map(), B = new Map();
     rows.forEach(function (r, i) {

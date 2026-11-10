@@ -93,6 +93,7 @@
     const r = { orders: new Set(), sales: 0, deliv: 0, late: [], open: [], todayLines: [], comm: 0, mSales: 0, mUnits: 0 };
     allRequestLines.forEach(l => {
       if (!mine(l)) return;
+      if (window.isLineCancelled && window.isLineCancelled(l)) return;
       const rd = lineDate(l), dk = dayKey(rd), st = l.status || 'In Progress';
       const rdn = dnum(rd), sn = dnum(l.exec_start_date), base = isNaN(sn) ? rdn : sn, dur = num(l.duration_days);
       const it = { l: l, st: st, age: isNaN(rdn) ? 0 : Math.max(0, today - rdn), late: 0 };

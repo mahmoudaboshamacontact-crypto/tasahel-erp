@@ -234,7 +234,7 @@
         .eq('complete', false).gte('received_at', DATA_FROM_TS).not('duration_days', 'is', null).order('id', { ascending: false }).limit(500);
       if (r.error) throw r.error;
       const t0 = new Date(); t0.setHours(0, 0, 0, 0);
-      const late = (r.data || []).map(l => {
+      const late = (r.data || []).filter(l => !(window.isLineCancelled && window.isLineCancelled(l))).map(l => {
         const base = new Date(String(l.exec_start_date || l.received_at || '').slice(0, 10) + 'T00:00'); if (isNaN(base)) return null;
         const due = new Date(base.getTime() + (Number(l.duration_days) || 0) * 864e5), days = Math.floor((t0 - due) / 864e5);
         return days > 0 ? { l: l, days: days, due: due } : null;

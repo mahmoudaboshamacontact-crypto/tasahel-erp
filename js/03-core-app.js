@@ -4,7 +4,7 @@ let txStatusFilter='all',selectedInspectorTx=null,showAllQuickServices=false;
 window.__saveOrderMode='normal';
 window.__homeFloatingTxId=null;
 const PAY_DEFAULT=['كاش','انستا باي','فودافون كاش','POS','تحويل بنكي'];
-const STATUS_AR={'Delivered':'تم التسليم','Complete':'جاهز للتسليم','Under Review':'قيد المراجعة','In Progress':'قيد التنفيذ'};
+const STATUS_AR={'Delivered':'تم التسليم','Complete':'مكتمل','Under Review':'تحت المراجعة','In Progress':'قيد التنفيذ'};
 const STATUS_CLS={'Delivered':'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300','Complete':'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300','Under Review':'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300','In Progress':'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300'};
 const $=id=>document.getElementById(id);
 let currentUser=null,profiles=[],myProfile=null,avatarUrls={},profilesReady=true,pendingAvatarBlob=null,pendingAvatarUrl=null,avatarRemoved=false;
@@ -48,10 +48,25 @@ function getOrderStatus(o){
   });
   return r===9?'In Progress':best;
 }
+window.isLineCancelled=(function(){
+  /* سريع: نحتفظ بمجموعة البنود اللي عليها استرداد معتمد لثواني قليلة بدل ما نلف على كل البنود لكل بند */
+  let ids=null,at=0;
+  return function(l){
+    try{
+      if(!l||typeof window.getAllApprovedRefunds!=='function'||typeof window.getLineRefundSummary!=='function')return false;
+      const now=Date.now();
+      if(!ids||now-at>2000){ids=new Set(window.getAllApprovedRefunds().map(r=>String(r.line_id)));at=now;}
+      if(!ids.has(String(l.id)))return false;
+      const rs=window.getLineRefundSummary(l.id);return !!(rs&&rs.isFull);
+    }catch(e){return false;}
+  };
+})();
 function isLineLate(l){
   if(!l)return false;
   const st=l.status||'In Progress';
   if(st==='Delivered'||st==='Complete')return false;
+  /* بند مسترد كليًا = اتلغى، مفيش تأخير عليه */
+  if(window.isLineCancelled(l))return false;
   const dur=Number(l.duration_days)||0;
   if(dur<=0)return false;
   const baseStr=String(l.exec_start_date||lineDate(l)||'').slice(0,10);
@@ -700,14 +715,14 @@ function getStageMeta(st,isLateFlag,customPct){
   }
   if(st==='Under Review'){
     const p=customPct!=null?customPct:50;
-    return {step:2,pct:p,barW:p,title:'قيد المراجعة',sub:'مراجعة المستندات والبيانات',color:'#f59e0b',icon:'fa-magnifying-glass',nextStatus:'In Progress',nextLabel:'قيد التنفيذ'};
+    return {step:2,pct:p,barW:p,title:'تحت المراجعة',sub:'مراجعة المستندات والبيانات',color:'#f59e0b',icon:'fa-magnifying-glass',nextStatus:'In Progress',nextLabel:'قيد التنفيذ'};
   }
   if(isLateFlag){
     const p=customPct!=null?customPct:25;
-    return {step:2,pct:p,barW:p,title:'متأخرة',sub:'تجاوزت موعد التسليم المحدد',color:'#f43f5e',icon:'fa-clock',nextStatus:'Complete',nextLabel:'جاهز للتسليم'};
+    return {step:2,pct:p,barW:p,title:'متأخرة',sub:'تجاوزت موعد التسليم المحدد',color:'#f43f5e',icon:'fa-clock',nextStatus:'Complete',nextLabel:'مكتمل'};
   }
   const p=customPct!=null?customPct:25;
-  return {step:2,pct:p,barW:p,title:'قيد التنفيذ',sub:'جاري التنفيذ لدى المنفذ',color:'#8b5cf6',icon:'fa-gears',nextStatus:'Complete',nextLabel:'جاهز للتسليم'};
+  return {step:2,pct:p,barW:p,title:'قيد التنفيذ',sub:'جاري التنفيذ لدى المنفذ',color:'#8b5cf6',icon:'fa-gears',nextStatus:'Complete',nextLabel:'مكتمل'};
 }
 
 /* بناء شريط مراحل المعاملة والحلقة الدائرية */
@@ -767,7 +782,7 @@ function buildInteractiveStatusWidgets(tx,currentSt,isLateFlag,mode,customPct){
           '</button>'+
           '<button type="button" onclick="'+clickFn('Complete')+'" class="'+nodeCls(3)+'">'+
             '<span class="tx-step-circle">'+nodeIcon(3,'fa-box-open')+'</span>'+
-            '<span class="tx-step-label">جاهز للتسليم</span>'+
+            '<span class="tx-step-label">مكتمل</span>'+
           '</button>'+
           '<button type="button" onclick="'+clickFn('Delivered')+'" class="'+nodeCls(4)+'">'+
             '<span class="tx-step-circle">'+nodeIcon(4,'fa-flag-checkered')+'</span>'+
@@ -1905,7 +1920,9 @@ function avatarHtml(p,size){
   if(url)return '<img src="'+escapeHtml(url)+'" alt="" loading="lazy" class="rounded-full object-cover shrink-0" style="'+box+'">';
   return '<span class="rounded-full shrink-0 inline-flex items-center justify-center font-bold text-white" style="'+box+'font-size:'+Math.round(size*.42)+'px;background:'+avColor((p&&p.id)||nm)+'">'+escapeHtml(nm?Array.from(nm)[0]:'؟')+'</span>';
 }
-function normName(s){return String(s||'').normalize('NFKD').replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[^\p{L}\p{N}]+/gu,' ').trim().toLowerCase();}
+const __nnCache=new Map();
+function normName(s){const k=s==null?'':String(s);let v=__nnCache.get(k);if(v!==undefined)return v;v=__normNameRaw(k);if(__nnCache.size>5000)__nnCache.clear();__nnCache.set(k,v);return v;}
+function __normNameRaw(s){return String(s||'').normalize('NFKD').replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[^\p{L}\p{N}]+/gu,' ').trim().toLowerCase();}
 function profileByName(n){
   const q=normName(n);if(!q)return null;
   const ex=profiles.filter(p=>normName(p.full_name)===q);if(ex.length)return ex[0];
