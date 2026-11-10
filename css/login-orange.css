@@ -1,0 +1,57 @@
+/* login-orange.css — شاشة الدخول بهوية تساهيل البرتقالية. CSS فقط: مفيش تغيير في ids ولا JS ولا منطق الدخول.
+   للإلغاء: شيل سطر الـ link من index.html وترجع الشاشة القديمة فوراً. */
+html body #login {
+  background:
+    radial-gradient(520px 420px at 88% 8%, rgba(255,122,61,.34), transparent 70%),
+    radial-gradient(460px 380px at 6% 96%, rgba(255,157,108,.16), transparent 70%),
+    radial-gradient(rgba(255,255,255,.055) 1px, transparent 1.4px) 0 0 / 22px 22px,
+    #0e0d0c !important;
+}
+html body #login::before, html body #login::after { display: none !important; }
+
+/* الكارت: حبر داكن + خط برتقالي رفيع فوق، من غير زجاج/blur */
+html body #login > div {
+  position: relative; max-width: 24rem !important; border-radius: 1.5rem !important;
+  background: #171513 !important; color: #f4eee8 !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  box-shadow: 0 30px 70px -20px rgba(0,0,0,.85), 0 0 0 1px rgba(255,157,108,.05) !important;
+  padding: 2rem 1.75rem !important; overflow: hidden;
+}
+html body #login > div::before {
+  content: ""; position: absolute; top: 0; right: 1.75rem; left: 1.75rem; height: 3px;
+  border-radius: 0 0 4px 4px; background: linear-gradient(90deg, #ff7a3d, #ff9d6c);
+}
+
+/* الهوية: اللوجو على مربع أبيض واضح، وإخفاء أيقونة السيستم المكررة */
+html body #login .h-9.w-px, html body #login img[src="icon.png"] { display: none !important; }
+html body #login #login-brand { height: 3rem; }
+html body #login > div > div:first-child { text-align: center; }
+html body #login .text-ink, html body #login [class*="dark:text-white"] { color: #f4eee8 !important; }
+html body #login [class*="text-slate-500"] { color: #a0978e !important; }
+
+/* الحقول: مريحة وواضحة */
+html body #login .label { color: #a0978e !important; font-size: .75rem; font-weight: 700; margin-bottom: .35rem; display: block; }
+html body #login .field {
+  background: #0e0d0c !important; color: #f4eee8 !important; border: 1px solid rgba(255,255,255,.12) !important;
+  border-radius: .9rem !important; padding: .8rem 1rem !important; box-shadow: none !important;
+}
+html body #login .field::placeholder { color: #6d655d !important; }
+html body #login .field:focus {
+  border-color: #ff9d6c !important; outline: none !important; box-shadow: 0 0 0 3px rgba(255,157,108,.2) !important;
+}
+
+/* زرار الدخول: برتقالي + نص غامق مقروء */
+html body #login #login-btn {
+  background: linear-gradient(135deg, #ff9d6c, #ff7a3d) !important; color: #1b1511 !important;
+  border: 0 !important; border-radius: .9rem !important; padding: .85rem 1rem !important;
+  font-weight: 800 !important; font-size: .95rem; box-shadow: 0 10px 24px -10px rgba(255,122,61,.7) !important;
+}
+html body #login #login-btn:hover { filter: brightness(1.05); }
+html body #login #login-btn:active { transform: translateY(1px); }
+html body #login #login-btn:disabled { opacity: .6; }
+
+html body #login #login-error { background: rgba(255,107,107,.1) !important; border-color: rgba(255,107,107,.35) !important; color: #ffb4b4 !important; }
+html body #login .border-t { border-color: rgba(255,255,255,.08) !important; }
+html body #login [class*="text-brand-"] { color: #a0978e !important; }
+html body #login #login-brand { background: #fff; }
+html body #login span:has(> #login-brand) { background: #fff !important; border-radius: .8rem !important; padding: .4rem .7rem !important; box-shadow: 0 8px 20px -10px rgba(0,0,0,.6); }
