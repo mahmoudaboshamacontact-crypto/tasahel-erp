@@ -44,3 +44,11 @@ html.dark body.reels :is([class*="from-violet"],[class*="from-purple"],[class*="
 html:not(.dark) body.reels :is([class*="from-violet"],[class*="from-purple"],[class*="from-indigo"]) :is([class*="text-violet-"],[class*="text-purple-"],[class*="text-indigo-"],[class*="text-slate-"],[class*="text-gray-"]):not([class*="hover:"]) {
   color: #1b1511 !important;
 }
+
+/* 5) إخفاء أزرار الحالة المكررة والمزدحمة في نافذة المعاملة:
+   الإبقاء على الشريط التفاعلي العلوي الأنيق (#tx-modal-stepper-slot) مع الـ Ring Gauge
+   وإخفاء كتلة التحديث الجماعي السفلية المزدحمة مع الحفاظ على الـ onclick دون تعديل JS */
+#tx-modal-body > div:has(button[data-s][onclick*="stageTxStatus"]) {
+  display: none !important;
+}
+
