@@ -392,14 +392,48 @@
   }
   function q(name) { return "'" + name.replace(/'/g, "''") + "'"; }
   var MONEY = '#,##0.00';
+  function tabc(ws, argb) { try { ws.properties.tabColor = { argb: argb }; } catch (e) { /* */ } }
+  function section(ws, text) {
+    var r = ws.addRow([text]); r.font = { bold: true, size: 12, color: { argb: 'FFE8590C' } }; return r;
+  }
+  /* شيت "اقرأني أولاً": شرح بالبلدي لكل شيت ومصطلح */
+  function readMe(wb, period) {
+    var w = wb.addWorksheet('اقرأني أولاً', { views: [{ rightToLeft: true, showGridLines: false }] });
+    w.columns = [{ width: 24 }, { width: 70 }, { width: 22 }];
+    tabc(w, 'FF1B1511');
+    var t = w.addRow(['إزاي تقرأ ملف تقفيل الشهر']); t.font = { bold: true, size: 16 };
+    w.addRow(['الفترة: ' + period]);
+    w.addRow(['ابدأ بشيت "ملخص" — فيه الأرقام الكبيرة. لو عايز تراجع رقم، افتح "كل البنود": كل أرقام الشيتات التانية معادلات منه.']);
+    w.addRow([]);
+    var h = w.addRow(['الشيت', 'بيجاوب على إيه', 'مين يهتم بيه']); head(w, h.number);
+    [['ملخص', 'الأرقام الرئيسية للشهر (بنود، مبيعات، عمولة، استردادات) + أداء كل موظف + حالات المعاملات + المكرر', 'المدير'],
+     ['الخدمات', 'كل خدمة اتباعت كام مرة ودخّلت كام، وهل عليها عمولة', 'المدير'],
+     ['المناديب', 'عدد مشاوير الاستلام والتسليم لكل مندوب ورسومها', 'المدير + المندوب'],
+     ['كل البنود', 'كل بند في الشهر سطر بسطر. ده المرجع الأساسي (بتقدر تفلتر بالموظف أو الخدمة)', 'للمراجعة'],
+     ['المشاوير', 'قايمة المشاوير سطر بسطر (يوم، معاملة، مندوب، نوع، رسوم)', 'للمراجعة'],
+     ['المكرر', 'البنود اللي شكلها متكررة عشان تتأكد منها قبل ما تعتمد التقفيل', 'المدير'],
+     ['شيت باسم كل موظف', 'بنود الموظف لوحده وعمولته، عشان يراجع شغله', 'الموظف']].forEach(function (r) { var x = w.addRow(r); x.alignment = { wrapText: true, vertical: 'top' }; x.getCell(1).font = { bold: true }; });
+    w.addRow([]);
+    var g = w.addRow(['معنى الكلمات']); g.font = { bold: true, size: 12 };
+    var h2 = w.addRow(['الكلمة', 'معناها']); head(w, h2.number);
+    [['بند', 'خدمة واحدة جوه معاملة (المعاملة الواحدة ممكن يكون فيها أكتر من بند)'],
+     ['العمولة', 'الكمية × عمولة الوحدة للخدمة. لو عمولة الوحدة صفر، مفيش عمولة على البند'],
+     ['بنود بعمولة', 'البنود اللي عمولة وحدتها أكبر من صفر. وبنود بدون عمولة هي الباقي (زي رسوم التوصيل)'],
+     ['الاستردادات', 'بتتخصم من المبيعات والعمولة (بتظهر بالسالب)'],
+     ['مكرر مؤكد', 'نفس المعاملة والخدمة والمبلغ اتسجلت مرتين'],
+     ['تكرار محتمل', 'نفس التليفون والخدمة والمبلغ في نفس اليوم تقريباً. راجعه بنفسك'],
+     ['رسوم التوصيل', 'مش داخلة هنا. ليها تقفيل أسبوعي منفصل']].forEach(function (r) { var x = w.addRow(r); x.alignment = { wrapText: true, vertical: 'top' }; x.getCell(1).font = { bold: true }; });
+    return w;
+  }
 
   async function exportMonth() {
     var d = st.data, XL = await loadXL(), wb = new XL.Workbook();
     wb.creator = 'Tasahel ERP'; wb.created = new Date();
-    var used = { 'ملخص': 1, 'كل البنود': 1, 'المشاوير': 1, 'المكرر': 1 };
+    var used = { 'ملخص': 1, 'كل البنود': 1, 'المشاوير': 1, 'المكرر': 1, 'الخدمات': 1, 'المناديب': 1, 'اقرأني أولاً': 1 };
+    readMe(wb, d.period);
 
     /* كل البنود */
-    var wa = newSheet(wb, 'كل البنود', [12, 16, 18, 28, 9, 13, 12, 13, 12, 14, 10, 10, 22]);
+    var wa = newSheet(wb, 'كل البنود', [12, 16, 18, 28, 9, 13, 12, 13, 12, 14, 10, 10, 22]); tabc(wa, 'FF8D857C');
     wa.addRow(['التاريخ', 'المعاملة', 'الموظف', 'الخدمة', 'الكمية', 'المبيعات', 'عمولة الوحدة', 'العمولة', 'محسوبة بعمولة', 'الحالة', 'النوع', 'تكرار', 'العميل']); head(wa, 1);
     var rows = d.rows.slice().sort(function (a, b) { return (a.emp + a.day).localeCompare(b.emp + b.day); });
     rows.forEach(function (r, i) {
@@ -412,13 +446,20 @@
     var R = function (col) { return "'كل البنود'!$" + col + '$2:$' + col + '$' + last; };
 
     /* ملخص */
-    var ws = newSheet(wb, 'ملخص', [26, 14, 12, 14, 14, 14, 14]);
+    var ws = newSheet(wb, 'ملخص', [30, 14, 12, 14, 14, 16, 16]); tabc(ws, 'FFE8590C');
     ws.views = [{ rightToLeft: true }];
     ws.addRow(['تقفيل الشهر — ' + d.period]); ws.getRow(1).font = { bold: true, size: 14 };
     ws.addRow(['رسوم التوصيل غير مشمولة هنا (ليها تقفيل أسبوعي منفصل). الاستردادات داخلة بالسالب.']);
     var cl = activeFor(st.from, st.to).exact;
     ws.addRow([cl ? 'حالة التقفيل: معتمد بتاريخ ' + String(cl.closed_at || '').slice(0, 10) + (cl.closed_by_name ? ' — ' + cl.closed_by_name : '') : 'حالة التقفيل: غير معتمد']);
-    var r0 = ws.addRow(['الموظف', 'عدد البنود', 'الكمية', 'المبيعات', 'العمولة', 'محسوبة بعمولة', 'غير محسوبة']).number; head(ws, r0);
+    ws.addRow([]);
+    section(ws, 'الأرقام الرئيسية');
+    var kp = [['إجمالي البنود', 'COUNTIF(' + R('K') + ',"بند")', 0], ['إجمالي المبيعات (بعد الاستردادات)', 'SUM(' + R('F') + ')', 1],
+              ['إجمالي العمولة', 'SUM(' + R('H') + ')', 1], ['عدد الاستردادات', 'COUNTIF(' + R('K') + ',"استرداد")', 0]];
+    kp.forEach(function (k) { var rr = ws.addRow([k[0], { formula: k[1] }]); rr.getCell(1).font = { bold: true }; rr.getCell(2).font = { bold: true, size: 12 }; if (k[2]) rr.getCell(2).numFmt = MONEY; });
+    ws.addRow([]);
+    section(ws, 'أداء كل موظف');
+    var r0 = ws.addRow(['الموظف', 'عدد البنود', 'الكمية', 'المبيعات', 'العمولة', 'بنود بعمولة', 'بنود بدون عمولة']).number; head(ws, r0);
     var e1 = r0 + 1;
     d.byEmp.forEach(function (g) {
       var n = ws.rowCount + 1;
@@ -435,35 +476,37 @@
     ws.addRow(['الإجمالي'].concat(['B', 'C', 'D', 'E', 'F', 'G'].map(function (c) { return { formula: 'SUM(' + c + e1 + ':' + c + e2 + ')' }; })));
     ['D', 'E'].forEach(function (c) { ws.getCell(c + tn).numFmt = MONEY; }); totalRow(ws, tn);
 
-    ws.addRow([]);
-    var s0 = ws.addRow(['الخدمة', 'محسوبة بعمولة؟', 'عدد البنود', 'الكمية', 'المبيعات', 'العمولة']).number; head(ws, s0);
+    var wv = newSheet(wb, 'الخدمات', [34, 16, 12, 12, 14, 14]); tabc(wv, 'FFE8590C'); wv.views = [{ rightToLeft: true }];
+    var s0 = wv.addRow(['الخدمة', 'عليها عمولة؟', 'عدد البنود', 'الكمية', 'المبيعات', 'العمولة']).number; head(wv, s0);
     var sv1 = s0 + 1;
     d.bySvc.forEach(function (g) {
-      var n = ws.rowCount + 1;
-      ws.addRow([g.key, g.counted > 0 ? 'نعم' : 'لا',
+      var n = wv.rowCount + 1;
+      wv.addRow([g.key, g.counted > 0 ? 'نعم' : 'لا',
         { formula: 'COUNTIFS(' + R('D') + ',A' + n + ',' + R('K') + ',"بند")' },
         { formula: 'SUMIFS(' + R('E') + ',' + R('D') + ',A' + n + ')' },
         { formula: 'SUMIFS(' + R('F') + ',' + R('D') + ',A' + n + ')' },
         { formula: 'SUMIFS(' + R('H') + ',' + R('D') + ',A' + n + ')' }]);
-      ['E', 'F'].forEach(function (c) { ws.getCell(c + n).numFmt = MONEY; });
+      ['E', 'F'].forEach(function (c) { wv.getCell(c + n).numFmt = MONEY; });
     });
-    var sv2 = ws.rowCount, stn = sv2 + 1;
-    ws.addRow(['الإجمالي', ''].concat(['C', 'D', 'E', 'F'].map(function (c) { return { formula: 'SUM(' + c + sv1 + ':' + c + sv2 + ')' }; })));
-    ['E', 'F'].forEach(function (c) { ws.getCell(c + stn).numFmt = MONEY; }); totalRow(ws, stn);
+    var sv2 = wv.rowCount, stn = sv2 + 1;
+    wv.addRow(['الإجمالي', ''].concat(['C', 'D', 'E', 'F'].map(function (c) { return { formula: 'SUM(' + c + sv1 + ':' + c + sv2 + ')' }; })));
+    ['E', 'F'].forEach(function (c) { wv.getCell(c + stn).numFmt = MONEY; }); totalRow(wv, stn);
 
     ws.addRow([]);
+    section(ws, 'حالات البنود');
     var t0 = ws.addRow(['الحالة', 'عدد البنود']).number; head(ws, t0);
     Object.keys(d.byStatus).forEach(function (k) {
       var n = ws.rowCount + 1;
       ws.addRow([k, { formula: 'COUNTIFS(' + R('J') + ',A' + n + ',' + R('K') + ',"بند")' }]);
     });
     ws.addRow([]);
-    var d0 = ws.addRow(['المكرر', 'العدد']).number; head(ws, d0);
+    section(ws, 'المكرر (راجعه قبل الاعتماد)');
+    var d0 = ws.addRow(['النوع', 'العدد']).number; head(ws, d0);
     ws.addRow(['مكرر مؤكد', { formula: 'COUNTIF(' + R('L') + ',"مكرر")' }]);
     ws.addRow(['تكرار محتمل', { formula: 'COUNTIF(' + R('L') + ',"محتمل")' }]);
 
     /* المشاوير */
-    var wt = newSheet(wb, 'المشاوير', [12, 16, 18, 12, 12]);
+    var wt = newSheet(wb, 'المشاوير', [12, 16, 18, 12, 12]); tabc(wt, 'FF8D857C');
     wt.addRow(['اليوم', 'المعاملة', 'المندوب', 'النوع', 'الرسوم']); head(wt, 1);
     d.trips.forEach(function (t, i) {
       wt.addRow([String(t.trip_day || ''), String(t.transaction_id || ''), String(t.courier || ''), t.kind === 'pickup' ? 'استلام' : 'تسليم', num(t.fee)]);
@@ -471,26 +514,26 @@
     });
     var tl = Math.max(d.trips.length + 1, 2);
     var T = function (col) { return "'المشاوير'!$" + col + '$2:$' + col + '$' + tl; };
-    ws.addRow([]);
-    var c0 = ws.addRow(['المندوب', 'مشاوير استلام', 'مشاوير تسليم', 'الإجمالي', 'رسوم المشاوير']).number; head(ws, c0);
+    var wc = newSheet(wb, 'المناديب', [26, 16, 16, 12, 16]); tabc(wc, 'FFE8590C'); wc.views = [{ rightToLeft: true }];
+    var c0 = wc.addRow(['المندوب', 'مشاوير استلام', 'مشاوير تسليم', 'الإجمالي', 'رسوم المشاوير']).number; head(wc, c0);
     var c1 = c0 + 1;
     d.couriers.forEach(function (g) {
-      var n = ws.rowCount + 1;
-      ws.addRow([g.name,
+      var n = wc.rowCount + 1;
+      wc.addRow([g.name,
         { formula: 'COUNTIFS(' + T('C') + ',A' + n + ',' + T('D') + ',"استلام")' },
         { formula: 'COUNTIFS(' + T('C') + ',A' + n + ',' + T('D') + ',"تسليم")' },
         { formula: 'B' + n + '+C' + n },
         { formula: 'SUMIFS(' + T('E') + ',' + T('C') + ',A' + n + ')' }]);
-      ws.getCell('E' + n).numFmt = MONEY;
+      wc.getCell('E' + n).numFmt = MONEY;
     });
     if (d.couriers.length) {
-      var c2 = ws.rowCount, ctn = c2 + 1;
-      ws.addRow(['الإجمالي'].concat(['B', 'C', 'D', 'E'].map(function (c) { return { formula: 'SUM(' + c + c1 + ':' + c + c2 + ')' }; })));
-      ws.getCell('E' + ctn).numFmt = MONEY; totalRow(ws, ctn);
+      var c2 = wc.rowCount, ctn = c2 + 1;
+      wc.addRow(['الإجمالي'].concat(['B', 'C', 'D', 'E'].map(function (c) { return { formula: 'SUM(' + c + c1 + ':' + c + c2 + ')' }; })));
+      wc.getCell('E' + ctn).numFmt = MONEY; totalRow(wc, ctn);
     }
 
     /* المكرر */
-    var wd = newSheet(wb, 'المكرر', [10, 12, 16, 18, 28, 9, 13, 16]);
+    var wd = newSheet(wb, 'المكرر', [10, 12, 16, 18, 28, 9, 13, 16]); tabc(wd, 'FF8D857C');
     wd.addRow(['النوع', 'التاريخ', 'المعاملة', 'الموظف', 'الخدمة', 'الكمية', 'المبلغ', 'التليفون']); head(wd, 1);
     d.rows.filter(function (r) { return r.dup; }).forEach(function (r, i) {
       wd.addRow([r.dup, r.day, r.tx, r.emp, r.service, r.qty, r.sales, r.phone]); wd.getCell('G' + (i + 2)).numFmt = MONEY;
@@ -498,7 +541,7 @@
 
     /* شيت لكل موظف */
     d.byEmp.forEach(function (g) {
-      var we = newSheet(wb, safeName(g.key, used), [12, 16, 28, 9, 13, 12, 13, 12, 14]);
+      var we = newSheet(wb, safeName(g.key, used), [12, 16, 28, 9, 13, 12, 13, 12, 14]); tabc(we, 'FF2E9E6B');
       we.addRow(['التاريخ', 'المعاملة', 'الخدمة', 'الكمية', 'المبيعات', 'عمولة الوحدة', 'العمولة', 'النوع', 'الحالة']); head(we, 1);
       var mine = d.rows.filter(function (r) { return r.emp === g.key; }).sort(function (a, b) { return a.day.localeCompare(b.day); });
       mine.forEach(function (r, i) {
@@ -511,7 +554,8 @@
       ['E', 'G'].forEach(function (c) { we.getCell(c + tn2).numFmt = MONEY; }); totalRow(we, tn2);
     });
 
-    wb.worksheets.sort(function (a, b) { return (a.name === 'ملخص' ? -1 : 0) - (b.name === 'ملخص' ? -1 : 0); });
+    var ORD = { 'اقرأني أولاً': 0, 'ملخص': 1, 'الخدمات': 2, 'المناديب': 3, 'كل البنود': 4, 'المشاوير': 5, 'المكرر': 6 };
+    wb.worksheets.forEach(function (w, i) { w.orderNo = (w.name in ORD ? ORD[w.name] : 9) * 1000 + i; });
     await download(wb, 'تقفيل-الشهر_' + st.from + '_' + st.to + '.xlsx');
   }
 
@@ -535,7 +579,7 @@
       ws.addRow(['الإجمالي'].concat(['B', 'C', 'D'].map(function (c) { return { formula: 'SUM(' + c + a + ':' + c + b + ')' }; })));
       ws.getCell('D' + tn).numFmt = MONEY; totalRow(ws, tn);
     }
-    wb.worksheets.sort(function (a, b) { return (a.name === 'ملخص' ? -1 : 0) - (b.name === 'ملخص' ? -1 : 0); });
+    wb.worksheets.forEach(function (w, i) { w.orderNo = (w.name === 'ملخص' ? 0 : 1000) + i; });
     await download(wb, 'رسوم-التوصيل_' + st.from + '_' + st.to + '.xlsx');
   }
 
