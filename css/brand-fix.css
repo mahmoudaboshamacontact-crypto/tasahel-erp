@@ -1,0 +1,38 @@
+/* brand-fix.css — إصلاحات تباين وقراءة (آخر ملف CSS يتحمّل). للإلغاء: شيل السطر من index.html */
+
+/* 1) قايمة الإشعارات: خلفية صلبة (كانت شفافة وبتبان من تحتها) */
+html.dark body.reels #nt-panel {
+  background: #141210 !important; border: 1px solid var(--r-line) !important;
+  border-radius: 1.2rem !important; box-shadow: 0 25px 60px rgba(0,0,0,.85) !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+html:not(.dark) body.reels #nt-panel {
+  background: #fff !important; border: 1px solid var(--r-line) !important;
+  box-shadow: 0 20px 50px rgba(40,25,10,.18) !important; backdrop-filter: none !important;
+}
+
+/* 2) زرار طريقة الدفع المختار: نص غامق واضح على خلفية الأكسنت (كان نفس اللون) */
+#pay-group button[class*="border-violet-400"] {
+  background: var(--r-acc) !important; background-image: none !important;
+  color: var(--r-on-acc, #fff) !important; border-color: var(--r-acc) !important; box-shadow: none !important;
+}
+html.dark body.reels #pay-group button[class*="border-violet-400"] { color: #1b1511 !important; }
+
+/* 3) مركز الذكاء الإداري: كارت التحليلات التنبؤية — خلفية هادية ونص مقروء */
+#exec-intel-modal [class*="from-indigo"] {
+  background: var(--r-card-2, #f4ede5) !important; background-image: none !important;
+  border: 1px solid var(--r-line) !important;
+}
+#exec-intel-modal [class*="from-indigo"] h4,
+#exec-intel-modal [class*="from-indigo"] [class*="text-indigo"],
+#exec-intel-modal [class*="from-indigo"] [class*="text-slate"] { color: var(--r-text, inherit) !important; }
+#exec-intel-modal [class*="from-indigo"] > div > span[class*="rounded-full"] {
+  background: var(--r-line) !important; color: var(--r-text, inherit) !important;
+}
+#exec-intel-modal [class*="from-indigo"] > div > div > span[class*="bg-indigo-600"] {
+  background: var(--r-acc) !important; color: var(--r-on-acc, #fff) !important;
+}
+#exec-intel-modal [class*="from-indigo"] [class*="bg-white"],
+html.dark #exec-intel-modal [class*="from-indigo"] [class*="dark:bg-slate"] {
+  background: var(--r-card, #fff) !important; border: 1px solid var(--r-line) !important;
+}
