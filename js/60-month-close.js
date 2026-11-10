@@ -110,6 +110,22 @@
       });
     });
 
+    /* توحيد اسم الموظف: نفس الاسم بهمزة/من غير همزة/مسافات زيادة = موظف واحد */
+    (function () {
+      var canon = new Map();
+      rows.forEach(function (r) {
+        var k = nn(r.emp); if (!k) return;
+        var c = canon.get(k); if (!c) { c = { names: {}, prof: null }; canon.set(k, c); }
+        c.names[r.emp] = (c.names[r.emp] || 0) + 1;
+      });
+      canon.forEach(function (c, k) {
+        var p = typeof profileByName === 'function' ? profileByName(Object.keys(c.names)[0]) : null;
+        var best = Object.keys(c.names).sort(function (a, b) { return c.names[b] - c.names[a]; })[0];
+        c.show = (p && p.full_name) ? String(p.full_name).trim() : String(best).trim().replace(/\s+/g, ' ');
+      });
+      rows.forEach(function (r) { var c = canon.get(nn(r.emp)); if (c) r.emp = c.show; });
+    })();
+
     /* المكرر: (أ) نفس المعاملة + الخدمة + الكمية + المبلغ. (ب) نفس التليفون + الخدمة + اليوم في معاملتين مختلفتين */
     var A = new Map(), B = new Map();
     rows.forEach(function (r, i) {
@@ -406,7 +422,8 @@
     w.addRow(['ابدأ بشيت "ملخص" — فيه الأرقام الكبيرة. لو عايز تراجع رقم، افتح "كل البنود": كل أرقام الشيتات التانية معادلات منه.']);
     w.addRow([]);
     var h = w.addRow(['الشيت', 'بيجاوب على إيه', 'مين يهتم بيه']); head(w, h.number);
-    [['ملخص', 'الأرقام الرئيسية للشهر (بنود، مبيعات، عمولة، استردادات) + أداء كل موظف + حالات المعاملات + المكرر', 'المدير'],
+    [['كوميشن الموظفين', 'إجمالي الكوميشن المستحق وكل موظف ياخد كام (بنفس طريقة تقفيلك اليدوي)', 'المدير'],
+     ['ملخص', 'الأرقام الرئيسية للشهر (بنود، مبيعات، عمولة، استردادات) + أداء كل موظف + حالات المعاملات + المكرر', 'المدير'],
      ['الخدمات', 'كل خدمة اتباعت كام مرة ودخّلت كام، وهل عليها عمولة', 'المدير'],
      ['المناديب', 'عدد مشاوير الاستلام والتسليم لكل مندوب ورسومها', 'المدير + المندوب'],
      ['كل البنود', 'كل بند في الشهر سطر بسطر. ده المرجع الأساسي (بتقدر تفلتر بالموظف أو الخدمة)', 'للمراجعة'],
@@ -429,7 +446,7 @@
   async function exportMonth() {
     var d = st.data, XL = await loadXL(), wb = new XL.Workbook();
     wb.creator = 'Tasahel ERP'; wb.created = new Date();
-    var used = { 'ملخص': 1, 'كل البنود': 1, 'المشاوير': 1, 'المكرر': 1, 'الخدمات': 1, 'المناديب': 1, 'اقرأني أولاً': 1 };
+    var used = { 'كوميشن الموظفين': 1, 'ملخص': 1, 'كل البنود': 1, 'المشاوير': 1, 'المكرر': 1, 'الخدمات': 1, 'المناديب': 1, 'اقرأني أولاً': 1 };
     readMe(wb, d.period);
 
     /* كل البنود */
@@ -475,6 +492,45 @@
     var e2 = ws.rowCount, tn = e2 + 1;
     ws.addRow(['الإجمالي'].concat(['B', 'C', 'D', 'E', 'F', 'G'].map(function (c) { return { formula: 'SUM(' + c + e1 + ':' + c + e2 + ')' }; })));
     ['D', 'E'].forEach(function (c) { ws.getCell(c + tn).numFmt = MONEY; }); totalRow(ws, tn);
+
+    /* كوميشن الموظفين.
+       لحد آخر 2026: إجمالي كوميشن القسم، وكل واحد (والمدير معاهم) ياخده كامل (الإجمالي × العدد ÷ العدد).
+       من 2027: كل موظف ياخد كوميشن الخدمات اللي هو عملها بس. وعمود "كوميشن خدماته" بيظهر في الحالتين. */
+    var own = String(st.to || '').slice(0, 4) >= '2027';
+    var people = d.byEmp.map(function (g) { return { name: g.key, mgr: false }; });
+    try {
+      (typeof profiles !== 'undefined' ? profiles : []).filter(function (p) { return p && p.role === 'manager' && p.full_name; }).forEach(function (p) {
+        var hit = people.filter(function (x) { return nn(x.name) === nn(p.full_name); })[0];
+        if (hit) hit.mgr = true; else if (!own) people.push({ name: String(p.full_name).trim(), mgr: true });
+      });
+    } catch (e) { /* */ }
+    var wk = newSheet(wb, 'كوميشن الموظفين', [34, 16, 20, 20]); tabc(wk, 'FFE8590C'); wk.views = [{ rightToLeft: true }];
+    wk.addRow(['كوميشن الموظفين — ' + d.period]); wk.getRow(1).font = { bold: true, size: 14 };
+    wk.addRow([own
+      ? 'الطريقة (من 2027): كل موظف ياخد كوميشن الخدمات اللي هو عملها بس. البنود "تحت المراجعة" معلّقة ومش داخلة. الاستردادات بتتخصم.'
+      : 'الطريقة (لحد آخر 2026): إجمالي كوميشن القسم بيتحسب مرة واحدة، وكل موظف (والمدير) ياخده كامل. عمود "كوميشن خدماته" للعلم عشان تعرف كل واحد عمل قد إيه. البنود "تحت المراجعة" معلّقة ومش داخلة. الاستردادات بتتخصم.']);
+    wk.getRow(2).alignment = { wrapText: true, vertical: 'top' }; wk.mergeCells('A2:D2'); wk.getRow(2).height = 48;
+    wk.addRow([]);
+    var UR = '"<>تحت المراجعة"';
+    var k1 = wk.addRow(['إجمالي كوميشن القسم المستحق', { formula: 'SUMIFS(' + R('H') + ',' + R('J') + ',' + UR + ')' }]); k1.getCell(1).font = { bold: true }; k1.getCell(2).font = { bold: true, size: 13 }; k1.getCell(2).numFmt = MONEY;
+    var kPool = 'B' + k1.number;
+    wk.addRow(['عدد البنود المستحقة (بعمولة)', { formula: 'COUNTIFS(' + R('K') + ',"بند",' + R('I') + ',"نعم",' + R('J') + ',' + UR + ')' }]);
+    var k3 = wk.addRow(['كوميشن معلّق (تحت المراجعة)', { formula: 'SUMIFS(' + R('H') + ',' + R('J') + ',"تحت المراجعة")' }]); k3.getCell(2).numFmt = MONEY;
+    wk.addRow(['عدد المستحقين', people.length]);
+    wk.addRow([]);
+    var kh = wk.addRow(['الموظف', 'عدد خدماته (بعمولة)', 'كوميشن خدماته', 'المبلغ المستحق له']).number; head(wk, kh);
+    var kf = kh + 1;
+    people.forEach(function (g) {
+      var n = wk.rowCount + 1;
+      wk.addRow([g.name + (g.mgr ? ' (المدير)' : ''),
+        { formula: 'COUNTIFS(' + R('C') + ',"' + g.name.replace(/"/g, '""') + '",' + R('K') + ',"بند",' + R('I') + ',"نعم",' + R('J') + ',' + UR + ')' },
+        { formula: 'SUMIFS(' + R('H') + ',' + R('C') + ',"' + g.name.replace(/"/g, '""') + '",' + R('J') + ',' + UR + ')' },
+        { formula: own ? 'C' + n : kPool }]);
+      wk.getCell('C' + n).numFmt = MONEY; wk.getCell('D' + n).numFmt = MONEY;
+    });
+    var kl = wk.rowCount, kt = kl + 1;
+    wk.addRow(['الإجمالي', { formula: 'SUM(B' + kf + ':B' + kl + ')' }, { formula: 'SUM(C' + kf + ':C' + kl + ')' }, { formula: 'SUM(D' + kf + ':D' + kl + ')' }]);
+    wk.getCell('C' + kt).numFmt = MONEY; wk.getCell('D' + kt).numFmt = MONEY; totalRow(wk, kt);
 
     var wv = newSheet(wb, 'الخدمات', [34, 16, 12, 12, 14, 14]); tabc(wv, 'FFE8590C'); wv.views = [{ rightToLeft: true }];
     var s0 = wv.addRow(['الخدمة', 'عليها عمولة؟', 'عدد البنود', 'الكمية', 'المبيعات', 'العمولة']).number; head(wv, s0);
@@ -554,7 +610,7 @@
       ['E', 'G'].forEach(function (c) { we.getCell(c + tn2).numFmt = MONEY; }); totalRow(we, tn2);
     });
 
-    var ORD = { 'اقرأني أولاً': 0, 'ملخص': 1, 'الخدمات': 2, 'المناديب': 3, 'كل البنود': 4, 'المشاوير': 5, 'المكرر': 6 };
+    var ORD = { 'اقرأني أولاً': 0, 'ملخص': 1, 'كوميشن الموظفين': 1.5, 'الخدمات': 2, 'المناديب': 3, 'كل البنود': 4, 'المشاوير': 5, 'المكرر': 6 };
     wb.worksheets.forEach(function (w, i) { w.orderNo = (w.name in ORD ? ORD[w.name] : 9) * 1000 + i; });
     await download(wb, 'تقفيل-الشهر_' + st.from + '_' + st.to + '.xlsx');
   }

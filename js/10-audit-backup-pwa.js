@@ -187,10 +187,10 @@
     lateAt = Date.now();
     const btn = $('tab-dash-btn'); if (!btn) return;
     try {
-      const r = await sbClient.from('request_lines').select('exec_start_date,received_at,duration_days').eq('complete', false).gte('received_at', DATA_FROM_TS).not('duration_days', 'is', null).limit(1000);
+      const r = await sbClient.from('request_lines').select('id,exec_start_date,received_at,duration_days').eq('complete', false).gte('received_at', DATA_FROM_TS).not('duration_days', 'is', null).limit(1000);
       if (r.error) return;
       const t0 = new Date(); t0.setHours(0, 0, 0, 0);
-      const n = (r.data || []).filter(l => { const b = new Date(String(l.exec_start_date || l.received_at || '').slice(0, 10) + 'T00:00'); return !isNaN(b) && Math.floor((t0 - new Date(b.getTime() + (Number(l.duration_days) || 0) * 864e5)) / 864e5) > 0; }).length;
+      const n = (r.data || []).filter(l => { if (window.isLineCancelled && window.isLineCancelled(l)) return false; const b = new Date(String(l.exec_start_date || l.received_at || '').slice(0, 10) + 'T00:00'); return !isNaN(b) && Math.floor((t0 - new Date(b.getTime() + (Number(l.duration_days) || 0) * 864e5)) / 864e5) > 0; }).length;
       let s = $('late-badge');
       if (!s) { btn.insertAdjacentHTML('beforeend', '<span id="late-badge" class="hidden rounded-full bg-rose-600 text-white text-[10px] font-bold px-1.5 min-w-[18px] text-center leading-[18px]"></span>'); s = $('late-badge'); }
       s.textContent = n > 99 ? '99+' : String(n); s.title = n + ' طلب متأخر'; s.classList.toggle('hidden', !n);
