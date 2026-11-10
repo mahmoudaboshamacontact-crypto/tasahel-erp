@@ -56,6 +56,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       '<input id="trk-in" readonly value="' + eh(url) + '" style="width:100%;box-sizing:border-box;direction:ltr;font-size:11px;padding:8px;border:1px solid ' + ln + ';border-radius:10px;background:transparent;color:' + fg + '">' +
       '<div style="display:flex;gap:8px;margin-top:10px">' +
       '<button type="button" data-a="copy" style="' + btn + 'background:#7c3aed;color:#fff;border-color:#7c3aed">نسخ الرابط</button>' +
+      '<button type="button" data-a="msg" style="' + btn + 'background:transparent;color:' + fg + '">نسخ رسالة جاهزة</button>' +
       (wa ? '<a href="' + eh(wa) + '" target="_blank" rel="noopener" style="' + btn + 'background:#25d366;color:#fff;border-color:#25d366">واتساب للعميل</a>' : '') +
       '<button type="button" data-a="x" style="' + btn + 'background:transparent;color:' + fg + ';flex:0 0 auto;padding:10px 14px">إغلاق</button></div>' +
       '<button type="button" data-a="base" style="margin-top:10px;background:none;border:0;color:' + mu + ';font:inherit;font-size:11px;text-decoration:underline;cursor:pointer">تغيير عنوان صفحة التتبع</button></div>';
@@ -66,6 +67,11 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         const inp = document.getElementById('trk-in'), done = () => { e.target.textContent = 'تم النسخ ✓'; };
         if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, () => { inp.select(); document.execCommand('copy'); done(); });
         else { inp.select(); document.execCommand('copy'); done(); }
+      }
+      if (a === 'msg') {
+        const t = e.target, done = () => { t.textContent = 'تم نسخ الرسالة ✓'; };
+        if (navigator.clipboard) navigator.clipboard.writeText(msg).then(done, () => showToast('تعذّر النسخ', 'error'));
+        else { const ta = document.createElement('textarea'); ta.value = msg; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done(); }
       }
       if (a === 'base') {
         const v = prompt('اكتب العنوان الكامل لصفحة التتبع (مثال: https://yourdomain.com/Track.html)\nسيبه فاضي للرجوع للافتراضي:', base());
