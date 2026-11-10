@@ -393,7 +393,7 @@
   function q(name) { return "'" + name.replace(/'/g, "''") + "'"; }
   var MONEY = '#,##0.00';
   function tabc(ws, argb) { try { ws.properties.tabColor = { argb: argb }; } catch (e) { /* */ } }
-  function section(ws, text) {
+  function xlSection(ws, text) {
     var r = ws.addRow([text]); r.font = { bold: true, size: 12, color: { argb: 'FFE8590C' } }; return r;
   }
   /* شيت "اقرأني أولاً": شرح بالبلدي لكل شيت ومصطلح */
@@ -453,12 +453,12 @@
     var cl = activeFor(st.from, st.to).exact;
     ws.addRow([cl ? 'حالة التقفيل: معتمد بتاريخ ' + String(cl.closed_at || '').slice(0, 10) + (cl.closed_by_name ? ' — ' + cl.closed_by_name : '') : 'حالة التقفيل: غير معتمد']);
     ws.addRow([]);
-    section(ws, 'الأرقام الرئيسية');
+    xlSection(ws, 'الأرقام الرئيسية');
     var kp = [['إجمالي البنود', 'COUNTIF(' + R('K') + ',"بند")', 0], ['إجمالي المبيعات (بعد الاستردادات)', 'SUM(' + R('F') + ')', 1],
               ['إجمالي العمولة', 'SUM(' + R('H') + ')', 1], ['عدد الاستردادات', 'COUNTIF(' + R('K') + ',"استرداد")', 0]];
     kp.forEach(function (k) { var rr = ws.addRow([k[0], { formula: k[1] }]); rr.getCell(1).font = { bold: true }; rr.getCell(2).font = { bold: true, size: 12 }; if (k[2]) rr.getCell(2).numFmt = MONEY; });
     ws.addRow([]);
-    section(ws, 'أداء كل موظف');
+    xlSection(ws, 'أداء كل موظف');
     var r0 = ws.addRow(['الموظف', 'عدد البنود', 'الكمية', 'المبيعات', 'العمولة', 'بنود بعمولة', 'بنود بدون عمولة']).number; head(ws, r0);
     var e1 = r0 + 1;
     d.byEmp.forEach(function (g) {
@@ -493,14 +493,14 @@
     ['E', 'F'].forEach(function (c) { wv.getCell(c + stn).numFmt = MONEY; }); totalRow(wv, stn);
 
     ws.addRow([]);
-    section(ws, 'حالات البنود');
+    xlSection(ws, 'حالات البنود');
     var t0 = ws.addRow(['الحالة', 'عدد البنود']).number; head(ws, t0);
     Object.keys(d.byStatus).forEach(function (k) {
       var n = ws.rowCount + 1;
       ws.addRow([k, { formula: 'COUNTIFS(' + R('J') + ',A' + n + ',' + R('K') + ',"بند")' }]);
     });
     ws.addRow([]);
-    section(ws, 'المكرر (راجعه قبل الاعتماد)');
+    xlSection(ws, 'المكرر (راجعه قبل الاعتماد)');
     var d0 = ws.addRow(['النوع', 'العدد']).number; head(ws, d0);
     ws.addRow(['مكرر مؤكد', { formula: 'COUNTIF(' + R('L') + ',"مكرر")' }]);
     ws.addRow(['تكرار محتمل', { formula: 'COUNTIF(' + R('L') + ',"محتمل")' }]);
