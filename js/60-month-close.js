@@ -34,7 +34,7 @@
   }
   function weekRange() { var t = today(); return { from: addDays(t, -6), to: t }; }
 
-  var STATUS_AR = { 'Delivered': 'تم التسليم', 'Complete': 'مكتمل', 'Under Review': 'تحت المراجعة', 'In Progress': 'قيد التنفيذ' };
+  var STATUS_AR = { 'Delivered': 'Delivered', 'Complete': 'Complete', 'Under Review': 'Under Review', 'In Progress': 'In Progress' };
   function statusOf(l) {
     var s = l.status || (l.delivered ? 'Delivered' : l.complete ? 'Complete' : l.under_review ? 'Under Review' : 'In Progress');
     return STATUS_AR[s] || String(s);
@@ -519,15 +519,15 @@
     var wk = newSheet(wb, 'كوميشن الموظفين', [34, 16, 20, 20]); tabc(wk, 'FFE8590C'); wk.views = [{ rightToLeft: true }];
     wk.addRow(['كوميشن الموظفين — ' + d.period]); wk.getRow(1).font = { bold: true, size: 14 };
     wk.addRow([own
-      ? 'الطريقة (من 2027): كل موظف ياخد كوميشن الخدمات اللي هو عملها بس. البنود "تحت المراجعة" معلّقة ومش داخلة. الاستردادات بتتخصم.'
-      : 'الطريقة (لحد آخر 2026): إجمالي كوميشن القسم بيتحسب مرة واحدة، وكل موظف (والمدير) ياخده كامل. عمود "كوميشن خدماته" للعلم عشان تعرف كل واحد عمل قد إيه. البنود "تحت المراجعة" معلّقة ومش داخلة. الاستردادات بتتخصم.']);
+      ? 'الطريقة (من 2027): كل موظف ياخد كوميشن الخدمات اللي هو عملها بس. البنود "Under Review" معلّقة ومش داخلة. الاستردادات بتتخصم.'
+      : 'الطريقة (لحد آخر 2026): إجمالي كوميشن القسم بيتحسب مرة واحدة، وكل موظف (والمدير) ياخده كامل. عمود "كوميشن خدماته" للعلم عشان تعرف كل واحد عمل قد إيه. البنود "Under Review" معلّقة ومش داخلة. الاستردادات بتتخصم.']);
     wk.getRow(2).alignment = { wrapText: true, vertical: 'top' }; wk.mergeCells('A2:D2'); wk.getRow(2).height = 48;
     wk.addRow([]);
-    var UR = '"<>تحت المراجعة"';
+    var UR = '"<>Under Review"';
     var k1 = wk.addRow(['إجمالي كوميشن القسم المستحق', { formula: 'SUMIFS(' + R('H') + ',' + R('J') + ',' + UR + ')' }]); k1.getCell(1).font = { bold: true }; k1.getCell(2).font = { bold: true, size: 13 }; k1.getCell(2).numFmt = MONEY;
     var kPool = 'B' + k1.number;
     wk.addRow(['عدد البنود المستحقة (بعمولة)', { formula: 'COUNTIFS(' + R('K') + ',"بند",' + R('I') + ',"نعم",' + R('J') + ',' + UR + ')' }]);
-    var k3 = wk.addRow(['كوميشن معلّق (تحت المراجعة)', { formula: 'SUMIFS(' + R('H') + ',' + R('J') + ',"تحت المراجعة")' }]); k3.getCell(2).numFmt = MONEY;
+    var k3 = wk.addRow(['كوميشن معلّق (Under Review)', { formula: 'SUMIFS(' + R('H') + ',' + R('J') + ',"Under Review")' }]); k3.getCell(2).numFmt = MONEY;
     wk.addRow(['عدد المستحقين', people.length]);
     wk.addRow([]);
     var kh = wk.addRow(['الموظف', 'عدد خدماته (بعمولة)', 'كوميشن خدماته', 'المبلغ المستحق له']).number; head(wk, kh);

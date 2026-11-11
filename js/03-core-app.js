@@ -4,7 +4,7 @@ let txStatusFilter='all',selectedInspectorTx=null,showAllQuickServices=false;
 window.__saveOrderMode='normal';
 window.__homeFloatingTxId=null;
 const PAY_DEFAULT=['كاش','انستا باي','فودافون كاش','POS','تحويل بنكي'];
-const STATUS_AR={'Delivered':'تم التسليم','Complete':'مكتمل','Under Review':'تحت المراجعة','In Progress':'قيد التنفيذ'};
+const STATUS_AR={'Delivered':'Delivered','Complete':'Complete','Under Review':'Under Review','In Progress':'In Progress'};
 const STATUS_CLS={'Delivered':'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300','Complete':'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300','Under Review':'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300','In Progress':'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300'};
 const $=id=>document.getElementById(id);
 let currentUser=null,profiles=[],myProfile=null,avatarUrls={},profilesReady=true,pendingAvatarBlob=null,pendingAvatarUrl=null,avatarRemoved=false;
@@ -20,7 +20,7 @@ function formatTimeOnly(s){if(!s)return '';const d=new Date(s);return isNaN(d)?'
 function formatDateSplit(s){if(!s)return '<span class="text-slate-400">—</span>';const d=new Date(s);if(isNaN(d))return escapeHtml(s);const dt=new Intl.DateTimeFormat('ar-EG',{year:'numeric',month:'short',day:'numeric'}).format(d);const tm=new Intl.DateTimeFormat('ar-EG',{hour:'2-digit',minute:'2-digit'}).format(d);return '<div class="rc-date-box"><span class="font-semibold text-slate-700 dark:text-slate-200 text-xs">'+escapeHtml(dt)+'</span><span class="text-[11px] text-slate-400">'+escapeHtml(tm)+'</span></div>';}
 function dayKey(d){return d?new Date(d).toLocaleDateString('en-CA'):'';}
 function lineDate(l){return l.received_at||l.created_at;}
-function statusLabel(s){return STATUS_AR[s]||s||'قيد التنفيذ';}
+function statusLabel(s){return STATUS_AR[s]||s||'In Progress';}
 function badge(s){return '<span class="rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap '+(STATUS_CLS[s]||'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300')+'">'+escapeHtml(statusLabel(s))+'</span>';}
 function waNum(p){p=String(p||'').replace(/\D/g,'');if(!p)return '';return p.charAt(0)==='0'?'2'+p:p;}
 function waLink(p,msg){const n=waNum(p);return n?'https://wa.me/'+n+(msg?'?text='+encodeURIComponent(msg):''):'';}
@@ -707,22 +707,22 @@ function buildServiceDetailCard(l,idx,mode){
 function getStageMeta(st,isLateFlag,customPct){
   if(st==='Delivered'){
     const p=customPct!=null?customPct:100;
-    return {step:4,pct:p,barW:p,title:'تم التسليم',sub:'تم تسليم المعاملة للعميل',color:'#10b981',icon:'fa-circle-check',nextStatus:'In Progress',nextLabel:'قيد التنفيذ'};
+    return {step:4,pct:p,barW:p,title:'Delivered',sub:'تم تسليم المعاملة للعميل',color:'#10b981',icon:'fa-circle-check',nextStatus:'In Progress',nextLabel:'In Progress'};
   }
   if(st==='Complete'){
     const p=customPct!=null?customPct:75;
-    return {step:3,pct:p,barW:p,title:'جاهزة للتسليم',sub:'مكتملة وفي انتظار التسليم',color:'#14b8a6',icon:'fa-box-open',nextStatus:'Delivered',nextLabel:'تم التسليم'};
+    return {step:3,pct:p,barW:p,title:'Complete',sub:'مكتملة وفي انتظار التسليم',color:'#14b8a6',icon:'fa-box-open',nextStatus:'Delivered',nextLabel:'Delivered'};
   }
   if(st==='Under Review'){
     const p=customPct!=null?customPct:50;
-    return {step:2,pct:p,barW:p,title:'تحت المراجعة',sub:'مراجعة المستندات والبيانات',color:'#f59e0b',icon:'fa-magnifying-glass',nextStatus:'In Progress',nextLabel:'قيد التنفيذ'};
+    return {step:2,pct:p,barW:p,title:'Under Review',sub:'مراجعة المستندات والبيانات',color:'#f59e0b',icon:'fa-magnifying-glass',nextStatus:'In Progress',nextLabel:'In Progress'};
   }
   if(isLateFlag){
     const p=customPct!=null?customPct:25;
-    return {step:2,pct:p,barW:p,title:'متأخرة',sub:'تجاوزت موعد التسليم المحدد',color:'#f43f5e',icon:'fa-clock',nextStatus:'Complete',nextLabel:'مكتمل'};
+    return {step:2,pct:p,barW:p,title:'متأخرة',sub:'تجاوزت موعد التسليم المحدد',color:'#f43f5e',icon:'fa-clock',nextStatus:'Complete',nextLabel:'Complete'};
   }
   const p=customPct!=null?customPct:25;
-  return {step:2,pct:p,barW:p,title:'قيد التنفيذ',sub:'جاري التنفيذ لدى المنفذ',color:'#8b5cf6',icon:'fa-gears',nextStatus:'Complete',nextLabel:'مكتمل'};
+  return {step:2,pct:p,barW:p,title:'In Progress',sub:'جاري التنفيذ لدى المنفذ',color:'#8b5cf6',icon:'fa-gears',nextStatus:'Complete',nextLabel:'Complete'};
 }
 
 /* بناء شريط مراحل المعاملة والحلقة الدائرية */
@@ -774,19 +774,19 @@ function buildInteractiveStatusWidgets(tx,currentSt,isLateFlag,mode,customPct){
         '<div class="tx-stepper-nodes">'+
           '<button type="button" onclick="'+clickFn('In Progress')+'" class="tx-step-node done">'+
             '<span class="tx-step-circle"><i class="fa-solid fa-check"></i></span>'+
-            '<span class="tx-step-label">قيد التنفيذ</span>'+
+            '<span class="tx-step-label">In Progress</span>'+
           '</button>'+
           '<button type="button" onclick="'+clickFn('Under Review')+'" class="'+nodeCls(2)+'">'+
             '<span class="tx-step-circle">'+nodeIcon(2,'fa-magnifying-glass')+'</span>'+
-            '<span class="tx-step-label">المراجعة</span>'+
+            '<span class="tx-step-label">Under Review</span>'+
           '</button>'+
           '<button type="button" onclick="'+clickFn('Complete')+'" class="'+nodeCls(3)+'">'+
             '<span class="tx-step-circle">'+nodeIcon(3,'fa-box-open')+'</span>'+
-            '<span class="tx-step-label">مكتمل</span>'+
+            '<span class="tx-step-label">Complete</span>'+
           '</button>'+
           '<button type="button" onclick="'+clickFn('Delivered')+'" class="'+nodeCls(4)+'">'+
             '<span class="tx-step-circle">'+nodeIcon(4,'fa-flag-checkered')+'</span>'+
-            '<span class="tx-step-label">تم التسليم</span>'+
+            '<span class="tx-step-label">Delivered</span>'+
           '</button>'+
         '</div>'+
       '</div>'+

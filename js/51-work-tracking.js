@@ -50,10 +50,10 @@
   var BTN_OFF = 'tab-btn text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800';
 
   var STAGES = [
-    { key: 'In Progress', label: 'قيد التنفيذ', icon: 'fa-gears', color: '#8b5cf6' },
-    { key: 'Under Review', label: 'تحت المراجعة', icon: 'fa-magnifying-glass', color: '#f59e0b' },
-    { key: 'Complete', label: 'مكتمل', icon: 'fa-box-open', color: '#14b8a6' },
-    { key: 'Delivered', label: 'تم التسليم', icon: 'fa-circle-check', color: '#10b981' }
+    { key: 'In Progress', label: 'In Progress', icon: 'fa-gears', color: '#8b5cf6' },
+    { key: 'Under Review', label: 'Under Review', icon: 'fa-magnifying-glass', color: '#f59e0b' },
+    { key: 'Complete', label: 'Complete', icon: 'fa-box-open', color: '#14b8a6' },
+    { key: 'Delivered', label: 'Delivered', icon: 'fa-circle-check', color: '#10b981' }
   ];
 
   /* إجازات رسمية افتراضية (مصر 2026) وتُدمج مع جدول public.holidays عند فتح الحاسبة */
