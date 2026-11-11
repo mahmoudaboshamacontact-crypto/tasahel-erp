@@ -67,7 +67,16 @@
       .select('id,line_id,kind,qty,sales_amount,unit_comm_hint,status,decided_at')
       .eq('status', 'approved').gte('decided_at', a).lt('decided_at', b);
     if (r.error) return [];
-    var refs = r.data || [];
+    var refs = (r.data || []).slice();
+    /* أي استرداد معتمد على بنود الفترة، حتى لو اتقرر بعد نهاية الفترة (البند الملغي مايتحسبش) */
+    var ids = Array.from(lineMap.keys());
+    var seen = {}; refs.forEach(function (x) { seen[x.id] = 1; });
+    for (var i = 0; i < ids.length; i += 150) {
+      var r2 = await db().from('line_refunds').select('id,line_id,kind,qty,sales_amount,unit_comm_hint,status,decided_at')
+        .eq('status', 'approved').in('line_id', ids.slice(i, i + 150));
+      if (r2.error) break;
+      (r2.data || []).forEach(function (x) { if (!seen[x.id]) { seen[x.id] = 1; refs.push(x); } });
+    }
     var missing = [];
     refs.forEach(function (x) { if (x.line_id != null && !lineMap.has(String(x.line_id)) && missing.indexOf(x.line_id) < 0) missing.push(x.line_id); });
     if (missing.length) {
@@ -93,22 +102,25 @@
       rows.push({
         type: 'بند', day: String(l.received_at || '').slice(0, 10), tx: String(l.transaction_id || ''),
         emp: String(l.employee || '—'), service: String(l.service || ''), qty: qty, sales: num(l.total),
-        rate: rate, status: statusOf(l), client: String(l.client_name || ''), phone: String(l.phone || ''), dup: ''
+        rate: rate, status: statusOf(l), client: String(l.client_name || ''), phone: String(l.phone || ''), dup: '', lid: String(l.id)
       });
     });
-    var refundCount = 0;
+    var refundCount = 0, refQty = {};
     refunds.forEach(function (rf) {
       var o = lineMap.get(String(rf.line_id));
       if (!o || isFar(o.service)) return;
       var rq = num(rf.qty), hint = rf.unit_comm_hint != null && rf.unit_comm_hint !== '' ? rf.unit_comm_hint : o.commission_per_unit;
       var rc = lineComm({ service: o.service, qty: rq, commission_per_unit: hint });
-      refundCount++;
+      refundCount++; refQty[String(rf.line_id)] = (refQty[String(rf.line_id)] || 0) + rq;
       rows.push({
         type: 'استرداد', day: String(rf.decided_at || '').slice(0, 10), tx: String(o.transaction_id || ''),
         emp: String(o.employee || '—'), service: String(o.service || ''), qty: -rq, sales: -num(rf.sales_amount),
         rate: rq > 0 ? rc / rq : 0, status: 'استرداد', client: String(o.client_name || ''), phone: String(o.phone || ''), dup: ''
       });
     });
+
+    /* بند اتسترد كله = ملغي: بيفضل ظاهر بس مش معلّق ومش بيتحسب (البند والاسترداد بيصفّروا بعض) */
+    rows.forEach(function (r) { if (r.type === 'بند' && r.lid && refQty[r.lid] >= r.qty && r.qty > 0) r.status = 'ملغي (مسترد)'; });
 
     /* توحيد اسم الموظف: نفس الاسم بهمزة/من غير همزة/مسافات زيادة = موظف واحد */
     (function () {
