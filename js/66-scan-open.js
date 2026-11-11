@@ -66,7 +66,20 @@
   }
   window.scanOpenTx = scan;
 
+  /* تاب المعاملات (الأساسي): الزرار ظاهر جنب خانة البحث مباشرة */
+  function injectTx() {
+    var q = document.getElementById('recent-q');
+    if (!q || document.getElementById('scan-open-btn-tx')) return;
+    var box = q.parentElement; if (!box || !box.parentElement) return;
+    var b = document.createElement('button');
+    b.id = 'scan-open-btn-tx'; b.type = 'button'; b.className = 'btn-neo-sec !py-1.5 text-xs'; b.title = 'مسح QR الإيصال لفتح المعاملة';
+    b.innerHTML = '<i class="fa-solid fa-qrcode"></i><span>مسح إيصال</span>';
+    b.onclick = scan;
+    box.parentElement.insertBefore(b, box.nextSibling);
+  }
+
   function inject() {
+    injectTx();
     var k = document.getElementById('search-key');
     if (!k || document.getElementById('scan-open-btn')) return;
     var box = k.closest('.flex.flex-wrap') || k.parentElement.parentElement;
