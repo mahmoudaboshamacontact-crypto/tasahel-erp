@@ -163,3 +163,15 @@ html:not(.dark) body.reels #tab-dash #dsh-title { color: #1b1511 !important; }
 html:not(.dark) body.reels #tab-dash .hm-hero .inline-flex button { color: #3a2f27 !important; }
 html:not(.dark) .dx-pill { color: color-mix(in srgb, rgb(var(--c)) 55%, #000) !important; }
 html:not(.dark) #app table td span.text-slate-300 { color: #8a7f74 !important; }
+
+/* 7) قوايم الإشعارات والمنيو: خلفية صلبة فعلاً. (قاعدة reels كانت بتكسب بالـspecificity وتخليها شفافة) */
+html.dark body.reels #nt-panel#nt-panel, html.dark body.reels #ub-panel#ub-panel, html.dark body.reels #nav-menu#nav-menu {
+  background: #141210 !important; background-image: none !important;
+  border: 1px solid rgba(255,255,255,.12) !important; box-shadow: 0 25px 60px rgba(0,0,0,.85) !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+html:not(.dark) body.reels #nt-panel#nt-panel, html:not(.dark) body.reels #ub-panel#ub-panel, html:not(.dark) body.reels #nav-menu#nav-menu {
+  background: #fff !important; background-image: none !important;
+  border: 1px solid rgba(40,25,10,.14) !important; box-shadow: 0 20px 50px rgba(40,25,10,.18) !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
