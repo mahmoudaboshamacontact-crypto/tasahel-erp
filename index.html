@@ -406,10 +406,10 @@
       </div>
       <div class="flex flex-wrap items-center gap-1.5" id="tx-status-chips">
         <button type="button" data-txf="all" onclick="setTxStatusFilter('all')" class="tx-flt-chip on">الكل</button>
-        <button type="button" data-txf="In Progress" onclick="setTxStatusFilter('In Progress')" class="tx-flt-chip">قيد التنفيذ</button>
-        <button type="button" data-txf="Under Review" onclick="setTxStatusFilter('Under Review')" class="tx-flt-chip">قيد المراجعة</button>
-        <button type="button" data-txf="Complete" onclick="setTxStatusFilter('Complete')" class="tx-flt-chip">جاهز للتسليم</button>
-        <button type="button" data-txf="Delivered" onclick="setTxStatusFilter('Delivered')" class="tx-flt-chip">تم التسليم</button>
+        <button type="button" data-txf="In Progress" onclick="setTxStatusFilter('In Progress')" class="tx-flt-chip">In Progress</button>
+        <button type="button" data-txf="Under Review" onclick="setTxStatusFilter('Under Review')" class="tx-flt-chip">Under Review</button>
+        <button type="button" data-txf="Complete" onclick="setTxStatusFilter('Complete')" class="tx-flt-chip">Complete</button>
+        <button type="button" data-txf="Delivered" onclick="setTxStatusFilter('Delivered')" class="tx-flt-chip">Delivered</button>
         <button type="button" data-txf="late" onclick="setTxStatusFilter('late')" class="tx-flt-chip text-rose-500">متأخر</button>
         <div class="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 ms-1">
           <button id="rm-all" type="button" onclick="setRecentMode('all')" class="rounded-lg px-2.5 py-1 text-xs font-semibold">الكل</button>
@@ -498,7 +498,7 @@
 <div class="card p-4 sm:p-5 space-y-3.5">
 <div class="flex flex-wrap items-end gap-3">
 <div class="flex-1 min-w-[240px]"><label class="label" for="search-key">بحث بالتليفون أو اسم العميل أو رقم المعاملة أو الخدمة</label><input id="search-key" placeholder="اكتب للبحث الفوري..." class="field" oninput="searchDebounced()"></div>
-<div class="min-w-[140px]"><label class="label" for="search-status-filter">حالة المعاملة</label><select id="search-status-filter" class="field" onchange="executeSearch()"><option value="all">كل الحالات</option><option value="In Progress">قيد التنفيذ</option><option value="Complete">مكتمل</option><option value="Delivered">تم التسليم</option><option value="Under Review">قيد المراجعة</option></select></div>
+<div class="min-w-[140px]"><label class="label" for="search-status-filter">حالة المعاملة</label><select id="search-status-filter" class="field" onchange="executeSearch()"><option value="all">كل الحالات</option><option value="In Progress">In Progress</option><option value="Complete">Complete</option><option value="Delivered">Delivered</option><option value="Under Review">Under Review</option></select></div>
 <div class="flex items-center gap-2"><button onclick="executeSearch()" class="btn-neo-pri"><i class="fa-solid fa-magnifying-glass"></i><span>بحث</span></button>
 <button onclick="exportSearchResultsCsv()" class="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-2 font-bold text-white text-xs shadow-sm"><i class="fa-solid fa-file-excel ms-1"></i> Excel</button></div>
 </div>
@@ -618,7 +618,7 @@
 </section>
 
 <div id="printArea"><div id="print-content" class="p-6"></div></div>
-<script src="js/03-core-app.js?v=p2c"></script>
+<script src="js/03-core-app.js?v=p2d"></script>
 <script src="js/05-chat-improvements.js?v=20261040"></script>
 <script src="js/06-cash-pdf-comments.js?v=p1c1"></script>
 <script src="js/07-commission-targets.js?v=20261040"></script>
@@ -664,7 +664,7 @@
 <script src="js/48-stability.js?v=1" defer></script>
 <script src="js/49-team-performance.js?v=1" defer></script>
 <script src="js/50-trash-archive.js?v=1" defer></script>
-<script src="js/51-work-tracking.js?v=2" defer></script>
+<script src="js/51-work-tracking.js?v=3" defer></script>
 <script src="js/52-money-commissions.js?v=1" defer></script>
 <script src="js/53-couriers-executors.js?v=1" defer></script>
 <script src="js/54-clients-growth.js?v=1" defer></script>
@@ -673,7 +673,7 @@
 <script src="js/57-push.js?v=1" defer></script>
 <script src="js/58-services-catalog.js?v=1" defer></script>
 <script src="js/59-offline-read.js?v=1" defer></script>
-<script src="js/60-month-close.js?v=1f" defer></script>
+<script src="js/60-month-close.js?v=1h" defer></script>
 <script src="js/61-doc-verification.js?v=1" defer></script>
 <script src="js/62-workflow-engine.js?v=1" defer></script>
 <script src="js/63-customer-360.js?v=1" defer></script>
