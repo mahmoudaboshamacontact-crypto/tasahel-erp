@@ -64,7 +64,7 @@
   async function fetchRefunds(from, to, lineMap) {
     var a = from + 'T00:00:00', b = addDays(to, 1) + 'T00:00:00';
     var r = await db().from('line_refunds')
-      .select('id,line_id,kind,qty,sales_amount,unit_comm_hint,status,decided_at')
+      .select('id,line_id,kind,qty,sales_amount,unit_comm_hint,status,decided_at,reason')
       .eq('status', 'approved').gte('decided_at', a).lt('decided_at', b);
     if (r.error) return [];
     var refs = (r.data || []).slice();
@@ -72,7 +72,7 @@
     var ids = Array.from(lineMap.keys());
     var seen = {}; refs.forEach(function (x) { seen[x.id] = 1; });
     for (var i = 0; i < ids.length; i += 150) {
-      var r2 = await db().from('line_refunds').select('id,line_id,kind,qty,sales_amount,unit_comm_hint,status,decided_at')
+      var r2 = await db().from('line_refunds').select('id,line_id,kind,qty,sales_amount,unit_comm_hint,status,decided_at,reason')
         .eq('status', 'approved').in('line_id', ids.slice(i, i + 150));
       if (r2.error) break;
       (r2.data || []).forEach(function (x) { if (!seen[x.id]) { seen[x.id] = 1; refs.push(x); } });
@@ -105,13 +105,25 @@
         rate: rate, status: statusOf(l), client: String(l.client_name || ''), phone: String(l.phone || ''), dup: '', lid: String(l.id)
       });
     });
-    var refundCount = 0, refQty = {};
+    var refundCount = 0, refQty = {}, refundList = [], have = {};
+    rows.forEach(function (r) { if (r.lid) have[r.lid] = 1; });
     refunds.forEach(function (rf) {
       var o = lineMap.get(String(rf.line_id));
       if (!o || isFar(o.service)) return;
+      /* البند الأصلي لو تاريخه جوه الفترة ومش ظاهر في الاستعلام، بنضيفه عشان الاسترداد ماينخصمش من فراغ وعشان الحسابات تشوفه */
+      var od = String(o.received_at || '').slice(0, 10), recovered = false;
+      if (!have[String(o.id)] && od >= st.from && od <= st.to) {
+        var q0 = num(o.qty), c0 = lineComm(o);
+        rows.push({ type: 'بند', day: od, tx: String(o.transaction_id || ''), emp: String(o.employee || '—'), service: String(o.service || ''),
+          qty: q0, sales: num(o.total), rate: q0 > 0 ? c0 / q0 : 0, status: statusOf(o), client: String(o.client_name || ''), phone: String(o.phone || ''), dup: '', lid: String(o.id) });
+        have[String(o.id)] = 1; recovered = true;
+      }
       var rq = num(rf.qty), hint = rf.unit_comm_hint != null && rf.unit_comm_hint !== '' ? rf.unit_comm_hint : o.commission_per_unit;
       var rc = lineComm({ service: o.service, qty: rq, commission_per_unit: hint });
       refundCount++; refQty[String(rf.line_id)] = (refQty[String(rf.line_id)] || 0) + rq;
+      refundList.push({ client: String(o.client_name || ''), tx: String(o.transaction_id || ''), service: String(o.service || ''), origDay: od,
+        day: String(rf.decided_at || '').slice(0, 10), qty: rq, comm: rc, reason: String(rf.reason || '').trim() || '—', full: rq >= num(o.qty),
+        note: recovered ? 'البند الأصلي كان ناقص من القائمة واتضاف للتقفيل' : '' });
       rows.push({
         type: 'استرداد', day: String(rf.decided_at || '').slice(0, 10), tx: String(o.transaction_id || ''),
         emp: String(o.employee || '—'), service: String(o.service || ''), qty: -rq, sales: -num(rf.sales_amount),
@@ -183,7 +195,7 @@
         service: String(l.service || ''), qty: num(l.qty), fee: num(l.exec_total) || num(l.qty) * num(l.exec_unit_cost), client: String(l.client_name || '') };
     });
     return {
-      rows: rows, byEmp: byEmp, bySvc: bySvc, byStatus: byStatus,
+      rows: rows, refundList: refundList, byEmp: byEmp, bySvc: bySvc, byStatus: byStatus,
       couriers: Array.from(couriers.values()).sort(function (a, b) { return (b.pickup + b.delivery) - (a.pickup + a.delivery); }),
       trips: namedTrips, noCourier: noCourier, far: farRows,
       tot: {
@@ -434,7 +446,8 @@
     w.addRow(['ابدأ بشيت "ملخص" — فيه الأرقام الكبيرة. لو عايز تراجع رقم، افتح "كل البنود": كل أرقام الشيتات التانية معادلات منه.']);
     w.addRow([]);
     var h = w.addRow(['الشيت', 'بيجاوب على إيه', 'مين يهتم بيه']); head(w, h.number);
-    [['كوميشن الموظفين', 'إجمالي الكوميشن المستحق وكل موظف ياخد كام (بنفس طريقة تقفيلك اليدوي)', 'المدير'],
+    [['المستردات', 'كل استرداد في صف واحد بسببه، وكوميشنه اللي اتشال (الريكوست كان موجود ومش محسوب)', 'المدير'],
+     ['كوميشن الموظفين', 'إجمالي الكوميشن المستحق وكل موظف ياخد كام (بنفس طريقة تقفيلك اليدوي)', 'المدير'],
      ['ملخص', 'الأرقام الرئيسية للشهر (بنود، مبيعات، عمولة، استردادات) + أداء كل موظف + حالات المعاملات + المكرر', 'المدير'],
      ['الخدمات', 'كل خدمة اتباعت كام مرة ودخّلت كام، وهل عليها عمولة', 'المدير'],
      ['المناديب', 'عدد مشاوير الاستلام والتسليم لكل مندوب ورسومها', 'المدير + المندوب'],
@@ -458,7 +471,7 @@
   async function exportMonth() {
     var d = st.data, XL = await loadXL(), wb = new XL.Workbook();
     wb.creator = 'Tasahel ERP'; wb.created = new Date();
-    var used = { 'كوميشن الموظفين': 1, 'ملخص': 1, 'كل البنود': 1, 'المشاوير': 1, 'المكرر': 1, 'الخدمات': 1, 'المناديب': 1, 'اقرأني أولاً': 1 };
+    var used = { 'كوميشن الموظفين': 1, 'المستردات': 1, 'ملخص': 1, 'كل البنود': 1, 'المشاوير': 1, 'المكرر': 1, 'الخدمات': 1, 'المناديب': 1, 'اقرأني أولاً': 1 };
     readMe(wb, d.period);
 
     /* كل البنود */
@@ -544,6 +557,22 @@
     wk.addRow(['الإجمالي', { formula: 'SUM(B' + kf + ':B' + kl + ')' }, { formula: 'SUM(C' + kf + ':C' + kl + ')' }, { formula: 'SUM(D' + kf + ':D' + kl + ')' }]);
     wk.getCell('C' + kt).numFmt = MONEY; wk.getCell('D' + kt).numFmt = MONEY; totalRow(wk, kt);
 
+    /* المستردات: صف واحد لكل استرداد، بالسبب، عشان الحسابات تشوف إن الريكوست كان موجود ومش محسوب */
+    var wr = newSheet(wb, 'المستردات', [26, 12, 30, 14, 14, 8, 14, 38, 30]); tabc(wr, 'FFE8590C'); wr.views = [{ rightToLeft: true }];
+    wr.addRow(['المستردات — ' + d.period]); wr.getRow(1).font = { bold: true, size: 14 };
+    wr.addRow(['كل صف استرداد معتمد: الريكوست كان موجود واتلغى، وكوميشنه اتشال من المستحق (مش محسوب).']);
+    wr.mergeCells('A2:I2'); wr.getRow(2).alignment = { wrapText: true };
+    wr.addRow([]);
+    var rh = wr.addRow(['العميل', 'المعاملة', 'الخدمة', 'تاريخ البند الأصلي', 'تاريخ الاسترداد', 'الكمية', 'الكوميشن اللي اتشال', 'سبب الاسترداد', 'ملاحظة']).number; head(wr, rh);
+    var rfirst = rh + 1;
+    (d.refundList || []).forEach(function (x) {
+      wr.addRow([x.client, x.tx, x.service, x.origDay, x.day, x.qty, x.comm, x.reason, (x.full ? 'مسترد كلياً' : 'مسترد جزئياً') + (x.note ? ' — ' + x.note : '')]);
+      var n = wr.rowCount; wr.getCell('G' + n).numFmt = MONEY; wr.getRow(n).alignment = { wrapText: true, vertical: 'top' };
+    });
+    if (!(d.refundList || []).length) wr.addRow(['مفيش استردادات في الفترة دي']);
+    else { var rl = wr.rowCount; wr.addRow(['الإجمالي', '', '', '', '', { formula: 'SUM(F' + rfirst + ':F' + rl + ')' }, { formula: 'SUM(G' + rfirst + ':G' + rl + ')' }]); wr.getCell('G' + (rl + 1)).numFmt = MONEY; totalRow(wr, rl + 1); }
+    wr.autoFilter = { from: { row: rh, column: 1 }, to: { row: rh, column: 9 } }; wr.views = [{ rightToLeft: true, state: 'frozen', ySplit: rh }];
+
     var wv = newSheet(wb, 'الخدمات', [34, 16, 12, 12, 14, 14]); tabc(wv, 'FFE8590C'); wv.views = [{ rightToLeft: true }];
     var s0 = wv.addRow(['الخدمة', 'عليها عمولة؟', 'عدد البنود', 'الكمية', 'المبيعات', 'العمولة']).number; head(wv, s0);
     var sv1 = s0 + 1;
@@ -622,7 +651,7 @@
       ['E', 'G'].forEach(function (c) { we.getCell(c + tn2).numFmt = MONEY; }); totalRow(we, tn2);
     });
 
-    var ORD = { 'اقرأني أولاً': 0, 'ملخص': 1, 'كوميشن الموظفين': 1.5, 'الخدمات': 2, 'المناديب': 3, 'كل البنود': 4, 'المشاوير': 5, 'المكرر': 6 };
+    var ORD = { 'اقرأني أولاً': 0, 'ملخص': 1, 'كوميشن الموظفين': 1.5, 'المستردات': 1.6, 'الخدمات': 2, 'المناديب': 3, 'كل البنود': 4, 'المشاوير': 5, 'المكرر': 6 };
     wb.worksheets.forEach(function (w, i) { w.orderNo = (w.name in ORD ? ORD[w.name] : 9) * 1000 + i; });
     await download(wb, 'تقفيل-الشهر_' + st.from + '_' + st.to + '.xlsx');
   }
