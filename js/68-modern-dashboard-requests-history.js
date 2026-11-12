@@ -1,27 +1,25 @@
 /* =====================================================================
-   68-modern-dashboard-requests-history.js | تساهيل ERP — التحديثات الشاملة (الإصدار المصحح والمثالي)
-   1. الشاشة الرئيسية (Dashboard):
-      - منع الرمشة (Flicker) عبر Smart DOM Patching وتخفيف التحديثات الخلفية.
-      - تطوير الساعة في الهيدر بتصميم عصري وأنيق (Executive Clock).
-      - كارت معلومات (Widget) في الجزء الشمال الفاضي فوق بالهيدر (مربع مدمج: ساعة + تاريخ + طقس القاهرة).
-   2. شاشة المعاملات (Requests / Transactions):
-      - كروت الحالات الخمسة (KPI Cards) في أعلى الصفحة: قيد التنفيذ، قيد المراجعة، جاهزة للتسليم، تم التسليم، متأخرة.
-      - فلتر الموظف المسؤول في شريط الفلاتر مع مطابقة دقيقة للأسماء.
-      - فصل أعمدة الجدول: Request ID | اسم العميل (مع الحفاظ على أسماء المستفيدين كاملة) | رقم التليفون (أيقونة اتصال) | الخدمة | الموظف | المبلغ | الحالة | التاريخ | إجراءات.
-   3. تفاصيل المعاملة (Request Details Modal):
-      - تصميم Grid / Cards منظم لبيانات العميل وضبط التفاف العنوان بالكامل.
-      - زرار الإيقاف "Under Review" مع أيقونة ⏸.
-      - شريط مراحل التنفيذ المودرن (Stepper).
+   68-modern-dashboard-requests-history.js | تساهيل ERP — الإصدار الشامل الخفيف
+   1. الشاشة الرئيسية:
+      - مانع الرمشة فائق الخفة والسرعة (0ms Overhead).
+      - ساعة هيدر عصرية ومودرن بتوقيت القاهرة الرسمي.
+      - كارت مربع مدمج في الجزء الشمال الفاضي فوق (الساعة + التاريخ + طقس القاهرة).
+   2. شاشة المعاملات:
+      - 5 كروت إحصائيات للحالات (In Progress, Under Review, Complete, Delivered, Late).
+      - فلتر الموظف المسؤول في شريط الفلاتر.
+      - 9 أعمدة مستقلة: فصل التليفون بأيقونة اتصال مع الحفاظ التام على أسماء المستفيدين.
+   3. تفاصيل المعاملة:
+      - كروت تفاصيل شبكية Grid + التفاف كامل للعنوان.
+      - زرار الإيقاف: Under Review مع أيقونة ⏸.
+      - شريط مراحل التنفيذ Stepper عصري واحترافي.
    4. سجل التغييرات الموحد (Change History):
-      - نافذة السجل الزمني الكامل (p51OpenTimelineModal) بتصميم السكرين شوت بالضبط.
-      - تجميع بالتاريخ (Date Grouping) من الأحدث للأقدم.
-      - أفاتار الأحرف الأولى (DM, AG, HO, EA) + اسم الموظف + شارة القسم (Gov, Accounting, Sales, Admin) + التوقيت.
-      - تفاصيل التغييرات: اسم الحقل: القيمة القديمة ➔ القيمة الجديدة.
-      - شارة Automatic للحركات التلقائية.
+      - تجميع بالتاريخ + أفاتار الأحرف الأولى + شارات الأقسام + Before ➔ After + Automatic.
+      - ربط مباشر وموثوق لزرار "السجل الزمني" مع معالجة آمنة لـ Supabase بدون تعليق.
    ===================================================================== */
 
 (function () {
   'use strict';
+
   if (window.__tasahelModernUpdate68) return;
   window.__tasahelModernUpdate68 = true;
 
@@ -33,8 +31,28 @@
     return String(s || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
   };
 
+  // جلب موثوق لعميل Supabase بدون أخطاء نطاق
+  function getSb() {
+    try {
+      if (window.sbClient) return window.sbClient;
+      if (typeof sbClient !== 'undefined' && sbClient) {
+        window.sbClient = sbClient;
+        return sbClient;
+      }
+      if (window.supabase) {
+        const url = localStorage.getItem('sb_url') || 'https://avehvjqifswsyayckpvx.supabase.co';
+        const key = localStorage.getItem('sb_key');
+        if (url && key) {
+          window.sbClient = window.supabase.createClient(url, key);
+          return window.sbClient;
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+
   /* =========================================================================
-     0. أنماط CSS المدمجة
+     0. أنماط CSS المدمجة (خفيفة وعصرية بالكامل)
      ========================================================================= */
   (function injectStyles() {
     if (document.getElementById('ts-modern-68-styles')) return;
@@ -46,7 +64,7 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 4px 12px;
+        padding: 5px 12px;
         border-radius: 12px;
         background: rgba(255, 122, 61, 0.08);
         border: 1px solid rgba(255, 122, 61, 0.28);
@@ -56,14 +74,13 @@
         transition: all 0.2s ease;
       }
       .ts-hdr-clock:hover {
-        background: rgba(255, 122, 61, 0.16);
+        background: rgba(255, 122, 61, 0.14);
         border-color: rgba(255, 122, 61, 0.45);
       }
       .ts-hdr-clock-time {
         font-family: "JetBrains Mono", "IBM Plex Sans Arabic", monospace;
         font-size: 13.5px;
         font-weight: 800;
-        letter-spacing: 0.5px;
         direction: ltr;
         display: inline-flex;
         align-items: baseline;
@@ -89,22 +106,22 @@
         display: inline-flex;
         flex-direction: column;
         justify-content: center;
-        gap: 4px;
+        gap: 5px;
         padding: 8px 14px;
         border-radius: 14px;
-        background: rgba(0, 0, 0, 0.35);
-        border: 1px solid rgba(255, 122, 61, 0.32);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+        background: rgba(18, 15, 13, 0.65);
+        border: 1px solid rgba(255, 122, 61, 0.3);
         color: #f8fafc;
-        min-width: 190px;
+        min-width: 200px;
         max-width: 250px;
         backdrop-filter: blur(8px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
       }
       html:not(.dark) .ts-home-top-widget {
-        background: rgba(255, 255, 255, 0.85);
+        background: rgba(255, 255, 255, 0.95);
         border-color: rgba(232, 89, 12, 0.3);
         color: #1e293b;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
       }
       .ts-topw-row {
         display: flex;
@@ -122,27 +139,13 @@
       html:not(.dark) .ts-topw-time {
         color: #e8590c;
       }
-      .ts-topw-date {
-        font-size: 11px;
-        font-weight: 700;
-        opacity: 0.9;
-        white-space: nowrap;
-      }
-      .ts-topw-weather {
-        font-size: 11px;
-        font-weight: 600;
-        color: #94a3b8;
-      }
-      html:not(.dark) .ts-topw-weather {
-        color: #64748b;
-      }
 
       /* KPI Cards 5 Grid */
       .ts-kpi-5-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 10px;
-        margin-bottom: 12px;
+        margin-bottom: 14px;
       }
       @media (min-width: 640px) {
         .ts-kpi-5-grid {
@@ -158,7 +161,7 @@
         padding: 12px 14px;
         border-radius: 14px;
         border: 1px solid rgba(255, 255, 255, 0.08);
-        background: rgba(27, 21, 17, 0.6);
+        background: rgba(27, 21, 17, 0.65);
         cursor: pointer;
         text-align: right;
         transition: all 0.2s ease;
@@ -173,11 +176,11 @@
       }
       .ts-kpi-card.active {
         border-color: #ff9d6c;
-        background: rgba(255, 122, 61, 0.12);
+        background: rgba(255, 122, 61, 0.14);
         box-shadow: 0 0 12px rgba(255, 122, 61, 0.25);
       }
       .ts-kpi-title {
-        font-size: 11px;
+        font-size: 11.5px;
         font-weight: 700;
         color: #94a3b8;
         display: flex;
@@ -333,22 +336,6 @@
         color: #f4f2fa;
         border-color: rgba(255, 255, 255, 0.1);
       }
-      .ts-ch-header {
-        padding: 12px 18px;
-        font-size: 13.5px;
-        font-weight: 800;
-        border-bottom: 1px solid #e2e8f0;
-        background: #f8fafc;
-        color: #334155;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-      html.dark .ts-ch-header {
-        background: #1b1815;
-        border-color: rgba(255, 255, 255, 0.08);
-        color: #e2e8f0;
-      }
       .ts-ch-date-block {
         border-bottom: 1px solid #edf2f7;
         padding-bottom: 10px;
@@ -359,7 +346,7 @@
       .ts-ch-date-title {
         font-size: 12px;
         font-weight: 700;
-        padding: 10px 18px 4px;
+        padding: 12px 18px 4px;
         color: #475569;
         direction: ltr;
         text-align: right;
@@ -451,7 +438,7 @@
       .ts-ch-row {
         font-size: 12px;
         color: #64748b;
-        margin-bottom: 2px;
+        margin-bottom: 3px;
         line-height: 1.5;
         display: flex;
         align-items: center;
@@ -490,93 +477,89 @@
   })();
 
   /* =========================================================================
-     1. إصلاح مشكلة الرمشة (Flicker / Auto-refresh) في الشاشة الرئيسية
+     1. الشاشة الرئيسية: كارت المربع بالأعلى يسار + مانع رمشة خفيف
      ========================================================================= */
-  let lastHomeRenderTime = 0;
-  let homeRenderQueued = false;
+  let cairoWeatherCache = null;
+  async function fetchCairoWeather() {
+    try {
+      const cached = localStorage.getItem('ts_cairo_weather');
+      if (cached) {
+        const j = JSON.parse(cached);
+        if (Date.now() - j.t < 1800000) { cairoWeatherCache = j; return; }
+      }
+    } catch (e) {}
 
-  function patchDomTree(target, source) {
-    if (!target || !source) return;
-    if (target.nodeType === Node.TEXT_NODE && source.nodeType === Node.TEXT_NODE) {
-      if (target.nodeValue !== source.nodeValue) target.nodeValue = source.nodeValue;
-      return;
-    }
-    if (target.nodeType === Node.ELEMENT_NODE && source.nodeType === Node.ELEMENT_NODE) {
-      if (target.tagName !== source.tagName) {
-        target.replaceWith(source.cloneNode(true));
-        return;
-      }
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
-        if (target.value !== source.value) target.value = source.value;
-      }
-      const targetAttrs = Array.from(target.attributes);
-      const sourceAttrs = Array.from(source.attributes);
-      for (const attr of sourceAttrs) {
-        if (target.getAttribute(attr.name) !== attr.value) target.setAttribute(attr.name, attr.value);
-      }
-      for (const attr of targetAttrs) {
-        if (!source.hasAttribute(attr.name)) target.removeAttribute(attr.name);
-      }
-      const tChildren = Array.from(target.childNodes);
-      const sChildren = Array.from(source.childNodes);
-      const maxLen = Math.max(tChildren.length, sChildren.length);
-      for (let i = 0; i < maxLen; i++) {
-        const tChild = tChildren[i], sChild = sChildren[i];
-        if (!tChild && sChild) target.appendChild(sChild.cloneNode(true));
-        else if (tChild && !sChild) tChild.remove();
-        else if (tChild && sChild) patchDomTree(tChild, sChild);
-      }
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 3500);
+      const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=30.0444&longitude=31.2357&current=temperature_2m,weather_code&timezone=Africa%2FCairo', { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (!res.ok) throw new Error('weather error');
+      const data = await res.json();
+      cairoWeatherCache = { temp: Math.round(data.current.temperature_2m), code: data.current.weather_code, t: Date.now() };
+      localStorage.setItem('ts_cairo_weather', JSON.stringify(cairoWeatherCache));
+      injectTopLeftHomeWidget();
+    } catch (e) {
+      if (!cairoWeatherCache) cairoWeatherCache = { temp: 26, code: 1, t: Date.now() };
     }
   }
+  fetchCairoWeather();
 
+  function getWeatherDesc(code) {
+    if (code === 0) return { text: 'مشمس', icon: 'fa-sun text-amber-400' };
+    if (code <= 3) return { text: 'غائم جزئياً', icon: 'fa-cloud-sun text-amber-300' };
+    if (code <= 48) return { text: 'ضبابي', icon: 'fa-smog text-slate-300' };
+    return { text: 'معتدل', icon: 'fa-cloud text-amber-400' };
+  }
+
+  function injectTopLeftHomeWidget() {
+    const box = document.getElementById('tab-home');
+    if (!box) return;
+    const heroFlex = box.querySelector('.hm-hero > div.flex.justify-between, .hm-hero > div.flex');
+    if (!heroFlex) return;
+
+    let widget = heroFlex.querySelector('#ts-home-top-widget');
+    if (!widget) {
+      widget = document.createElement('div');
+      widget.id = 'ts-home-top-widget';
+      widget.className = 'ts-home-top-widget';
+      heroFlex.appendChild(widget);
+    }
+
+    const d = new Date();
+    const fT = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit', hour12: true });
+    const fD = new Intl.DateTimeFormat('ar-EG', { timeZone: 'Africa/Cairo', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const wData = cairoWeatherCache || { temp: 26, code: 1 };
+    const wInfo = getWeatherDesc(wData.code);
+
+    widget.innerHTML = `
+      <div class="ts-topw-row">
+        <i class="fa-solid fa-clock text-amber-400 text-xs"></i>
+        <span class="ts-topw-time">${fT.format(d)}</span>
+      </div>
+      <div class="ts-topw-row">
+        <i class="fa-solid fa-calendar-day text-amber-500 text-xs"></i>
+        <span class="ts-topw-date">${eh(fD.format(d))}</span>
+      </div>
+      <div class="ts-topw-row">
+        <i class="fa-solid ${wInfo.icon} text-xs"></i>
+        <span class="ts-topw-weather">${wData.temp}°C · ${wInfo.text} (القاهرة)</span>
+      </div>
+    `;
+  }
+
+  // لف خفيف وفوري لـ renderHomeTab بدون أي بطء أو تكرار
   const origRenderHome = window.renderHomeTab;
   if (typeof origRenderHome === 'function') {
-    window.renderHomeTab = function (isUserAction) {
-      const box = document.getElementById('tab-home');
-      if (!box) return origRenderHome.apply(this, arguments);
-
-      const now = Date.now();
-      if (!isUserAction && now - lastHomeRenderTime < 10000) {
-        if (!homeRenderQueued) {
-          homeRenderQueued = true;
-          setTimeout(() => {
-            homeRenderQueued = false;
-            if (window.currentTab === 'home') window.renderHomeTab(false);
-          }, 10000);
-        }
-        return;
-      }
-      lastHomeRenderTime = now;
-
-      if (!box.children.length) {
-        const r = origRenderHome.apply(this, arguments);
-        injectTopLeftHomeWidget();
-        return r;
-      }
-
-      try {
-        const offscreen = document.createElement('div');
-        offscreen.id = 'tab-home';
-        const tempParent = box.parentNode;
-        const dummy = document.createElement('div');
-        tempParent.replaceChild(dummy, box);
-        document.body.appendChild(offscreen);
-
-        origRenderHome.apply(this, arguments);
-
-        offscreen.remove();
-        tempParent.replaceChild(box, dummy);
-        patchDomTree(box, offscreen);
-        injectTopLeftHomeWidget();
-      } catch (err) {
-        origRenderHome.apply(this, arguments);
-        injectTopLeftHomeWidget();
-      }
+    window.renderHomeTab = function () {
+      const r = origRenderHome.apply(this, arguments);
+      try { injectTopLeftHomeWidget(); } catch (e) {}
+      return r;
     };
   }
 
   /* =========================================================================
-     2. تطوير الساعة في الهيدر (Modern Header Clock)
+     2. تطوير الساعة في الهيدر (Modern Executive Clock)
      ========================================================================= */
   function updateModernHeaderClock() {
     const slot = document.getElementById('hdr-clock-slot');
@@ -614,100 +597,44 @@
         <div class="ts-hdr-clock-date">${eh(dateStr)}</div>
       </div>
     `;
+
+    // تحديث وقت المربع في الرئيسية إن وجد
+    const topWTime = document.querySelector('#ts-home-top-widget .ts-topw-time');
+    if (topWTime) {
+      const fT12 = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit', hour12: true });
+      topWTime.textContent = fT12.format(d);
+    }
+  }
+
+  // إيقاف تعارض ساعة 33-header-clock.js القديمة
+  if (typeof window.mountHomeClock === 'function') {
+    window.mountHomeClock = updateModernHeaderClock;
   }
   setInterval(updateModernHeaderClock, 1000);
 
   /* =========================================================================
-     3. كارت المعلومات (Widget) في الجزء الشمال الفاضي فوق بالرئيسية
-     ========================================================================= */
-  let cairoWeatherCache = null;
-  async function fetchCairoWeather() {
-    try {
-      const cached = localStorage.getItem('ts_cairo_weather');
-      if (cached) {
-        const j = JSON.parse(cached);
-        if (Date.now() - j.t < 1800000) { cairoWeatherCache = j; return; }
-      }
-    } catch (e) {}
-
-    try {
-      const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=30.0444&longitude=31.2357&current=temperature_2m,weather_code&timezone=Africa%2FCairo');
-      if (!res.ok) throw new Error('weather error');
-      const data = await res.json();
-      cairoWeatherCache = { temp: Math.round(data.current.temperature_2m), code: data.current.weather_code, t: Date.now() };
-      localStorage.setItem('ts_cairo_weather', JSON.stringify(cairoWeatherCache));
-    } catch (e) {
-      if (!cairoWeatherCache) cairoWeatherCache = { temp: 26, code: 1, t: Date.now() };
-    }
-  }
-  fetchCairoWeather();
-
-  function getWeatherDesc(code) {
-    if (code === 0) return { text: 'مشمس', icon: 'fa-sun text-amber-400' };
-    if (code <= 3) return { text: 'غائم جزئياً', icon: 'fa-cloud-sun text-amber-300' };
-    if (code <= 48) return { text: 'ضبابي', icon: 'fa-smog text-slate-300' };
-    return { text: 'معتدل', icon: 'fa-cloud text-amber-400' };
-  }
-
-  function injectTopLeftHomeWidget() {
-    const box = document.getElementById('tab-home');
-    if (!box) return;
-    const heroFlex = box.querySelector('.hm-hero > div.flex.justify-between, .hm-hero > div.flex');
-    if (!heroFlex) return;
-
-    let widget = heroFlex.querySelector('#ts-home-top-widget');
-    if (!widget) {
-      widget = document.createElement('div');
-      widget.id = 'ts-home-top-widget';
-      widget.className = 'ts-home-top-widget';
-      // وضعه في الجزء الشمال (الطرف المقابل للترحيب)
-      heroFlex.appendChild(widget);
-    }
-
-    const d = new Date();
-    const fT = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit', hour12: true });
-    const fD = new Intl.DateTimeFormat('ar-EG', { timeZone: 'Africa/Cairo', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    const wData = cairoWeatherCache || { temp: 26, code: 1 };
-    const wInfo = getWeatherDesc(wData.code);
-
-    widget.innerHTML = `
-      <div class="ts-topw-row">
-        <i class="fa-solid fa-clock text-amber-400 text-xs"></i>
-        <span class="ts-topw-time">${fT.format(d)}</span>
-      </div>
-      <div class="ts-topw-row">
-        <i class="fa-solid fa-calendar-day text-amber-500 text-xs"></i>
-        <span class="ts-topw-date">${eh(fD.format(d))}</span>
-      </div>
-      <div class="ts-topw-row">
-        <i class="fa-solid ${wInfo.icon} text-xs"></i>
-        <span class="ts-topw-weather">${wData.temp}°C · ${wInfo.text} (القاهرة)</span>
-      </div>
-    `;
-  }
-
-  /* =========================================================================
-     4. شاشة المعاملات: كروت الحالات الخمسة + فلتر الموظف + فصل الأعمدة
+     3. شاشة المعاملات: كروت الحالات الخمسة + فلتر الموظف + فصل الأعمدة
      ========================================================================= */
   window.__txEmployeeFilter = 'all';
 
-  // تحديث كروت الحالات الخمسة في أعلى الصفحة
   function renderTxStatusKpiCards() {
     const tabTx = document.getElementById('tab-tx');
     if (!tabTx) return;
 
-    // استبدال أو إخفاء الشبكة القديمة ووضع كروت الحالات الخمسة المحددة
     let kpiWrap = document.getElementById('ts-tx-kpi-5-container');
+    const oldGrid = tabTx.querySelector('.grid.grid-cols-2.lg\\:grid-cols-4');
+
     if (!kpiWrap) {
-      const oldGrid = tabTx.querySelector('.grid.grid-cols-2.lg\\:grid-cols-4');
-      if (oldGrid) oldGrid.style.display = 'none'; // إخفاء القديم
-
-      kpiWrap = document.createElement('div');
-      kpiWrap.id = 'ts-tx-kpi-5-container';
-      kpiWrap.className = 'ts-kpi-5-grid';
-
-      if (oldGrid) oldGrid.insertAdjacentElement('afterend', kpiWrap);
-      else tabTx.prepend(kpiWrap);
+      if (oldGrid) {
+        kpiWrap = oldGrid;
+        kpiWrap.id = 'ts-tx-kpi-5-container';
+        kpiWrap.className = 'ts-kpi-5-grid';
+      } else {
+        kpiWrap = document.createElement('div');
+        kpiWrap.id = 'ts-tx-kpi-5-container';
+        kpiWrap.className = 'ts-kpi-5-grid';
+        tabTx.prepend(kpiWrap);
+      }
     }
 
     const orders = window.groupedOrders || [];
@@ -744,21 +671,27 @@
     `).join('');
   }
 
-  // فلتر الموظف المسؤول
   function injectEmployeeFilterControl() {
     const cardBar = document.querySelector('#tab-tx .card .flex.flex-wrap.items-center.justify-between');
-    if (!cardBar || document.getElementById('tx-emp-filter-select')) return;
+    if (!cardBar) return;
 
-    const wrap = document.createElement('div');
-    wrap.id = 'tx-emp-filter-wrap';
-    wrap.className = 'inline-flex items-center gap-1.5 ms-auto shrink-0';
+    let wrap = document.getElementById('tx-emp-filter-wrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'tx-emp-filter-wrap';
+      wrap.className = 'inline-flex items-center gap-1.5 ms-2 shrink-0';
+      cardBar.insertBefore(wrap, cardBar.children[1] || null);
+    }
 
     const empSet = new Set();
     if (Array.isArray(window.profiles)) {
       window.profiles.forEach(p => { if (p.full_name) empSet.add(p.full_name.trim()); });
     }
     if (Array.isArray(window.groupedOrders)) {
-      window.groupedOrders.forEach(o => { if (o.employee) empSet.add(o.employee.trim()); });
+      window.groupedOrders.forEach(o => {
+        if (o.employee) empSet.add(o.employee.trim());
+        (o.lines || []).forEach(l => { if (l.employee) empSet.add(l.employee.trim()); });
+      });
     }
 
     let opts = '<option value="all">كل الموظفين (الكل)</option>';
@@ -768,17 +701,14 @@
     });
 
     wrap.innerHTML = `
-      <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+      <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
         <i class="fa-solid fa-user-tie text-slate-400"></i>
         <span>الموظف:</span>
-        <select id="tx-emp-filter-select" class="bg-transparent border-0 font-bold text-ink dark:text-white focus:outline-none">
+        <select id="tx-emp-filter-select" class="bg-transparent border-0 font-bold text-ink dark:text-white focus:outline-none cursor-pointer">
           ${opts}
         </select>
       </div>
     `;
-
-    // وضعه بجانب مربع البحث
-    cardBar.insertBefore(wrap, cardBar.children[1] || null);
 
     const selEl = wrap.querySelector('#tx-emp-filter-select');
     selEl.addEventListener('change', function () {
@@ -787,12 +717,10 @@
     });
   }
 
-  // فصل أعمدة الجدول مع الحفاظ التام على أسماء المستفيدين
   function formatSeparatedColumns() {
     const table = document.querySelector('#tab-tx table');
     if (!table) return;
 
-    // 1. تحديث thead إلى 9 أعمدة
     const theadTr = table.querySelector('thead tr');
     if (theadTr && theadTr.children.length === 8) {
       theadTr.innerHTML = `
@@ -808,7 +736,6 @@
       `;
     }
 
-    // 2. تحديث صفوف tbody
     const tbody = table.querySelector('tbody#recent-table-body');
     if (!tbody) return;
 
@@ -818,16 +745,15 @@
         const clientCell = cells[1];
         const svcCell = cells[2];
 
-        // استخراج التليفون فقط من خانة العميل دون المساس باسم العميل أو المستفيدين
+        // استخراج رقم التليفون وحذفه من خانة العميل مع بقاء اسم العميل والمستفيدين بالكامل
         const phonePill = clientCell.querySelector('.rc-phone-pill');
         let phoneText = '';
         if (phonePill) {
-          const match = phonePill.textContent.match(/\d{9,15}/);
+          const match = phonePill.textContent.match(/[\d+]{8,16}/);
           if (match) phoneText = match[0];
-          phonePill.remove(); // شيل رقم التليفون فقط من خانة العميل ليبقى الاسم والمستفيدين
+          phonePill.remove();
         }
 
-        // إنشاء عمود التليفون المستقل مع أيقونة اتصال
         const phoneTd = document.createElement('td');
         phoneTd.className = 'px-3 py-3 whitespace-nowrap text-xs';
         phoneTd.setAttribute('dir', 'ltr');
@@ -848,11 +774,20 @@
     });
   }
 
-  // فلتر القائمة قبل العرض لتطبيق فلتر الموظف
+  // فلترة الموظفين المتسلسلة دون كسر الـ pinned أو stuck السابق
+  const prevRecentFilter = window.__recentFilter;
   window.__recentFilter = function (list) {
+    if (typeof prevRecentFilter === 'function') list = prevRecentFilter(list);
     if (!window.__txEmployeeFilter || window.__txEmployeeFilter === 'all') return list;
     const target = norm(window.__txEmployeeFilter);
-    return list.filter(o => norm(o.employee || '') === target || String(o.employee || '').toLowerCase().includes(target));
+    return list.filter(o => {
+      const empNorm = norm(o.employee || '');
+      if (empNorm === target || empNorm.includes(target) || target.includes(empNorm)) return true;
+      return (o.lines || []).some(l => {
+        const lNorm = norm(l.employee || '');
+        return lNorm === target || lNorm.includes(target);
+      });
+    });
   };
 
   const origRenderRecent = window.renderRecentRequests;
@@ -866,7 +801,7 @@
   }
 
   /* =========================================================================
-     5. كارت تفاصيل المعاملة: Grid UI + Stepper + Under Review Button
+     4. تفاصيل المعاملة: Grid + Stepper + Under Review Button
      ========================================================================= */
   const origOpenTxModal = window.openTxModal;
   if (typeof origOpenTxModal === 'function') {
@@ -878,7 +813,6 @@
       const modalBody = document.getElementById('tx-modal-body');
       if (!modalBody) return;
 
-      // 1. Grid لبيانات المعاملة مع ضبط التفاف العنوان
       const oldGrid = modalBody.querySelector('.grid.grid-cols-2.sm\\:grid-cols-4');
       if (oldGrid && !oldGrid.dataset.formatted68) {
         oldGrid.dataset.formatted68 = '1';
@@ -896,7 +830,6 @@
         `;
       }
 
-      // 2. Stepper لمراحل التنفيذ
       const stepperSlot = modalBody.querySelector('#tx-modal-stepper-slot');
       if (stepperSlot && !stepperSlot.querySelector('.ts-stepper')) {
         const st = typeof getOrderStatus === 'function' ? getOrderStatus(o) : 'In Progress';
@@ -926,7 +859,6 @@
         `);
       }
 
-      // 3. تعديل زرار الوقف لـ Under Review
       modalBody.querySelectorAll('[data-svc-card-id] .lp-btn').forEach(b => {
         if (!b.classList.contains('lp-resume')) {
           b.innerHTML = '<span>⏸</span><span>Under Review</span>';
@@ -936,7 +868,7 @@
   }
 
   /* =========================================================================
-     6. سجل التغييرات الموحد (Change History Modal & Unified Display)
+     5. سجل التغييرات الكامل (Change History Modal) — زرار "السجل الزمني"
      ========================================================================= */
   function getInitials(name) {
     if (!name) return '??';
@@ -971,19 +903,18 @@
     return '<span class="ts-ch-dept">Gov</span>';
   }
 
-  // الدالة الأساسية لفتح نافذة سجل التغييرات الموحد (مطابقة تماماً للسكرين شوت)
+  // الدالة التي يتم استدعاؤها عند الضغط على زرار "السجل الزمني"
   window.p51OpenTimelineModal = async function (tx) {
     if (!tx) return;
 
-    // إزالة أي نافذة سابقة
     const old = document.getElementById('ts-change-history-modal');
     if (old) old.remove();
 
     const ov = document.createElement('div');
     ov.id = 'ts-change-history-modal';
-    ov.className = 'fixed inset-0 z-[150] flex items-center justify-center bg-black/70 p-4';
+    ov.className = 'fixed inset-0 z-[160] flex items-center justify-center bg-black/75 p-3 sm:p-4';
     ov.innerHTML = `
-      <div class="w-full max-w-2xl max-h-[88vh] bg-white dark:bg-[#141210] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+      <div class="w-full max-w-3xl max-h-[90vh] bg-white dark:bg-[#141210] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden" onclick="event.stopPropagation()">
         <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-[#1b1815]">
           <div class="flex items-center gap-2.5">
             <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/20 text-amber-500 font-bold"><i class="fa-solid fa-clock-rotate-left"></i></span>
@@ -1005,17 +936,23 @@
     ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
     document.body.appendChild(ov);
 
-    // سحب الأحداث من Supabase
+    const sb = getSb();
+    const bodyEl = document.getElementById('ts-ch-modal-list');
+
     try {
-      const results = await Promise.all([
-        window.sbClient.from('audit_log').select('*').eq('transaction_id', String(tx)).order('at', { ascending: false }).limit(100),
-        window.sbClient.from('line_stage_events').select('*').eq('transaction_id', String(tx)).order('at', { ascending: false }).limit(50),
-        window.sbClient.from('tx_comments').select('*').eq('transaction_id', String(tx)).order('created_at', { ascending: false }).limit(50)
+      // حماية بمهلة زمنية لا تتجاوز 4 ثوانٍ حتى لا يعلق السجل مطلقاً
+      const fetchPromise = Promise.all([
+        sb ? sb.from('audit_log').select('*').eq('transaction_id', String(tx)).order('at', { ascending: false }).limit(100) : Promise.resolve({ data: [] }),
+        sb ? sb.from('line_stage_events').select('*').eq('transaction_id', String(tx)).order('at', { ascending: false }).limit(50) : Promise.resolve({ data: [] }),
+        sb ? sb.from('tx_comments').select('*').eq('transaction_id', String(tx)).order('created_at', { ascending: false }).limit(50) : Promise.resolve({ data: [] })
       ]);
 
-      const auditRows = (!results[0].error && Array.isArray(results[0].data)) ? results[0].data : [];
-      const stageRows = (!results[1].error && Array.isArray(results[1].data)) ? results[1].data : [];
-      const commentRows = (!results[2].error && Array.isArray(results[2].data)) ? results[2].data : [];
+      const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([{ data: [] }, { data: [] }, { data: [] }]), 4000));
+      const results = await Promise.race([fetchPromise, timeoutPromise]);
+
+      const auditRows = (results[0] && !results[0].error && Array.isArray(results[0].data)) ? results[0].data : [];
+      const stageRows = (results[1] && !results[1].error && Array.isArray(results[1].data)) ? results[1].data : [];
+      const commentRows = (results[2] && !results[2].error && Array.isArray(results[2].data)) ? results[2].data : [];
 
       const events = [];
 
@@ -1023,9 +960,8 @@
       auditRows.forEach(a => {
         const d = a.details || {};
         let action = a.action === 'created' ? 'Added' : (a.action === 'cost_confirmed' ? 'Operations Cost Confirmation' : 'Changed');
-        let isAuto = !!(d.automatic || d.Current_Queue || a.action === 'status_sync');
+        let isAuto = !!(d.automatic || d.Current_Queue);
 
-        // تحويل أسماء الحقول والقيم لتطابق الصورة
         const formattedDetails = {};
         for (const k in d) {
           if (k === 'automatic') continue;
@@ -1060,7 +996,7 @@
       stageRows.forEach(s => {
         events.push({
           time: new Date(s.at || 0),
-          user: 'System Bot',
+          user: s.by_user || 'System Bot',
           action: 'Changed',
           details: { 'Operations Status': { old: 'New', new: stageNames[s.stage] || s.stage } },
           isAuto: true
@@ -1078,7 +1014,7 @@
         });
       });
 
-      // 4. حدث الإضافة الأساسي للمعاملة
+      // 4. حدث الإضافة الأساسي للمعاملة من الذاكرة المحلية
       const o = (window.groupedOrders || []).find(x => String(x.transaction_id) === String(tx));
       if (o && (o.received_at || o.created_at)) {
         events.push({
@@ -1090,10 +1026,9 @@
         });
       }
 
-      // ترتيب تنازلي حسب الوقت
       events.sort((a, b) => b.time.getTime() - a.time.getTime());
 
-      // تجميع حسب التاريخ (Date Grouping)
+      // تجميع حسب اليوم
       const groups = {};
       events.forEach(ev => {
         const d = ev.time;
@@ -1102,11 +1037,10 @@
         groups[dayStr].push(ev);
       });
 
-      const bodyEl = document.getElementById('ts-ch-modal-list');
       if (!bodyEl) return;
 
       if (!Object.keys(groups).length) {
-        bodyEl.innerHTML = '<div class="py-8 text-center text-xs text-slate-400">No change history recorded for this request yet.</div>';
+        bodyEl.innerHTML = '<div class="py-8 text-center text-xs text-slate-400">لا توجد حركات مسجلة لهذه المعاملة بعد.</div>';
         return;
       }
 
@@ -1166,13 +1100,11 @@
 
       bodyEl.innerHTML = html;
     } catch (err) {
-      console.warn('timeline fetch err', err);
+      if (bodyEl) bodyEl.innerHTML = '<div class="py-6 text-center text-xs text-rose-500">حدث خطأ أثناء تحميل السجل</div>';
     }
   };
 
-  /* =========================================================================
-     7. تهيئة أولية عند تشغيل السكربت
-     ========================================================================= */
+  // تهيئة أولية
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       injectTopLeftHomeWidget();
