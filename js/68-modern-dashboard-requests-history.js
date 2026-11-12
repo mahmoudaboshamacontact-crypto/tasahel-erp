@@ -1,25 +1,23 @@
 /* =====================================================================
-   68-modern-dashboard-requests-history.js | تساهيل ERP — التحديثات الشاملة
+   68-modern-dashboard-requests-history.js | تساهيل ERP — التحديثات الشاملة (الإصدار المصحح والمثالي)
    1. الشاشة الرئيسية (Dashboard):
       - منع الرمشة (Flicker) عبر Smart DOM Patching وتخفيف التحديثات الخلفية.
       - تطوير الساعة في الهيدر بتصميم عصري وأنيق (Executive Clock).
-      - إضافة كارت معلومات (Widget) في الرئيسية (الساعة + التاريخ + الطقس/الحرارة).
+      - كارت معلومات (Widget) في الجزء الشمال الفاضي فوق بالهيدر (مربع مدمج: ساعة + تاريخ + طقس القاهرة).
    2. شاشة المعاملات (Requests / Transactions):
-      - كروت إحصائيات KPI تفاعلية مقسمة حسب الحالة.
-      - فلتر الموظف المسؤول في شريط الفلاتر.
-      - فصل أعمدة الجدول: Request ID | اسم العميل | رقم التليفون (أيقونة اتصال) | الخدمة | الموظف | المبلغ | الحالة | التاريخ | إجراءات.
+      - كروت الحالات الخمسة (KPI Cards) في أعلى الصفحة: قيد التنفيذ، قيد المراجعة، جاهزة للتسليم، تم التسليم، متأخرة.
+      - فلتر الموظف المسؤول في شريط الفلاتر مع مطابقة دقيقة للأسماء.
+      - فصل أعمدة الجدول: Request ID | اسم العميل (مع الحفاظ على أسماء المستفيدين كاملة) | رقم التليفون (أيقونة اتصال) | الخدمة | الموظف | المبلغ | الحالة | التاريخ | إجراءات.
    3. تفاصيل المعاملة (Request Details Modal):
-      - تصميم Grid / Cards عصري ومنظم.
-      - ضبط التفاف النصوص الطويلة لخانة العنوان (Full width + break-words).
+      - تصميم Grid / Cards منظم لبيانات العميل وضبط التفاف العنوان بالكامل.
       - زرار الإيقاف "Under Review" مع أيقونة ⏸.
-      - شريط مراحل التنفيذ (Modern Stepper / Progress Tracker).
+      - شريط مراحل التنفيذ المودرن (Stepper).
    4. سجل التغييرات الموحد (Change History):
-      - دمج السجل الزمني وسجل المتغيرات في واجهة موحدة تطابق التصميم.
+      - نافذة السجل الزمني الكامل (p51OpenTimelineModal) بتصميم السكرين شوت بالضبط.
       - تجميع بالتاريخ (Date Grouping) من الأحدث للأقدم.
-      - أفاتار الأحرف الأولى (DM, AG, HO, EA) + اسم الموظف + شارة القسم (Gov, Accounting, Sales) + التوقيت.
+      - أفاتار الأحرف الأولى (DM, AG, HO, EA) + اسم الموظف + شارة القسم (Gov, Accounting, Sales, Admin) + التوقيت.
       - تفاصيل التغييرات: اسم الحقل: القيمة القديمة ➔ القيمة الجديدة.
       - شارة Automatic للحركات التلقائية.
-      - تسجيل دقيق وشامل لأي تعديل على المعاملة.
    ===================================================================== */
 
 (function () {
@@ -31,15 +29,19 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   };
 
+  const norm = typeof normName === 'function' ? normName : function (s) {
+    return String(s || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+  };
+
   /* =========================================================================
-     0. أنماط CSS المدمجة (Tailwind-compatible & Theme Matching)
+     0. أنماط CSS المدمجة
      ========================================================================= */
   (function injectStyles() {
     if (document.getElementById('ts-modern-68-styles')) return;
     const style = document.createElement('style');
     style.id = 'ts-modern-68-styles';
     style.textContent = `
-      /* Header Modern Clock */
+      /* Header Clock */
       .ts-hdr-clock {
         display: inline-flex;
         align-items: center;
@@ -82,58 +84,200 @@
         white-space: nowrap;
       }
 
-      /* Home Info Widget */
-      .ts-home-widget {
+      /* Home Top-Left Square Widget */
+      .ts-home-top-widget {
+        display: inline-flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+        padding: 8px 14px;
+        border-radius: 14px;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 122, 61, 0.32);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+        color: #f8fafc;
+        min-width: 190px;
+        max-width: 250px;
+        backdrop-filter: blur(8px);
+      }
+      html:not(.dark) .ts-home-top-widget {
+        background: rgba(255, 255, 255, 0.85);
+        border-color: rgba(232, 89, 12, 0.3);
+        color: #1e293b;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+      }
+      .ts-topw-row {
         display: flex;
-        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+      }
+      .ts-topw-time {
+        font-size: 13.5px;
+        font-weight: 800;
+        font-family: monospace;
+        color: #ff9d6c;
+        direction: ltr;
+      }
+      html:not(.dark) .ts-topw-time {
+        color: #e8590c;
+      }
+      .ts-topw-date {
+        font-size: 11px;
+        font-weight: 700;
+        opacity: 0.9;
+        white-space: nowrap;
+      }
+      .ts-topw-weather {
+        font-size: 11px;
+        font-weight: 600;
+        color: #94a3b8;
+      }
+      html:not(.dark) .ts-topw-weather {
+        color: #64748b;
+      }
+
+      /* KPI Cards 5 Grid */
+      .ts-kpi-5-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      @media (min-width: 640px) {
+        .ts-kpi-5-grid {
+          grid-template-columns: repeat(3, 1fr);
+        }
+      }
+      @media (min-width: 1024px) {
+        .ts-kpi-5-grid {
+          grid-template-columns: repeat(5, 1fr);
+        }
+      }
+      .ts-kpi-card {
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(27, 21, 17, 0.6);
+        cursor: pointer;
+        text-align: right;
+        transition: all 0.2s ease;
+      }
+      html:not(.dark) .ts-kpi-card {
+        background: #ffffff;
+        border-color: #e2e8f0;
+      }
+      .ts-kpi-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(255, 122, 61, 0.4);
+      }
+      .ts-kpi-card.active {
+        border-color: #ff9d6c;
+        background: rgba(255, 122, 61, 0.12);
+        box-shadow: 0 0 12px rgba(255, 122, 61, 0.25);
+      }
+      .ts-kpi-title {
+        font-size: 11px;
+        font-weight: 700;
+        color: #94a3b8;
+        display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
-        padding: 12px 18px;
-        border-radius: 16px;
-        background: rgba(27, 21, 17, 0.75);
-        border: 1px solid rgba(255, 122, 61, 0.22);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-        margin-top: 12px;
-        margin-bottom: 8px;
       }
-      html:not(.dark) .ts-home-widget {
-        background: #ffffff;
-        border-color: rgba(232, 89, 12, 0.25);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+      .ts-kpi-num {
+        font-size: 22px;
+        font-weight: 800;
+        font-family: monospace;
+        margin-top: 4px;
+        color: #ffffff;
       }
-      .ts-widget-item {
+      html:not(.dark) .ts-kpi-num {
+        color: #0f172a;
+      }
+
+      /* Stepper */
+      .ts-stepper {
         display: flex;
-        align-items: center;
-        gap: 10px;
-        min-width: 140px;
+        align-items: flex-start;
+        justify-content: space-between;
+        position: relative;
+        padding: 10px 4px 4px;
+        margin: 6px 0;
       }
-      .ts-widget-icon {
-        width: 38px;
-        height: 38px;
-        border-radius: 10px;
+      .ts-stepper::before {
+        content: '';
+        position: absolute;
+        top: 22px;
+        left: 20px;
+        right: 20px;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.12);
+        z-index: 1;
+      }
+      html:not(.dark) .ts-stepper::before {
+        background: #e2e8f0;
+      }
+      .ts-step-node {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        flex: 1;
+      }
+      .ts-step-circle {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(255, 122, 61, 0.14);
-        color: #ff9d6c;
-        font-size: 15px;
-      }
-      .ts-widget-label {
         font-size: 10.5px;
+        font-weight: 800;
+        background: #1e293b;
+        border: 2px solid #475569;
         color: #94a3b8;
       }
-      .ts-widget-val {
-        font-size: 13.5px;
-        font-weight: 800;
-        color: #ffffff;
-        font-family: "IBM Plex Sans Arabic", sans-serif;
+      html:not(.dark) .ts-step-circle {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+        color: #64748b;
       }
-      html:not(.dark) .ts-widget-val {
-        color: #1e293b;
+      .ts-step-done .ts-step-circle {
+        background: #10b981;
+        border-color: #10b981;
+        color: #ffffff;
+      }
+      .ts-step-current .ts-step-circle {
+        background: #e8590c;
+        border-color: #ff9d6c;
+        color: #ffffff;
+        box-shadow: 0 0 10px rgba(232, 89, 12, 0.5);
+      }
+      .ts-step-title {
+        font-size: 10.5px;
+        font-weight: 700;
+        margin-top: 5px;
+        color: #94a3b8;
+      }
+      .ts-step-done .ts-step-title,
+      .ts-step-current .ts-step-title {
+        color: #f8fafc;
+      }
+      html:not(.dark) .ts-step-done .ts-step-title,
+      html:not(.dark) .ts-step-current .ts-step-title {
+        color: #0f172a;
+      }
+      .ts-step-time {
+        font-size: 9px;
+        color: #64748b;
+        margin-top: 2px;
+        direction: ltr;
+        font-family: monospace;
       }
 
-      /* Request Details Grid */
+      /* Details Grid */
       .ts-dtl-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -166,7 +310,6 @@
         font-weight: 700;
         font-size: 12.5px;
         color: #f8fafc;
-        word-break: break-word;
       }
       html:not(.dark) .ts-dtl-val {
         color: #0f172a;
@@ -175,90 +318,7 @@
         grid-column: 1 / -1;
       }
 
-      /* Stepper Progress Tracker */
-      .ts-stepper {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        position: relative;
-        padding: 12px 6px 6px;
-        margin: 6px 0;
-      }
-      .ts-stepper::before {
-        content: '';
-        position: absolute;
-        top: 24px;
-        left: 24px;
-        right: 24px;
-        height: 3px;
-        background: rgba(255, 255, 255, 0.12);
-        z-index: 1;
-      }
-      html:not(.dark) .ts-stepper::before {
-        background: #e2e8f0;
-      }
-      .ts-step-node {
-        position: relative;
-        z-index: 2;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-        flex: 1;
-      }
-      .ts-step-circle {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 11px;
-        font-weight: 800;
-        background: #1e293b;
-        border: 2px solid #475569;
-        color: #94a3b8;
-        transition: all 0.2s ease;
-      }
-      html:not(.dark) .ts-step-circle {
-        background: #f1f5f9;
-        border-color: #cbd5e1;
-        color: #64748b;
-      }
-      .ts-step-done .ts-step-circle {
-        background: #10b981;
-        border-color: #10b981;
-        color: #ffffff;
-      }
-      .ts-step-current .ts-step-circle {
-        background: #e8590c;
-        border-color: #ff9d6c;
-        color: #ffffff;
-        box-shadow: 0 0 10px rgba(232, 89, 12, 0.6);
-      }
-      .ts-step-title {
-        font-size: 11px;
-        font-weight: 700;
-        margin-top: 6px;
-        color: #94a3b8;
-      }
-      .ts-step-done .ts-step-title,
-      .ts-step-current .ts-step-title {
-        color: #f8fafc;
-      }
-      html:not(.dark) .ts-step-done .ts-step-title,
-      html:not(.dark) .ts-step-current .ts-step-title {
-        color: #0f172a;
-      }
-      .ts-step-time {
-        font-size: 9.5px;
-        color: #64748b;
-        margin-top: 2px;
-        direction: ltr;
-        font-family: monospace;
-      }
-
-      /* Change History Section (Exact Screenshot Match) */
+      /* Change History Layout (Exact Match to Screenshot) */
       .ts-ch-box {
         background: #ffffff;
         color: #1b1511;
@@ -291,15 +351,15 @@
       }
       .ts-ch-date-block {
         border-bottom: 1px solid #edf2f7;
-        padding-bottom: 12px;
+        padding-bottom: 10px;
       }
       html.dark .ts-ch-date-block {
         border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       }
       .ts-ch-date-title {
-        font-size: 11.5px;
+        font-size: 12px;
         font-weight: 700;
-        padding: 10px 18px 6px;
+        padding: 10px 18px 4px;
         color: #475569;
         direction: ltr;
         text-align: right;
@@ -312,11 +372,10 @@
         align-items: flex-start;
         gap: 12px;
         padding: 10px 18px;
-        position: relative;
       }
       .ts-ch-avatar {
-        width: 32px;
-        height: 32px;
+        width: 34px;
+        height: 34px;
         border-radius: 50%;
         background: #e2e8f0;
         color: #334155;
@@ -344,7 +403,7 @@
         margin-bottom: 3px;
       }
       .ts-ch-user {
-        font-size: 12.5px;
+        font-size: 13px;
         font-weight: 800;
         color: #0f172a;
         display: flex;
@@ -375,7 +434,7 @@
         color: #86198f;
       }
       .ts-ch-time {
-        font-size: 11.5px;
+        font-size: 12px;
         color: #64748b;
         font-family: monospace;
         direction: ltr;
@@ -390,7 +449,7 @@
         color: #cbd5e1;
       }
       .ts-ch-row {
-        font-size: 11.5px;
+        font-size: 12px;
         color: #64748b;
         margin-bottom: 2px;
         line-height: 1.5;
@@ -409,9 +468,9 @@
         color: #f1f5f9;
       }
       .ts-ch-auto {
-        font-size: 9.5px;
+        font-size: 10px;
         font-weight: 800;
-        padding: 0px 5px;
+        padding: 1px 6px;
         border-radius: 4px;
         background: #f1f5f9;
         color: #475569;
@@ -436,66 +495,40 @@
   let lastHomeRenderTime = 0;
   let homeRenderQueued = false;
 
-  // دالة ذكية لتحديث شجرة الـ DOM بدون تدمير العناصر وبدون رمشة للصور
   function patchDomTree(target, source) {
     if (!target || !source) return;
-
-    // تحديث الخصائص والنصوص إذا كانت نفس نوع العنصر
     if (target.nodeType === Node.TEXT_NODE && source.nodeType === Node.TEXT_NODE) {
-      if (target.nodeValue !== source.nodeValue) {
-        target.nodeValue = source.nodeValue;
-      }
+      if (target.nodeValue !== source.nodeValue) target.nodeValue = source.nodeValue;
       return;
     }
-
     if (target.nodeType === Node.ELEMENT_NODE && source.nodeType === Node.ELEMENT_NODE) {
-      // إذا كان العنصر نفسه tag مختلف: استبدله بالكامل
       if (target.tagName !== source.tagName) {
         target.replaceWith(source.cloneNode(true));
         return;
       }
-
-      // الحفاظ على عناصر الصور والـ inputs من التدمير
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
         if (target.value !== source.value) target.value = source.value;
       }
-
-      // مزامنة الـ attributes
       const targetAttrs = Array.from(target.attributes);
       const sourceAttrs = Array.from(source.attributes);
-
       for (const attr of sourceAttrs) {
-        if (target.getAttribute(attr.name) !== attr.value) {
-          target.setAttribute(attr.name, attr.value);
-        }
+        if (target.getAttribute(attr.name) !== attr.value) target.setAttribute(attr.name, attr.value);
       }
       for (const attr of targetAttrs) {
-        if (!source.hasAttribute(attr.name)) {
-          target.removeAttribute(attr.name);
-        }
+        if (!source.hasAttribute(attr.name)) target.removeAttribute(attr.name);
       }
-
-      // مقارنة الأطفال ومزامنتهم
       const tChildren = Array.from(target.childNodes);
       const sChildren = Array.from(source.childNodes);
-
       const maxLen = Math.max(tChildren.length, sChildren.length);
       for (let i = 0; i < maxLen; i++) {
-        const tChild = tChildren[i];
-        const sChild = sChildren[i];
-
-        if (!tChild && sChild) {
-          target.appendChild(sChild.cloneNode(true));
-        } else if (tChild && !sChild) {
-          tChild.remove();
-        } else if (tChild && sChild) {
-          patchDomTree(tChild, sChild);
-        }
+        const tChild = tChildren[i], sChild = sChildren[i];
+        if (!tChild && sChild) target.appendChild(sChild.cloneNode(true));
+        else if (tChild && !sChild) tChild.remove();
+        else if (tChild && sChild) patchDomTree(tChild, sChild);
       }
     }
   }
 
-  // لف دالة renderHomeTab لمنع الرمشة والتحديثات المفرطة في الخلفية
   const origRenderHome = window.renderHomeTab;
   if (typeof origRenderHome === 'function') {
     window.renderHomeTab = function (isUserAction) {
@@ -503,7 +536,6 @@
       if (!box) return origRenderHome.apply(this, arguments);
 
       const now = Date.now();
-      // لو نداء خلفي متكرر خلال أقل من 10 ثوانٍ والمستخدم مش متفاعل الآن، أجله
       if (!isUserAction && now - lastHomeRenderTime < 10000) {
         if (!homeRenderQueued) {
           homeRenderQueued = true;
@@ -516,35 +548,29 @@
       }
       lastHomeRenderTime = now;
 
-      // لو الصندوق لسه فاضي، ارسم عادي
       if (!box.children.length) {
         const r = origRenderHome.apply(this, arguments);
-        injectHomeWidget();
+        injectTopLeftHomeWidget();
         return r;
       }
 
-      // لو مرسوم قبل كده: نبني في الذاكرة ونعمل Patch ناعم في مكانه
       try {
         const offscreen = document.createElement('div');
         offscreen.id = 'tab-home';
-        // مؤقتاً نبدل الصندوق لعنصر الذاكرة ونشغل الرسم الأصلي
         const tempParent = box.parentNode;
         const dummy = document.createElement('div');
-        dummy.id = 'tab-home-dummy';
         tempParent.replaceChild(dummy, box);
         document.body.appendChild(offscreen);
 
         origRenderHome.apply(this, arguments);
 
-        // نرجع الصندوق الحقيقي ونعمل patch
         offscreen.remove();
         tempParent.replaceChild(box, dummy);
         patchDomTree(box, offscreen);
-        injectHomeWidget();
+        injectTopLeftHomeWidget();
       } catch (err) {
-        // إذا حدث أي استثناء، نرجع للرسم المباشر الآمن
         origRenderHome.apply(this, arguments);
-        injectHomeWidget();
+        injectTopLeftHomeWidget();
       }
     };
   }
@@ -552,7 +578,6 @@
   /* =========================================================================
      2. تطوير الساعة في الهيدر (Modern Header Clock)
      ========================================================================= */
-  let headerClockTimer = null;
   function updateModernHeaderClock() {
     const slot = document.getElementById('hdr-clock-slot');
     if (!slot) return;
@@ -590,16 +615,10 @@
       </div>
     `;
   }
-
-  function startHeaderClock() {
-    if (headerClockTimer) clearInterval(headerClockTimer);
-    updateModernHeaderClock();
-    headerClockTimer = setInterval(updateModernHeaderClock, 1000);
-  }
-  startHeaderClock();
+  setInterval(updateModernHeaderClock, 1000);
 
   /* =========================================================================
-     3. إضافة كارت معلومات (Widget) في الرئيسية: ساعة + تاريخ + درجة حرارة
+     3. كارت المعلومات (Widget) في الجزء الشمال الفاضي فوق بالرئيسية
      ========================================================================= */
   let cairoWeatherCache = null;
   async function fetchCairoWeather() {
@@ -607,23 +626,18 @@
       const cached = localStorage.getItem('ts_cairo_weather');
       if (cached) {
         const j = JSON.parse(cached);
-        if (Date.now() - j.t < 1800000) { // 30 دقيقة
-          cairoWeatherCache = j;
-          return;
-        }
+        if (Date.now() - j.t < 1800000) { cairoWeatherCache = j; return; }
       }
     } catch (e) {}
 
     try {
       const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=30.0444&longitude=31.2357&current=temperature_2m,weather_code&timezone=Africa%2FCairo');
-      if (!res.ok) throw new Error('weather fetch failed');
+      if (!res.ok) throw new Error('weather error');
       const data = await res.json();
-      const temp = Math.round(data.current.temperature_2m);
-      const code = data.current.weather_code;
-      cairoWeatherCache = { temp, code, t: Date.now() };
+      cairoWeatherCache = { temp: Math.round(data.current.temperature_2m), code: data.current.weather_code, t: Date.now() };
       localStorage.setItem('ts_cairo_weather', JSON.stringify(cairoWeatherCache));
     } catch (e) {
-      if (!cairoWeatherCache) cairoWeatherCache = { temp: 24, code: 0, t: Date.now() };
+      if (!cairoWeatherCache) cairoWeatherCache = { temp: 26, code: 1, t: Date.now() };
     }
   }
   fetchCairoWeather();
@@ -632,147 +646,139 @@
     if (code === 0) return { text: 'مشمس', icon: 'fa-sun text-amber-400' };
     if (code <= 3) return { text: 'غائم جزئياً', icon: 'fa-cloud-sun text-amber-300' };
     if (code <= 48) return { text: 'ضبابي', icon: 'fa-smog text-slate-300' };
-    if (code <= 67) return { text: 'ماطر', icon: 'fa-cloud-rain text-sky-400' };
-    return { text: 'معتدل', icon: 'fa-sun text-amber-400' };
+    return { text: 'معتدل', icon: 'fa-cloud text-amber-400' };
   }
 
-  function injectHomeWidget() {
+  function injectTopLeftHomeWidget() {
     const box = document.getElementById('tab-home');
     if (!box) return;
-    const hero = box.querySelector('.hm-hero');
-    if (!hero) return;
+    const heroFlex = box.querySelector('.hm-hero > div.flex.justify-between, .hm-hero > div.flex');
+    if (!heroFlex) return;
 
-    let widget = box.querySelector('#ts-home-main-widget');
+    let widget = heroFlex.querySelector('#ts-home-top-widget');
     if (!widget) {
       widget = document.createElement('div');
-      widget.id = 'ts-home-main-widget';
-      widget.className = 'ts-home-widget';
-      hero.insertAdjacentElement('afterend', widget);
+      widget.id = 'ts-home-top-widget';
+      widget.className = 'ts-home-top-widget';
+      // وضعه في الجزء الشمال (الطرف المقابل للترحيب)
+      heroFlex.appendChild(widget);
     }
 
     const d = new Date();
     const fT = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit', hour12: true });
     const fD = new Intl.DateTimeFormat('ar-EG', { timeZone: 'Africa/Cairo', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-
-    const wData = cairoWeatherCache || { temp: 24, code: 0 };
+    const wData = cairoWeatherCache || { temp: 26, code: 1 };
     const wInfo = getWeatherDesc(wData.code);
 
     widget.innerHTML = `
-      <div class="ts-widget-item">
-        <div class="ts-widget-icon"><i class="fa-solid fa-clock"></i></div>
-        <div>
-          <div class="ts-widget-label">الساعة الآن (توقيت القاهرة)</div>
-          <div class="ts-widget-val font-mono" dir="ltr">${fT.format(d)}</div>
-        </div>
+      <div class="ts-topw-row">
+        <i class="fa-solid fa-clock text-amber-400 text-xs"></i>
+        <span class="ts-topw-time">${fT.format(d)}</span>
       </div>
-      <div class="ts-widget-item">
-        <div class="ts-widget-icon"><i class="fa-solid fa-calendar-day"></i></div>
-        <div>
-          <div class="ts-widget-label">تاريخ اليوم</div>
-          <div class="ts-widget-val">${eh(fD.format(d))}</div>
-        </div>
+      <div class="ts-topw-row">
+        <i class="fa-solid fa-calendar-day text-amber-500 text-xs"></i>
+        <span class="ts-topw-date">${eh(fD.format(d))}</span>
       </div>
-      <div class="ts-widget-item">
-        <div class="ts-widget-icon"><i class="fa-solid ${wInfo.icon}"></i></div>
-        <div>
-          <div class="ts-widget-label">الطقس في القاهرة</div>
-          <div class="ts-widget-val font-mono">${wData.temp}°C · <span class="font-sans text-xs font-semibold">${wInfo.text}</span></div>
-        </div>
+      <div class="ts-topw-row">
+        <i class="fa-solid ${wInfo.icon} text-xs"></i>
+        <span class="ts-topw-weather">${wData.temp}°C · ${wInfo.text} (القاهرة)</span>
       </div>
     `;
   }
 
   /* =========================================================================
-     4. شاشة المعاملات: كروت الإحصائيات (KPI Cards) + فلتر الموظف + فصل الأعمدة
+     4. شاشة المعاملات: كروت الحالات الخمسة + فلتر الموظف + فصل الأعمدة
      ========================================================================= */
   window.__txEmployeeFilter = 'all';
 
-  // لف renderRecentRequests لتطبيق فلتر الموظف وفصل الأعمدة بدقة
-  const origRenderRecent = window.renderRecentRequests;
-  if (typeof origRenderRecent === 'function') {
-    window.renderRecentRequests = function () {
-      // 1. تحديث كروت الإحصائيات الأربعة العلوية
-      updateTxKpiCards();
+  // تحديث كروت الحالات الخمسة في أعلى الصفحة
+  function renderTxStatusKpiCards() {
+    const tabTx = document.getElementById('tab-tx');
+    if (!tabTx) return;
 
-      // 2. تطبيق فلتر الموظف على القائمة
-      const origFilter = window.__recentFilter;
-      window.__recentFilter = function (list) {
-        let res = typeof origFilter === 'function' ? origFilter(list) : list;
-        if (window.__txEmployeeFilter && window.__txEmployeeFilter !== 'all') {
-          const target = window.__txEmployeeFilter.trim().toLowerCase();
-          res = res.filter(o => (o.employee || '').trim().toLowerCase() === target);
-        }
-        return res;
-      };
+    // استبدال أو إخفاء الشبكة القديمة ووضع كروت الحالات الخمسة المحددة
+    let kpiWrap = document.getElementById('ts-tx-kpi-5-container');
+    if (!kpiWrap) {
+      const oldGrid = tabTx.querySelector('.grid.grid-cols-2.lg\\:grid-cols-4');
+      if (oldGrid) oldGrid.style.display = 'none'; // إخفاء القديم
 
-      // 3. استدعاء الدالة الأصلية لحساب الفلاتر والتقسيم
-      origRenderRecent.apply(this, arguments);
+      kpiWrap = document.createElement('div');
+      kpiWrap.id = 'ts-tx-kpi-5-container';
+      kpiWrap.className = 'ts-kpi-5-grid';
 
-      // 4. تعديل رأس الجدول والصفوف لفصل الأعمدة وتعيين أيقونة الهاتف
-      adjustTransactionsTableColumns();
-
-      // 5. زرع فلتر الموظف في شريط الفلاتر
-      injectEmployeeFilterControl();
-    };
-  }
-
-  function updateTxKpiCards() {
-    try {
-      const today = new Date().toLocaleDateString('en-CA');
-      const openOrders = (window.groupedOrders || []).filter(o => typeof getOrderStatus === 'function' && getOrderStatus(o) !== 'Delivered');
-      const lateOrders = (window.groupedOrders || []).filter(o => typeof isOrderLate === 'function' && isOrderLate(o));
-      const readyOrders = (window.groupedOrders || []).filter(o => typeof getOrderStatus === 'function' && getOrderStatus(o) === 'Complete');
-      const deliveredToday = (window.groupedOrders || []).filter(o => {
-        const st = typeof getOrderStatus === 'function' ? getOrderStatus(o) : '';
-        const d = typeof dayKey === 'function' ? dayKey(o.delivered_date || o.received_at || o.created_at) : '';
-        return st === 'Delivered' && d === today;
-      });
-
-      const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
-      setVal('tx-kpi-open', openOrders.length);
-      setVal('tx-kpi-late', lateOrders.length);
-      setVal('tx-kpi-ready', readyOrders.length);
-      setVal('tx-kpi-today', deliveredToday.length);
-
-      // تحديث مسمى الكارت الرابع ليصبح "سُلّمت اليوم" كما بالصورة
-      const todayCardTitle = document.querySelector('#tx-kpi-today')?.parentElement?.querySelector('span');
-      if (todayCardTitle) todayCardTitle.textContent = 'سُلّمت اليوم';
-    } catch (e) {
-      console.warn('tx kpi update error', e);
+      if (oldGrid) oldGrid.insertAdjacentElement('afterend', kpiWrap);
+      else tabTx.prepend(kpiWrap);
     }
+
+    const orders = window.groupedOrders || [];
+    let inProg = 0, underRev = 0, complete = 0, delivered = 0, late = 0;
+
+    orders.forEach(o => {
+      const st = typeof getOrderStatus === 'function' ? getOrderStatus(o) : '';
+      if (st === 'In Progress') inProg++;
+      else if (st === 'Under Review') underRev++;
+      else if (st === 'Complete') complete++;
+      else if (st === 'Delivered') delivered++;
+
+      if (typeof isOrderLate === 'function' && isOrderLate(o)) late++;
+    });
+
+    const activeFilter = window.txStatusFilter || 'all';
+
+    const cards = [
+      { id: 'In Progress', title: 'قيد التنفيذ', count: inProg, icon: 'fa-spinner text-amber-400', cls: activeFilter === 'In Progress' ? 'active' : '' },
+      { id: 'Under Review', title: 'Under Review', count: underRev, icon: 'fa-pause text-orange-500', cls: activeFilter === 'Under Review' ? 'active' : '' },
+      { id: 'Complete', title: 'جاهزة للتسليم', count: complete, icon: 'fa-circle-check text-teal-400', cls: activeFilter === 'Complete' ? 'active' : '' },
+      { id: 'Delivered', title: 'تم التسليم', count: delivered, icon: 'fa-truck-fast text-emerald-400', cls: activeFilter === 'Delivered' ? 'active' : '' },
+      { id: 'late', title: 'متأخرة', count: late, icon: 'fa-triangle-exclamation text-rose-500', cls: activeFilter === 'late' ? 'active' : '' }
+    ];
+
+    kpiWrap.innerHTML = cards.map(c => `
+      <div onclick="setTxStatusFilter('${c.id}')" class="ts-kpi-card ${c.cls}">
+        <div class="ts-kpi-title">
+          <span>${c.title}</span>
+          <i class="fa-solid ${c.icon}"></i>
+        </div>
+        <div class="ts-kpi-num">${c.count}</div>
+      </div>
+    `).join('');
   }
 
+  // فلتر الموظف المسؤول
   function injectEmployeeFilterControl() {
-    const bar = document.querySelector('#tab-tx .card .flex.items-center');
-    if (!bar || document.getElementById('tx-emp-filter-select')) return;
+    const cardBar = document.querySelector('#tab-tx .card .flex.flex-wrap.items-center.justify-between');
+    if (!cardBar || document.getElementById('tx-emp-filter-select')) return;
 
     const wrap = document.createElement('div');
     wrap.id = 'tx-emp-filter-wrap';
-    wrap.className = 'inline-flex items-center gap-1.5 ms-2';
+    wrap.className = 'inline-flex items-center gap-1.5 ms-auto shrink-0';
 
-    // استخراج أسماء الموظفين
-    const employees = new Set();
+    const empSet = new Set();
     if (Array.isArray(window.profiles)) {
-      window.profiles.forEach(p => { if (p.full_name) employees.add(p.full_name.trim()); });
+      window.profiles.forEach(p => { if (p.full_name) empSet.add(p.full_name.trim()); });
     }
     if (Array.isArray(window.groupedOrders)) {
-      window.groupedOrders.forEach(o => { if (o.employee) employees.add(o.employee.trim()); });
+      window.groupedOrders.forEach(o => { if (o.employee) empSet.add(o.employee.trim()); });
     }
 
-    let opts = '<option value="all">كل الموظفين</option>';
-    Array.from(employees).sort().forEach(emp => {
+    let opts = '<option value="all">كل الموظفين (الكل)</option>';
+    Array.from(empSet).sort().forEach(emp => {
       const sel = window.__txEmployeeFilter === emp ? ' selected' : '';
       opts += `<option value="${eh(emp)}"${sel}>${eh(emp)}</option>`;
     });
 
     wrap.innerHTML = `
-      <span class="text-xs text-slate-400 font-semibold"><i class="fa-solid fa-user-tie ms-1"></i>الموظف:</span>
-      <select id="tx-emp-filter-select" class="field !py-1 !px-2 text-xs font-semibold rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-        ${opts}
-      </select>
+      <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+        <i class="fa-solid fa-user-tie text-slate-400"></i>
+        <span>الموظف:</span>
+        <select id="tx-emp-filter-select" class="bg-transparent border-0 font-bold text-ink dark:text-white focus:outline-none">
+          ${opts}
+        </select>
+      </div>
     `;
 
-    bar.appendChild(wrap);
+    // وضعه بجانب مربع البحث
+    cardBar.insertBefore(wrap, cardBar.children[1] || null);
 
     const selEl = wrap.querySelector('#tx-emp-filter-select');
     selEl.addEventListener('change', function () {
@@ -781,14 +787,14 @@
     });
   }
 
-  function adjustTransactionsTableColumns() {
+  // فصل أعمدة الجدول مع الحفاظ التام على أسماء المستفيدين
+  function formatSeparatedColumns() {
     const table = document.querySelector('#tab-tx table');
     if (!table) return;
 
-    // 1. تحديث Thead ليحتوي على عمود مستقل لـ Request ID، اسم العميل، ورقم التليفون
+    // 1. تحديث thead إلى 9 أعمدة
     const theadTr = table.querySelector('thead tr');
-    if (theadTr && !theadTr.dataset.separatedCols) {
-      theadTr.dataset.separatedCols = '1';
+    if (theadTr && theadTr.children.length === 8) {
       theadTr.innerHTML = `
         <th class="th px-3.5" dir="ltr">Request ID</th>
         <th class="th">اسم العميل</th>
@@ -802,41 +808,34 @@
       `;
     }
 
-    // 2. تحديث Tbody لتقسيم البيانات واستخدام أيقونة الاتصال بدل الواتساب
+    // 2. تحديث صفوف tbody
     const tbody = table.querySelector('tbody#recent-table-body');
     if (!tbody) return;
 
     Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
       const cells = tr.children;
-      // إذا كان الصف غير مقسم بعد (8 أعمدة بدل 9)
       if (cells.length === 8) {
-        const idCell = cells[0];
         const clientCell = cells[1];
         const svcCell = cells[2];
-        const empCell = cells[3];
-        const amountCell = cells[4];
-        const statusCell = cells[5];
-        const dateCell = cells[6];
-        const actionCell = cells[7];
 
-        // استخراج اسم العميل والتليفون
-        const clientBtn = clientCell.querySelector('button');
-        const clientName = clientBtn ? clientBtn.textContent.trim() : clientCell.textContent.trim();
-        const phoneDiv = clientCell.querySelector('.rc-phone-pill, span');
+        // استخراج التليفون فقط من خانة العميل دون المساس باسم العميل أو المستفيدين
+        const phonePill = clientCell.querySelector('.rc-phone-pill');
         let phoneText = '';
-        if (phoneDiv) {
-          const match = phoneDiv.textContent.match(/\d{9,15}/);
+        if (phonePill) {
+          const match = phonePill.textContent.match(/\d{9,15}/);
           if (match) phoneText = match[0];
+          phonePill.remove(); // شيل رقم التليفون فقط من خانة العميل ليبقى الاسم والمستفيدين
         }
 
-        // إنشاء عمود التليفون الجديد مع أيقونة اتصال
+        // إنشاء عمود التليفون المستقل مع أيقونة اتصال
         const phoneTd = document.createElement('td');
         phoneTd.className = 'px-3 py-3 whitespace-nowrap text-xs';
         phoneTd.setAttribute('dir', 'ltr');
+
         if (phoneText) {
           phoneTd.innerHTML = `
-            <a href="tel:${eh(phoneText)}" onclick="event.stopPropagation()" class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-300 border border-sky-200 dark:border-sky-800 font-mono hover:bg-sky-100 transition" title="اتصال">
-              <i class="fa-solid fa-phone text-[10px]"></i>
+            <a href="tel:${eh(phoneText)}" onclick="event.stopPropagation()" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-300 border border-sky-200 dark:border-sky-800 font-mono text-xs hover:bg-sky-100 transition" title="اتصال هاتفي">
+              <i class="fa-solid fa-phone text-[11px]"></i>
               <span>${eh(phoneText)}</span>
             </a>
           `;
@@ -844,17 +843,30 @@
           phoneTd.innerHTML = '<span class="text-slate-400">—</span>';
         }
 
-        // تنظيف خانة العميل لتعرض الاسم فقط
-        clientCell.innerHTML = `<span class="font-bold text-ink dark:text-white leading-snug">${eh(clientName)}</span>`;
-
-        // إدراج خانة التليفون بعد خانة اسم العميل
         tr.insertBefore(phoneTd, svcCell);
       }
     });
   }
 
+  // فلتر القائمة قبل العرض لتطبيق فلتر الموظف
+  window.__recentFilter = function (list) {
+    if (!window.__txEmployeeFilter || window.__txEmployeeFilter === 'all') return list;
+    const target = norm(window.__txEmployeeFilter);
+    return list.filter(o => norm(o.employee || '') === target || String(o.employee || '').toLowerCase().includes(target));
+  };
+
+  const origRenderRecent = window.renderRecentRequests;
+  if (typeof origRenderRecent === 'function') {
+    window.renderRecentRequests = function () {
+      renderTxStatusKpiCards();
+      origRenderRecent.apply(this, arguments);
+      formatSeparatedColumns();
+      injectEmployeeFilterControl();
+    };
+  }
+
   /* =========================================================================
-     5. كارت تفاصيل المعاملة (Grid UI + التواء النصوص + Stepper + Under Review)
+     5. كارت تفاصيل المعاملة: Grid UI + Stepper + Under Review Button
      ========================================================================= */
   const origOpenTxModal = window.openTxModal;
   if (typeof origOpenTxModal === 'function') {
@@ -863,128 +875,69 @@
 
       const o = (window.groupedOrders || []).find(x => String(x.transaction_id) === String(tx));
       if (!o) return;
-
       const modalBody = document.getElementById('tx-modal-body');
       if (!modalBody) return;
 
-      // 1. إعادة تصميم قسم تفاصيل العميل إلى Grid / Cards مريحة وضبط التفاف العنوان
-      reformatModalDetailsGrid(o, modalBody);
+      // 1. Grid لبيانات المعاملة مع ضبط التفاف العنوان
+      const oldGrid = modalBody.querySelector('.grid.grid-cols-2.sm\\:grid-cols-4');
+      if (oldGrid && !oldGrid.dataset.formatted68) {
+        oldGrid.dataset.formatted68 = '1';
+        oldGrid.className = 'ts-dtl-grid';
+        oldGrid.innerHTML = `
+          <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-hashtag"></i><span>Request ID</span></div><div class="ts-dtl-val font-mono" dir="ltr">${eh(o.transaction_id)}</div></div>
+          <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-user"></i><span>العميل</span></div><div class="ts-dtl-val">${eh(o.client_name || '—')}</div></div>
+          <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-phone"></i><span>الهاتف</span></div><div class="ts-dtl-val font-mono" dir="ltr">${o.phone ? `<a href="tel:${eh(o.phone)}" class="text-sky-500 hover:underline"><i class="fa-solid fa-phone text-xs ms-1"></i>${eh(o.phone)}</a>` : '—'}</div></div>
+          <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-credit-card"></i><span>طريقة الدفع</span></div><div class="ts-dtl-val">${eh(o.payment_method || '—')}</div></div>
+          <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-user-tie"></i><span>الموظف المسؤول</span></div><div class="ts-dtl-val">${eh(o.employee || '—')}</div></div>
+          <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-motorcycle"></i><span>مندوب الاستلام</span></div><div class="ts-dtl-val">${eh(o.receiver || 'العميل شخصياً')}</div></div>
+          <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-calendar"></i><span>تاريخ الاستلام</span></div><div class="ts-dtl-val font-mono">${eh(typeof formatDateTime === 'function' ? formatDateTime(o.received_at || o.created_at) : (o.received_at || '—'))}</div></div>
+          <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-receipt"></i><span>رقم الإيصال</span></div><div class="ts-dtl-val font-mono">${eh(o.rn_nm || '—')}</div></div>
+          <div class="ts-dtl-card ts-dtl-card-wide"><div class="ts-dtl-label"><i class="fa-solid fa-location-dot text-rose-500"></i><span>العنوان</span></div><div class="ts-dtl-val whitespace-normal leading-relaxed text-xs">${eh(o.address || 'لم يتم تسجيل عنوان')}</div></div>
+        `;
+      }
 
-      // 2. تحديث شريط مراحل التنفيذ (Modern Stepper)
-      reformatModalStepper(o, modalBody);
+      // 2. Stepper لمراحل التنفيذ
+      const stepperSlot = modalBody.querySelector('#tx-modal-stepper-slot');
+      if (stepperSlot && !stepperSlot.querySelector('.ts-stepper')) {
+        const st = typeof getOrderStatus === 'function' ? getOrderStatus(o) : 'In Progress';
+        const steps = [
+          { title: 'استلام المعاملة', icon: 'fa-inbox', done: true, time: o.received_at || o.created_at },
+          { title: 'قيد التنفيذ', icon: 'fa-gears', done: true, current: st === 'In Progress' },
+          { title: 'المراجعة', icon: 'fa-magnifying-glass', done: st === 'Under Review', current: st === 'Under Review' },
+          { title: 'جاهز للتسليم', icon: 'fa-circle-check', done: st === 'Complete' || st === 'Delivered', current: st === 'Complete' },
+          { title: 'تم التسليم', icon: 'fa-truck-fast', done: st === 'Delivered', current: st === 'Delivered', time: o.delivered_date }
+        ];
 
-      // 3. بناء ودمج سجل التغييرات الموحد (Change History)
-      mountUnifiedChangeHistory(tx, modalBody);
+        stepperSlot.insertAdjacentHTML('afterend', `
+          <div class="card p-3 my-2">
+            <div class="text-xs font-bold text-slate-400 mb-1 flex items-center justify-between">
+              <span><i class="fa-solid fa-bars-progress text-amber-500 ms-1"></i>مراحل إنجاز المعاملة</span>
+            </div>
+            <div class="ts-stepper">
+              ${steps.map(s => `
+                <div class="ts-step-node ${s.done ? 'ts-step-done' : (s.current ? 'ts-step-current' : '')}">
+                  <div class="ts-step-circle"><i class="fa-solid ${s.done ? 'fa-check' : s.icon}"></i></div>
+                  <div class="ts-step-title">${s.title}</div>
+                  ${s.time ? `<div class="ts-step-time">${eh(String(s.time).slice(5, 16))}</div>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `);
+      }
 
-      // 4. التأكد من زرار Under Review
-      decorateUnderReviewButtons();
+      // 3. تعديل زرار الوقف لـ Under Review
+      modalBody.querySelectorAll('[data-svc-card-id] .lp-btn').forEach(b => {
+        if (!b.classList.contains('lp-resume')) {
+          b.innerHTML = '<span>⏸</span><span>Under Review</span>';
+        }
+      });
     };
   }
 
-  function reformatModalDetailsGrid(o, modalBody) {
-    const oldGrid = modalBody.querySelector('.grid.grid-cols-2.sm\\:grid-cols-4');
-    if (!oldGrid) return;
-
-    const cards = [
-      { label: 'Request ID', val: `<span class="font-mono" dir="ltr">${eh(o.transaction_id)}</span>`, ic: 'fa-hashtag' },
-      { label: 'العميل', val: eh(o.client_name || '—'), ic: 'fa-user' },
-      {
-        label: 'الهاتف',
-        val: o.phone
-          ? `<a href="tel:${eh(o.phone)}" class="text-sky-500 hover:underline font-mono inline-flex items-center gap-1.5"><i class="fa-solid fa-phone text-xs"></i><span>${eh(o.phone)}</span></a>`
-          : '—',
-        ic: 'fa-phone'
-      },
-      { label: 'طريقة الدفع', val: eh(o.payment_method || '—'), ic: 'fa-credit-card' },
-      { label: 'الموظف المسؤول', val: eh(o.employee || '—'), ic: 'fa-user-tie' },
-      { label: 'مندوب الاستلام', val: eh(o.receiver || 'العميل شخصياً'), ic: 'fa-motorcycle' },
-      { label: 'تاريخ الاستلام', val: eh(typeof formatDateTime === 'function' ? formatDateTime(o.received_at || o.created_at) : (o.received_at || '—')), ic: 'fa-calendar' },
-      { label: 'رقم الإيصال', val: eh(o.rn_nm || '—'), ic: 'fa-receipt' },
-      {
-        label: 'العنوان',
-        val: eh(o.address || 'لم يتم تسجيل عنوان للعميل'),
-        ic: 'fa-location-dot text-rose-500',
-        wide: true
-      }
-    ];
-
-    const gridHtml = `
-      <div class="ts-dtl-grid">
-        ${cards.map(c => `
-          <div class="ts-dtl-card ${c.wide ? 'ts-dtl-card-wide' : ''}">
-            <div class="ts-dtl-label"><i class="fa-solid ${c.ic}"></i><span>${c.label}</span></div>
-            <div class="ts-dtl-val ${c.wide ? 'whitespace-normal leading-relaxed' : 'truncate'}">${c.val}</div>
-          </div>
-        `).join('')}
-      </div>
-    `;
-
-    oldGrid.outerHTML = gridHtml;
-  }
-
-  function reformatModalStepper(o, modalBody) {
-    const stepperSlot = modalBody.querySelector('#tx-modal-stepper-slot');
-    if (!stepperSlot) return;
-
-    const st = typeof getOrderStatus === 'function' ? getOrderStatus(o) : 'In Progress';
-    const isLate = typeof isOrderLate === 'function' ? isOrderLate(o) : false;
-
-    const steps = [
-      { key: 'received', title: 'استلام المعاملة', icon: 'fa-inbox', done: true, time: o.received_at || o.created_at },
-      { key: 'in_progress', title: 'قيد التنفيذ', icon: 'fa-gears', done: true, time: o.received_at },
-      { key: 'under_review', title: 'المراجعة', icon: 'fa-magnifying-glass', done: st === 'Under Review', current: st === 'Under Review', alert: st === 'Under Review' },
-      { key: 'complete', title: 'جاهز للتسليم', icon: 'fa-circle-check', done: st === 'Complete' || st === 'Delivered', current: st === 'Complete' },
-      { key: 'delivered', title: 'تم التسليم', icon: 'fa-truck-fast', done: st === 'Delivered', current: st === 'Delivered', time: o.delivered_date }
-    ];
-
-    let stepperHtml = `
-      <div class="card p-3.5 mb-2">
-        <div class="flex items-center justify-between text-xs font-bold text-slate-400 mb-1">
-          <span><i class="fa-solid fa-bars-progress text-amber-500 ms-1"></i>مراحل إنجاز المعاملة</span>
-          ${isLate ? '<span class="text-rose-500 font-bold"><i class="fa-solid fa-triangle-exclamation ms-1"></i>متأخرة عن الموعد</span>' : ''}
-        </div>
-        <div class="ts-stepper">
-          ${steps.map((s, idx) => {
-            const cls = s.done ? 'ts-step-done' : (s.current ? 'ts-step-current' : '');
-            return `
-              <div class="ts-step-node ${cls}">
-                <div class="ts-step-circle">
-                  <i class="fa-solid ${s.done ? 'fa-check' : s.icon}"></i>
-                </div>
-                <div class="ts-step-title">${s.title}</div>
-                ${s.time ? `<div class="ts-step-time">${eh(String(s.time).slice(5, 16))}</div>` : ''}
-              </div>
-            `;
-          }).join('')}
-        </div>
-      </div>
-    `;
-
-    stepperSlot.insertAdjacentHTML('afterend', stepperHtml);
-  }
-
-  function decorateUnderReviewButtons() {
-    document.querySelectorAll('#tx-modal-body [data-svc-card-id]').forEach(function (card) {
-      const b = card.querySelector('.lp-btn');
-      if (b && !b.dataset.customized) {
-        b.dataset.customized = '1';
-        const isPaused = b.classList.contains('lp-resume');
-        b.innerHTML = isPaused
-          ? '<i class="fa-solid fa-play"></i><span>استئناف</span>'
-          : '<span>⏸</span><span>Under Review</span>';
-      }
-    });
-  }
-
   /* =========================================================================
-     6. سجل التغييرات الموحد (Unified Change History)
+     6. سجل التغييرات الموحد (Change History Modal & Unified Display)
      ========================================================================= */
-  // إخفاء الـ details القديم لسجل التغييرات لمنع التكرار
-  const hideOldAuditBox = () => {
-    const oldBox = document.getElementById('aud-box');
-    if (oldBox) oldBox.style.display = 'none';
-  };
-
   function getInitials(name) {
     if (!name) return '??';
     const n = String(name).trim();
@@ -1018,28 +971,41 @@
     return '<span class="ts-ch-dept">Gov</span>';
   }
 
-  async function mountUnifiedChangeHistory(tx, modalBody) {
-    hideOldAuditBox();
+  // الدالة الأساسية لفتح نافذة سجل التغييرات الموحد (مطابقة تماماً للسكرين شوت)
+  window.p51OpenTimelineModal = async function (tx) {
+    if (!tx) return;
 
-    let chBox = document.getElementById('ts-unified-change-history');
-    if (!chBox) {
-      chBox = document.createElement('div');
-      chBox.id = 'ts-unified-change-history';
-      chBox.className = 'ts-ch-box';
-      modalBody.appendChild(chBox);
-    }
+    // إزالة أي نافذة سابقة
+    const old = document.getElementById('ts-change-history-modal');
+    if (old) old.remove();
 
-    chBox.innerHTML = `
-      <div class="ts-ch-header">
-        <div class="flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left text-amber-500"></i><span>Change history</span></div>
-        <div class="text-xs text-slate-400 font-mono">${eh(tx)}</div>
-      </div>
-      <div id="ts-ch-list" class="p-4 text-center text-xs text-slate-400">
-        <i class="fa-solid fa-spinner fa-spin ms-1"></i> جارٍ تجميع سجل التغييرات...
+    const ov = document.createElement('div');
+    ov.id = 'ts-change-history-modal';
+    ov.className = 'fixed inset-0 z-[150] flex items-center justify-center bg-black/70 p-4';
+    ov.innerHTML = `
+      <div class="w-full max-w-2xl max-h-[88vh] bg-white dark:bg-[#141210] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-[#1b1815]">
+          <div class="flex items-center gap-2.5">
+            <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/20 text-amber-500 font-bold"><i class="fa-solid fa-clock-rotate-left"></i></span>
+            <div>
+              <h3 class="font-bold text-sm sm:text-base text-ink dark:text-white">Change history</h3>
+              <p class="text-xs text-slate-400 font-mono" dir="ltr">Request ID: ${eh(tx)}</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('ts-change-history-modal').remove()" class="h-8 w-8 rounded-lg text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10 flex items-center justify-center transition">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+        <div id="ts-ch-modal-list" class="overflow-y-auto p-4 sm:p-5 text-start" dir="ltr">
+          <div class="py-8 text-center text-xs text-slate-400"><i class="fa-solid fa-spinner fa-spin ms-1"></i> Loading change history...</div>
+        </div>
       </div>
     `;
 
-    // سحب كل الأحداث من audit_log و line_stage_events و tx_comments
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    document.body.appendChild(ov);
+
+    // سحب الأحداث من Supabase
     try {
       const results = await Promise.all([
         window.sbClient.from('audit_log').select('*').eq('transaction_id', String(tx)).order('at', { ascending: false }).limit(100),
@@ -1055,40 +1021,64 @@
 
       // 1. تحويل سجلات audit_log
       auditRows.forEach(a => {
+        const d = a.details || {};
+        let action = a.action === 'created' ? 'Added' : (a.action === 'cost_confirmed' ? 'Operations Cost Confirmation' : 'Changed');
+        let isAuto = !!(d.automatic || d.Current_Queue || a.action === 'status_sync');
+
+        // تحويل أسماء الحقول والقيم لتطابق الصورة
+        const formattedDetails = {};
+        for (const k in d) {
+          if (k === 'automatic') continue;
+          let label = k;
+          if (k === 'complete') label = 'Operations Status';
+          else if (k === 'under_review') label = 'Operations Status';
+          else if (k === 'delivered') label = 'Operations Status';
+          else if (k === 'payment_method') label = 'Payment Confirmation';
+          else if (k === 'employee') label = 'Operations Owner';
+
+          const valObj = d[k];
+          if (valObj && typeof valObj === 'object' && ('new' in valObj || 'old' in valObj)) {
+            const oldVal = valObj.old === true ? 'Confirmed' : (valObj.old === false ? 'New' : (valObj.old || '—'));
+            const newVal = valObj.new === true ? 'Confirmed' : (valObj.new === false ? 'New' : (valObj.new || '—'));
+            formattedDetails[label] = { old: oldVal, new: newVal };
+          } else {
+            formattedDetails[label] = { old: '—', new: String(valObj) };
+          }
+        }
+
         events.push({
           time: new Date(a.at || 0),
-          user: a.user_name || 'موظف',
-          action: a.action === 'created' ? 'Added' : (a.action === 'cost_confirmed' ? 'Operations Cost Confirmation' : 'Changed'),
-          details: a.details || {},
-          service: a.service,
-          isAuto: !!(a.details && (a.details.automatic || a.details.Current_Queue))
+          user: a.user_name || 'Staff Specialist',
+          action: action,
+          details: Object.keys(formattedDetails).length ? formattedDetails : d,
+          isAuto: isAuto
         });
       });
 
-      // 2. تحويل انتقالات المراحل line_stage_events
-      const stageLabels = { in_progress: 'In Progress', under_review: 'Under Review', complete: 'Complete', delivered: 'Delivered' };
+      // 2. تحويل line_stage_events
+      const stageNames = { in_progress: 'In Progress', under_review: 'Under Review', complete: 'Complete', delivered: 'Delivered' };
       stageRows.forEach(s => {
         events.push({
           time: new Date(s.at || 0),
-          user: 'System',
+          user: 'System Bot',
           action: 'Changed',
-          details: { 'Operations Status': { old: '—', new: stageLabels[s.stage] || s.stage } },
+          details: { 'Operations Status': { old: 'New', new: stageNames[s.stage] || s.stage } },
           isAuto: true
         });
       });
 
-      // 3. تحويل التعليقات ووقف/استئناف الخدمات
+      // 3. تحويل tx_comments
       commentRows.forEach(c => {
         events.push({
           time: new Date(c.created_at || 0),
-          user: c.author_name || 'موظف',
+          user: c.author_name || 'Staff',
           action: 'Comment',
-          details: { 'Note': { old: '', new: c.body } },
+          details: { 'Note': { old: '—', new: c.body } },
           isAuto: false
         });
       });
 
-      // إضافة حدث الإنشاء الأساسي للمعاملة إذا كان مسجلاً
+      // 4. حدث الإضافة الأساسي للمعاملة
       const o = (window.groupedOrders || []).find(x => String(x.transaction_id) === String(tx));
       if (o && (o.received_at || o.created_at)) {
         events.push({
@@ -1100,10 +1090,10 @@
         });
       }
 
-      // ترتيب كل الأحداث تنازلياً من الأحدث للأقدم
+      // ترتيب تنازلي حسب الوقت
       events.sort((a, b) => b.time.getTime() - a.time.getTime());
 
-      // تجميع الأحداث حسب التاريخ (Date Grouping)
+      // تجميع حسب التاريخ (Date Grouping)
       const groups = {};
       events.forEach(ev => {
         const d = ev.time;
@@ -1112,11 +1102,11 @@
         groups[dayStr].push(ev);
       });
 
-      const listEl = document.getElementById('ts-ch-list');
-      if (!listEl) return;
+      const bodyEl = document.getElementById('ts-ch-modal-list');
+      if (!bodyEl) return;
 
       if (!Object.keys(groups).length) {
-        listEl.innerHTML = '<div class="py-6 text-center text-xs text-slate-400">لا توجد حركات مسجلة على هذه المعاملة حتى الآن</div>';
+        bodyEl.innerHTML = '<div class="py-8 text-center text-xs text-slate-400">No change history recorded for this request yet.</div>';
         return;
       }
 
@@ -1130,17 +1120,16 @@
               const initials = getInitials(item.user);
               const deptBadge = getDeptBadge(item.user);
 
-              // بناء صفوف التغييرات Before ➔ After
               const rowsHtml = Object.keys(item.details).map(k => {
-                const valObj = item.details[k];
-                if (valObj && typeof valObj === 'object' && ('old' in valObj || 'new' in valObj)) {
+                const v = item.details[k];
+                if (v && typeof v === 'object' && ('old' in v || 'new' in v)) {
                   return `
                     <div class="ts-ch-row">
                       ${item.isAuto ? '<span class="ts-ch-auto">Automatic</span>' : ''}
                       <span>${eh(k)}:</span>
-                      <span>${eh(valObj.old || '—')}</span>
+                      <span>${eh(v.old || '—')}</span>
                       <span class="ts-ch-arrow">➔</span>
-                      <b>${eh(valObj.new || '—')}</b>
+                      <b>${eh(v.new || '—')}</b>
                     </div>
                   `;
                 }
@@ -1149,7 +1138,7 @@
                     ${item.isAuto ? '<span class="ts-ch-auto">Automatic</span>' : ''}
                     <span>${eh(k)}:</span>
                     <span class="ts-ch-arrow">➔</span>
-                    <b>${eh(String(valObj || '—'))}</b>
+                    <b>${eh(String(v || '—'))}</b>
                   </div>
                 `;
               }).join('');
@@ -1175,71 +1164,22 @@
         `;
       }
 
-      listEl.innerHTML = html;
+      bodyEl.innerHTML = html;
     } catch (err) {
-      console.warn('change history load error', err);
-    }
-  }
-
-  // ربط دوال الفتح السابقة لتفتح سجل التغييرات الموحد بسلاسة
-  window.p51OpenTimelineModal = function (tx) {
-    if (typeof window.openTxModal === 'function') {
-      window.openTxModal(tx);
-      setTimeout(() => {
-        const el = document.getElementById('ts-unified-change-history');
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
-      }, 200);
+      console.warn('timeline fetch err', err);
     }
   };
 
   /* =========================================================================
-     7. تسجيل شامل ودقيق: اعتراض saveTxEdit لتسجيل أي تعديل في audit_log
+     7. تهيئة أولية عند تشغيل السكربت
      ========================================================================= */
-  const origSaveTxEdit = window.saveTxEdit;
-  if (typeof origSaveTxEdit === 'function') {
-    window.saveTxEdit = async function () {
-      try {
-        const st = window.txEditState;
-        if (st && st.tx && window.sbClient && window.currentUser) {
-          const editor = (window.myProfile && window.myProfile.full_name) || window.currentUser.email || 'موظف';
-          const first = st.o && st.o.lines && st.o.lines[0];
-          if (first) {
-            const client = (document.getElementById('te-client')?.value || '').trim();
-            const phone = (document.getElementById('te-phone')?.value || '').trim();
-            const addr = (document.getElementById('te-addr')?.value || '').trim();
-            const emp = (document.getElementById('te-emp')?.value || '').trim();
-
-            const changes = {};
-            if (client && client !== first.client_name) changes['Client Name'] = { old: first.client_name || '—', new: client };
-            if (phone !== first.phone) changes['Phone'] = { old: first.phone || '—', new: phone || '—' };
-            if (addr !== first.address) changes['Address'] = { old: first.address || '—', new: addr || '—' };
-            if (emp && emp !== first.employee) changes['Employee'] = { old: first.employee || '—', new: emp };
-
-            if (Object.keys(changes).length) {
-              await window.sbClient.from('audit_log').insert({
-                transaction_id: String(st.tx),
-                action: 'updated',
-                user_name: editor,
-                details: changes
-              });
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('audit log intercept error', e);
-      }
-      return origSaveTxEdit.apply(this, arguments);
-    };
-  }
-
-  // التهيئة المبدئية عند اكتمال تحميل المستند
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-      injectHomeWidget();
+      injectTopLeftHomeWidget();
       updateModernHeaderClock();
     });
   } else {
-    injectHomeWidget();
+    injectTopLeftHomeWidget();
     updateModernHeaderClock();
   }
 })();
