@@ -169,3 +169,25 @@ html:not(.dark) body.reels #nt-panel#nt-panel, html:not(.dark) body.reels #ub-pa
   border: 1px solid rgba(40,25,10,.14) !important; box-shadow: 0 20px 50px rgba(40,25,10,.18) !important;
   backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
 }
+
+/* 8) وقف/استئناف خدمة (js/67-line-pause.js) */
+.lp-btn { display:inline-flex; align-items:center; gap:.3rem; padding:.2rem .6rem; border-radius:.6rem; font-size:11px; font-weight:700; border:1px solid rgba(232,89,12,.55); background:transparent; color:inherit; cursor:pointer; }
+.lp-btn:hover { background: rgba(232,89,12,.14); }
+.lp-btn.lp-resume { background:#e8590c; color:#1b1511; border-color:#e8590c; }
+#lp-modal { position:fixed; inset:0; z-index:99999; display:flex; align-items:center; justify-content:center; padding:1rem; }
+#lp-modal .lp-back { position:absolute; inset:0; background:rgba(0,0,0,.65); }
+#lp-modal .lp-box { position:relative; width:100%; max-width:440px; background:#fff; color:#1b1511; border-radius:1rem; padding:1.1rem; box-shadow:0 25px 60px rgba(0,0,0,.5); }
+html.dark #lp-modal .lp-box { background:#141210; color:#f4f2fa; border:1px solid rgba(255,255,255,.12); }
+#lp-modal .lp-h { font-weight:800; font-size:1rem; margin-bottom:.4rem; }
+#lp-modal .lp-svc { font-weight:700; font-size:.85rem; padding:.35rem .6rem; border-radius:.6rem; background:rgba(232,89,12,.14); margin-bottom:.6rem; }
+#lp-modal .lp-warn { font-size:.78rem; line-height:1.7; padding:.55rem .7rem; border-radius:.6rem; background:#fff3cd; color:#5c3d00; margin-bottom:.7rem; }
+html.dark #lp-modal .lp-warn { background:#3a2c0a; color:#ffd98a; }
+#lp-modal .lp-l { font-size:.78rem; font-weight:700; display:block; margin:.3rem 0; }
+#lp-modal .lp-req { color:#d33; }
+#lp-modal textarea { width:100%; border:1px solid rgba(128,128,128,.45); border-radius:.6rem; padding:.5rem; background:transparent; color:inherit; font-size:.85rem; }
+#lp-modal .lp-err { color:#d33; font-size:.75rem; min-height:1rem; margin-top:.25rem; }
+#lp-modal .lp-act { display:flex; gap:.5rem; margin-top:.6rem; }
+#lp-modal .lp-go, #lp-modal .lp-st { background:#e8590c; color:#1b1511; font-weight:800; padding:.5rem .9rem; border-radius:.7rem; font-size:.85rem; }
+#lp-modal .lp-go:disabled, #lp-modal .lp-st:disabled { opacity:.5; }
+#lp-modal .lp-no { border:1px solid rgba(128,128,128,.5); padding:.5rem .9rem; border-radius:.7rem; font-size:.85rem; }
+#lp-modal .lp-sts { display:grid; grid-template-columns:1fr; gap:.5rem; }
