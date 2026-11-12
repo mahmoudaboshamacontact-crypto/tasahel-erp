@@ -88,7 +88,7 @@
       var b = document.createElement('button'); b.type = 'button';
       var paused = (l.status || '') === 'Under Review';
       b.className = 'lp-btn' + (paused ? ' lp-resume' : '');
-      b.innerHTML = paused ? '<i class="fa-solid fa-play"></i><span>استئناف</span>' : '<i class="fa-solid fa-pause"></i><span>وقف</span>';
+      b.innerHTML = paused ? '<i class="fa-solid fa-play"></i><span>استئناف</span>' : '<span>⏸</span><span>Under Review</span>';
       b.title = paused ? 'استئناف الخدمة دي' : 'وقف الخدمة دي بس (Under Review) بسبب';
       b.onclick = function (e) { e.stopPropagation(); (paused ? openResume : openPause)(id); };
       box.appendChild(b);
