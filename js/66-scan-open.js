@@ -32,8 +32,9 @@
     raw = String(raw || '').trim();
     if (!raw) return null;
     try {
-      var u = new URL(raw), t = u.searchParams.get('token') || '';
+      var u = new URL(raw), t = u.searchParams.get('token') || u.searchParams.get('tx') || '';
       if (OK.test(t)) return { token: t };
+      if (t && hasTx(t)) return { tx: t };
     } catch (e) { /* مش رابط */ }
     if (raw.length <= 60 && hasTx(raw)) return { tx: raw };
     return null;
@@ -66,13 +67,33 @@
   }
   window.scanOpenTx = scan;
 
-  /* تاب المعاملات (الأساسي): الزرار ظاهر جنب خانة البحث مباشرة */
+  /* إزالة أي زر QR مكرر أو معطل تم حقنه أسفل شريط البحث */
+  function removeDuplicateQrButtons() {
+    var dup = document.getElementById('ts-qr-integrated-btn');
+    if (dup) dup.remove();
+    var allTxBtns = document.querySelectorAll('#scan-open-btn-tx');
+    for (var i = 1; i < allTxBtns.length; i++) {
+      allTxBtns[i].remove();
+    }
+  }
+
+  /* تاب المعاملات (الأساسي): زر QR واحد فقط متناسق بجانب شريط البحث وفلتر الموظفين */
   function injectTx() {
+    removeDuplicateQrButtons();
     var q = document.getElementById('recent-q');
-    if (!q || document.getElementById('scan-open-btn-tx')) return;
-    var box = q.parentElement; if (!box || !box.parentElement) return;
+    if (!q) return;
+    var box = q.parentElement;
+    if (!box || !box.parentElement) return;
+    var existing = document.getElementById('scan-open-btn-tx');
+    if (existing) {
+      existing.onclick = scan;
+      return;
+    }
     var b = document.createElement('button');
-    b.id = 'scan-open-btn-tx'; b.type = 'button'; b.className = 'btn-neo-sec !py-1.5 text-xs'; b.title = 'مسح QR الإيصال لفتح المعاملة';
+    b.id = 'scan-open-btn-tx';
+    b.type = 'button';
+    b.className = 'btn-neo-sec !py-1.5 text-xs shrink-0';
+    b.title = 'مسح QR الإيصال لفتح المعاملة';
     b.innerHTML = '<i class="fa-solid fa-qrcode"></i><span>مسح إيصال</span>';
     b.onclick = scan;
     box.parentElement.insertBefore(b, box.nextSibling);
@@ -91,6 +112,7 @@
     if (searchBtn && searchBtn.parentElement) searchBtn.parentElement.insertBefore(b, searchBtn);
     else k.parentElement.parentElement.appendChild(b);
   }
+  window.ensureSingleTxQrButton = injectTx;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject); else inject();
   setTimeout(inject, 1500);
 })();
