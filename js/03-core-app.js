@@ -647,7 +647,7 @@ function buildServiceDetailCard(l,idx,mode){
   const peopleHtml=typeof window.getRequestPeopleForLineHtml==='function'?window.getRequestPeopleForLineHtml(l.transaction_id,l.id,l.service):'';
   const ctrlHtml=mode==='modal'
     ?statusSelect(l)
-    :'<div class="pt-1"><label class="text-[10.5px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">تحديث حالة هذه الخدمة فقط:</label><select onchange="setLineStatus(\''+escapeHtml(l.id)+'\',this.value)" class="field !py-1.5 text-xs">'+Object.keys(STATUS_PATCH).map(s=>'<option value="'+s+'"'+(s===st?' selected':'')+'>'+statusLabel(s)+'</option>').join('')+'</select></div>';
+    :'<div class="pt-1"><label class="text-[10.5px] font-semibold text-slate-500 dark:text-slate-400 block mb-1">تحديث حالة هذه الخدمة فقط:</label><select onchange="setLineStatus(\''+escapeHtml(l.id)+'\',this.value)" class="field !py-1.5 text-xs">'+Object.keys(STATUS_PATCH).filter(s=>s!=='Under Review'||s===st).map(s=>'<option value="'+s+'"'+(s===st?' selected':'')+'>'+statusLabel(s)+'</option>').join('')+'</select></div>';
 
   return '<div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/90 p-3 space-y-2 shadow-2xs" data-svc-card-id="'+escapeHtml(l.id)+'">'+
     '<div class="flex flex-wrap items-center justify-between gap-2">'+
@@ -775,10 +775,6 @@ function buildInteractiveStatusWidgets(tx,currentSt,isLateFlag,mode,customPct){
           '<button type="button" onclick="'+clickFn('In Progress')+'" class="tx-step-node done">'+
             '<span class="tx-step-circle"><i class="fa-solid fa-check"></i></span>'+
             '<span class="tx-step-label">In Progress</span>'+
-          '</button>'+
-          '<button type="button" onclick="'+clickFn('Under Review')+'" class="'+nodeCls(2)+'">'+
-            '<span class="tx-step-circle">'+nodeIcon(2,'fa-magnifying-glass')+'</span>'+
-            '<span class="tx-step-label">Under Review</span>'+
           '</button>'+
           '<button type="button" onclick="'+clickFn('Complete')+'" class="'+nodeCls(3)+'">'+
             '<span class="tx-step-circle">'+nodeIcon(3,'fa-box-open')+'</span>'+
@@ -1281,7 +1277,7 @@ function openTxModal(tx){
   (o.notes?'<div class="p-3 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 rounded-xl text-xs"><i class="fa-solid fa-note-sticky ms-1"></i><b>ملاحظات:</b> '+escapeHtml(o.notes)+'</div>':'')+
   '<div><div class="flex items-center justify-between mb-2"><h4 class="font-bold text-xs text-slate-500">بطاقات بنود الخدمات ('+o.lines.length+')</h4><span class="text-[11px] font-semibold text-slate-400">كل خدمة لها حالة وشريط تقدم مستقل</span></div><div class="space-y-2.5">'+
   o.lines.map((l,i)=>buildServiceDetailCard(l,i,'modal')).join('')+'</div></div>'+
-  '<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><div class="text-[11px] text-slate-500 mb-2">تحديث جماعي لكل الخدمات (اختياري)</div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">'+Object.keys(STATUS_PATCH).map(s=>'<button type="button" data-tx="'+escapeHtml(o.transaction_id)+'" data-s="'+s+'" onclick="stageTxStatus(this.dataset.s)" class="rounded-lg py-2 text-xs font-bold '+(STATUS_CLS[s]||'')+'">'+statusLabel(s)+'</button>').join('')+'</div></div>'+
+  '<div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3"><div class="text-[11px] text-slate-500 mb-2">تحديث جماعي لكل الخدمات (اختياري)</div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2">'+Object.keys(STATUS_PATCH).filter(s=>s!=='Under Review').map(s=>'<button type="button" data-tx="'+escapeHtml(o.transaction_id)+'" data-s="'+s+'" onclick="stageTxStatus(this.dataset.s)" class="rounded-lg py-2 text-xs font-bold '+(STATUS_CLS[s]||'')+'">'+statusLabel(s)+'</button>').join('')+'</div></div>'+
   '<div class="flex items-center justify-between p-3.5 bg-slate-900 text-white rounded-xl"><span class="text-xs font-semibold text-slate-300">الإجمالي النهائي:</span><span class="text-lg font-bold font-mono">'+formatCurrency(o.grand_total)+'</span></div>';
   $('tx-modal-actions-left').innerHTML='<button id="tx-save-btn" type="button" onclick="saveTxChanges()" disabled class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold flex items-center gap-1.5 opacity-50"><i class="fa-solid fa-floppy-disk"></i><span>حفظ</span></button>'+
   '<button data-tx="'+escapeHtml(o.transaction_id)+'" onclick="printTxReceipt(this.dataset.tx)" class="px-3.5 py-2 rounded-xl bg-ink dark:bg-brand-600 text-white text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-print"></i><span>الإيصال الرسمي</span></button>'+
@@ -1514,7 +1510,7 @@ async function saveTxEdit(){
 /* ---------- تغيير الحالة (يتفاعل لحظياً مع شريط الحالة والحلقة الدائرية) ---------- */
 let openTxCurrent=null,txDirty=false;
 const STATUS_PATCH={'In Progress':{delivered:false,complete:false,under_review:false},'Under Review':{delivered:false,complete:false,under_review:true},'Complete':{delivered:false,complete:true,under_review:false},'Delivered':{delivered:true,complete:true,under_review:false}};
-function statusSelect(l){return '<select data-id="'+escapeHtml(l.id)+'" data-orig="'+escapeHtml(l.status||'In Progress')+'" onchange="markTxDirty()" class="field st-sel mt-2 !py-1.5 text-xs">'+Object.keys(STATUS_PATCH).map(s=>'<option value="'+s+'"'+(s===l.status?' selected':'')+'>'+statusLabel(s)+'</option>').join('')+'</select>';}
+function statusSelect(l){return '<select data-id="'+escapeHtml(l.id)+'" data-orig="'+escapeHtml(l.status||'In Progress')+'" onchange="markTxDirty()" class="field st-sel mt-2 !py-1.5 text-xs">'+Object.keys(STATUS_PATCH).filter(s=>s!=='Under Review'||s===l.status).map(s=>'<option value="'+s+'"'+(s===l.status?' selected':'')+'>'+statusLabel(s)+'</option>').join('')+'</select>';}
 async function applyStatus(ids,status){
   const basePatch=STATUS_PATCH[status];if(!basePatch||!ids.length)return false;
   const patch=Object.assign({},basePatch);
