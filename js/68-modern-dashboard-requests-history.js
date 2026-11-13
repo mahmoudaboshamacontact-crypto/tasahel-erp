@@ -597,6 +597,21 @@
       }
 
 
+
+      .ts-clock-gear-wrap { position: relative; margin-top: 2px; }
+      .ts-clock-gear { width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(255,122,61,.3); background: rgba(0,0,0,.35); color: #ff9d6c; cursor: pointer; font-size: 12px; }
+      .ts-clock-gear:hover { background: rgba(255,122,61,.2); color: #fff; }
+      .ts-clock-pop { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: #1b1510; border: 1px solid rgba(255,122,61,.35); box-shadow: 0 8px 24px rgba(0,0,0,.5); white-space: nowrap; }
+      .ts-clock-pop[hidden] { display: none; }
+      /* خانات تفاصيل الخدمة: العنوان فوق والقيمة تحته بنفس المحاذاة */
+      .ts-svc-grid { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px !important; background: transparent !important; padding: 0 !important; }
+      .ts-svc-grid > div { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(148,163,184,.22); background: rgba(148,163,184,.06); min-width: 0; text-align: start; }
+      .ts-svc-grid > div > span:first-child { direction: rtl !important; text-align: start; }
+      .ts-svc-grid > div > span:last-child { overflow-wrap: anywhere; }
+      .ts-dtl-card { min-height: 60px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+      .ts-dtl-val { overflow-wrap: anywhere; line-height: 1.5; }
+      .ts-dtl-phone { display: inline-flex; align-items: center; gap: 6px; direction: ltr; }
+
       /* Stepper */
       .ts-stepper { margin-top: 2px; }
       .ts-stp-row { display: flex; align-items: flex-start; gap: 0; }
@@ -822,10 +837,6 @@
             <div id="ts-hand-s" class="ts-hand ts-hand-s"></div>
             <div class="ts-dial-center"></div>
           </div>
-          <div class="text-[11px] font-bold text-amber-500/80 mt-2 flex items-center gap-1.5">
-            <i class="fa-solid fa-stopwatch"></i>
-            <span>ساعة أنالوج سهلة القراءة</span>
-          </div>
         </div>
 
         <!-- 2. Middle Digital Clock & Date -->
@@ -840,10 +851,12 @@
             <span id="ts-digi-date">--</span>
           </div>
 
-          <div class="ts-time-format-toggle">
-            <span class="text-[11px] font-bold text-slate-400 ms-1 flex items-center gap-1"><i class="fa-regular fa-clock text-amber-500"></i> تنسيق الوقت:</span>
-            <button id="ts-fmt-btn-12" onclick="setTsClockFormat('12')" class="ts-fmt-btn active">✓ 12 ساعة</button>
-            <button id="ts-fmt-btn-24" onclick="setTsClockFormat('24')" class="ts-fmt-btn">24 ساعة</button>
+          <div class="ts-clock-gear-wrap">
+            <button type="button" id="ts-clock-gear" class="ts-clock-gear" aria-label="إعدادات الساعة" title="إعدادات الساعة"><i class="fa-solid fa-gear"></i></button>
+            <div id="ts-clock-pop" class="ts-clock-pop" hidden>
+              <button type="button" id="ts-fmt-btn-12" onclick="setTsClockFormat('12')" class="ts-fmt-btn active">12 ساعة</button>
+              <button type="button" id="ts-fmt-btn-24" onclick="setTsClockFormat('24')" class="ts-fmt-btn">24 ساعة</button>
+            </div>
           </div>
         </div>
 
@@ -862,17 +875,21 @@
       <!-- 4. Bottom Hijri Date Banner -->
       <div class="ts-hijri-banner">
         <div class="ts-hijri-text">
-          <span class="text-xs font-bold text-slate-300">التاريخ الهجري:</span>
+          <span class="text-xs font-bold text-slate-300">هجريًا:</span>
           <span id="ts-hijri-full" class="ts-hijri-day">--</span>
         </div>
         <div class="flex items-center gap-2 text-amber-500/90 text-sm font-bold">
           <i class="fa-solid fa-mosque"></i>
-          <span>توقيت جمهورية مصر العربية</span>
+          <span>مصر</span>
         </div>
       </div>
     `;
 
     tabHome.prepend(widget);
+    const gear = widget.querySelector('#ts-clock-gear'), pop = widget.querySelector('#ts-clock-pop');
+    gear.addEventListener('click', e => { e.stopPropagation(); pop.hidden = !pop.hidden; });
+    pop.addEventListener('click', e => { e.stopPropagation(); if (e.target.closest('button')) pop.hidden = true; });
+    document.addEventListener('click', () => { pop.hidden = true; });
     updateClockDisplay();
   }
 
@@ -1210,11 +1227,11 @@
         oldGrid.innerHTML = `
           <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-hashtag text-amber-500"></i><span>Request ID</span></div><div class="ts-dtl-val font-mono" dir="ltr">${eh(o.transaction_id)}</div></div>
           <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-user text-amber-500"></i><span>اسم العميل</span></div><div class="ts-dtl-val">${eh(o.client_name || '—')}</div></div>
-          <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-phone text-sky-500"></i><span>الهاتف</span></div><div class="ts-dtl-val font-mono" dir="ltr">${o.phone ? `<a href="tel:${eh(o.phone)}" class="text-sky-400 hover:underline"><i class="fa-solid fa-phone text-xs ms-1"></i>${eh(o.phone)}</a>` : '—'}</div></div>
+          <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-phone text-sky-500"></i><span>الهاتف</span></div><div class="ts-dtl-val font-mono" dir="ltr">${o.phone ? `<a href="tel:${eh(o.phone)}" class="ts-dtl-phone text-sky-400 hover:underline"><i class="fa-solid fa-phone text-xs"></i><span>${eh(o.phone)}</span></a>` : '—'}</div></div>
           <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-wallet text-amber-500"></i><span>طريقة الدفع</span></div><div class="ts-dtl-val">${eh(o.payment_method || '—')}</div></div>
           <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-user-tie text-amber-500"></i><span>الموظف المسؤول</span></div><div class="ts-dtl-val">${eh(o.employee || '—')}</div></div>
           <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-motorcycle text-amber-500"></i><span>مندوب الاستلام</span></div><div class="ts-dtl-val">${eh(o.receiver || 'العميل شخصياً')}</div></div>
-          <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-calendar-day text-amber-500"></i><span>تاريخ الاستلام</span></div><div class="ts-dtl-val font-mono">${eh(typeof formatDateTime === 'function' ? formatDateTime(o.received_at || o.created_at) : (o.received_at || '—'))}</div></div>
+          <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-calendar-day text-amber-500"></i><span>تاريخ الاستلام</span></div><div class="ts-dtl-val font-mono" dir="ltr" style="text-align:start">${eh(fmtStepDate(o.received_at || o.created_at) || '—')}</div></div>
           <div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-receipt text-amber-500"></i><span>رقم الإيصال</span></div><div class="ts-dtl-val font-mono">${eh(o.rn_nm || '—')}</div></div>
           ${(() => { try { const dsc = typeof txDisc === 'function' ? txDisc(o) : 0; return dsc > 0 ? `<div class="ts-dtl-card"><div class="ts-dtl-label"><i class="fa-solid fa-percent text-rose-500"></i><span>أعلى خصم بند</span></div><div class="ts-dtl-val font-mono">${eh(String(dsc))}%</div></div>` : ''; } catch (e) { return ''; } })()}
           <div class="ts-dtl-card ts-dtl-card-wide"><div class="ts-dtl-label"><i class="fa-solid fa-location-dot text-rose-500"></i><span>العنوان المسجل</span></div><div class="ts-dtl-val whitespace-normal leading-relaxed text-xs">${eh(o.address || 'لم يتم تسجيل عنوان')}</div></div>
@@ -1227,6 +1244,11 @@
         rpList.dataset.styled68 = '1';
         rpList.className = 'rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 p-3.5 my-3';
       }
+
+      modalBody.querySelectorAll('[data-svc-card-id] .svc-exp .grid.grid-cols-2').forEach(g => {
+        g.classList.add('ts-svc-grid');
+        g.querySelectorAll('[dir="ltr"]').forEach(x => { if (x.classList.contains('block')) x.removeAttribute('dir'); });
+      });
 
       // 3. شريط مراحل التنفيذ (Stepper) لكل خدمة
       renderSteppers(o);
@@ -1280,6 +1302,7 @@
     refund: 'Refund Approved', refund_approved: 'Refund Approved', refund_request: 'Refund Requested', refund_rejected: 'Refund Rejected'
   };
   const sv = v => v === true ? 'نعم' : v === false ? 'لا' : (v == null || v === '') ? '—' : (STATUS_AR[v] || String(v));
+  const BOOL_STATUS = { delivered: 'Delivered', complete: 'Complete', under_review: 'Under Review' };
 
   function rowsFromDetails(d) {
     const rows = [];
@@ -1287,6 +1310,11 @@
       if (k === 'automatic') return;
       const label = FIELD_LABELS[k] || k;
       const v = d[k];
+      if (BOOL_STATUS[k] && v && typeof v === 'object' && typeof v.new === 'boolean') {
+        // نعم/لا مش مفهومة لوحدها: نكتبها كحالة صريحة
+        rows.push({ label: 'الحالة', old: null, neu: v.new ? 'تم تحويلها إلى ' + BOOL_STATUS[k] : 'اتشالت من ' + BOOL_STATUS[k] });
+        return;
+      }
       if (v && typeof v === 'object' && ('old' in v || 'new' in v)) rows.push({ label, old: sv(v.old), neu: sv(v.new) });
       else rows.push({ label, old: null, neu: sv(v) });
     });
@@ -1352,16 +1380,21 @@
         });
       });
 
-      // مراحل البنود: بتتسجل بتريجر من السيرفر؛ لو في audit_log لنفس الخدمة قريب (±3 دقايق) يبقى هو الأصل ونتجاهل المرحلة (منعاً للتكرار)
-      stages.forEach(st => {
-        const t = new Date(st.at || 0).getTime();
-        const svc = lineName(o, st.line_id);
-        const dup = events.some(e => e.kind === 'audit' && e.svc === svc && Math.abs(e.t - t) <= 180000 &&
-          e.rows.some(r => /تم التسليم|جاهزة|Under Review|الحالة|Status/i.test(r.label)));
-        if (dup) return;
-        events.push({
-          t, user: 'System', auto: true, svc, title: 'Changed', kind: 'stage',
-          rows: [{ label: 'Operations Status', old: null, neu: STATUS_AR[{ in_progress: 'In Progress', under_review: 'Under Review', complete: 'Complete', delivered: 'Delivered' }[st.stage]] || st.stage }]
+      // مراحل البنود (بتتسجل بتريجر من السيرفر): الأصل هو audit_log لو لنفس الخدمة قريب (±3 دقايق)،
+      // وأول In Progress بعد الإضافة مجرد انعكاس للإضافة فنتجاهله. باقي الحالات بنعرضها "من ➔ إلى" بالمرحلة اللي قبلها.
+      const STG = { in_progress: 'In Progress', under_review: 'Under Review', complete: 'Complete', delivered: 'Delivered' };
+      const byLine = {};
+      stages.slice().sort((x, y) => new Date(x.at) - new Date(y.at)).forEach(st => { (byLine[st.line_id] = byLine[st.line_id] || []).push(st); });
+      Object.keys(byLine).forEach(lid => {
+        const svc = lineName(o, lid);
+        byLine[lid].forEach((st, i) => {
+          const t = new Date(st.at || 0).getTime();
+          const near = events.some(e => e.kind === 'audit' && e.svc === svc && Math.abs(e.t - t) <= 180000);
+          if (near && (i === 0 || events.some(e => e.kind === 'audit' && e.svc === svc && Math.abs(e.t - t) <= 180000 &&
+            e.rows.some(r => /Complete|Delivered|Under Review|الحالة|Status/i.test(r.label + ' ' + r.neu))))) return;
+          const prev = i > 0 ? STG[byLine[lid][i - 1].stage] : null;
+          events.push({ t, user: 'System', auto: true, svc, title: 'Status Changed', kind: 'stage',
+            rows: [{ label: 'الحالة', old: prev, neu: STG[st.stage] || st.stage }] });
         });
       });
 
