@@ -51,6 +51,23 @@
   function CU() { try { return currentUser || null; } catch (e) { return null; } }
   function MP() { try { return myProfile || null; } catch (e) { return null; } }
 
+  /* المتغيرات اللي معرّفة بـ let في 03-core-app.js مش على window، فملفات زي 61 (فحص المستندات) و62 و13 كانت بتقراها فاضية.
+     بنعرّفها كـ getter/setter يقرا/يكتب نفس المتغير الأصلي (مفيش نسخة تانية). */
+  [
+    ['sbClient', () => sbClient, v => { sbClient = v; }],
+    ['allServices', () => allServices, v => { allServices = v; }],
+    ['allRequestLines', () => allRequestLines, v => { allRequestLines = v; }],
+    ['groupedOrders', () => groupedOrders, v => { groupedOrders = v; }],
+    ['profiles', () => profiles, v => { profiles = v; }],
+    ['currentUser', () => currentUser, v => { currentUser = v; }],
+    ['myProfile', () => myProfile, v => { myProfile = v; }]
+  ].forEach(([n, g, st]) => {
+    if (Object.prototype.hasOwnProperty.call(window, n)) return;
+    try {
+      Object.defineProperty(window, n, { configurable: true, get() { try { return g(); } catch (e) { return undefined; } }, set(v) { try { st(v); } catch (e) {} } });
+    } catch (e) {}
+  });
+
   function getSb() {
     try {
       if (window.sbClient) return window.sbClient;
@@ -611,6 +628,21 @@
       .ts-dtl-card { min-height: 60px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
       .ts-dtl-val { overflow-wrap: anywhere; line-height: 1.5; }
       .ts-dtl-phone { display: inline-flex; align-items: center; gap: 6px; direction: ltr; }
+
+
+      /* ألوان كانت ناقصة من tailwind.css (كانت بتطلع زراير بيضاء فاضية) */
+      .bg-orange-600 { background-color: #e8590c; color: #fff; }
+      .hover\:bg-orange-700:hover { background-color: #c2410c; }
+      .bg-orange-50, .bg-orange-100 { background-color: rgba(255,122,61,.13); }
+      .text-orange-500, .text-orange-600, .text-orange-700, .text-orange-800 { color: #ea580c; }
+      .border-orange-300 { border-color: rgba(255,122,61,.45); }
+      .bg-indigo-600 { background-color: #e8590c; color: #fff; }
+      #wf-stages-modal { z-index: 125; }
+      /* مسار العمل: مسار موازي للحالة بيلخبط (In Progress/Complete/Delivered هي الأصل) فمخفي من الكارت */
+      button[onclick*="openWorkflowStagesModal"] { display: none !important; }
+      /* كلمة "متوسط تقدم الخدمات" كانت بتطلع برا الدايرة */
+      .tx-ring-gauge-box .absolute > span:nth-child(3) { display: none; }
+      .ts-deliv-by { font-size: 10px; color: #10b981; font-weight: 700; margin-top: 2px; }
 
       /* Stepper */
       .ts-stepper { margin-top: 2px; }
@@ -1177,7 +1209,8 @@
       const cls = i < cur || (i === cur && st === 'Delivered') ? 'done' : i === cur ? (paused ? 'paused' : 'now') : '';
       const ic = cls === 'done' ? '<i class="fa-solid fa-check"></i>' : cls === 'paused' ? '⏸' : (i + 1);
       const when = x.at ? fmtStepDate(x.at) : (cls === 'now' || cls === 'paused' ? 'جارية الآن' : '—');
-      return `<div class="ts-stp ${cls}"><span class="ts-stp-dot">${ic}</span><b>${x.t}</b><small>${x.ar}</small><em dir="ltr">${eh(when)}</em></div>`;
+      const who = x.t === 'Delivered' && st === 'Delivered' ? deliveredBy[o.transaction_id + '|' + (line.service || '')] : '';
+      return `<div class="ts-stp ${cls}"><span class="ts-stp-dot">${ic}</span><b>${x.t}</b><small>${x.ar}</small><em dir="ltr">${eh(when)}</em>${who ? '<div class="ts-deliv-by">بواسطة ' + eh(who) + '</div>' : ''}</div>`;
     }).join('<span class="ts-stp-line"></span>');
     return `<div class="ts-stepper">${paused ? '<div class="ts-stp-hold">⏸ Under Review — الخدمة موقوفة مؤقتاً</div>' : ''}<div class="ts-stp-row">${nodes}</div></div>`;
   }
@@ -1199,6 +1232,46 @@
       slot.innerHTML = stepperHtml(o, line);
     });
   }
+
+  /* ===== مين سلّم الخدمة: من audit_log (الموظف اللي حوّلها Delivered) ===== */
+  const deliveredBy = {};
+  async function loadDeliveredBy(o) {
+    if (!o || !(o.lines || []).some(l => l.status === 'Delivered')) return;
+    const sb = getSb(); if (!sb) return;
+    try {
+      const r = await sb.from('audit_log').select('at,user_name,service,details').eq('transaction_id', String(o.transaction_id)).order('at', { ascending: false }).limit(500);
+      if (r.error || !Array.isArray(r.data)) return;
+      r.data.forEach(a => {
+        const d = a.details || {};
+        const hit = (d.delivered && d.delivered.new === true) || (d.status && d.status.new === 'Delivered');
+        const key = o.transaction_id + '|' + (a.service || '');
+        if (hit && a.user_name && !deliveredBy[key]) deliveredBy[key] = a.user_name;
+      });
+      renderSteppers(o);
+      paintDeliveredCard(o);
+    } catch (e) {}
+  }
+  function deliveredNames(o) {
+    const set = new Set();
+    (o.lines || []).forEach(l => { if (l.status === 'Delivered') { const n = deliveredBy[o.transaction_id + '|' + (l.service || '')]; if (n) set.add(n); } });
+    return Array.from(set);
+  }
+  function paintDeliveredCard(o) {
+    const grid = document.querySelector('#tx-modal-body .ts-dtl-grid');
+    if (!grid) return;
+    let c = grid.querySelector('[data-ts-delivered]');
+    const names = deliveredNames(o);
+    if (!names.length) { if (c) c.remove(); return; }
+    if (!c) {
+      c = document.createElement('div');
+      c.className = 'ts-dtl-card';
+      c.setAttribute('data-ts-delivered', '1');
+      const wide = grid.querySelector('.ts-dtl-card-wide');
+      grid.insertBefore(c, wide || null);
+    }
+    c.innerHTML = '<div class="ts-dtl-label"><i class="fa-solid fa-truck-fast text-emerald-500"></i><span>تم التسليم بواسطة</span></div><div class="ts-dtl-val">' + eh(names.join('، ')) + '</div>';
+  }
+
   // لما تواريخ المراحل الحقيقية تتحمّل من السيرفر نعيد رسم الـ Stepper
   const origLoadStage = window.loadLineStageEvents;
   if (typeof origLoadStage === 'function') {
@@ -1252,6 +1325,8 @@
 
       // 3. شريط مراحل التنفيذ (Stepper) لكل خدمة
       renderSteppers(o);
+      paintDeliveredCard(o);
+      loadDeliveredBy(o);
 
       // 4. زر الإيقاف Under Review
       modalBody.querySelectorAll('[data-svc-card-id] .lp-btn').forEach(b => {
@@ -1331,7 +1406,7 @@
 
     const ov = document.createElement('div');
     ov.id = 'ts-change-history-modal';
-    ov.className = 'fixed inset-0 z-[160] flex items-center justify-center bg-black/75 p-3 sm:p-4';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99990;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:12px';
     ov.innerHTML = `
       <div class="w-full max-w-3xl max-h-[90vh] bg-white dark:bg-[#141210] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden" onclick="event.stopPropagation()">
         <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-[#1b1815]">
