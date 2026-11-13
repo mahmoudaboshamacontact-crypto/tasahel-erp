@@ -642,7 +642,7 @@
       button[onclick*="openWorkflowStagesModal"] { display: none !important; }
       /* كلمة "متوسط تقدم الخدمات" كانت بتطلع برا الدايرة */
       .tx-ring-gauge-box .absolute > span:nth-child(3) { display: none; }
-      .ts-deliv-by { font-size: 10px; color: #10b981; font-weight: 700; margin-top: 2px; }
+      .ts-deliv-by { font-size: 10px; color: #10b981; font-weight: 700; margin-top: 2px; line-height: 1.4; }
 
       /* Stepper */
       .ts-stepper { margin-top: 2px; }
@@ -1209,8 +1209,10 @@
       const cls = i < cur || (i === cur && st === 'Delivered') ? 'done' : i === cur ? (paused ? 'paused' : 'now') : '';
       const ic = cls === 'done' ? '<i class="fa-solid fa-check"></i>' : cls === 'paused' ? '⏸' : (i + 1);
       const when = x.at ? fmtStepDate(x.at) : (cls === 'now' || cls === 'paused' ? 'جارية الآن' : '—');
-      const who = x.t === 'Delivered' && st === 'Delivered' ? deliveredBy[o.transaction_id + '|' + (line.service || '')] : '';
-      return `<div class="ts-stp ${cls}"><span class="ts-stp-dot">${ic}</span><b>${x.t}</b><small>${x.ar}</small><em dir="ltr">${eh(when)}</em>${who ? '<div class="ts-deliv-by">بواسطة ' + eh(who) + '</div>' : ''}</div>`;
+      let who = '';
+      if (x.t === 'In Progress' && o.receiver) who = 'استلام: ' + o.receiver;
+      if (x.t === 'Delivered' && st === 'Delivered') { const dt = (trips[o.transaction_id] || {}).delivery; if (dt) who = 'تسليم: ' + courierText(dt.courier); }
+      return `<div class="ts-stp ${cls}"><span class="ts-stp-dot">${ic}</span><b>${x.t}</b><small>${x.ar}</small><em dir="ltr">${eh(when)}</em>${who ? '<div class="ts-deliv-by">' + eh(who) + '</div>' : ''}</div>`;
     }).join('<span class="ts-stp-line"></span>');
     return `<div class="ts-stepper">${paused ? '<div class="ts-stp-hold">⏸ Under Review — الخدمة موقوفة مؤقتاً</div>' : ''}<div class="ts-stp-row">${nodes}</div></div>`;
   }
@@ -1233,43 +1235,38 @@
     });
   }
 
-  /* ===== مين سلّم الخدمة: من audit_log (الموظف اللي حوّلها Delivered) ===== */
-  const deliveredBy = {};
+  /* ===== مندوب التسليم: بيتسجل أصلاً في courier_trips (kind=delivery) لما الحالة تبقى Delivered ===== */
+  const trips = {};
+  const selfPick = c => !c || c === '—';
+  function courierText(c) { return selfPick(c) ? 'العميل استلم بنفسه من المكتب' : c; }
   async function loadDeliveredBy(o) {
     if (!o || !(o.lines || []).some(l => l.status === 'Delivered')) return;
     const sb = getSb(); if (!sb) return;
     try {
-      const r = await sb.from('audit_log').select('at,user_name,service,details').eq('transaction_id', String(o.transaction_id)).order('at', { ascending: false }).limit(500);
+      const r = await sb.from('courier_trips').select('kind,courier,trip_day').eq('transaction_id', String(o.transaction_id));
       if (r.error || !Array.isArray(r.data)) return;
-      r.data.forEach(a => {
-        const d = a.details || {};
-        const hit = (d.delivered && d.delivered.new === true) || (d.status && d.status.new === 'Delivered');
-        const key = o.transaction_id + '|' + (a.service || '');
-        if (hit && a.user_name && !deliveredBy[key]) deliveredBy[key] = a.user_name;
-      });
+      const t = {};
+      r.data.forEach(x => { t[x.kind] = x; });
+      trips[o.transaction_id] = t;
       renderSteppers(o);
       paintDeliveredCard(o);
     } catch (e) {}
-  }
-  function deliveredNames(o) {
-    const set = new Set();
-    (o.lines || []).forEach(l => { if (l.status === 'Delivered') { const n = deliveredBy[o.transaction_id + '|' + (l.service || '')]; if (n) set.add(n); } });
-    return Array.from(set);
   }
   function paintDeliveredCard(o) {
     const grid = document.querySelector('#tx-modal-body .ts-dtl-grid');
     if (!grid) return;
     let c = grid.querySelector('[data-ts-delivered]');
-    const names = deliveredNames(o);
-    if (!names.length) { if (c) c.remove(); return; }
+    const t = (trips[o.transaction_id] || {}).delivery;
+    const delivered = (o.lines || []).some(l => l.status === 'Delivered');
+    if (!delivered || !t) { if (c) c.remove(); return; }
     if (!c) {
       c = document.createElement('div');
       c.className = 'ts-dtl-card';
       c.setAttribute('data-ts-delivered', '1');
-      const wide = grid.querySelector('.ts-dtl-card-wide');
-      grid.insertBefore(c, wide || null);
+      grid.insertBefore(c, grid.querySelector('.ts-dtl-card-wide') || null);
     }
-    c.innerHTML = '<div class="ts-dtl-label"><i class="fa-solid fa-truck-fast text-emerald-500"></i><span>تم التسليم بواسطة</span></div><div class="ts-dtl-val">' + eh(names.join('، ')) + '</div>';
+    c.innerHTML = '<div class="ts-dtl-label"><i class="fa-solid fa-truck-fast text-emerald-500"></i><span>مندوب التسليم</span></div><div class="ts-dtl-val">' + eh(courierText(t.courier)) + '</div>' +
+      (t.trip_day ? '<div class="ts-deliv-by" dir="ltr" style="text-align:start">' + eh(fmtStepDate(t.trip_day)) + '</div>' : '');
   }
 
   // لما تواريخ المراحل الحقيقية تتحمّل من السيرفر نعيد رسم الـ Stepper
