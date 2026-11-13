@@ -277,14 +277,13 @@
     var ps = distinctPeople(tx); if (!ps.length) return '';
     return '<div class="rp-list rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 p-3 text-xs space-y-1.5">' +
       '<div class="font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between"><span><i class="fa-solid fa-users ms-1.5"></i>المستفيدون (' + ps.length + ')</span></div>' +
-      '<div class="divide-y divide-slate-200/60 dark:divide-slate-700/60">' +
-      ps.map(function (p, i) {
+      '<div class="rp-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">' +
+      ps.map(function (p) {
         var svc = resolveServiceNameForLineId(tx, p.line_id);
-        return '<div class="flex flex-wrap items-center justify-between gap-2 py-1.5">' +
-          '<div class="flex items-center gap-2"><span class="font-mono text-[10.5px] text-slate-400">' + (i + 1) + '.</span><span class="font-bold text-ink dark:text-white">' + eh(p.name) + '</span>' +
-          (svc ? '<span class="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10.5px] font-semibold text-slate-600 dark:text-slate-300">' + eh(svc) + '</span>' : '<span class="text-[10.5px] text-slate-400">(كل الطلب)</span>') +
-          '</div>' +
-          (p.phone ? '<span class="font-mono text-slate-600 dark:text-slate-300" dir="ltr">' + eh(p.phone) + '</span>' : '') +
+        return '<div class="rp-card" style="display:flex;flex-direction:column;gap:3px;padding:8px 10px;border-radius:10px;border:1px solid rgba(148,163,184,.25);background:rgba(148,163,184,.07)">' +
+          '<span class="font-bold text-ink dark:text-white" style="line-height:1.4">' + eh(p.name) + '</span>' +
+          (svc ? '<span class="text-[10.5px] font-semibold text-slate-500 dark:text-slate-300">' + eh(svc) + '</span>' : '') +
+          (p.phone ? '<span class="font-mono text-[11px] text-slate-500 dark:text-slate-300" dir="ltr" style="align-self:flex-start">' + eh(p.phone) + '</span>' : '') +
         '</div>';
       }).join('') + '</div></div>';
   }
