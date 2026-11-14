@@ -472,3 +472,101 @@ end $$;
 -- ===== فحص بعد التشغيل (اختياري) =====
 -- select tablename from pg_policies where schemaname='public' and policyname='courier_block' order by 1;   -- لازم يطلع كل الجداول
 -- select proname from pg_proc where proname like 'courier_%' or proname in ('assign_courier','list_courier_accounts','is_courier','norm_ar');
+
+-- =====================================================================
+-- 9) إضافات النسخة 3 (Courier Portal v3):
+--    لوحة ترتيب الاستلامات والتسليم (Leaderboard) + إحصائيات شاملة للمدير
+--    قابل لإعادة التشغيل بأمان (Idempotent) — إضافة فقط بدون مساس بالدوال السابقة.
+-- =====================================================================
+
+-- لوحة ترتيب المناديب (تعمل للمندوب وللمدير/الموظف):
+-- - المندوب يشوف: الترتيب، الاسم، عدد الاستلامات، عدد التسليمات، مشاوير التوصيل، الإجمالي، ونسبة التأكيد (بدون كشف مبالغ غيره).
+-- - المدير يشوف بالإضافة لذلك: إجمالي المبالغ والعمولات المؤكدة والمنتظرة لكل مندوب.
+create or replace function public.courier_leaderboard(p_from date default null, p_to date default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_today date := (now() at time zone 'Africa/Cairo')::date;
+  v_to date := coalesce(p_to, v_today);
+  v_from date := greatest(coalesce(p_from, date_trunc('month', v_today)::date), v_to - 366);
+  v_is_mgr boolean := coalesce(public.is_manager(), false);
+  v_is_staff boolean := coalesce(public.is_staff(), false);
+  v_is_courier boolean := coalesce(public.is_courier(), false);
+  v_uid uuid := auth.uid();
+begin
+  if not (v_is_courier or v_is_mgr or v_is_staff) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+
+  return coalesce((
+    with active_couriers as (
+      select c.id, c.name, public.norm_ar(c.name) as norm_name, c.user_id, c.sort_order
+        from public.couriers c
+       where c.active = true
+    ),
+    trips_agg as (
+      select public.norm_ar(t.courier) as norm_name,
+             count(*) filter (where t.kind = 'pickup') as pickups_total,
+             count(*) filter (where t.kind = 'pickup' and t.courier_confirmed_at is not null) as pickups_confirmed,
+             count(*) filter (where t.kind = 'delivery') as deliveries_total,
+             count(*) filter (where t.kind = 'delivery' and t.courier_confirmed_at is not null) as deliveries_confirmed,
+             coalesce(sum(t.fee) filter (where t.courier_confirmed_at is not null), 0) as trips_confirmed_amt,
+             coalesce(sum(t.fee) filter (where t.courier_confirmed_at is null), 0) as trips_pending_amt
+        from public.courier_trips t
+       where t.trip_day between v_from and v_to
+         and t.courier is not null and t.courier <> '—'
+       group by public.norm_ar(t.courier)
+    ),
+    fees_agg as (
+      select public.norm_ar(l.executor) as norm_name,
+             count(*) as fees_total,
+             count(*) filter (where fc.line_id is not null) as fees_confirmed,
+             coalesce(sum(coalesce(nullif(l.exec_total, 0), coalesce(l.qty, 0) * coalesce(l.exec_unit_cost, 0))) filter (where fc.line_id is not null), 0) as fees_confirmed_amt,
+             coalesce(sum(coalesce(nullif(l.exec_total, 0), coalesce(l.qty, 0) * coalesce(l.exec_unit_cost, 0))) filter (where fc.line_id is null), 0) as fees_pending_amt
+        from public.request_lines l
+        left join public.courier_fee_confirms fc
+          on fc.line_id = l.id
+         and public.norm_ar(fc.courier) = public.norm_ar(l.executor)
+       where l.deleted_at is null
+         and public.norm_ar(l.service) like 'رسوم توصيل%'
+         and l.received_at::date between v_from and v_to
+       group by public.norm_ar(l.executor)
+    ),
+    combined as (
+      select ac.id,
+             ac.name,
+             (ac.user_id = v_uid) as is_me,
+             (ac.user_id is not null) as has_account,
+             coalesce(ta.pickups_total, 0) as pickups,
+             coalesce(ta.pickups_confirmed, 0) as pickups_confirmed,
+             coalesce(ta.deliveries_total, 0) as deliveries,
+             coalesce(ta.deliveries_confirmed, 0) as deliveries_confirmed,
+             coalesce(fa.fees_total, 0) as fee_trips,
+             coalesce(fa.fees_confirmed, 0) as fee_trips_confirmed,
+             (coalesce(ta.pickups_total, 0) + coalesce(ta.deliveries_total, 0) + coalesce(fa.fees_total, 0)) as total_trips,
+             (coalesce(ta.pickups_confirmed, 0) + coalesce(ta.deliveries_confirmed, 0) + coalesce(fa.fees_confirmed, 0)) as confirmed_trips,
+             (coalesce(ta.pickups_total, 0) + coalesce(ta.deliveries_total, 0)) as std_trips,
+             case when v_is_mgr or ac.user_id = v_uid
+                  then (coalesce(ta.trips_confirmed_amt, 0) + coalesce(fa.fees_confirmed_amt, 0))
+                  else null end as confirmed_amount,
+             case when v_is_mgr or ac.user_id = v_uid
+                  then (coalesce(ta.trips_pending_amt, 0) + coalesce(fa.fees_pending_amt, 0))
+                  else null end as pending_amount,
+             ac.sort_order
+        from active_couriers ac
+        left join trips_agg ta on ta.norm_name = ac.norm_name
+        left join fees_agg fa on fa.norm_name = ac.norm_name
+    ),
+    ranked as (
+      select c.*,
+             dense_rank() over (
+               order by c.total_trips desc, c.deliveries desc, c.pickups desc, c.confirmed_trips desc, c.sort_order asc, c.id asc
+             ) as rank
+        from combined c
+    )
+    select jsonb_agg(to_jsonb(r) order by r.rank asc, r.sort_order asc, r.id asc)
+      from ranked r
+  ), '[]'::jsonb);
+end $$;
+
+revoke all on function public.courier_leaderboard(date, date) from public, anon;
+grant execute on function public.courier_leaderboard(date, date) to authenticated;
