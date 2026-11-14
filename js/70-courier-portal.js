@@ -480,10 +480,10 @@
 
   /* ---------- المدير: ربط حساب بمندوب + متابعة ---------- */
   function addMgrBtn() {
-    if ($('cp-mgr-btn')) return;
+    if ($('tab-cpmgr-btn')) return;
     const anchor = $('tab-couriers-btn'); if (!anchor) return;
-    anchor.insertAdjacentHTML('afterend', '<button id="cp-mgr-btn" type="button" class="tab-btn"><i class="fa-solid fa-id-card"></i><span>حسابات المناديب</span></button>');
-    $('cp-mgr-btn').addEventListener('click', () => { if (window.closeNavMenu) window.closeNavMenu(); openMgr(); });
+    anchor.insertAdjacentHTML('afterend', '<button id="tab-cpmgr-btn" type="button" class="tab-btn"><i class="fa-solid fa-id-card"></i><span>حسابات المناديب</span></button>');
+    $('tab-cpmgr-btn').addEventListener('click', () => { if (window.closeNavMenu) window.closeNavMenu(); openMgr(); });
   }
   function mgrShell(inner) {
     addCss(); let o = $('cp-mgr'); if (!o) { o = document.createElement('div'); o.id = 'cp-mgr'; o.className = 'cp-modal'; o.setAttribute('dir', 'rtl'); document.body.appendChild(o); }
