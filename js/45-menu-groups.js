@@ -13,7 +13,7 @@
     { id: 'daily', title: 'الشغل اليومي', icon: 'fa-sun', keys: ['home', 'new', 'tx', 'exec', 'wtrack', 'cash', 'receipt', 'batchprint', 'myday', 'late'] },
     { id: 'follow', title: 'متابعة وتواصل', icon: 'fa-comments', keys: ['chat', 'tasks', 'notes', 'inquiries', 'search'] },
     { id: 'perf', title: 'أداء وتقارير', icon: 'fa-chart-line', keys: ['comm', 'dash', 'teamperf', 'wk', 'team'] },
-    { id: 'admin', title: 'إدارة', icon: 'fa-sliders', keys: ['hr', 'couriers', 'partners', 'calc', 'db', 'backup'] }
+    { id: 'admin', title: 'إدارة', icon: 'fa-sliders', keys: ['hr', 'couriers', 'cpmgr', 'partners', 'calc', 'db', 'backup'] }
   ];
   const where = {}; GROUPS.forEach(g => g.keys.forEach((k, i) => { where[k] = { g: g.id, i: i }; }));
   let menu = null, busy = false, timer = null;
