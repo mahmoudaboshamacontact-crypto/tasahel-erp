@@ -96,7 +96,7 @@
       '.ts-ck-gear:hover{background:var(--ck-acc);color:#fff}',
       /* تخطيط الرئيسية: الترحيب يمين والساعة شمال في صف واحد */
       '@media(min-width:1100px){',
-      '#tab-home{display:grid !important;grid-template-columns:minmax(0,1fr) 500px;column-gap:18px;row-gap:14px;align-items:start}',
+      '#tab-home:not(.hidden){display:grid !important;grid-template-columns:minmax(0,1fr) 500px;column-gap:18px;row-gap:14px;align-items:start}',
       '#tab-home>*{grid-column:1/-1;margin:0 !important}',
       '#tab-home>.hm-hero{grid-column:1;grid-row:1;align-self:stretch}',
       '#tab-home>#ts-ck{grid-column:2;grid-row:1;align-self:stretch}',
