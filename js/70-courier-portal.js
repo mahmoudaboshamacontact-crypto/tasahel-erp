@@ -1,5 +1,5 @@
 /* =====================================================================
-   بوابة المندوب (js/70-courier-portal.js) — النسخة 5 (Courier Portal v5)
+   بوابة المندوب (js/70-courier-portal.js) — النسخة 6 (Courier Portal v6: Today-first navigation)
    - 5 تابات للمندوب: حسابي / مشاويري / الترتيب / المراجعة / التواصل + ملفي الشخصي، شهور، ثيم، ساعة، أوفلاين.
    - A) تجميع ريكوستات نفس العميل (client_name بعد التطبيع + day + type) في كارت واحد („٤ ريكوستات“)
         في مشاويري والمراجعة بدون تغيير أي حساب فلوس، والضغط على العميل يفتح مودال „تفاصيل العميل“
@@ -20,7 +20,7 @@
   const MGR_EMAILS = ['mahmoud.aboshama@tasahel.com.eg', 'mahmoud.aboshama.contact@gmail.com'];
 
   const st = {
-    me: null, prevTab: 'home', avUrl: '', avPendingBlob: null, avPendingUrl: '', avRemoved: false, items: [], sig: '', tab: 'home', period: 'today', month: '', lbPeriod: 'month',
+    me: null, prevTab: 'home', avUrl: '', avPendingBlob: null, avPendingUrl: '', avRemoved: false, items: [], sig: '', tab: 'today', period: 'today', month: '', lbPeriod: 'month',
     day: null, type: 'all', statusFilter: 'all', q: '',
     leaderboard: [], lbsig: '', lbLoaded: false,
     notesMap: {}, nsig: '',
@@ -472,19 +472,21 @@
     const n = $('cp-nav'); if (!n) return;
     const u = unreadTotal(), pend = st.items.filter(i => !i.confirmed).length;
     const T = [
-      ['home', 'fa-chart-pie', 'حسابي', 0],
+      ['today', 'fa-house', 'اليوم', st.items.filter(i => i.day === today() && !i.confirmed).length],
       ['trips', 'fa-motorcycle', 'مشاويري', 0],
-      ['rank', 'fa-trophy', 'الترتيب', 0],
       ['review', 'fa-clipboard-check', 'المراجعة', pend],
-      ['chat', 'fa-comments', 'التواصل', u]
+      ['chat', 'fa-comments', 'التواصل', u],
+      ['account', 'fa-wallet', 'حسابي', 0]
     ];
-    const html = T.map(t => '<button type="button" data-tab="' + t[0] + '" class="' + (st.tab === t[0] ? 'on' : '') + '"><i class="fa-solid ' + t[1] + '"></i>' + t[2] + (t[3] ? '<em class="cp-bdg">' + num(t[3]) + '</em>' : '') + '</button>').join('');
+    const activeTab = st.tab === 'rank' ? 'account' : st.tab;
+    const html = T.map(t => '<button type="button" data-tab="' + t[0] + '" class="' + (activeTab === t[0] ? 'on' : '') + '"><i class="fa-solid ' + t[1] + '"></i>' + t[2] + (t[3] ? '<em class="cp-bdg">' + num(t[3]) + '</em>' : '') + '</button>').join('');
     if (n.dataset.h !== html) { n.dataset.h = html; n.innerHTML = html; }
   }
   function setTab(t) {
-    st.tab = t;
-    if (t !== 'chat') st.chat = null;
-    if (t === 'rank') loadLeaderboard(true);
+    st.tab = t === 'home' ? 'account' : t;
+    if (st.tab !== 'chat') st.chat = null;
+    if (st.tab === 'rank') loadLeaderboard(true);
+    if (st.tab === 'today' || st.tab === 'account') loadItems(true);
     renderNav(); renderTab(true);
   }
   function renderTab(top) {
@@ -497,7 +499,8 @@
     const y = b.scrollTop;
 
     if (st.tab === 'profile') b.innerHTML = viewProfile();
-    else if (st.tab === 'home') b.innerHTML = viewHome();
+    else if (st.tab === 'today') b.innerHTML = viewToday();
+    else if (st.tab === 'home' || st.tab === 'account') b.innerHTML = viewHome();
     else if (st.tab === 'trips') b.innerHTML = viewTrips();
     else if (st.tab === 'rank') b.innerHTML = viewLeaderboard();
     else if (st.tab === 'review') b.innerHTML = viewReview();
@@ -517,6 +520,36 @@
     st.items.forEach(i => { if (i.day && i.day.length >= 7) set.add(i.day.slice(0, 7)); });
     return Array.from(set).sort().reverse().slice(0, 6);
   }
+  /* ---------- شاشة اليوم: الأولويات التشغيلية للمندوب ---------- */
+  function viewToday() {
+    const t = today();
+    const todayItems = itemsOf(t);
+    const pending = todayItems.filter(i => !i.confirmed);
+    const overdue = st.items.filter(i => !i.confirmed && i.day < t);
+    const confirmed = todayItems.filter(i => i.confirmed);
+    const groups = groupItemsByClient(pending);
+    const greeting = '<section class="cp-card" style="padding:16px;margin-bottom:12px">' +
+      '<small style="color:var(--mu);font-weight:700">' + eh(dayLabel(t)) + '</small>' +
+      '<h2 style="font-size:21px;font-weight:900;margin:5px 0 3px">أهلاً ' + eh((st.me && st.me.name) || 'بك') + ' 👋</h2>' +
+      '<div style="color:var(--mu);font-size:12px">دي متابعة شغلك النهارده — ابدأ بالمشاوير اللي لسه محتاجة تأكيد</div>' +
+      '</section>';
+    const kpis = '<div class="cp-grid">' +
+      '<div class="cp-kpi"><small><i class="fa-solid fa-route"></i>مشاوير اليوم</small><b>' + num(todayItems.length) + '</b><div class="m">إجمالي المشاوير</div></div>' +
+      '<div class="cp-kpi"><small><i class="fa-solid fa-hourglass-half"></i>بانتظار تأكيدك</small><b>' + num(pending.length) + '</b><div class="p">مطلوب مراجعتها</div></div>' +
+      '<div class="cp-kpi wide"><small><i class="fa-solid fa-circle-check"></i>تم تأكيدها اليوم</small><b>' + num(confirmed.length) + '</b><div class="m">مشوار مؤكد</div></div>' +
+      '</div>';
+    const overdueBox = overdue.length
+      ? '<section class="cp-card" style="border-color:#f59e0b;margin-bottom:12px"><div class="cp-row"><b>⚠ مشاوير من أيام سابقة</b><span class="cp-tag wt">' + num(overdue.length) + ' غير مؤكدة</span></div><p class="cp-sub">راجع المشاوير القديمة حتى لا تظل معلّقة في حسابك.</p><button type="button" class="cp-btn cp-sm" data-tab="review">فتح المراجعة</button></section>'
+      : '';
+    const pendingSection = '<div class="cp-h"><span>المشاوير المطلوب تأكيدها اليوم</span><button type="button" class="cp-a cp-sm" data-tab="trips">كل مشاويري</button></div>' +
+      (groups.length ? groups.map(tripGroupCard).join('') : '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير محتاجة تأكيد النهارده 🎉' : 'جاري تحميل المشاوير…') + '</div>');
+    const quickLinks = '<div class="cp-grid" style="margin-top:12px">' +
+      '<button type="button" class="cp-btn" data-tab="review"><i class="fa-solid fa-clipboard-check"></i> مراجعة وتأكيد</button>' +
+      '<button type="button" class="cp-btn" data-tab="account"><i class="fa-solid fa-wallet"></i> حسابي وعمولاتي</button>' +
+      '</div>';
+    return greeting + kpis + overdueBox + pendingSection + quickLinks;
+  }
+
   function viewHome() {
     if (!st.month) st.month = today().slice(0, 7);
     const s = stats(rangeOf(st.period));
@@ -740,7 +773,7 @@
       ['week', 'هذا الأسبوع'],
       ['month', 'هذا الشهر']
     ].map(p => '<button type="button" data-lbper="' + p[0] + '" class="' + (st.lbPeriod === p[0] ? 'on' : '') + '">' + p[1] + '</button>').join('') + '</div>';
-    return renderGuideBanner('rank') + seg + renderLeaderboardInner(st.leaderboard);
+    return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><b>ترتيب المندوبين</b><button type="button" class="cp-a cp-sm" data-tab="account">رجوع لحسابي</button></div>' + renderGuideBanner('rank') + seg + renderLeaderboardInner(st.leaderboard);
   }
 
   /* ---------- 4) المراجعة (تأكيد آخر اليوم: مجمع بالعميل + أكّد ده بس + أبلغت الموظف) ---------- */
@@ -1303,7 +1336,7 @@
       case 'logout': return window.handleLogout && window.handleLogout();
       case 'theme': return toggleTheme();
       case 'profile': return openProfileModal();
-      case 'pf-back': st.tab = st.prevTab || 'home'; renderNav(); return renderTab(true);
+      case 'pf-back': st.tab = st.prevTab || 'account'; renderNav(); return renderTab(true);
       case 'pf-pick': return pickCourierPhoto();
       case 'pf-rm': st.avPendingBlob = null; if (st.avPendingUrl) { URL.revokeObjectURL(st.avPendingUrl); st.avPendingUrl = ''; } st.avRemoved = true; updateHeaderWho(); return renderTab(false);
       case 'pf-save': return saveCourierProfile(el);
