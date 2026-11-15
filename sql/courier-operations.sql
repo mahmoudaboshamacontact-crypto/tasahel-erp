@@ -181,7 +181,7 @@ begin
   if v_c.id is null then raise exception 'courier account not linked' using errcode='42501'; end if;
   select coalesce(jsonb_agg(
     e.value || jsonb_build_object(
-      'closing_id',ci.closing_id,'closed_at',cl.closed_at,
+      'closing_id',ci.closing_id,'closed_at',cl.created_at,
       'paid_at',cl.paid_at,'paid_by',cl.paid_by,
       'included_in_closing',ci.id is not null and ci.released_at is null,
       'released_at',ci.released_at
