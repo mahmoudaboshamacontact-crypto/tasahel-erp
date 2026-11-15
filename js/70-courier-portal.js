@@ -597,8 +597,9 @@
     ].map(s => '<button type="button" class="cp-tab' + (st.statusFilter === s[0] ? ' on' : '') + '" data-sfilter="' + s[0] + '">' + s[1] + '</button>').join('') + '</div>';
 
     const searchBar = '<div class="cp-search-bar">' +
-      '<input id="cp-trip-q" type="search" value="' + eh(st.q) + '" placeholder="ابحث باسم العميل، رقم المعاملة، التليفون، العنوان…">' +
-      (st.q ? '<button type="button" class="cp-btn cp-sm" data-act="qclear">مسح البحث</button>' : '') +
+      '<input id="cp-trip-q" type="search" value="' + eh(st.q) + '" placeholder="ابحث باسم العميل، رقم المعاملة، التليفون، العنوان…" aria-label="البحث في المشاوير">' +
+      '<button type="button" class="cp-btn cp-go cp-sm" data-act="qsearch"><i class="fa-solid fa-magnifying-glass"></i> بحث</button>' +
+      (st.q ? '<button type="button" class="cp-btn cp-sm" data-act="qclear">مسح</button>' : '') +
     '</div>';
 
     const q = normAr((st.q || '').trim());
@@ -1340,13 +1341,15 @@
 
   /* ---------- الأحداث ---------- */
   function onKey(e) {
-    if (e.target && e.target.id === 'cp-msg' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
-  }
-  function onInput(e) {
-    if (e.target && e.target.id === 'cp-trip-q') {
+    if (e.target && e.target.id === 'cp-msg' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); return; }
+    if (e.target && e.target.id === 'cp-trip-q' && e.key === 'Enter') {
+      e.preventDefault();
       st.q = e.target.value;
       renderTab(false);
     }
+  }
+  function onInput(e) {
+    if (e.target && e.target.id === 'cp-trip-q') st.q = e.target.value;
   }
   function onClick(e) {
     const el = e.target.closest('[data-act],[data-tab],[data-per],[data-month],[data-lbper],[data-type],[data-sfilter]'); if (!el) return;
@@ -1371,6 +1374,12 @@
       case 'pf-rm': st.avPendingBlob = null; if (st.avPendingUrl) { URL.revokeObjectURL(st.avPendingUrl); st.avPendingUrl = ''; } st.avRemoved = true; updateHeaderWho(); return renderTab(false);
       case 'pf-save': return saveCourierProfile(el);
       case 'guide-toggle': return toggleGuide(el.dataset.gtab);
+      case 'qsearch': {
+        const input = $('cp-trip-q');
+        if (input) st.q = input.value;
+        renderTab(false);
+        return;
+      }
       case 'qclear': st.q = ''; return renderTab(false);
       case 'dprev': st.day = addDays(st.day, -1); return renderTab(false);
       case 'dnext': if (st.day < today()) { st.day = addDays(st.day, 1); renderTab(false); } return;
