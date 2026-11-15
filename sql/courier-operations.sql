@@ -22,7 +22,7 @@ revoke all on public.courier_trip_ops from public, anon, authenticated;
 
 create table if not exists public.courier_trip_issues (
   id bigserial primary key,
-  trip_id bigint not null references public.courier_trips(id) on delete cascade,
+  trip_id bigint not null references public.courier_trips(id) on delete restrict,
   reporter_id uuid not null references auth.users(id),
   issue_type text not null check (issue_type in
     ('customer_unavailable','wrong_address','incorrect_fee','pickup_problem','other')),
