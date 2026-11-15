@@ -598,6 +598,8 @@ revoke all on function public.courier_dispatch_pending_reminders() from public,a
 
 -- Supabase Cron runs independently of an open browser session.
 create extension if not exists pg_cron with schema pg_catalog;
+grant usage on schema cron to postgres;
+grant all privileges on all tables in schema cron to postgres;
 select cron.unschedule(jobid) from cron.job where jobname='courier-pending-reminders';
 select cron.schedule(
   'courier-pending-reminders',
