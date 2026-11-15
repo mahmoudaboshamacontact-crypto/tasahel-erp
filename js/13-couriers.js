@@ -443,6 +443,8 @@
       totDl += d.dlCount;
       totFar += d.farCount;
       totMoney += d.totalFee;
+      totPending += d.pendingFee;
+      pendingCount += d.pendingCount;
     });
     return '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">' +
       '<div class="card p-4 flex items-center gap-3.5">' +
@@ -738,7 +740,7 @@
 
     const flatRows = [];
     const csvRows = [];
-    let totPk = 0, totDl = 0, totFar = 0, totMoney = 0;
+    let totPk = 0, totDl = 0, totFar = 0, totMoney = 0, totPending = 0, pendingCount = 0;
 
     targetData.forEach(d => {
       totPk += d.pkCount;
@@ -754,6 +756,7 @@
           it.client + (it.phone ? ' (' + it.phone + ')' : ''),
           it.services || '—',
           it.typeLabel,
+          it.confirmed ? 'مؤكد' : 'بانتظار التأكيد',
           formatCurrency(it.fee)
         ]);
         csvRows.push([
@@ -765,6 +768,7 @@
           it.address || '',
           it.services || '',
           it.typeLabel,
+          it.confirmed ? 'مؤكد' : 'بانتظار التأكيد',
           it.fee
         ]);
       });
@@ -783,11 +787,12 @@
         ['إجمالي المشاوير', flatRows.length + ' مشوار'],
         ['استلام / تسليم', 'استلام: ' + totPk + ' | تسليم: ' + totDl],
         ['رسوم توصيل', totFar + ' مشوار'],
-        ['الإجمالي المستحق', formatCurrency(totMoney)]
+        ['المستحق المؤكد', formatCurrency(totMoney)],
+        ['معلق مستبعد من التقفيل', pendingCount + ' مشوار · ' + formatCurrency(totPending)]
       ],
-      headers: ['#', 'المندوب', 'التاريخ', 'رقم المعاملة', 'العميل والهاتف', 'الخدمة', 'نوع المشوار', 'الأجر'],
+      headers: ['#', 'المندوب', 'التاريخ', 'رقم المعاملة', 'العميل والهاتف', 'الخدمة', 'نوع المشوار', 'حالة التأكيد', 'الأجر'],
       rows: flatRows,
-      csvHeaders: ['المندوب', 'التاريخ', 'رقم المعاملة', 'اسم العميل', 'الهاتف', 'العنوان', 'الخدمات', 'نوع المشوار', 'الأجر'],
+      csvHeaders: ['المندوب', 'التاريخ', 'رقم المعاملة', 'اسم العميل', 'الهاتف', 'العنوان', 'الخدمات', 'نوع المشوار', 'حالة التأكيد', 'الأجر'],
       csvRows: csvRows,
       filename: (courierNameOpt ? 'شيت_المندوب_' + courierNameOpt.replace(/\s+/g, '_') : 'شيت_المناديب') + '_' + last.s + '_' + last.e
     };
