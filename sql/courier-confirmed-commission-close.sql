@@ -333,6 +333,7 @@ begin
         select 1 from public.courier_trips t
          where t.id = v_trip_id and t.kind = p_type
            and public.norm_ar(t.courier) = v_me
+           and t.trip_day <= v_today
       ) then
         raise exception 'not your trip' using errcode = '42501';
       end if;
@@ -410,6 +411,7 @@ begin
        where l.id = v_line_id and l.deleted_at is null
          and public.norm_ar(l.service) like 'رسوم توصيل%'
          and public.norm_ar(l.executor) = v_me
+         and l.received_at::date <= v_today
     ) then
       raise exception 'not your fee line' using errcode = '42501';
     end if;
@@ -589,7 +591,8 @@ begin
      or p_period_start is null or p_period_end is null
      or p_period_start > p_period_end
      or p_period_type is null
-     or p_period_type not in ('today','week','month','prev_month','all','custom') then
+     or p_period_type not in ('today','week','month','prev_month','all','custom')
+     or p_period_end > (now() at time zone 'Africa/Cairo')::date then
     raise exception 'invalid closing parameters' using errcode = '22023';
   end if;
 
@@ -727,6 +730,9 @@ begin
   if v_closing.id is null then
     raise exception 'active closing not found' using errcode = 'P0002';
   end if;
+
+  -- نفس قفل المندوب المستخدم في التقفيل يمنع تداخل إعادة الفتح مع تقفيل جديد.
+  perform pg_advisory_xact_lock(hashtextextended(public.norm_ar(v_closing.courier), 0));
 
   update public.courier_closing_items
      set released_at = now(),
