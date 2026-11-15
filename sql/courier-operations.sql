@@ -320,7 +320,7 @@ revoke all on function public.trg_courier_ops_staff_note_notice() from public,an
 revoke all on function public.courier_tx_notes(text) from public,anon;
 grant execute on function public.courier_tx_notes(text) to authenticated;
 
-\nrevoke all on function public.courier_ops_items(date,date),
+revoke all on function public.courier_ops_items(date,date),
  public.courier_ops_update(bigint,text,smallint,integer,text),
  public.courier_ops_report(bigint,text,text),public.courier_ops_issues(text),
  public.courier_ops_issue_update(bigint,text,text),public.courier_ops_ledger(date,date),
