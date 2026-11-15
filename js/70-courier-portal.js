@@ -701,7 +701,8 @@
       const data = Array.isArray(r.data) ? r.data : [], sig = JSON.stringify(data);
       st.loaded = true; st.lastOk = Date.now(); const u = $('cp-upd'); if (u) u.textContent = timeOf(st.lastOk);
       if (sig !== st.sig) { saveCache(data); st.sig = sig; st.items = data; renderNav(); if (st.tab !== 'chat' && st.tab !== 'profile') renderTab(false); }
-    } catch (e) { setOffline(true); if (!silent) toast(errMsg(e), true); }
+      return true;
+    } catch (e) { setOffline(true); if (!silent) toast(errMsg(e), true); return false; }
   }
   async function loadLeaderboard(silent) {
     try {
@@ -896,7 +897,7 @@
       case 'pback': st.pPhoto = undefined; st.pT = undefined; st.pP = undefined; return setTab('home');
       case 'pdel': syncDraft(); st.pPhoto = ''; return renderTab(false);
       case 'psave': return saveProfile(el);
-      case 'refresh': return loadItems(false).then(() => toast('اتحدّث ✓'));
+      case 'refresh': return loadItems(false).then(ok => { if (ok) toast('اتحدّث ✓'); });
       case 'goold': { const o = st.items.filter(i => !i.confirmed && i.day < today()).map(i => i.day).sort().pop(); if (o) st.month = monthOf(o); st.rvf = 'pending'; st.rvOpen = false; return setTab('review'); }
       case 'qr': { const t = $('cp-msg'); if (t) { t.value = (t.value ? t.value.trim() + ' ' : '') + el.dataset.txt; st.draft = t.value; t.focus(); } return; }
       case 'sendloc': {
@@ -943,7 +944,17 @@
     catch (e) {
       st.err = e; let m = null; try { m = JSON.parse(localStorage.getItem('ts_cp_me') || 'null'); } catch (x) { /* */ }
       const denied = e && (e.code === '42501' || /not linked|courier only/.test(String(e.message || '')));
-      if (m && m.user_id && !denied) { st.me = m; st.offline = true; }
+      let sessionUserId = null;
+      try {
+        const sessionResult = await sbClient.auth.getSession();
+        sessionUserId = sessionResult && sessionResult.data && sessionResult.data.session &&
+          sessionResult.data.session.user && sessionResult.data.session.user.id;
+      } catch (x) { /* لا نعرض بيانات مخزنة دون التحقق من هوية الجلسة */ }
+      if (m && m.user_id && sessionUserId && m.user_id === sessionUserId && !denied) {
+        st.me = m; st.offline = true;
+      } else if (denied || (m && m.user_id && sessionUserId && m.user_id !== sessionUserId)) {
+        try { localStorage.removeItem('ts_cp_me'); } catch (x) { /* */ }
+      }
     }
     if (!st.me) { const e = st.err || new Error('تعذر تحميل البوابة'); overlay('<header class="cp-head"><div class="cp-who"><b>بوابة المندوب</b></div>' + logoutBtn + '</header><div class="cp-empty" style="margin:auto">' + eh(errMsg(e)) + '</div>'); return; }
     const cc = loadCache(); if (cc) { st.items = cc.items; st.loaded = true; st.lastOk = cc.ts; }
