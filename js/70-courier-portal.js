@@ -363,7 +363,7 @@
 
   /* مرجع التأكيد الفردي (للبند B.1) */
   // التأكيد الفردي لازم يشير إلى سجل المشوار نفسه، لا إلى رقم المعاملة الذي قد يحتوي أكثر من مشوار.
-  const itemRef = it => String(it.id);
+  const itemRef = it => (it.type === 'fee' ? 'fee:' : 'trip:') + String(it.id);
 
   /* علامة 📨 أبلغت الموظف (البند B.3) */
   function noteBadgeHtml(it) {
