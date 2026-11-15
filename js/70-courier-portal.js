@@ -362,7 +362,8 @@
   const kindLabel = it => it.type === 'fee' ? (it.fee_kind === 'round' ? 'رسوم توصيل · ذهاب وعودة' : 'رسوم توصيل · ذهاب فقط') : KIND[it.type].label;
 
   /* مرجع التأكيد الفردي (للبند B.1) */
-  const itemRef = it => it.type === 'fee' ? String(it.id) : String(it.transaction_id);
+  // التأكيد الفردي لازم يشير إلى سجل المشوار نفسه، لا إلى رقم المعاملة الذي قد يحتوي أكثر من مشوار.
+  const itemRef = it => String(it.id);
 
   /* علامة 📨 أبلغت الموظف (البند B.3) */
   function noteBadgeHtml(it) {
