@@ -525,6 +525,7 @@
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 font-bold text-emerald-700 dark:text-emerald-300"><i class="fa-solid fa-truck-fast"></i>تسليم: ' + d.dlCount + '</span>' +
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 px-2.5 py-1 font-bold text-amber-700 dark:text-amber-300"><i class="fa-solid fa-motorcycle"></i>رسوم توصيل: ' + d.farCount + '</span>' +
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 px-2.5 py-1 font-bold text-teal-800 dark:text-teal-200"><i class="fa-solid fa-coins"></i>المستحق المؤكد: ' + formatCurrency(d.totalFee) + '</span>' +
+                (d.pendingCount ? '<span class="inline-flex items-center gap-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 px-2.5 py-1 font-bold text-amber-700 dark:text-amber-300">معلق: ' + d.pendingCount + ' · ' + formatCurrency(d.pendingFee) + '</span>' : '') +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -857,7 +858,7 @@
 
   window.courierClose = async function (c) {
     const x = last && last.rows.find(r => r.c === c); if (!x || !isMgr()) return;
-    if (!confirm('تقفيل ' + c + ' عن الفترة من ' + last.s + ' إلى ' + last.e + '؟\nالإجمالي: ' + formatCurrency(x.tot))) return;
+    if (!confirm('تقفيل ' + c + ' عن الفترة من ' + last.s + ' إلى ' + last.e + '؟\nالمستحق المؤكد: ' + formatCurrency(x.confirmedTot) + '\nالمشاوير المعلقة المستبعدة: ' + x.pendingCount + ' (' + formatCurrency(x.pendingAmount) + ')')) return;
     if (x.confirmedTot <= 0) return showToast('لا توجد مشاوير مؤكدة قابلة للتقفيل لهذا المندوب في الفترة المحددة', 'info');
     const r = await sbClient.rpc('courier_close_account', { p_courier: c, p_period_type: filterPreset || 'custom', p_period_start: last.s, p_period_end: last.e });
     if (r.error) return showError('تعذّر التقفيل', r.error); showToast('تم تقفيل ' + c + ' على المشاوير المؤكدة فقط'); render();
