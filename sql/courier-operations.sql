@@ -201,7 +201,7 @@ create or replace function public.courier_ops_closings(p_from date default null,
 returns jsonb language plpgsql stable security definer set search_path=public as $$
 begin
   if not (public.is_manager() or public.is_staff()) then raise exception 'staff only' using errcode='42501'; end if;
-  return coalesce((select jsonb_agg(to_jsonb(c) order by c.closed_at desc) from public.courier_closings c
+  return coalesce((select jsonb_agg(to_jsonb(c) order by c.created_at desc) from public.courier_closings c
     where (p_from is null or c.period_end>=p_from) and (p_to is null or c.period_start<=p_to)
   ),'[]'::jsonb);
 end $$;
