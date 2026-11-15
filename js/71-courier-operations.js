@@ -86,7 +86,8 @@
       const q=await rpc('courier_ops_update',{p_trip_id:Number(other.id),p_route_order:i+1,p_status:null,p_priority:null,p_note:null});
       if(q.error)return toast(q.error.message,true);return render();
     }
-    if(a==='paid'){return;}\n    if(a==='issue-state'){
+    if(a==='paid'){return;}
+    if(a==='issue-state'){
       const resolution=b.dataset.state==='resolved'?(prompt('اكتب ملخص الحل (اختياري):')||'') : null;
       const r=await rpc('courier_ops_issue_update',{p_issue_id:Number(b.dataset.id),p_status:b.dataset.state,p_resolution:resolution});
       if(r.error)return toast(r.error.message,true);toast('تم تحديث حالة البلاغ');if(isStaff()&&!$('courier-ops-modal')?.style.display||$('courier-ops-modal')?.style.display==='none')return loadManagerPanel();return render();
@@ -113,8 +114,8 @@
   async function loadManagerPanel() {
     const c=$('cop-manager-content');if(!c||state.managerBusy)return;state.managerBusy=true;c.textContent='جاري التحميل…';
     try{
-      const [ir,cr]=await Promise.all([rpc('courier_ops_issues',{p_status:null}),rpc('courier_ops_closings',{p_from:null,p_to:null})]);
-      if(ir.error)throw ir.error;if(cr.error)throw cr.error;state.issues=ir.data||[];state.closings=cr.data||[];
+      const [ir,cr,tr]=await Promise.all([rpc('courier_ops_issues',{p_status:null}),rpc('courier_ops_closings',{p_from:null,p_to:null}),rpc('courier_ops_items',{p_from:null,p_to:null})]);
+      if(ir.error)throw ir.error;if(cr.error)throw cr.error;if(tr.error)throw tr.error;state.issues=ir.data||[];state.closings=cr.data||[];state.items=tr.data||[];
       c.innerHTML='<b>حالات المشاوير التشغيلية</b>'+state.items.slice(0,12).map(x=>'<div class="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.transaction_id)+' · '+esc(x.client_name||'بدون اسم')+'</span><select class="field !w-auto !py-1 text-xs" data-cop-status="'+x.id+'">'+Object.keys(labels).map(k=>'<option value="'+k+'" '+(x.operational_status===k?'selected':'')+'>'+labels[k]+'</option>').join('')+'</select></div>').join('')+'<hr><b>البلاغات المفتوحة: '+state.issues.filter(x=>x.status!=='resolved').length+'</b>'+state.issues.slice(0,8).map(x=>'<div class="border-b border-slate-200 dark:border-slate-700 py-2"><b>'+esc(issueLabels[x.issue_type]||x.issue_type)+'</b> · '+esc(x.courier)+' · '+esc(x.transaction_id)+'<div>'+esc(x.details)+'</div><span>'+({open:'مفتوح',in_progress:'جاري الحل',resolved:'تم الحل'}[x.status])+'</span><button class="text-emerald-600 font-bold mr-2" data-cop="issue-state" data-id="'+x.id+'" data-state="resolved">حل البلاغ</button></div>').join('')+'<hr><b>التقفيلات الأخيرة</b>'+state.closings.slice(0,8).map(x=>'<div class="flex justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.period_start)+' → '+esc(x.period_end)+' · '+money(x.total)+' · '+(x.paid_at?'تم الصرف':'لم يُسجل الصرف')+'</span>'+(isManager()?'<button class="text-emerald-600 font-bold" data-cop="paid" data-id="'+x.id+'" '+(x.paid_at?'disabled':'')+'>تسجيل الصرف</button>':'')+'</div>').join('');
     }catch(e){c.textContent='تعذر تحميل متابعة التشغيل. '+(e.message||'');}
     finally{state.managerBusy=false;}
