@@ -150,6 +150,31 @@ begin
   return public.courier_me();
 end $$;
 
+-- ملاحظاتي وحالة كل واحدة: اتحلّت (لو كانت «رسوم ناقصة» واتسجل للمندوب رسوم توصيل) / الموظف شافها (إشعار اتقرا) / لسه ماتشافتش
+create or replace function public.courier_my_notes()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_me text;
+begin
+  if not public.is_courier() then raise exception 'courier only' using errcode = '42501'; end if;
+  select public.norm_ar(name) into v_me from public.couriers where user_id = auth.uid() and active;
+  if v_me is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
+  return coalesce((
+    select jsonb_agg(to_jsonb(r) order by r.created_at desc) from (
+      select c.id, c.transaction_id, c.body, c.created_at,
+             (select max(l.client_name) from public.request_lines l where l.transaction_id = c.transaction_id and l.deleted_at is null) as client_name,
+             case
+               when c.body like '⚠ المشوار ده برسوم توصيل%' and exists (
+                      select 1 from public.request_lines l where l.transaction_id = c.transaction_id and l.deleted_at is null
+                         and public.norm_ar(l.service) like 'رسوم توصيل%' and public.norm_ar(l.executor) = v_me) then 'resolved'
+               when exists (select 1 from public.notifications n where n.body = c.body and n.read) then 'seen'
+               else 'sent' end as status
+        from public.tx_comments c
+       where c.author_id = auth.uid() and c.deleted_at is null and c.created_at > now() - interval '90 days'
+       order by c.created_at desc limit 100) r), '[]'::jsonb);
+end $$;
+revoke all on function public.courier_my_notes() from public, anon;
+grant execute on function public.courier_my_notes() to authenticated;
+
 -- صور المناديب للموظفين (عشان تظهر في الشات بتاعهم). للموظفين والمدير فقط
 create or replace function public.courier_photos()
 returns jsonb language plpgsql stable security definer set search_path = public as $$

@@ -395,7 +395,7 @@
       : '<div class="cp-h"><span>أيام ' + (st.period === 'week' ? 'الأسبوع' : 'الشهر') + ' وحالة كل يوم</span></div>' + (dayRows(rng).map(dayRowHtml).join('') || load || '<div class="cp-empty">مفيش مشاوير في الفترة دي</div>');
     const t0 = today(), oldPend = st.items.filter(i => !i.confirmed && i.day < t0);
     const oldAlert = oldPend.length ? '<div class="cp-old">⚠ عندك <b>' + num(oldPend.length) + ' مشوار</b> مش متأكدين في أيام فاتت. راجعهم وأكّدهم عشان يتحسبوا في عمولتك. <button type="button" class="cp-a" data-act="goold">راجعهم دلوقتي</button></div>' : '';
-    const updLine = '<div class="cp-sub" style="margin:-4px 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">آخر تحديث: <b id="cp-upd">' + (st.lastOk ? eh(timeOf(st.lastOk)) : '—') + '</b><button type="button" class="cp-a cp-sm" data-act="refresh">تحديث الآن</button></div>';
+    const updLine = '<div class="cp-sub" style="margin:-4px 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">آخر تحديث: <b id="cp-upd">' + (st.lastOk ? eh(timeOf(st.lastOk)) : '—') + '</b><button type="button" class="cp-a cp-sm" data-act="refresh">تحديث الآن</button><button type="button" class="cp-a cp-sm" data-act="mynotes">ملاحظاتي</button>' + (st.period === 'month' ? '<button type="button" class="cp-a cp-sm" data-act="stmt">كشف حساب الشهر</button>' : '') + '</div>';
     const fee = money(st.me && st.me.fee || 40);
     const rights = '<details class="cp-card cp-rights"><summary><b>إزاي بتتحسب عمولتي؟</b> (حقوقك)</summary><div class="cp-sub" style="line-height:1.8;margin-top:8px">' +
       '• كل مشوار <b>استلام</b> = ' + fee + '، وكل مشوار <b>تسليم</b> = ' + fee + '.<br>• مشوار <b>رسوم التوصيل</b> بيتحسب لك بالمبلغ المسجل في الطلب كله.<br>' +
@@ -479,7 +479,7 @@
       '<div class="cp-chips"><span class="cp-tag ' + k.cls + '"><i class="fa-solid ' + k.icon + '"></i> ' + eh(kindLabel(it)) + '</span><span class="cp-tag ' + sc + '">' + sl + '</span>' +
       (it.type !== 'fee' ? String(it.services || '').split('، ').filter(Boolean).slice(0, 4).map(x => '<span class="cp-chip">' + eh(x) + '</span>').join('') : '') + '</div>' +
       (links.length ? '<div class="cp-info">' + links.join('') + '</div>' : '') + emp +
-      '<div class="cp-info"><button type="button" class="cp-a" data-act="note" data-tx="' + eh(it.transaction_id) + '"><i class="fa-solid fa-note-sticky"></i> ملاحظة للموظف / بلاغ سريع' + (Number(it.my_notes) ? ' (' + num(it.my_notes) + ')' : '') + '</button></div></div>';
+      '<div class="cp-info">' + (it.phone ? '<button type="button" class="cp-a wa" data-act="wtpl" data-tx="' + eh(it.transaction_id) + '" data-id="' + eh(it.id) + '">رسالة واتساب جاهزة للعميل</button>' : '') + '<button type="button" class="cp-a" data-act="note" data-tx="' + eh(it.transaction_id) + '"><i class="fa-solid fa-note-sticky"></i> ملاحظة للموظف / بلاغ سريع' + (Number(it.my_notes) ? ' (' + num(it.my_notes) + ')' : '') + '</button></div></div>';
   }
 
   /* ---------- 3) لوحة ترتيب المناديب (Leaderboard: الاستلامات والتسليم) ---------- */
@@ -752,6 +752,61 @@
     if (st.tick % 60 === 0) sbClient.rpc('touch_last_seen');
   }
 
+  /* ---------- رسائل واتساب جاهزة للعميل ---------- */
+  function openWaTemplates(id, tx) {
+    const it = st.items.find(o => String(o.id) === String(id) && String(o.transaction_id) === String(tx)) || byTx(tx); if (!it || !it.phone) return;
+    const me = (st.me && st.me.name) || '', cl = it.client_name || 'حضرتك', head = 'السلام عليكم ' + cl + '، أنا ' + me + ' مندوب تساهيل';
+    const T = [
+      ['وصلت', head + '، وصلت لحضرتك بخصوص المعاملة رقم ' + tx + '.'],
+      ['في الطريق', head + '، أنا في الطريق لحضرتك بخصوص المعاملة رقم ' + tx + ' وهوصل خلال دقائق.'],
+      ['العنوان / اللوكيشن', head + '، ممكن توضحلي العنوان أو تبعتلي اللوكيشن عشان أوصلك بسرعة؟ (المعاملة ' + tx + ')'],
+      ['اتصلت ومردتش', head + '، حاولت أتصل بحضرتك بخصوص المعاملة رقم ' + tx + ' ومردتش، ياريت تكلمني في أقرب وقت.'],
+      ['اعتذار عن التأخير', head + '، بعتذر عن التأخير بخصوص المعاملة رقم ' + tx + '، وهكون عندك في أقرب وقت.']
+    ];
+    modal('<b style="font-size:15px">اختار الرسالة (هتفتح واتساب والنص جاهز، وانت اللي تبعت)</b><div style="margin-top:10px">' +
+      T.map(t => '<a class="cp-a wa" style="display:block;margin-bottom:8px;text-align:start;white-space:normal" target="_blank" rel="noopener" href="https://wa.me/' + eh(waNum(it.phone)) + '?text=' + encodeURIComponent(t[1]) + '"><b>' + eh(t[0]) + '</b><br><span style="font-weight:500">' + eh(t[1]) + '</span></a>').join('') +
+      '</div><button type="button" class="cp-btn" style="width:100%" data-act="mclose-btn">إغلاق</button>');
+  }
+
+  /* ---------- ملاحظاتي (وحالة كل واحدة) ---------- */
+  async function openMyNotes() {
+    modal('<div class="cp-empty">جاري التحميل…</div>');
+    try {
+      const r = await sbClient.rpc('courier_my_notes'); if (r.error) throw r.error;
+      const L = Array.isArray(r.data) ? r.data : [];
+      const lab = x => x === 'resolved' ? ['ok', '✓ اتحلّت'] : x === 'seen' ? ['k-pk', '👁 الموظف شافها'] : ['wt', '⏳ لسه ماتشافتش'];
+      modal('<b style="font-size:15px">ملاحظاتي اللي بعتّها (آخر ٩٠ يوم)</b><div style="margin-top:10px;max-height:60vh;overflow:auto">' + (L.length ? L.map(n => { const l = lab(n.status);
+        return '<div class="cp-card" style="padding:10px"><div class="cp-row"><div><div class="cp-name" style="font-size:13px">' + eh(n.client_name || 'بدون اسم') + '</div><div class="cp-sub">معاملة <b dir="ltr">' + eh(n.transaction_id) + '</b> · ' + eh(dayLabel(String(n.created_at).slice(0, 10))) + '</div></div><span class="cp-tag ' + l[0] + '">' + l[1] + '</span></div><div class="cp-sub" style="margin-top:6px;white-space:normal">' + eh(n.body) + '</div></div>'; }).join('') : '<div class="cp-empty">مفيش ملاحظات لسه</div>') +
+        '</div><button type="button" class="cp-btn" style="width:100%;margin-top:8px" data-act="mclose-btn">إغلاق</button>');
+    } catch (e) { modal('<div class="cp-empty">' + eh(errMsg(e)) + '</div><button type="button" class="cp-btn" style="width:100%" data-act="mclose-btn">إغلاق</button>'); }
+  }
+
+  /* ---------- كشف حساب الشهر (عرض + نسخة واتساب + طباعة) ---------- */
+  function stmtData() {
+    const rng = rangeOf('month', st.month), rows = st.items.filter(i => i.day >= rng[0] && i.day <= rng[1]).sort((a, b) => a.day < b.day ? -1 : a.day > b.day ? 1 : 0);
+    const c = rows.filter(i => i.confirmed), pn = rows.filter(i => !i.confirmed);
+    const sum = a => a.reduce((x, i) => x + Number(i.amount || 0), 0);
+    return { rows: rows, c: c, p: pn, ca: sum(c), pa: sum(pn) };
+  }
+  function openStatement() {
+    const d = stmtData(), nm = (st.me && st.me.name) || '';
+    modal('<b style="font-size:15px">كشف حساب ' + eh(monthLabel(st.month)) + ' — ' + eh(nm) + '</b>' +
+      '<div class="cp-chips" style="margin:8px 0"><span class="cp-tag ok">✓ مؤكد: ' + num(d.c.length) + ' مشوار · ' + money(d.ca) + '</span><span class="cp-tag ' + (d.p.length ? 'wt' : 'ok') + '">' + (d.p.length ? '⏳ مش متأكد: ' + num(d.p.length) + ' مشوار · ' + money(d.pa) : 'مفيش حاجة مش متأكدة') + '</span></div>' +
+      '<div style="max-height:46vh;overflow:auto">' + (d.rows.length ? d.rows.map(i => '<div class="cp-rev"><div>' + eh(i.client_name || 'بدون اسم') + '<br><span>' + eh(dayLabel(i.day)) + ' · ' + eh(kindLabel(i)) + ' · <b dir="ltr">' + eh(i.transaction_id) + '</b></span></div><div style="text-align:end"><b>' + money(i.amount) + '</b><br><span>' + (i.confirmed ? '✓ مؤكد' : '○ مش متأكد') + '</span></div></div>').join('') : '<div class="cp-empty">مفيش مشاوير في الشهر ده</div>') + '</div>' +
+      '<div class="cp-info" style="margin-top:10px"><button type="button" class="cp-a wa" data-act="stmt-wa">ابعته واتساب</button><button type="button" class="cp-a" data-act="stmt-print">طباعة / حفظ PDF</button><button type="button" class="cp-btn" data-act="mclose-btn">إغلاق</button></div>');
+  }
+  function stmtText() {
+    const d = stmtData(), by = {}; d.rows.forEach(i => { const x = by[i.day] || (by[i.day] = { n: 0, a: 0, p: 0 }); x.n++; x.a += Number(i.amount || 0); if (!i.confirmed) x.p++; });
+    const lines = Object.keys(by).sort().map(k => dayLabel(k) + ': ' + num(by[k].n) + ' مشوار · ' + money(by[k].a) + (by[k].p ? ' (' + num(by[k].p) + ' مش متأكد)' : ' ✓'));
+    return 'كشف حساب ' + monthLabel(st.month) + ' — ' + ((st.me && st.me.name) || '') + '\n' + lines.join('\n') + '\n\nمؤكد: ' + num(d.c.length) + ' مشوار · ' + money(d.ca) + '\nمش متأكد: ' + num(d.p.length) + ' مشوار · ' + money(d.pa);
+  }
+  function printStatement() {
+    const d = stmtData(), w = window.open('', '_blank'); if (!w) return toast('المتصفح منع نافذة الطباعة، اسمح بالنوافذ وجرّب تاني', true);
+    const tr = d.rows.map(i => '<tr><td>' + eh(i.day) + '</td><td>' + eh(i.transaction_id) + '</td><td>' + eh(i.client_name || '') + '</td><td>' + eh(kindLabel(i)) + '</td><td>' + money(i.amount) + '</td><td>' + (i.confirmed ? 'مؤكد' : 'مش متأكد') + '</td></tr>').join('');
+    w.document.write('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>كشف حساب</title><style>body{font-family:sans-serif;padding:16px}table{width:100%;border-collapse:collapse;font-size:13px}td,th{border:1px solid #999;padding:5px;text-align:right}h2{margin:0 0 4px}</style></head><body><h2>كشف حساب ' + eh(monthLabel(st.month)) + '</h2><div>المندوب: ' + eh((st.me && st.me.name) || '') + '</div><br><table><tr><th>التاريخ</th><th>المعاملة</th><th>العميل</th><th>النوع</th><th>المبلغ</th><th>الحالة</th></tr>' + tr + '</table><p><b>مؤكد:</b> ' + num(d.c.length) + ' مشوار · ' + money(d.ca) + '<br><b>مش متأكد:</b> ' + num(d.p.length) + ' مشوار · ' + money(d.pa) + '</p></body></html>');
+    w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch (e) { /* */ } }, 300);
+  }
+
   /* ---------- مودالات الملاحظات السريعة والتأكيد ---------- */
   function modal(html) { const r = $('cp-modal-root'); if (!r) return; r.innerHTML = '<div class="cp-modal" data-act="mclose"><div class="cp-box">' + html + '</div></div>'; const f = r.querySelector('textarea,input'); if (f) setTimeout(() => f.focus(), 60); }
   const closeModal = () => { const r = $('cp-modal-root'); if (r) r.innerHTML = ''; };
@@ -854,6 +909,11 @@
         }, () => toast('مقدرتش أجيب موقعك، اتأكد إن الموقع شغال', true), { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
         return;
       }
+      case 'wtpl': return openWaTemplates(el.dataset.id, tx);
+      case 'mynotes': return openMyNotes();
+      case 'stmt': return openStatement();
+      case 'stmt-wa': return window.open('https://wa.me/?text=' + encodeURIComponent(stmtText()), '_blank');
+      case 'stmt-print': return printStatement();
       case 'qclear': st.q = ''; return renderTab(false);
       case 'dprev': st.day = addDays(st.day, -1); return renderTab(false);
       case 'dnext': if (st.day < today()) { st.day = addDays(st.day, 1); renderTab(false); } return;
