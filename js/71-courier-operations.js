@@ -50,11 +50,16 @@
     return (isStaff()?'<p class="cp-sub">بلاغات الفريق ومتابعة حالتها.</p>':'<p class="cp-sub">تابع حالة البلاغات التي أرسلتها.</p>')+(rows||'<div class="cp-empty">لا توجد بلاغات.</div>');
   }
   function ledgerView() {
-    const rows=state.ledger.map(x=>'<tr><td>'+esc(x.day)+'</td><td>'+esc(x.transaction_id)+'</td><td>'+esc(x.type)+'</td><td>'+money(x.amount)+'</td><td>'+(x.confirmed?'مؤكد':'معلق')+'</td><td>'+(x.included_in_closing?(x.paid_at?'تم الصرف':'دخل التقفيل'):'لم يدخل التقفيل')+'</td></tr>').join('');
+    const fmtDate = v => v ? new Date(v).toLocaleString('ar-EG') : '—';
+    const rows=state.ledger.map(x=>{
+      const closeState=x.included_in_closing?(x.paid_at?'تم الصرف':'دخل التقفيل'):(x.released_at?'أُعيد فتح التقفيل':'لم يدخل التقفيل');
+      return '<tr><td>'+esc(x.day)+'</td><td>'+esc(x.transaction_id)+'</td><td>'+esc(x.type)+'</td><td>'+money(x.amount)+'</td><td>'+(x.confirmed?'مؤكد':'معلق')+'</td><td>'+esc(fmtDate(x.confirmed_at))+'</td><td>'+esc(closeState)+'</td><td>'+esc(x.paid_at?fmtDate(x.paid_at):'—')+'</td></tr>';
+    }).join('');
     const total=state.ledger.filter(x=>x.confirmed).reduce((a,x)=>a+Number(x.amount||0),0);
     const closed=state.ledger.filter(x=>x.confirmed&&x.included_in_closing).reduce((a,x)=>a+Number(x.amount||0),0);
     const paid=state.ledger.filter(x=>x.confirmed&&x.included_in_closing&&x.paid_at).reduce((a,x)=>a+Number(x.amount||0),0);
-    return '<div class="cp-grid"><div class="cp-kpi"><small>إجمالي المؤكد</small><b>'+money(total)+'</b></div><div class="cp-kpi"><small>دخل التقفيل</small><b>'+money(closed)+'</b></div><div class="cp-kpi"><small>تم تسجيل صرفه</small><b>'+money(paid)+'</b></div><div class="cp-kpi"><small>مؤكد لم يدخل التقفيل</small><b>'+money(total-closed)+'</b></div></div><div style="overflow:auto"><table class="cp-table" style="width:100%;font-size:11px"><thead><tr><th>التاريخ</th><th>المعاملة</th><th>النوع</th><th>العمولة</th><th>التأكيد</th><th>التقفيل/الصرف</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="cp-sub">«تم تسجيل صرفه» تعني أن الإدارة سجلت الصرف في النظام، وليست إثباتًا بنكيًا.</p>';
+    const unpaid=Math.max(0,closed-paid);
+    return '<div class="cp-grid"><div class="cp-kpi"><small>إجمالي المؤكد</small><b>'+money(total)+'</b></div><div class="cp-kpi"><small>دخل التقفيل</small><b>'+money(closed)+'</b></div><div class="cp-kpi"><small>تم تسجيل صرفه</small><b>'+money(paid)+'</b></div><div class="cp-kpi"><small>دخل التقفيل ولم يُصرف</small><b>'+money(unpaid)+'</b></div><div class="cp-kpi"><small>مؤكد لم يدخل التقفيل</small><b>'+money(total-closed)+'</b></div></div><div style="overflow:auto"><table class="cp-table" style="width:100%;font-size:11px"><thead><tr><th>التاريخ</th><th>المعاملة</th><th>النوع</th><th>العمولة</th><th>التأكيد</th><th>تاريخ التأكيد</th><th>حالة التقفيل</th><th>تاريخ الصرف</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="cp-sub">«تم تسجيل صرفه» تعني أن الإدارة سجلت الصرف في النظام، وليست إثباتًا بنكيًا.</p>';
   }
   async function render() {
     const c=$('cop-content'); if(!c)return; tabButtons(); c.innerHTML='<div class="cp-empty">جاري تحميل البيانات…</div>';
