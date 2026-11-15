@@ -525,6 +525,86 @@ begin
   return v_count;
 end $$;
 
+
+-- Server-side dispatcher: reminders continue even when the courier portal is closed.
+create or replace function public.courier_dispatch_pending_reminders()
+returns integer language plpgsql security definer set search_path=public as $$
+declare
+  v_c record;
+  v_today date := (now() at time zone 'Africa/Cairo')::date;
+  v_last timestamptz;
+  v_count integer := 0;
+  r record;
+begin
+  for v_c in
+    select c.user_id,c.name from public.couriers c
+     where c.active=true and c.user_id is not null
+  loop
+    for r in
+      select t.id,t.transaction_id,t.kind,t.trip_day from public.courier_trips t
+       where public.norm_ar(t.courier)=public.norm_ar(v_c.name)
+         and t.courier_confirmed_at is null and t.trip_day between v_today-62 and v_today
+    loop
+      select s.last_reminded_at into v_last from public.courier_pending_reminder_state s
+       where s.source_type='trip' and s.source_id=r.id and s.courier_user_id=v_c.user_id for update;
+      if not found then
+        insert into public.courier_pending_reminder_state values('trip',r.id,v_c.user_id,now()) on conflict do nothing;
+        continue;
+      end if;
+      if v_last<=now()-interval '6 hours' then
+        update public.courier_pending_reminder_state set last_reminded_at=now()
+         where source_type='trip' and source_id=r.id and courier_user_id=v_c.user_id;
+        insert into public.notifications(user_id,kind,title,body)
+        values(v_c.user_id,'info','تذكير: عندك مشوار غير مؤكد',
+          'المعاملة '||coalesce(r.transaction_id,'—')||' · '||
+          case r.kind when 'pickup' then 'استلام' when 'delivery' then 'تسليم' else r.kind end||
+          ' · يوم '||r.trip_day::text||' — برجاء مراجعة التأكيد');
+        v_count:=v_count+1;
+      end if;
+    end loop;
+
+    for r in
+      select l.id,l.transaction_id,l.received_at::date as trip_day from public.request_lines l
+       where l.deleted_at is null and public.norm_ar(l.service) like 'رسوم توصيل%'
+         and public.norm_ar(l.executor)=public.norm_ar(v_c.name)
+         and l.received_at::date between v_today-62 and v_today
+         and not exists (
+           select 1 from public.courier_fee_confirms fc
+            where fc.line_id=l.id and public.norm_ar(fc.courier)=public.norm_ar(v_c.name)
+              and fc.amount=coalesce(nullif(l.exec_total,0),coalesce(l.qty,0)*coalesce(l.exec_unit_cost,0))
+              and fc.trip_day=l.received_at::date
+         )
+    loop
+      select s.last_reminded_at into v_last from public.courier_pending_reminder_state s
+       where s.source_type='fee' and s.source_id=r.id and s.courier_user_id=v_c.user_id for update;
+      if not found then
+        insert into public.courier_pending_reminder_state values('fee',r.id,v_c.user_id,now()) on conflict do nothing;
+        continue;
+      end if;
+      if v_last<=now()-interval '6 hours' then
+        update public.courier_pending_reminder_state set last_reminded_at=now()
+         where source_type='fee' and source_id=r.id and courier_user_id=v_c.user_id;
+        insert into public.notifications(user_id,kind,title,body)
+        values(v_c.user_id,'info','تذكير: عندك رسوم توصيل غير مؤكدة',
+          'المعاملة '||coalesce(r.transaction_id,'—')||' · يوم '||r.trip_day::text||
+          ' — برجاء مراجعة تأكيد رسوم التوصيل');
+        v_count:=v_count+1;
+      end if;
+    end loop;
+  end loop;
+  return v_count;
+end $$;
+revoke all on function public.courier_dispatch_pending_reminders() from public,anon,authenticated;
+
+-- Supabase Cron runs independently of an open browser session.
+create extension if not exists pg_cron with schema pg_catalog;
+select cron.unschedule(jobid) from cron.job where jobname='courier-pending-reminders';
+select cron.schedule(
+  'courier-pending-reminders',
+  '*/30 * * * *',
+  'select public.courier_dispatch_pending_reminders();'
+);
+
 revoke all on function public.courier_pending_reminders() from public,anon;
 grant execute on function public.courier_pending_reminders() to authenticated;
 revoke all on function public.courier_ops_items(date,date),
