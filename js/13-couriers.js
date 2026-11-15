@@ -747,6 +747,8 @@
       totDl += d.dlCount;
       totFar += d.farCount;
       totMoney += d.totalFee;
+      totPending += d.pendingFee;
+      pendingCount += d.pendingCount;
       d.items.forEach(it => {
         flatRows.push([
           flatRows.length + 1,
