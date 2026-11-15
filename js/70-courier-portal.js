@@ -25,7 +25,7 @@
     leaderboard: [], lbsig: '', lbLoaded: false,
     notesMap: {}, nsig: '',
     contacts: [], csig: '', chat: null, msgs: [], msig: '', draft: '',
-    theme: 'dark', timer: null, tick: 0,
+    theme: 'dark', timer: null, tick: 0, pendingReminderCheck: 0,
     busy: false, offline: false, unreadSeen: 0, loaded: false, itemsLoading: null, refreshing: false, lastSync: null,
     guides: {}
   };
@@ -1025,6 +1025,16 @@
       }
     } catch (e) { if (!silent) toast(errMsg(e), true); }
   }
+  async function checkPendingReminders(force) {
+    if (!st.me || (!force && Date.now()-st.pendingReminderCheck < 15*60*1000)) return;
+    st.pendingReminderCheck=Date.now();
+    try {
+      const r=await sbClient.rpc('courier_pending_reminders');
+      if(r.error)throw r.error;
+      const n=Number(r.data)||0;
+      if(n>0)toast('عندك '+num(n)+' تذكير لمشاوير أو رسوم توصيل لسه محتاجة تأكيد');
+    } catch(e) { /* لا نعطل البوابة إذا لم تُشغّل migration بعد */ }
+  }
   function tick() {
     st.tick++; tickClock();
     if (document.hidden || !st.me) return;
@@ -1032,6 +1042,7 @@
     if (st.tick % 30 === 0) { loadItems(true); loadMyNotes(); loadContacts(true); }
     if (st.tick % 90 === 0) loadLeaderboard(true);
     if (st.tick % 60 === 0) sbClient.rpc('touch_last_seen');
+    if (st.tick % 900 === 0) checkPendingReminders(false);
   }
 
   /* ---------- مودالات: تفاصيل العميل (A.2) + التأكيد الفردي (B.1) + الملاحظة (B.3/B.4) + ملفي الشخصي ---------- */
@@ -1413,9 +1424,10 @@
     catch (e) { overlay('<header class="cp-head"><div class="cp-who"><b>بوابة المندوب</b></div>' + logoutBtn + '</header><div class="cp-empty" style="margin:auto">' + eh(errMsg(e)) + '</div>'); return; }
     shell(); loadMyAvatar(); sbClient.rpc('touch_last_seen');
     await Promise.all([loadItems(false), loadMyNotes(), loadLeaderboard(true), loadContacts(true)]);
+    await checkPendingReminders(true);
     clearInterval(st.timer); st.timer = setInterval(tick, 1000);
   }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && st.me && $('courier-app')) { loadItems(true); loadMyNotes(); loadLeaderboard(true); loadContacts(true); if (st.chat) pollMsgs(false); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && st.me && $('courier-app')) { loadItems(true); loadMyNotes(); loadLeaderboard(true); loadContacts(true); checkPendingReminders(false); if (st.chat) pollMsgs(false); } });
   window.addEventListener('online', () => { if (st.me) { loadItems(true); loadMyNotes(); loadLeaderboard(true); loadContacts(true); } });
 
   /* ---------- نقطة الدخول ---------- */
