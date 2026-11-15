@@ -28,7 +28,7 @@
     contacts: [], csig: '', chat: null, msgs: [], draft: '',
     theme: 'dark', timer: null, tick: 0,
     busy: false, offline: false, unreadSeen: 0, loaded: false,
-    guides: {}
+    guides: {}, month: null, rvOpen: false, lastOk: 0, rvf: 'all', tripScope: 'day', pPhoto: undefined, pT: undefined, pP: undefined
   };
 
   /* ---------- صلاحية المدير (الدور أو الإيميل المعتمد) ---------- */
@@ -46,89 +46,52 @@
   const monthStart = s => s.slice(0, 8) + '01';
   const dayLabel = s => { try { return new Date(s + 'T12:00:00Z').toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }); } catch (e) { return s; } };
   const timeOf = iso => { try { return new Date(iso).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', timeZone: TZ }); } catch (e) { return ''; } };
-  const rangeOf = p => { const t = today(); return p === 'today' ? [t, t] : p === 'week' ? [weekStart(t), t] : [monthStart(t), t]; };
+  const monthOf = d => d.slice(0, 7);
+  const addMonths = (m, n) => { const a = m.split('-').map(Number); return new Date(Date.UTC(a[0], a[1] - 1 + n, 1)).toISOString().slice(0, 7); };
+  const monthLabel = m => { try { return new Date(m + '-15T12:00:00Z').toLocaleDateString('ar-EG', { month: 'long', year: 'numeric', timeZone: 'UTC' }); } catch (e) { return m; } };
+  const monthEnd = m => { const t = today(), e = addDays(addMonths(m, 1) + '-01', -1); return e > t ? t : e; };
+  const minMonth = () => addMonths(monthOf(addDays(today(), -120)), 1);   /* آخر شهور كاملة متاحة من السيرفر */
+  const rangeOf = (p, m) => { const t = today(); if (p === 'today') return [t, t]; if (p === 'week') return [weekStart(t), t]; m = m || monthOf(t); return [m + '-01', monthEnd(m)]; };
   const money = n => Number(n || 0).toLocaleString('ar-EG') + ' ج';
   const num = n => Number(n || 0).toLocaleString('ar-EG');
+
+  const buzz = () => { try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) { /* */ } };
+  const cacheKey = () => 'ts_cp_cache_' + (st.me && st.me.user_id);
+  function saveCache(items) { try { localStorage.setItem(cacheKey(), JSON.stringify({ ts: Date.now(), items: items })); } catch (e) { /* */ } }
+  function loadCache() { try { const c = JSON.parse(localStorage.getItem(cacheKey()) || 'null'); if (c && Array.isArray(c.items)) return c; } catch (e) { /* */ } return null; }
 
   /* ---------- حفظ واسترجاع حالة بطاقات التعريف (الشرح) ---------- */
   function initGuides() {
     try { st.guides = JSON.parse(localStorage.getItem('ts_cp_guides') || '{}') || {}; } catch (e) { st.guides = {}; }
   }
-  function isGuideOpen(tab) {
-    return st.guides[tab] !== false; /* مفتوح افتراضياً في كل الشاشات عشان المندوب مايتوهش */
-  }
   function toggleGuide(tab) {
-    st.guides[tab] = !isGuideOpen(tab);
+    st.guides[tab] = !(st.guides[tab] === true);
     try { localStorage.setItem('ts_cp_guides', JSON.stringify(st.guides)); } catch (e) { /* */ }
     renderTab(false);
   }
 
   const GUIDES = {
-    home: {
-      icon: 'fa-chart-pie',
-      title: 'شاشة «حسابي» — متابعة عمولتك ومشاويرك لحظة بلحظة',
-      desc: 'هنا بتشوف إجمالي عمولتك المؤكدة عن (اليوم أو الأسبوع أو الشهر)، وتفصيل المشاوير اللي استلمتها أو سلمتها ومشاوير رسوم التوصيل.',
-      steps: [
-        'الأخضر (مؤكدة): مشاوير راجعتها وأكدتها ونزلت في حساب عمولتك.',
-        'البرتقالي (في انتظار تأكيدك): مشاوير اتسجلت باسمك ومستنية تراجعها وتأكدها من شاشة «المراجعة».',
-        'كارت الترتيب: بيعرفك مركزك الحالي وسط زمايلك في الاستلامات والتسليم.'
-      ]
-    },
-    trips: {
-      icon: 'fa-motorcycle',
-      title: 'شاشة «مشاويري» — خط سيرك وتفاصيل العملاء',
-      desc: 'دي قائمة كل المشاوير المسجلة باسمك يوم بيوم. تقدر تفلتر بالنوع (استلام / تسليم / رسوم توصيل) أو بحالة التأكيد، وتبحث باسم العميل أو رقم المعاملة.',
-      steps: [
-        'اضغط على رقم التليفون للاتصال بالعميل فوراً أو اضغط «واتساب» لمراسلته.',
-        'اضغط على العنوان عشان يفتحلك اللوكيشن على خرائط جوجل (Google Maps).',
-        'لو العميل مش بيرد أو فيه أي مشكلة أو رسوم توصيل ناقصة، اضغط «ملاحظة للموظف» واختار السبب بضغطة واحدة.'
-      ]
-    },
-    rank: {
-      icon: 'fa-trophy',
-      title: 'شاشة «الترتيب» — لوحة شرف الاستلامات والتسليم',
-      desc: 'لوحة منافسة شريفة بتعرض ترتيب كل المناديب حسب عدد مرات الاستلام والتسليم ومشاوير التوصيل خلال اليوم أو الأسبوع أو الشهر.',
-      steps: [
-        'الترتيب بيتحسب تلقائياً حسب إجمالي المشاوير (استلام + تسليم + توصيل) ثم عدد التسليمات.',
-        'كل ما تنجز مشاوير أكتر وتأكدها في موعدها، مركزك بيعلى في لوحة الشرف!',
-        'الأرقام المالية الخاصة بيك بتظهرلك أنت بس، ومحدش من زمايلك بيشوف عمولة التاني.'
-      ]
-    },
-    review: {
-      icon: 'fa-clipboard-check',
-      title: 'شاشة «المراجعة» — تقفيل وتأكيد شغل آخر اليوم',
-      desc: 'أهم خطوة آخر كل يوم عمل: راجع المشاوير اللي عملتها النهارده (أو الأيام اللي فاتت) قسم بقسم، وبعدين اضغط زرار التأكيد الأخضر.',
-      steps: [
-        'راجع أسماء العملاء وأرقام المعاملات في كل قسم (الاستلام / التسليم / رسوم التوصيل).',
-        'لو لقيت معاملة مش بتاعتك أو فيها خطأ، اضغط «🚩 ملاحظة» وبلغ الموظف قبل ما تأكد.',
-        'اضغط «تم تأكيد...» عشان المشاوير تتحول لـ (مؤكد ✓) وتنزل في عمولتك المعتمدة.'
-      ]
-    },
-    chat: {
-      icon: 'fa-comments',
-      title: 'شاشة «التواصل» — رسايل خاصة ومباشرة مع الموظفين والإدارة',
-      desc: 'قائمة بكل موظفين الشركة والمدير عشان تتواصل معاهم مباشرة بخصوص أي معاملة أو استفسار وأنت في الشارع.',
-      steps: [
-        'اضغط على اسم أي موظف أو المدير لفتح محادثة خاصة وسريعة معاه.',
-        'علامة 🟢 معناها إن الموظف فاتح السيستم دلوقتي ومتصل.',
-        'تقدر كمان تتصل بالموظف تليفونياً أو تبعتله واتساب من نفس الكارت.'
-      ]
-    }
+    home: { icon: 'fa-chart-pie', title: 'حسابي', desc: 'هنا بتشوف فلوسك: كام مشوار عملت وكام عمولتك. اختار اليوم أو الأسبوع أو الشهر (وتقدر تتنقل بين الشهور).',
+      steps: ['الأخضر «مؤكد»: مشاوير راجعتها وأكدتها وبتتحسب لك.', 'البرتقالي «مش متأكد»: مشاوير اتسجلت باسمك ولسه مراجعتهاش.', 'في الأسبوع والشهر هتلاقي كل يوم لوحده وحالته، واضغط على اليوم عشان تراجعه.'] },
+    trips: { icon: 'fa-motorcycle', title: 'مشاويري', desc: 'كل مشاويرك بالتفصيل: اسم العميل وتليفونه وعنوانه. اختار «يوم يوم» أو «الشهر كله».',
+      steps: ['اضغط «اتصال» أو «واتساب» للعميل، واضغط العنوان يفتح الخريطة.', 'لو فيه مشكلة أو رسوم توصيل ناقصة اضغط «ملاحظة للموظف».', 'ابحث باسم العميل أو رقم المعاملة من خانة البحث.'] },
+    rank: { icon: 'fa-trophy', title: 'الترتيب', desc: 'ترتيبك وسط المناديب في عدد الاستلامات والتسليمات. للتشجيع بس، ومحدش بيشوف فلوس غيره.',
+      steps: ['الترتيب حسب إجمالي المشاوير ثم التسليمات.', 'اختار اليوم أو الأسبوع أو الشهر.'] },
+    review: { icon: 'fa-clipboard-check', title: 'المراجعة', desc: 'هنا بتراجع أيام الشهر وتأكد مشاويرك عشان تتحسب في عمولتك. اختار الشهر وشوف كل يوم متأكد ولا لأ.',
+      steps: ['اليوم اللي عليه «مش متأكد» اضغط «راجع وأكّد»، وبعدين زرار «تم تأكيد…» لكل قسم.', 'لو لقيت غلط اضغط «ملاحظة» وبلّغ الموظف قبل ما تأكد.', 'لو الموظف عدّل حاجة بعد تأكيدك، التأكيد بيتلغي وتأكد تاني.'] },
+    chat: { icon: 'fa-comments', title: 'التواصل', desc: 'رسايل خاصة مع الموظفين والإدارة، وكمان اتصال وواتساب. اضغط على الاسم عشان تكتب له.',
+      steps: ['🟢 يعني الموظف فاتح السيستم دلوقتي.', 'لو الرسالة عن طلب معين افتحها من كارت الطلب في «مشاويري».'] },
+    profile: { icon: 'fa-id-card', title: 'ملفي الشخصي', desc: 'ضيف صورتك ومسماك الوظيفي ورقم تليفونك عشان الموظفين يعرفوك ويتواصلوا معاك.',
+      steps: ['الاسم بتحدده الإدارة ومش بيتغير من هنا.', 'الصورة بتتصغّر لوحدها، اختار أي صورة من الموبايل.', 'اضغط «حفظ» في الآخر.'] }
   };
 
   function renderGuideBanner(tab) {
     const g = GUIDES[tab]; if (!g) return '';
-    if (!isGuideOpen(tab)) {
-      return '<div class="cp-guide-mini"><button type="button" data-act="guide-toggle" data-gtab="' + tab + '"><i class="fa-solid fa-circle-question"></i> اضغط هنا لعرض شرح وإرشادات شاشة «' + eh(g.title.split('—')[0].replace('شاشة', '').trim()) + '»</button></div>';
-    }
-    return '<div class="cp-guide">' +
-      '<div class="cp-guide-hd">' +
-        '<div class="cp-guide-ic"><i class="fa-solid ' + g.icon + '"></i></div>' +
-        '<div class="cp-guide-tt"><b>' + eh(g.title) + '</b><p>' + eh(g.desc) + '</p></div>' +
-        '<button type="button" class="cp-guide-x" data-act="guide-toggle" data-gtab="' + tab + '" title="إخفاء الشرح">إخفاء ✕</button>' +
-      '</div>' +
-      '<ul class="cp-guide-ul">' + g.steps.map(s => '<li>' + eh(s) + '</li>').join('') + '</ul>' +
-    '</div>';
+    const open = st.guides[tab] === true;
+    return '<div class="cp-guide"><div class="cp-guide-hd"><div class="cp-guide-ic"><i class="fa-solid ' + g.icon + '"></i></div>' +
+      '<div class="cp-guide-tt"><b>شاشة «' + eh(g.title) + '» — إيه فايدتها؟</b><p>' + eh(g.desc) + '</p></div>' +
+      '<button type="button" class="cp-guide-x" data-act="guide-toggle" data-gtab="' + tab + '">' + (open ? 'إخفاء التفاصيل' : 'تفاصيل أكتر') + '</button></div>' +
+      (open ? '<ul class="cp-guide-ul">' + g.steps.map(x => '<li>' + eh(x) + '</li>').join('') + '</ul>' : '') + '</div>';
   }
 
   /* ---------- ثيم: صباحي (فاتح) / مسائي (داكن) ---------- */
@@ -173,6 +136,12 @@
       '.cp-guide-x{flex:0 0 auto;border:0;background:var(--chip);color:var(--mu);border-radius:8px;padding:4px 8px;font:inherit;font-size:10.5px;font-weight:700;cursor:pointer}',
       '.cp-guide-ul{margin:8px 0 0;padding:8px 18px 0 0;border-top:1px dashed var(--gd-bd);font-size:11.5px;line-height:1.65;color:var(--tx)}',
       '.cp-guide-ul li{margin-bottom:2px}',
+      '.cp-whobtn{display:flex;align-items:center;gap:8px;background:none;border:0;color:inherit;font:inherit;text-align:start;cursor:pointer;padding:0}.cp-wt{min-width:0;display:block}.cp-wt small{display:block;color:#10b981;font-size:10px;font-weight:800}.cp-wt b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      '.cp-pav{border-radius:50%;object-fit:cover;background:var(--chip);color:var(--tx);display:inline-flex;align-items:center;justify-content:center;font-weight:800;flex:0 0 auto}',
+      '#courier-app .cp-fld{display:block;width:100%;border:1.5px solid var(--mu);background:var(--card);color:var(--tx);-webkit-text-fill-color:var(--tx);opacity:1;border-radius:12px;padding:10px 12px;font:inherit;font-size:14px;outline:none}#courier-app .cp-fld:focus{border-color:#10b981}#courier-app .cp-fld::placeholder{color:var(--mu);-webkit-text-fill-color:var(--mu);opacity:.8}',
+      '.cp-whobtn{flex:1 1 0;min-width:0}@media(max-width:480px){.cp-head>img{display:none}}',
+      '.cp-lbl{display:block;font-size:12px;font-weight:700;color:var(--mu);margin:10px 0 4px}',
+      '.cp-qr{display:flex;gap:6px;overflow-x:auto;padding:6px 0;flex:0 0 auto}.cp-qr .cp-a{white-space:nowrap}.cp-rights summary{cursor:pointer;font-size:13px}',
       '.cp-guide-mini{margin-bottom:10px;text-align:start}',
       '.cp-guide-mini button{width:100%;border:1px dashed var(--gd-bd);background:var(--gd-bg);color:#10b981;border-radius:12px;padding:7px 12px;font:inherit;font-size:11.5px;font-weight:800;cursor:pointer;text-align:start;display:flex;align-items:center;gap:6px}',
       /* الفلاتر والكروت */
@@ -330,19 +299,25 @@
     if (!o) {
       o = document.createElement('div'); o.id = 'courier-app'; o.setAttribute('dir', 'rtl');
       o.addEventListener('click', onClick); o.addEventListener('keydown', onKey); o.addEventListener('input', onInput);
+      o.addEventListener('change', e => { if (e.target && e.target.id === 'cp-pfile') pickPhoto(e.target.files && e.target.files[0]); });
       document.body.appendChild(o);
     }
     o.classList.remove('hidden'); o.setAttribute('data-theme', st.theme); o.innerHTML = inner; return o;
   }
   const logoutBtn = '<button type="button" class="cp-hbtn" data-act="logout"><i class="fa-solid fa-right-from-bracket"></i> خروج</button>';
 
+  const avatar = (photo, name, size) => photo
+    ? '<img class="cp-pav" style="width:' + size + 'px;height:' + size + 'px" src="' + eh(photo) + '" alt="">'
+    : '<span class="cp-pav" style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size / 2.2) + 'px">' + eh(String(name || '؟').trim().charAt(0)) + '</span>';
+  const whoInner = () => avatar(st.me && st.me.photo, st.me && st.me.name, 36) + '<span class="cp-wt"><small>ملفي ←</small><b>' + eh(st.me && st.me.name) + '</b></span>';
+
   function shell() {
     overlay(
       '<header class="cp-head"><img src="logo-transparent.png" alt="" style="height:30px" onerror="this.style.display=\'none\'">' +
-        '<div class="cp-who"><small>بوابة المندوب</small><b>' + eh(st.me && st.me.name) + '</b></div>' +
+        '<button type="button" class="cp-who cp-whobtn" id="cp-whobtn" data-act="profile">' + whoInner() + '</button>' +
         '<div class="cp-clock"><b id="cp-time"></b><small id="cp-date"></small></div>' +
         '<button type="button" class="cp-hbtn" id="cp-theme" data-act="theme"></button>' + logoutBtn + '</header>' +
-      '<div class="cp-off" id="cp-off">مفيش اتصال بالإنترنت… بحاول تاني</div>' +
+      '<div class="cp-off" id="cp-off">مفيش اتصال… اللي قدامك آخر نسخة محفوظة وبحاول أتصل تاني</div>' +
       '<main class="cp-body" id="cp-body"></main>' +
       '<nav class="cp-nav" id="cp-nav"></nav><div id="cp-modal-root"></div>');
     applyTheme(); tickClock(); renderNav(); renderTab();
@@ -369,6 +344,7 @@
     if (n.dataset.h !== html) { n.dataset.h = html; n.innerHTML = html; }
   }
   function setTab(t) {
+    if (t === 'review' && st.tab === 'review') st.rvOpen = false;
     st.tab = t;
     if (t !== 'chat') st.chat = null;
     if (t === 'rank') loadLeaderboard(true);
@@ -385,6 +361,7 @@
     else if (st.tab === 'trips') b.innerHTML = viewTrips();
     else if (st.tab === 'rank') b.innerHTML = viewLeaderboard();
     else if (st.tab === 'review') b.innerHTML = viewReview();
+    else if (st.tab === 'profile') b.innerHTML = viewProfile();
     else viewChat();
 
     b.scrollTop = top ? 0 : y;
@@ -396,9 +373,9 @@
 
   /* ---------- 1) حسابي ---------- */
   function viewHome() {
-    const s = stats(rangeOf(st.period));
+    const rng = rangeOf(st.period, st.month), s = stats(rng);
     const seg = '<div class="cp-seg">' + [['today', 'اليوم'], ['week', 'الأسبوع'], ['month', 'الشهر']].map(p => '<button type="button" data-per="' + p[0] + '" class="' + (st.period === p[0] ? 'on' : '') + '">' + p[1] + '</button>').join('') + '</div>';
-    const hero = '<div class="cp-hero"><small>عمولتك المؤكدة (' + (st.period === 'today' ? 'اليوم' : st.period === 'week' ? 'هذا الأسبوع' : 'هذا الشهر') + ')</small><b>' + money(s.total) + '</b>' +
+    const hero = '<div class="cp-hero"><small>عمولتك المؤكدة (' + (st.period === 'today' ? 'اليوم' : st.period === 'week' ? 'هذا الأسبوع' : monthLabel(st.month)) + ')</small><b>' + money(s.total) + '</b>' +
       (s.pendN ? '<div class="pend"><span>+ ' + money(s.pend) + ' في انتظار تأكيدك (' + num(s.pendN) + ' مشوار)</span><button type="button" data-tab="review">راجع وأكّد</button></div>' : '<small>كل مشاويرك في الفترة دي متأكدة ✓</small>') + '</div>';
 
     /* كارت مختصر لترتيب المندوب الحالي */
@@ -411,9 +388,41 @@
     const grid = '<div class="cp-grid">' + kpi('pickup', 'fa-box-archive', 'استلمت', 'عمولة الاستلام') + kpi('delivery', 'fa-truck-fast', 'سلّمت', 'عمولة التسليم') +
       '<div class="cp-kpi wide"><small><i class="fa-solid fa-motorcycle"></i>مشاوير رسوم التوصيل</small><b>' + num(s.fee.n) + ' <span style="font-size:13px;font-weight:700;color:var(--mu)">مشوار</span></b><div class="m">' + money(s.fee.camt) + ' مؤكدة</div>' +
       (s.fee.pamt ? '<div class="p">+ ' + money(s.fee.pamt) + ' في الانتظار</div>' : '') + '<div class="s">ذهاب فقط: ' + num(s.one) + ' · ذهاب وعودة: ' + num(s.round) + '</div></div></div>';
-    const recent = st.items.slice(0, 6).map(it => '<div class="cp-card" style="padding:10px"><div class="cp-row"><div><div class="cp-name" style="font-size:14px">' + eh(it.client_name || 'بدون اسم') + '</div><div class="cp-sub">' + eh(kindLabel(it)) + ' · ' + eh(dayLabel(it.day)) + '</div></div><div style="text-align:end"><b>' + money(it.amount) + '</b><div><span class="cp-tag ' + (it.confirmed ? 'ok' : 'wt') + '">' + (it.confirmed ? 'مؤكد' : 'بانتظارك') + '</span></div></div></div></div>').join('');
+    const recent = st.items.slice(0, 6).map(it => '<div class="cp-card" style="padding:10px"><div class="cp-row"><div><div class="cp-name" style="font-size:14px">' + eh(it.client_name || 'بدون اسم') + '</div><div class="cp-sub">' + eh(kindLabel(it)) + ' · ' + eh(dayLabel(it.day)) + '</div></div><div style="text-align:end"><b>' + money(it.amount) + '</b><div><span class="cp-tag ' + (it.confirmed ? 'ok' : 'wt') + '">' + (it.confirmed ? 'مؤكد' : 'مش متأكد') + '</span></div></div></div></div>').join('');
     const load = !st.loaded ? '<div class="cp-empty">جاري التحميل…</div>' : '';
-    return renderGuideBanner('home') + seg + hero + rankTeaser + grid + '<div class="cp-h"><span>آخر مشاويرك</span><button type="button" class="cp-a cp-sm" data-tab="trips">كل المشاوير ←</button></div>' + (recent || load || '<div class="cp-empty">لسه مفيش مشاوير متسجلة باسمك</div>');
+    const lower = st.period === 'today'
+      ? '<div class="cp-h"><span>آخر مشاويرك</span><button type="button" class="cp-a cp-sm" data-tab="trips">كل المشاوير ←</button></div>' + (recent || load || '<div class="cp-empty">لسه مفيش مشاوير متسجلة باسمك</div>')
+      : '<div class="cp-h"><span>أيام ' + (st.period === 'week' ? 'الأسبوع' : 'الشهر') + ' وحالة كل يوم</span></div>' + (dayRows(rng).map(dayRowHtml).join('') || load || '<div class="cp-empty">مفيش مشاوير في الفترة دي</div>');
+    const t0 = today(), oldPend = st.items.filter(i => !i.confirmed && i.day < t0);
+    const oldAlert = oldPend.length ? '<div class="cp-old">⚠ عندك <b>' + num(oldPend.length) + ' مشوار</b> مش متأكدين في أيام فاتت. راجعهم وأكّدهم عشان يتحسبوا في عمولتك. <button type="button" class="cp-a" data-act="goold">راجعهم دلوقتي</button></div>' : '';
+    const updLine = '<div class="cp-sub" style="margin:-4px 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">آخر تحديث: <b id="cp-upd">' + (st.lastOk ? eh(timeOf(st.lastOk)) : '—') + '</b><button type="button" class="cp-a cp-sm" data-act="refresh">تحديث الآن</button><button type="button" class="cp-a cp-sm" data-act="mynotes">ملاحظاتي</button>' + (st.period === 'month' ? '<button type="button" class="cp-a cp-sm" data-act="stmt">كشف حساب الشهر</button>' : '') + '</div>';
+    const fee = money(st.me && st.me.fee || 40);
+    const rights = '<details class="cp-card cp-rights"><summary><b>إزاي بتتحسب عمولتي؟</b> (حقوقك)</summary><div class="cp-sub" style="line-height:1.8;margin-top:8px">' +
+      '• كل مشوار <b>استلام</b> = ' + fee + '، وكل مشوار <b>تسليم</b> = ' + fee + '.<br>• مشوار <b>رسوم التوصيل</b> بيتحسب لك بالمبلغ المسجل في الطلب كله.<br>' +
+      '• الرقم الأخضر (مؤكد) هو اللي بيتحسب لك، والبرتقالي بيتحول لأخضر لما تأكده من «المراجعة».<br>• لو فيه مشوار ناقص أو مبلغ غلط، ابعت «ملاحظة للموظف» من كارت المشوار أو كلّم الإدارة من «التواصل».</div></details>';
+    return renderGuideBanner('home') + oldAlert + seg + updLine + (st.period === 'month' ? monthNav() : '') + hero + rankTeaser + grid + lower + rights;
+  }
+
+  /* ---------- شهور وأيام (مشترك بين حسابي / مشاويري / المراجعة) ---------- */
+  function monthNav() {
+    const cur = monthOf(today());
+    return '<div class="cp-day"><button type="button" data-act="mprev"' + (st.month <= minMonth() ? ' disabled' : '') + '>الشهر السابق</button><div class="t">' + eh(monthLabel(st.month)) + (st.month === cur ? ' · الحالي' : '') + '</div>' +
+      '<button type="button" data-act="mnext"' + (st.month >= cur ? ' disabled' : '') + '>الشهر التالي</button></div>';
+  }
+  function dayRows(range) {
+    const m = {};
+    st.items.forEach(it => {
+      if (it.day < range[0] || it.day > range[1]) return;
+      const d = m[it.day] || (m[it.day] = { day: it.day, n: 0, pn: 0, amt: 0, pickup: 0, delivery: 0, fee: 0 });
+      d.n++; d[it.type]++; d.amt += Number(it.amount) || 0; if (!it.confirmed) d.pn++;
+    });
+    return Object.keys(m).sort().reverse().map(k => m[k]);
+  }
+  const dayKinds = d => [d.pickup ? num(d.pickup) + ' استلام' : '', d.delivery ? num(d.delivery) + ' تسليم' : '', d.fee ? num(d.fee) + ' رسوم توصيل' : ''].filter(Boolean).join(' · ');
+  function dayRowHtml(d) {
+    return '<div class="cp-card"><div class="cp-row"><div><div class="cp-name" style="font-size:14px">' + eh(dayLabel(d.day)) + '</div><div class="cp-sub">' + eh(dayKinds(d)) + '</div></div>' +
+      '<div style="text-align:end"><b>' + money(d.amt) + '</b><div style="margin-top:3px"><span class="cp-tag ' + (d.pn ? 'wt' : 'ok') + '">' + (d.pn ? num(d.pn) + ' مش متأكد' : '✓ كله متأكد') + '</span></div></div></div>' +
+      '<div class="cp-info"><button type="button" class="cp-a" data-act="rvday" data-day="' + d.day + '">' + (d.pn ? 'راجع وأكّد اليوم ده' : 'شوف تفاصيل اليوم') + '</button></div></div>';
   }
 
   /* ---------- 2) مشاويري ---------- */
@@ -424,11 +433,12 @@
   }
   const itemsOf = d => st.items.filter(it => it.day === d);
   function viewTrips() {
-    const all = itemsOf(st.day), n = k => all.filter(i => k === 'all' || i.type === k).length;
+    const inMonth = st.tripScope === 'month', mr = rangeOf('month', st.month);
+    const all = inMonth ? st.items.filter(i => i.day >= mr[0] && i.day <= mr[1]) : itemsOf(st.day), n = k => all.filter(i => k === 'all' || i.type === k).length;
     const tabs = '<div class="cp-tabs">' + [['all', 'الكل'], ['pickup', 'استلام'], ['delivery', 'تسليم'], ['fee', 'رسوم توصيل']].map(t => '<button type="button" class="cp-tab' + (st.type === t[0] ? ' on' : '') + '" data-type="' + t[0] + '">' + t[1] + '<i>' + num(n(t[0])) + '</i></button>').join('') + '</div>';
     const stTabs = '<div class="cp-tabs">' + [
       ['all', 'كل الحالات (' + num(all.length) + ')'],
-      ['pending', '⏳ بانتظار تأكيدك (' + num(all.filter(i => !i.confirmed).length) + ')'],
+      ['pending', '⏳ مش متأكد (' + num(all.filter(i => !i.confirmed).length) + ')'],
       ['confirmed', '✓ مؤكدة (' + num(all.filter(i => i.confirmed).length) + ')']
     ].map(s => '<button type="button" class="cp-tab' + (st.statusFilter === s[0] ? ' on' : '') + '" data-sfilter="' + s[0] + '">' + s[1] + '</button>').join('') + '</div>';
 
@@ -449,7 +459,12 @@
       return true;
     });
 
-    return renderGuideBanner('trips') + dayNav() + searchBar + tabs + stTabs + (rows.length ? rows.map(tripCard).join('') : '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مطابقة في اليوم ده' : 'جاري التحميل…') + '</div>');
+    const scope = '<div class="cp-seg">' + [['day', 'يوم يوم'], ['month', 'الشهر كله']].map(x => '<button type="button" data-tscope="' + x[0] + '" class="' + (st.tripScope === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>';
+    let list = '';
+    if (!rows.length) list = '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مطابقة' : 'جاري التحميل…') + '</div>';
+    else if (inMonth) { let last = ''; rows.slice().sort((a, b) => a.day < b.day ? 1 : a.day > b.day ? -1 : 0).forEach(i => { if (i.day !== last) { last = i.day; list += '<div class="cp-h"><span>' + eh(dayLabel(i.day)) + '</span></div>'; } list += tripCard(i); }); }
+    else list = rows.map(tripCard).join('');
+    return renderGuideBanner('trips') + scope + (inMonth ? monthNav() : dayNav()) + searchBar + tabs + stTabs + list;
   }
   function tripCard(it) {
     const k = KIND[it.type], [sl, sc] = txState(it);
@@ -464,7 +479,7 @@
       '<div class="cp-chips"><span class="cp-tag ' + k.cls + '"><i class="fa-solid ' + k.icon + '"></i> ' + eh(kindLabel(it)) + '</span><span class="cp-tag ' + sc + '">' + sl + '</span>' +
       (it.type !== 'fee' ? String(it.services || '').split('، ').filter(Boolean).slice(0, 4).map(x => '<span class="cp-chip">' + eh(x) + '</span>').join('') : '') + '</div>' +
       (links.length ? '<div class="cp-info">' + links.join('') + '</div>' : '') + emp +
-      '<div class="cp-info"><button type="button" class="cp-a" data-act="note" data-tx="' + eh(it.transaction_id) + '"><i class="fa-solid fa-note-sticky"></i> ملاحظة للموظف / بلاغ سريع' + (Number(it.my_notes) ? ' (' + num(it.my_notes) + ')' : '') + '</button></div></div>';
+      '<div class="cp-info">' + (it.phone ? '<button type="button" class="cp-a wa" data-act="wtpl" data-tx="' + eh(it.transaction_id) + '" data-id="' + eh(it.id) + '">رسالة واتساب جاهزة للعميل</button>' : '') + '<button type="button" class="cp-a" data-act="note" data-tx="' + eh(it.transaction_id) + '"><i class="fa-solid fa-note-sticky"></i> ملاحظة للموظف / بلاغ سريع' + (Number(it.my_notes) ? ' (' + num(it.my_notes) + ')' : '') + '</button></div></div>';
   }
 
   /* ---------- 3) لوحة ترتيب المناديب (Leaderboard: الاستلامات والتسليم) ---------- */
@@ -538,12 +553,19 @@
     return renderGuideBanner('rank') + seg + renderLeaderboardInner(st.leaderboard, false);
   }
 
-  /* ---------- 4) المراجعة (تأكيد آخر اليوم) ---------- */
-  function viewReview() {
-    const t = today();
-    const old = {}; st.items.forEach(i => { if (!i.confirmed && i.day < t) old[i.day] = (old[i.day] || 0) + 1; });
-    const oldDays = Object.keys(old).sort().reverse().slice(0, 6).filter(d => d !== st.day);
-    const oldBox = oldDays.length ? '<div class="cp-old">⚠ عندك أيام قبل كده لسه ما اتأكدتش (اضغط على اليوم لمراجعته وتأكيده):<br>' + oldDays.map(d => '<button type="button" class="cp-a" data-act="dset" data-day="' + d + '">' + eh(dayLabel(d)) + ' (' + num(old[d]) + ')</button>').join('') + '</div>' : '';
+  /* ---------- 4) المراجعة (الشهر ← الأيام ← تأكيد اليوم) ---------- */
+  function viewReview() { return st.rvOpen ? reviewDay() : reviewMonth(); }
+  function reviewMonth() {
+    const rng = rangeOf('month', st.month), rows = dayRows(rng);
+    const n = rows.reduce((a, d) => a + d.n, 0), pn = rows.reduce((a, d) => a + d.pn, 0);
+    const amt = rows.reduce((a, d) => a + d.amt, 0);
+    const sum = '<div class="cp-card"><div class="cp-row"><b>' + eh(monthLabel(st.month)) + '</b><span class="cp-tag k-pk">' + num(n) + ' مشوار · ' + money(amt) + '</span></div>' +
+      '<div class="cp-chips" style="margin-top:8px"><span class="cp-tag ok">✓ متأكد: ' + num(n - pn) + ' مشوار</span><span class="cp-tag ' + (pn ? 'wt' : 'ok') + '">' + (pn ? '⏳ مش متأكد: ' + num(pn) + ' مشوار' : 'مفيش حاجة مستنية تأكيدك') + '</span></div></div>';
+    const fl = '<div class="cp-seg">' + [['all', 'كل الأيام'], ['pending', 'مش متأكد'], ['confirmed', 'متأكد']].map(x => '<button type="button" data-rvf="' + x[0] + '" class="' + (st.rvf === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>';
+    const shown = rows.filter(d => st.rvf === 'all' || (st.rvf === 'pending' ? d.pn > 0 : d.pn === 0));
+    return renderGuideBanner('review') + monthNav() + sum + fl + (shown.length ? shown.map(dayRowHtml).join('') : '<div class="cp-empty">' + (st.loaded ? 'مفيش أيام مطابقة في الشهر ده' : 'جاري التحميل…') + '</div>');
+  }
+  function reviewDay() {
     const all = itemsOf(st.day);
     const sec = k => {
       const rows = all.filter(i => i.type === k); if (!rows.length) return '';
@@ -551,12 +573,58 @@
       const last = rows.filter(i => i.confirmed_at).map(i => i.confirmed_at).sort().pop();
       return '<div class="cp-card"><div class="cp-row"><b>' + KIND[k].sec + '</b><span class="cp-tag ' + KIND[k].cls + '">' + num(rows.length) + ' مشوار · ' + money(tot) + '</span></div><div style="margin-top:6px">' +
         rows.map(i => '<div class="cp-rev"><div>' + eh(i.client_name || 'بدون اسم') + '<br><span><b dir="ltr">' + eh(i.transaction_id) + '</b>' + (i.type === 'fee' ? ' · ' + (i.fee_kind === 'round' ? 'ذهاب وعودة' : 'ذهاب فقط') : '') + '</span></div>' +
-          '<div style="text-align:end"><b>' + money(i.amount) + '</b><br><span>' + (i.confirmed ? '✓ مؤكد' : '○ منتظر') + ' <button type="button" class="cp-a cp-sm" data-act="note" data-tx="' + eh(i.transaction_id) + '"><i class="fa-solid fa-flag"></i> ملاحظة</button></span></div></div>').join('') + '</div>' +
+          '<div style="text-align:end"><b>' + money(i.amount) + '</b><br><span>' + (i.confirmed ? '✓ مؤكد' : '○ مش متأكد') + ' <button type="button" class="cp-a cp-sm" data-act="note" data-tx="' + eh(i.transaction_id) + '"><i class="fa-solid fa-flag"></i> ملاحظة</button></span></div></div>').join('') + '</div>' +
         (pend.length ? '<button type="button" class="cp-big" data-act="ask" data-kind="' + k + '" data-n="' + pend.length + '" data-amt="' + ptot + '">' + KIND[k].btn + ' · ' + money(ptot) + '</button>'
           : '<div class="cp-done">✓ اتأكد بالكامل' + (last ? ' الساعة ' + eh(timeOf(last)) : '') + '</div>') + '</div>';
     };
     const body = ['pickup', 'delivery', 'fee'].map(sec).join('');
-    return renderGuideBanner('review') + dayNav() + oldBox + (body || '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مسجلة في اليوم ده' : 'جاري التحميل…') + '</div>');
+    return '<div class="cp-h"><span>مراجعة يوم واحد</span><button type="button" class="cp-a cp-sm" data-act="rvback">رجوع لأيام الشهر</button></div>' + dayNav() + (body || '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مسجلة في اليوم ده' : 'جاري التحميل…') + '</div>');
+  }
+
+  /* ---------- ملفي الشخصي ---------- */
+  function syncDraft() { const t = $('cp-ptitle'), p = $('cp-pphone'); if (t) st.pT = t.value; if (p) st.pP = p.value; }
+  function viewProfile() {
+    const m = st.me || {}, ph = st.pPhoto === undefined ? m.photo : st.pPhoto;
+    const title = st.pT !== undefined ? st.pT : (m.title || ''), phone = st.pP !== undefined ? st.pP : (m.phone || '');
+    return '<div class="cp-h"><span>ملفي الشخصي</span><button type="button" class="cp-a cp-sm" data-act="pback">رجوع</button></div>' + renderGuideBanner('profile') +
+      '<div class="cp-card" style="text-align:center">' + avatar(ph, m.name, 96) +
+      '<div class="cp-info" style="justify-content:center;margin-top:10px"><label class="cp-a" for="cp-pfile">' + (ph ? 'غيّر الصورة' : 'اختار صورة') + '</label><input id="cp-pfile" type="file" accept="image/*" style="display:none">' +
+      (ph ? '<button type="button" class="cp-a" data-act="pdel">شيل الصورة</button>' : '') + '</div>' +
+      '<div class="cp-sub" style="margin-top:6px">' + (st.pPhoto !== undefined ? 'الصورة لسه ما اتحفظتش — اضغط «حفظ» تحت' : '') + '</div></div>' +
+      '<div class="cp-card"><label class="cp-lbl">الاسم (بتحدده الإدارة)</label><div class="cp-name">' + eh(m.name) + '</div>' +
+      '<label class="cp-lbl" for="cp-ptitle">المسمى الوظيفي</label><input id="cp-ptitle" class="cp-fld" maxlength="60" value="' + eh(title) + '" placeholder="مثال: مندوب تسليم">' +
+      '<label class="cp-lbl" for="cp-pphone">رقم التليفون</label><input id="cp-pphone" class="cp-fld" type="tel" inputmode="tel" dir="ltr" maxlength="20" value="' + eh(phone) + '" placeholder="01xxxxxxxxx">' +
+      '<button type="button" class="cp-big" data-act="psave" style="margin-top:14px">حفظ</button></div>';
+  }
+  function pickPhoto(file) {
+    if (!file || !/^image\//.test(file.type)) return toast('اختار صورة من فضلك', true);
+    const rd = new FileReader();
+    rd.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+        const m = Math.min(img.width, img.height); c.getContext('2d').drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, S, S);
+        syncDraft(); st.pPhoto = c.toDataURL('image/jpeg', 0.8); renderTab(false);
+      };
+      img.onerror = () => toast('الصورة دي مش مقروءة، جرّب غيرها', true);
+      img.src = rd.result;
+    };
+    rd.readAsDataURL(file);
+  }
+  async function saveProfile(btn) {
+    syncDraft();
+    const m = st.me || {}, ar = '٠١٢٣٤٥٦٧٨٩';
+    const title = String(st.pT !== undefined ? st.pT : (m.title || '')).trim();
+    const phone = String(st.pP !== undefined ? st.pP : (m.phone || '')).replace(/[٠-٩]/g, d => ar.indexOf(d)).trim();
+    if (phone && !/^[0-9+ ]{7,20}$/.test(phone)) return toast('رقم التليفون غير صحيح', true);
+    btn.disabled = true; btn.textContent = 'جاري الحفظ…';
+    try {
+      const r = await sbClient.rpc('courier_profile_update', { p_title: title, p_phone: phone, p_photo: st.pPhoto === undefined ? null : st.pPhoto });
+      if (r.error) throw r.error;
+      st.me = r.data; st.pPhoto = undefined; st.pT = undefined; st.pP = undefined;
+      const w = $('cp-whobtn'); if (w) w.innerHTML = whoInner();
+      toast('تم حفظ ملفك ✓'); renderTab(false);
+    } catch (e) { toast(errMsg(e), true); btn.disabled = false; btn.textContent = 'حفظ'; }
   }
 
   /* ---------- 5) التواصل (رسايل خاصة + اتصال) ---------- */
@@ -575,9 +643,11 @@
     b.innerHTML = renderGuideBanner('chat') + (rows || '<div class="cp-empty">' + (st.loaded ? 'مفيش جهات اتصال' : 'جاري التحميل…') + '</div>');
   }
   function convView() {
+    const QR = ['وصلت', 'العميل مش بيرد', 'العنوان مش واضح', 'محتاج رسوم توصيل', 'خلصت التسليم', 'متأخر شوية'];
     const b = $('cp-body'), c = st.chat; if (!b) return;
     b.innerHTML = '<div class="cp-chat"><div class="cp-chead"><button type="button" class="cp-btn cp-sm" data-act="chat-back">رجوع</button><b>' + eh(c.name) + '</b>' + (c.phone ? callBtns(c.phone, 'اتصال') : '') + '</div>' +
       '<div class="cp-msgs" id="cp-msgs"></div>' + (c.tx ? '<div class="cp-sub" style="margin-top:6px">بخصوص معاملة <b>' + eh(c.tx) + '</b> <button type="button" class="cp-a cp-sm" data-act="chat-notx">شيل</button></div>' : '') +
+      '<div class="cp-qr">' + QR.map(x => '<button type="button" class="cp-a" data-act="qr" data-txt="' + eh(x) + '">' + eh(x) + '</button>').join('') + '<button type="button" class="cp-a" data-act="sendloc">ابعت موقعي</button></div>' +
       '<div class="cp-comp"><textarea id="cp-msg" class="cp-field" rows="1" placeholder="اكتب رسالة…">' + eh(st.draft) + '</textarea><button type="button" class="cp-btn cp-go" data-act="chat-send">إرسال</button></div></div>';
     paintMsgs(true);
     const t = $('cp-msg'); if (t) { t.addEventListener('input', () => { st.draft = t.value; t.style.height = 'auto'; t.style.height = Math.min(110, t.scrollHeight) + 'px'; }); }
@@ -606,7 +676,7 @@
       if (!st.chat || st.chat.ch !== c.ch) return;
       const have = new Set(st.msgs.map(x => x.id)), add = (r.data || []).filter(x => !have.has(x.id));
       if (first) { st.msgs = r.data || []; paintMsgs(true); }
-      else if (add.length) { st.msgs = st.msgs.filter(x => !String(x.id).startsWith('tmp')).concat(add); paintMsgs(false); }
+      else if (add.length) { if (add.some(x => !x.mine)) buzz(); st.msgs = st.msgs.filter(x => !String(x.id).startsWith('tmp')).concat(add); paintMsgs(false); }
       if ((first || add.some(x => !x.mine))) { sbClient.rpc('courier_chat_read', { p_channel: c.ch }); const k = st.contacts.find(x => x.channel_id === c.ch); if (k) k.unread = 0; renderNav(); }
     } catch (e) { setOffline(true); }
   }
@@ -626,11 +696,11 @@
   function setOffline(v) { st.offline = v; const e = $('cp-off'); if (e) e.classList.toggle('on', !!v); }
   async function loadItems(silent) {
     try {
-      const t = today(), r = await sbClient.rpc('courier_items', { p_from: addDays(t, -62), p_to: t });
+      const t = today(), r = await sbClient.rpc('courier_items', { p_from: addDays(t, -120), p_to: t });
       if (r.error) throw r.error; setOffline(false);
       const data = Array.isArray(r.data) ? r.data : [], sig = JSON.stringify(data);
-      st.loaded = true;
-      if (sig !== st.sig) { st.sig = sig; st.items = data; renderNav(); if (st.tab !== 'chat') renderTab(false); }
+      st.loaded = true; st.lastOk = Date.now(); const u = $('cp-upd'); if (u) u.textContent = timeOf(st.lastOk);
+      if (sig !== st.sig) { saveCache(data); st.sig = sig; st.items = data; renderNav(); if (st.tab !== 'chat' && st.tab !== 'profile') renderTab(false); }
     } catch (e) { setOffline(true); if (!silent) toast(errMsg(e), true); }
   }
   async function loadLeaderboard(silent) {
@@ -668,7 +738,7 @@
       if (sig !== st.csig) {
         const u0 = unreadTotal(); st.csig = sig; st.contacts = data; const u1 = unreadTotal();
         renderNav(); if (st.tab === 'chat' && !st.chat) viewChat();
-        if (u1 > u0 && st.loaded && !(st.chat)) toast('وصلتك رسالة جديدة 💬');
+        if (u1 > u0 && st.loaded && !(st.chat)) { toast('وصلتك رسالة جديدة 💬'); buzz(); }
       }
     } catch (e) { if (!silent) toast(errMsg(e), true); }
   }
@@ -680,6 +750,61 @@
     if (st.tick % 30 === 0) loadLeaderboard(true);
     if (st.tick % 15 === 0) loadContacts(true);
     if (st.tick % 60 === 0) sbClient.rpc('touch_last_seen');
+  }
+
+  /* ---------- رسائل واتساب جاهزة للعميل ---------- */
+  function openWaTemplates(id, tx) {
+    const it = st.items.find(o => String(o.id) === String(id) && String(o.transaction_id) === String(tx)) || byTx(tx); if (!it || !it.phone) return;
+    const me = (st.me && st.me.name) || '', cl = it.client_name || 'حضرتك', head = 'السلام عليكم ' + cl + '، أنا ' + me + ' مندوب تساهيل';
+    const T = [
+      ['وصلت', head + '، وصلت لحضرتك بخصوص المعاملة رقم ' + tx + '.'],
+      ['في الطريق', head + '، أنا في الطريق لحضرتك بخصوص المعاملة رقم ' + tx + ' وهوصل خلال دقائق.'],
+      ['العنوان / اللوكيشن', head + '، ممكن توضحلي العنوان أو تبعتلي اللوكيشن عشان أوصلك بسرعة؟ (المعاملة ' + tx + ')'],
+      ['اتصلت ومردتش', head + '، حاولت أتصل بحضرتك بخصوص المعاملة رقم ' + tx + ' ومردتش، ياريت تكلمني في أقرب وقت.'],
+      ['اعتذار عن التأخير', head + '، بعتذر عن التأخير بخصوص المعاملة رقم ' + tx + '، وهكون عندك في أقرب وقت.']
+    ];
+    modal('<b style="font-size:15px">اختار الرسالة (هتفتح واتساب والنص جاهز، وانت اللي تبعت)</b><div style="margin-top:10px">' +
+      T.map(t => '<a class="cp-a wa" style="display:block;margin-bottom:8px;text-align:start;white-space:normal" target="_blank" rel="noopener" href="https://wa.me/' + eh(waNum(it.phone)) + '?text=' + encodeURIComponent(t[1]) + '"><b>' + eh(t[0]) + '</b><br><span style="font-weight:500">' + eh(t[1]) + '</span></a>').join('') +
+      '</div><button type="button" class="cp-btn" style="width:100%" data-act="mclose-btn">إغلاق</button>');
+  }
+
+  /* ---------- ملاحظاتي (وحالة كل واحدة) ---------- */
+  async function openMyNotes() {
+    modal('<div class="cp-empty">جاري التحميل…</div>');
+    try {
+      const r = await sbClient.rpc('courier_my_notes'); if (r.error) throw r.error;
+      const L = Array.isArray(r.data) ? r.data : [];
+      const lab = x => x === 'resolved' ? ['ok', '✓ اتحلّت'] : x === 'seen' ? ['k-pk', '👁 الموظف شافها'] : ['wt', '⏳ لسه ماتشافتش'];
+      modal('<b style="font-size:15px">ملاحظاتي اللي بعتّها (آخر ٩٠ يوم)</b><div style="margin-top:10px;max-height:60vh;overflow:auto">' + (L.length ? L.map(n => { const l = lab(n.status);
+        return '<div class="cp-card" style="padding:10px"><div class="cp-row"><div><div class="cp-name" style="font-size:13px">' + eh(n.client_name || 'بدون اسم') + '</div><div class="cp-sub">معاملة <b dir="ltr">' + eh(n.transaction_id) + '</b> · ' + eh(dayLabel(String(n.created_at).slice(0, 10))) + '</div></div><span class="cp-tag ' + l[0] + '">' + l[1] + '</span></div><div class="cp-sub" style="margin-top:6px;white-space:normal">' + eh(n.body) + '</div></div>'; }).join('') : '<div class="cp-empty">مفيش ملاحظات لسه</div>') +
+        '</div><button type="button" class="cp-btn" style="width:100%;margin-top:8px" data-act="mclose-btn">إغلاق</button>');
+    } catch (e) { modal('<div class="cp-empty">' + eh(errMsg(e)) + '</div><button type="button" class="cp-btn" style="width:100%" data-act="mclose-btn">إغلاق</button>'); }
+  }
+
+  /* ---------- كشف حساب الشهر (عرض + نسخة واتساب + طباعة) ---------- */
+  function stmtData() {
+    const rng = rangeOf('month', st.month), rows = st.items.filter(i => i.day >= rng[0] && i.day <= rng[1]).sort((a, b) => a.day < b.day ? -1 : a.day > b.day ? 1 : 0);
+    const c = rows.filter(i => i.confirmed), pn = rows.filter(i => !i.confirmed);
+    const sum = a => a.reduce((x, i) => x + Number(i.amount || 0), 0);
+    return { rows: rows, c: c, p: pn, ca: sum(c), pa: sum(pn) };
+  }
+  function openStatement() {
+    const d = stmtData(), nm = (st.me && st.me.name) || '';
+    modal('<b style="font-size:15px">كشف حساب ' + eh(monthLabel(st.month)) + ' — ' + eh(nm) + '</b>' +
+      '<div class="cp-chips" style="margin:8px 0"><span class="cp-tag ok">✓ مؤكد: ' + num(d.c.length) + ' مشوار · ' + money(d.ca) + '</span><span class="cp-tag ' + (d.p.length ? 'wt' : 'ok') + '">' + (d.p.length ? '⏳ مش متأكد: ' + num(d.p.length) + ' مشوار · ' + money(d.pa) : 'مفيش حاجة مش متأكدة') + '</span></div>' +
+      '<div style="max-height:46vh;overflow:auto">' + (d.rows.length ? d.rows.map(i => '<div class="cp-rev"><div>' + eh(i.client_name || 'بدون اسم') + '<br><span>' + eh(dayLabel(i.day)) + ' · ' + eh(kindLabel(i)) + ' · <b dir="ltr">' + eh(i.transaction_id) + '</b></span></div><div style="text-align:end"><b>' + money(i.amount) + '</b><br><span>' + (i.confirmed ? '✓ مؤكد' : '○ مش متأكد') + '</span></div></div>').join('') : '<div class="cp-empty">مفيش مشاوير في الشهر ده</div>') + '</div>' +
+      '<div class="cp-info" style="margin-top:10px"><button type="button" class="cp-a wa" data-act="stmt-wa">ابعته واتساب</button><button type="button" class="cp-a" data-act="stmt-print">طباعة / حفظ PDF</button><button type="button" class="cp-btn" data-act="mclose-btn">إغلاق</button></div>');
+  }
+  function stmtText() {
+    const d = stmtData(), by = {}; d.rows.forEach(i => { const x = by[i.day] || (by[i.day] = { n: 0, a: 0, p: 0 }); x.n++; x.a += Number(i.amount || 0); if (!i.confirmed) x.p++; });
+    const lines = Object.keys(by).sort().map(k => dayLabel(k) + ': ' + num(by[k].n) + ' مشوار · ' + money(by[k].a) + (by[k].p ? ' (' + num(by[k].p) + ' مش متأكد)' : ' ✓'));
+    return 'كشف حساب ' + monthLabel(st.month) + ' — ' + ((st.me && st.me.name) || '') + '\n' + lines.join('\n') + '\n\nمؤكد: ' + num(d.c.length) + ' مشوار · ' + money(d.ca) + '\nمش متأكد: ' + num(d.p.length) + ' مشوار · ' + money(d.pa);
+  }
+  function printStatement() {
+    const d = stmtData(), w = window.open('', '_blank'); if (!w) return toast('المتصفح منع نافذة الطباعة، اسمح بالنوافذ وجرّب تاني', true);
+    const tr = d.rows.map(i => '<tr><td>' + eh(i.day) + '</td><td>' + eh(i.transaction_id) + '</td><td>' + eh(i.client_name || '') + '</td><td>' + eh(kindLabel(i)) + '</td><td>' + money(i.amount) + '</td><td>' + (i.confirmed ? 'مؤكد' : 'مش متأكد') + '</td></tr>').join('');
+    w.document.write('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>كشف حساب</title><style>body{font-family:sans-serif;padding:16px}table{width:100%;border-collapse:collapse;font-size:13px}td,th{border:1px solid #999;padding:5px;text-align:right}h2{margin:0 0 4px}</style></head><body><h2>كشف حساب ' + eh(monthLabel(st.month)) + '</h2><div>المندوب: ' + eh((st.me && st.me.name) || '') + '</div><br><table><tr><th>التاريخ</th><th>المعاملة</th><th>العميل</th><th>النوع</th><th>المبلغ</th><th>الحالة</th></tr>' + tr + '</table><p><b>مؤكد:</b> ' + num(d.c.length) + ' مشوار · ' + money(d.ca) + '<br><b>مش متأكد:</b> ' + num(d.p.length) + ' مشوار · ' + money(d.pa) + '</p></body></html>');
+    w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch (e) { /* */ } }, 300);
   }
 
   /* ---------- مودالات الملاحظات السريعة والتأكيد ---------- */
@@ -748,10 +873,12 @@
     }
   }
   function onClick(e) {
-    const el = e.target.closest('[data-act],[data-tab],[data-per],[data-lbper],[data-type],[data-sfilter]'); if (!el) return;
+    const el = e.target.closest('[data-act],[data-tab],[data-per],[data-lbper],[data-type],[data-sfilter],[data-tscope],[data-rvf]'); if (!el) return;
     if (el.dataset.tab) return setTab(el.dataset.tab);
     if (el.dataset.per) { st.period = el.dataset.per; return renderTab(false); }
     if (el.dataset.lbper) { st.lbPeriod = el.dataset.lbper; st.lbsig = ''; renderTab(false); return loadLeaderboard(false); }
+    if (el.dataset.tscope) { st.tripScope = el.dataset.tscope; return renderTab(false); }
+    if (el.dataset.rvf) { st.rvf = el.dataset.rvf; return renderTab(false); }
     if (el.dataset.type) { st.type = el.dataset.type; return renderTab(false); }
     if (el.dataset.sfilter) { st.statusFilter = el.dataset.sfilter; return renderTab(false); }
     const a = el.dataset.act, tx = el.dataset.tx;
@@ -761,6 +888,32 @@
       case 'logout': return window.handleLogout && window.handleLogout();
       case 'theme': return toggleTheme();
       case 'guide-toggle': return toggleGuide(el.dataset.gtab);
+      case 'mprev': if (st.month > minMonth()) { st.month = addMonths(st.month, -1); st.rvOpen = false; renderTab(false); } return;
+      case 'mnext': if (st.month < monthOf(today())) { st.month = addMonths(st.month, 1); st.rvOpen = false; renderTab(false); } return;
+      case 'rvday': st.day = el.dataset.day; st.month = monthOf(el.dataset.day); st.rvOpen = true; return st.tab === 'review' ? renderTab(true) : setTab('review');
+      case 'rvback': st.rvOpen = false; return renderTab(true);
+      case 'profile': return setTab('profile');
+      case 'pback': st.pPhoto = undefined; st.pT = undefined; st.pP = undefined; return setTab('home');
+      case 'pdel': syncDraft(); st.pPhoto = ''; return renderTab(false);
+      case 'psave': return saveProfile(el);
+      case 'refresh': return loadItems(false).then(() => toast('اتحدّث ✓'));
+      case 'goold': { const o = st.items.filter(i => !i.confirmed && i.day < today()).map(i => i.day).sort().pop(); if (o) st.month = monthOf(o); st.rvf = 'pending'; st.rvOpen = false; return setTab('review'); }
+      case 'qr': { const t = $('cp-msg'); if (t) { t.value = (t.value ? t.value.trim() + ' ' : '') + el.dataset.txt; st.draft = t.value; t.focus(); } return; }
+      case 'sendloc': {
+        if (!navigator.geolocation) return toast('الموبايل ده مش بيدعم تحديد الموقع', true);
+        toast('بجيب موقعك…');
+        navigator.geolocation.getCurrentPosition(pos => {
+          const t = $('cp-msg'); if (!t) return;
+          const link = 'https://www.google.com/maps?q=' + pos.coords.latitude.toFixed(6) + ',' + pos.coords.longitude.toFixed(6);
+          t.value = (t.value ? t.value.trim() + ' ' : 'موقعي: ') + link; st.draft = t.value; t.focus(); toast('الموقع اتحط في الرسالة، اضغط إرسال');
+        }, () => toast('مقدرتش أجيب موقعك، اتأكد إن الموقع شغال', true), { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+        return;
+      }
+      case 'wtpl': return openWaTemplates(el.dataset.id, tx);
+      case 'mynotes': return openMyNotes();
+      case 'stmt': return openStatement();
+      case 'stmt-wa': return window.open('https://wa.me/?text=' + encodeURIComponent(stmtText()), '_blank');
+      case 'stmt-print': return printStatement();
       case 'qclear': st.q = ''; return renderTab(false);
       case 'dprev': st.day = addDays(st.day, -1); return renderTab(false);
       case 'dnext': if (st.day < today()) { st.day = addDays(st.day, 1); renderTab(false); } return;
@@ -784,10 +937,16 @@
   }
 
   async function showCourier() {
-    initTheme(); initGuides(); st.day = today();
+    initTheme(); initGuides(); st.day = today(); st.month = monthOf(today());
     overlay('<div class="cp-empty" style="margin:auto">جاري التحميل…</div>');
-    try { const r = await sbClient.rpc('courier_me'); if (r.error) throw r.error; st.me = r.data; }
-    catch (e) { overlay('<header class="cp-head"><div class="cp-who"><b>بوابة المندوب</b></div>' + logoutBtn + '</header><div class="cp-empty" style="margin:auto">' + eh(errMsg(e)) + '</div>'); return; }
+    try { const r = await sbClient.rpc('courier_me'); if (r.error) throw r.error; st.me = r.data; try { localStorage.setItem('ts_cp_me', JSON.stringify(st.me)); } catch (x) { /* */ } }
+    catch (e) {
+      st.err = e; let m = null; try { m = JSON.parse(localStorage.getItem('ts_cp_me') || 'null'); } catch (x) { /* */ }
+      const denied = e && (e.code === '42501' || /not linked|courier only/.test(String(e.message || '')));
+      if (m && m.user_id && !denied) { st.me = m; st.offline = true; }
+    }
+    if (!st.me) { const e = st.err || new Error('تعذر تحميل البوابة'); overlay('<header class="cp-head"><div class="cp-who"><b>بوابة المندوب</b></div>' + logoutBtn + '</header><div class="cp-empty" style="margin:auto">' + eh(errMsg(e)) + '</div>'); return; }
+    const cc = loadCache(); if (cc) { st.items = cc.items; st.loaded = true; st.lastOk = cc.ts; }
     shell(); sbClient.rpc('touch_last_seen');
     await Promise.all([loadItems(false), loadLeaderboard(true), loadContacts(true)]);
     clearInterval(st.timer); st.timer = setInterval(tick, 1000);
@@ -803,6 +962,7 @@
     if (role === 'courier') { window.__role = 'courier'; return showCourier(); }
     if (role) window.__role = role;
     if (isManagerUser()) ensureManagerUi();
+    if (role === 'manager' || role === 'staff') loadCourierPhotos();
     try {
       const out = await _li.apply(this, arguments);
       if (isManagerUser()) ensureManagerUi();
@@ -812,9 +972,20 @@
       throw err;
     }
   };
+  /* الموظفين يشوفوا صورة المندوب في الشات بتاعهم (الصور بتتحمل للموظفين بس) */
+  async function loadCourierPhotos() { try { const r = await sbClient.rpc('courier_photos'); if (!r.error && r.data) window.__courierPhotos = r.data; } catch (e) { /* */ } }
+  const _av = window.avatarHtml;
+  if (typeof _av === 'function') {
+    window.avatarHtml = function (p, size) {
+      const ph = window.__courierPhotos && p && window.__courierPhotos[p.id];
+      if (!ph || !/^data:image\//.test(ph)) return _av.apply(this, arguments);
+      size = size || 40;
+      return '<img src="' + eh(ph) + '" alt="" class="rounded-full object-cover shrink-0" style="width:' + size + 'px;height:' + size + 'px">';
+    };
+  }
   const _sl = window.showLoginScreen;
   window.showLoginScreen = function () {
-    clearInterval(st.timer); st.me = null; st.sig = ''; st.lbsig = ''; st.csig = ''; st.items = []; st.leaderboard = []; st.contacts = []; st.chat = null; st.msgs = []; st.loaded = false; st.lbLoaded = false; st.tab = 'home';
+    clearInterval(st.timer); try { if (st.me) { localStorage.removeItem(cacheKey()); localStorage.removeItem('ts_cp_me'); } } catch (e) { /* */ } st.me = null; st.sig = ''; st.lbsig = ''; st.csig = ''; st.items = []; st.leaderboard = []; st.contacts = []; st.chat = null; st.msgs = []; st.loaded = false; st.lbLoaded = false; st.tab = 'home'; st.rvOpen = false; st.pPhoto = undefined; st.pT = undefined; st.pP = undefined;
     document.body.classList.remove('is-courier-mode', 'is-partner-mode');
     const o = $('courier-app'); if (o) o.remove();
     return _sl.apply(this, arguments);
@@ -954,6 +1125,7 @@
         ? '<div class="cp-mgr-row">' +
             '<span class="nm"><i class="fa-solid fa-circle-check" style="color:#10b981;margin-inline-end:5px"></i>' + eh(c.name) + '</span>' +
             '<span class="em">' + eh(c.email || 'مربوط بحساب') + '</span>' +
+            ((c.profile_title || c.profile_phone) ? '<span class="st">' + eh([c.profile_title, c.profile_phone].filter(Boolean).join(' · ')) + '</span>' : '') +
             '<button type="button" class="cp-btn" style="background:#be123c;color:#fff" data-unlink="' + eh(c.user_id) + '">فك الربط</button>' +
             '<button type="button" class="cp-btn" data-toggle-c="' + eh(c.id) + '" data-active="false">إيقاف المندوب</button>' +
             (info[c.id] ? '<span class="st">مشاوير بانتظار تأكيد المندوب (آخر 30 يوم): <b>' + num(info[c.id].pending_trips) + '</b> · ملاحظاته آخر 7 أيام: <b>' + num(info[c.id].notes_7d) + '</b></span>' : '') +
