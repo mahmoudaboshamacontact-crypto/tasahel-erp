@@ -188,7 +188,7 @@ begin
   if v_c.id is null then
     raise exception 'courier account not linked' using errcode = '42501';
   end if;
-  if p_kind not in ('pickup','delivery','fee') then
+  if p_kind is null or p_kind not in ('pickup','delivery','fee') then
     raise exception 'bad kind' using errcode = '22023';
   end if;
   if p_day is null or p_day > v_today then
@@ -292,7 +292,7 @@ begin
   if v_c.id is null then
     raise exception 'courier account not linked' using errcode = '42501';
   end if;
-  if p_type not in ('pickup','delivery','fee') or v_ref = '' then
+  if p_type is null or p_type not in ('pickup','delivery','fee') or v_ref = '' then
     raise exception 'bad confirmation reference' using errcode = '22023';
   end if;
 
@@ -557,6 +557,7 @@ begin
   if nullif(btrim(coalesce(p_courier, '')), '') is null
      or p_period_start is null or p_period_end is null
      or p_period_start > p_period_end
+     or p_period_type is null
      or p_period_type not in ('today','week','month','prev_month','all','custom') then
     raise exception 'invalid closing parameters' using errcode = '22023';
   end if;
