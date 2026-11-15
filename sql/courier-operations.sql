@@ -58,7 +58,7 @@ begin
     if v_c.id is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
   end if;
   return coalesce((
-    select jsonb_agg(to_jsonb(x) order by x.route_order, x.priority, x.trip_day, x.id)
+    select jsonb_agg(to_jsonb(x) order by case when x.route_order=0 then 2147483647 else x.route_order end, x.priority, x.trip_day, x.id)
     from (
       select t.id, t.transaction_id, t.kind, t.courier, t.trip_day,
              t.fee, t.courier_confirmed_at,
