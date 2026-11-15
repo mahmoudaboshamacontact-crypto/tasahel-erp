@@ -600,6 +600,7 @@ begin
      where public.norm_ar(t.courier) = public.norm_ar(v_name)
        and t.trip_day between p_period_start and p_period_end
        and t.courier_confirmed_at is not null
+       and coalesce(t.fee, 0) > 0
        and not exists (
          select 1 from public.courier_closing_items ci
           where ci.source_type = t.kind
