@@ -74,6 +74,7 @@ begin
         left join public.request_lines l on l.transaction_id=t.transaction_id and l.deleted_at is null
        where t.trip_day between coalesce(p_from,(now() at time zone 'Africa/Cairo')::date-30)
                             and coalesce(p_to,(now() at time zone 'Africa/Cairo')::date)
+         and exists (select 1 from public.couriers active_c where active_c.active=true and active_c.user_id is not null and public.norm_ar(active_c.name)=public.norm_ar(t.courier))
          and (v_manager or public.norm_ar(t.courier)=public.norm_ar(v_c.name))
        group by t.id,o.operational_status,o.priority,o.route_order,o.operational_note,o.updated_at
     ) x
