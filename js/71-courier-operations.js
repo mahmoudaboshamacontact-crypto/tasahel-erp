@@ -82,13 +82,13 @@
       const i=sorted.findIndex(z=>Number(z.id)===id),j=i+(a==='up'?-1:1);if(j<0||j>=sorted.length)return;
       const other=sorted[j],r=await rpc('courier_ops_update',{p_trip_id:id,p_route_order:Number(other.route_order||0),p_status:null,p_priority:null,p_note:null});
       if(r.error)return toast(r.error.message,true);
-      const q=await rpc('courier_ops_update',{p_trip_id:Number(other.id),p_route_order:Number(x.route_order||0),p_status:null,p_priority:null,p_note:null});
+      const q=await rpc('courier_ops_update',{p_trip_id:Number(other.id),p_route_order:i+1,p_status:null,p_priority:null,p_note:null});
       if(q.error)return toast(q.error.message,true);return render();
     }
-    if(a==='issue-state'){
+    if(a==='paid'){return;}\n    if(a==='issue-state'){
       const resolution=b.dataset.state==='resolved'?(prompt('اكتب ملخص الحل (اختياري):')||'') : null;
       const r=await rpc('courier_ops_issue_update',{p_issue_id:Number(b.dataset.id),p_status:b.dataset.state,p_resolution:resolution});
-      if(r.error)return toast(r.error.message,true);toast('تم تحديث حالة البلاغ');return render();
+      if(r.error)return toast(r.error.message,true);toast('تم تحديث حالة البلاغ');if(isStaff()&&!$('courier-ops-modal')?.style.display||$('courier-ops-modal')?.style.display==='none')return loadManagerPanel();return render();
     }
   }
   async function onChange(e) {
