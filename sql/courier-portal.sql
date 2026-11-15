@@ -166,7 +166,24 @@ begin
                when c.body like '⚠ المشوار ده برسوم توصيل%' and exists (
                       select 1 from public.request_lines l where l.transaction_id = c.transaction_id and l.deleted_at is null
                          and public.norm_ar(l.service) like 'رسوم توصيل%' and public.norm_ar(l.executor) = v_me) then 'resolved'
-               when exists (select 1 from public.notifications n where n.body = c.body and n.read) then 'seen'
+               when exists (
+                      select 1
+                        from public.notifications n
+                       where n.body = c.body
+                         and n.read
+                         and n.created_at >= c.created_at
+                         and n.user_id = (
+                           select p.id
+                             from public.profiles p
+                            where public.norm_ar(p.full_name) = (
+                              select public.norm_ar(max(l.employee))
+                                from public.request_lines l
+                               where l.transaction_id = c.transaction_id
+                                 and l.deleted_at is null
+                            )
+                            limit 1
+                         )
+                    ) then 'seen'
                else 'sent' end as status
         from public.tx_comments c
        where c.author_id = auth.uid() and c.deleted_at is null and c.created_at > now() - interval '90 days'
