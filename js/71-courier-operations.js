@@ -11,7 +11,8 @@
   const statusOptions = Object.keys(labels).map(k=>'<option value="'+k+'">'+labels[k]+'</option>').join('');
   function rpc(name,args) { return sbClient.rpc(name,args || {}); }
   function toast(s,bad) { if (typeof showToast==='function') showToast(s,bad?'error':'success'); else alert(s); }
-  function isStaff() { return window.__role==='manager'||window.__role==='staff'||(typeof currentUser!=='undefined'&&currentUser&&/mahmoud\.aboshama@tasahel\.com\.eg|mahmoud\.aboshama\.contact@gmail\.com/i.test(currentUser.email||'')); }
+  function isManager() { return window.__role==='manager'||(typeof currentUser!=='undefined'&&currentUser&&/mahmoud\\.aboshama@tasahel\\.com\\.eg|mahmoud\\.aboshama\\.contact@gmail\\.com/i.test(currentUser.email||'')); }
+  function isStaff() { return isManager()||window.__role==='staff'; }
   function addCourierButton() {
     const nav=$('cp-nav'); if (!nav || nav.querySelector('[data-cop-open]')) return;
     const b=document.createElement('button'); b.type='button'; b.dataset.copOpen='1';
