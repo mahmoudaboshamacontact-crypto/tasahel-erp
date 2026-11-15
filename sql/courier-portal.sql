@@ -479,6 +479,11 @@ end $$;
 --    قابل لإعادة التشغيل بأمان (Idempotent) — إضافة فقط بدون مساس بالدوال السابقة.
 -- =====================================================================
 
+-- استبعاد الجهات (مش أشخاص) من الترتيب؛ المدير يقدر يغيّر العمود بعدين
+alter table public.couriers add column if not exists in_ranking boolean not null default true;
+update public.couriers set in_ranking = false
+ where public.norm_ar(name) in (public.norm_ar('الفرع'), public.norm_ar('ارامكس'), public.norm_ar('توصيل عن طريق اوبر'), public.norm_ar('seles'));
+
 -- لوحة ترتيب المناديب (تعمل للمندوب وللمدير/الموظف):
 -- - المندوب يشوف: الترتيب، الاسم، عدد الاستلامات، عدد التسليمات، مشاوير التوصيل، الإجمالي، ونسبة التأكيد (بدون كشف مبالغ غيره).
 -- - المدير يشوف بالإضافة لذلك: إجمالي المبالغ والعمولات المؤكدة والمنتظرة لكل مندوب.
@@ -501,7 +506,7 @@ begin
     with active_couriers as (
       select c.id, c.name, public.norm_ar(c.name) as norm_name, c.user_id, c.sort_order
         from public.couriers c
-       where c.active = true
+       where c.active = true and c.in_ranking
     ),
     trips_agg as (
       select public.norm_ar(t.courier) as norm_name,
