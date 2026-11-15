@@ -214,7 +214,58 @@ begin
   return jsonb_build_object('ok',true,'closing_id',p_closing_id);
 end $$;
 
-revoke all on function public.courier_ops_items(date,date),
+
+-- Push in-app notifications for newly assigned or materially changed trips.
+create or replace function public.trg_courier_ops_trip_notice()
+returns trigger language plpgsql security definer set search_path=public as $
+declare v_uid uuid; v_title text; v_body text;
+begin
+  if tg_op='UPDATE' and new.courier is not distinct from old.courier
+     and new.fee is not distinct from old.fee
+     and new.trip_day is not distinct from old.trip_day
+     and new.transaction_id is not distinct from old.transaction_id
+     and new.kind is not distinct from old.kind then return new; end if;
+  select c.user_id into v_uid from public.couriers c
+   where c.active and c.user_id is not null and public.norm_ar(c.name)=public.norm_ar(new.courier) limit 1;
+  if v_uid is not null then
+    v_title:=case when tg_op='INSERT' then 'مشوار جديد اتسجل باسمك' else 'تم تعديل أحد مشاويرك' end;
+    v_body:='المعاملة '||coalesce(new.transaction_id,'—')||' · '||
+      case new.kind when 'pickup' then 'استلام' when 'delivery' then 'تسليم' else new.kind end||
+      ' · '||coalesce(new.trip_day::text,'');
+    insert into public.notifications(user_id,kind,title,body) values(v_uid,'info',v_title,v_body);
+  end if;
+  return new;
+end $;
+drop trigger if exists courier_ops_trip_notice on public.courier_trips;
+create trigger courier_ops_trip_notice after insert or update of courier,fee,trip_day,transaction_id,kind
+on public.courier_trips for each row execute function public.trg_courier_ops_trip_notice();
+
+create or replace function public.trg_courier_ops_fee_notice()
+returns trigger language plpgsql security definer set search_path=public as $
+declare v_uid uuid; v_executor text; v_tx text; v_service text;
+begin
+  if tg_op='UPDATE' and new.executor is not distinct from old.executor
+     and new.exec_total is not distinct from old.exec_total
+     and new.exec_unit_cost is not distinct from old.exec_unit_cost
+     and new.qty is not distinct from old.qty
+     and new.received_at is not distinct from old.received_at
+     and new.service is not distinct from old.service then return new; end if;
+  if new.deleted_at is not null or public.norm_ar(new.service) not like 'رسوم توصيل%' then return new; end if;
+  select c.user_id into v_uid from public.couriers c
+   where c.active and c.user_id is not null and public.norm_ar(c.name)=public.norm_ar(new.executor) limit 1;
+  if v_uid is not null then
+    insert into public.notifications(user_id,kind,title,body)
+    values(v_uid, 'info',
+      case when tg_op='INSERT' then 'رسوم توصيل جديدة مسجلة باسمك' else 'تم تعديل بند رسوم توصيل باسمك' end,
+      'المعاملة '||coalesce(new.transaction_id,'—')||' · '||coalesce(new.received_at::date::text,''));
+  end if;
+  return new;
+end $;
+drop trigger if exists courier_ops_fee_notice on public.request_lines;
+create trigger courier_ops_fee_notice after insert or update of executor,exec_total,exec_unit_cost,qty,received_at,service,deleted_at
+on public.request_lines for each row execute function public.trg_courier_ops_fee_notice();
+
+\nrevoke all on function public.courier_ops_items(date,date),
  public.courier_ops_update(bigint,text,smallint,integer,text),
  public.courier_ops_report(bigint,text,text),public.courier_ops_issues(text),
  public.courier_ops_issue_update(bigint,text,text),public.courier_ops_ledger(date,date),
