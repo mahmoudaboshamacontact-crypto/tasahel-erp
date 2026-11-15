@@ -81,10 +81,12 @@
       const id=Number(b.dataset.id),x=state.items.find(z=>Number(z.id)===id);if(!x)return;
       const sorted=state.items.slice().sort((m,n)=>Number(m.route_order)-Number(n.route_order));
       const i=sorted.findIndex(z=>Number(z.id)===id),j=i+(a==='up'?-1:1);if(j<0||j>=sorted.length)return;
-      const other=sorted[j],r=await rpc('courier_ops_update',{p_trip_id:id,p_route_order:Number(other.route_order||0),p_status:null,p_priority:null,p_note:null});
-      if(r.error)return toast(r.error.message,true);
-      const q=await rpc('courier_ops_update',{p_trip_id:Number(other.id),p_route_order:i+1,p_status:null,p_priority:null,p_note:null});
-      if(q.error)return toast(q.error.message,true);return render();
+      const next=sorted.slice();[next[i],next[j]]=[next[j],next[i]];
+      for(let k=0;k<next.length;k++){
+        const q=await rpc('courier_ops_update',{p_trip_id:Number(next[k].id),p_route_order:k+1,p_status:null,p_priority:null,p_note:null});
+        if(q.error){toast(q.error.message,true);return render();}
+      }
+      return render();
     }
     if(a==='paid'){return;}
     if(a==='issue-state'){
