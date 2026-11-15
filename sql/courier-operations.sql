@@ -34,6 +34,13 @@ create table if not exists public.courier_trip_issues (
   updated_at timestamptz not null default now(),
   resolved_at timestamptz
 );
+-- Keep issue history: trips with reports cannot be hard-deleted.
+alter table public.courier_trip_issues
+  drop constraint if exists courier_trip_issues_trip_id_fkey;
+alter table public.courier_trip_issues
+  add constraint courier_trip_issues_trip_id_fkey
+  foreign key (trip_id) references public.courier_trips(id) on delete restrict;
+
 create index if not exists courier_trip_issues_trip_idx
   on public.courier_trip_issues (trip_id, created_at desc);
 create index if not exists courier_trip_issues_status_idx
