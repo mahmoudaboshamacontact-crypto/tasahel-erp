@@ -188,8 +188,11 @@ begin
     ) order by (e.value->>'day')::date desc
   ),'[]'::jsonb) into v_items
   from jsonb_array_elements(public.courier_items(p_from,p_to)) e(value)
-  left join public.courier_closing_items ci
-    on ci.source_type=e.value->>'type' and ci.source_id=(e.value->>'id')::bigint
+  left join lateral (
+    select z.* from public.courier_closing_items z
+     where z.source_type=e.value->>'type' and z.source_id=(e.value->>'id')::bigint
+     order by z.created_at desc,z.id desc limit 1
+  ) ci on true
   left join public.courier_closings cl on cl.id=ci.closing_id;
   return coalesce(v_items,'[]'::jsonb);
 end $$;
@@ -217,7 +220,7 @@ end $$;
 
 -- Push in-app notifications for newly assigned or materially changed trips.
 create or replace function public.trg_courier_ops_trip_notice()
-returns trigger language plpgsql security definer set search_path=public as $
+returns trigger language plpgsql security definer set search_path=public as $func$
 declare v_uid uuid; v_title text; v_body text;
 begin
   if tg_op='UPDATE' and new.courier is not distinct from old.courier
@@ -241,7 +244,7 @@ create trigger courier_ops_trip_notice after insert or update of courier,fee,tri
 on public.courier_trips for each row execute function public.trg_courier_ops_trip_notice();
 
 create or replace function public.trg_courier_ops_fee_notice()
-returns trigger language plpgsql security definer set search_path=public as $
+returns trigger language plpgsql security definer set search_path=public as $func$
 declare v_uid uuid; v_executor text; v_tx text; v_service text;
 begin
   if tg_op='UPDATE' and new.executor is not distinct from old.executor
