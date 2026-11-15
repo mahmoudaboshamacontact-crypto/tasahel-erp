@@ -304,7 +304,7 @@
   /* بناء قائمة مشاوير المندوب المفلترة حسب نوع المشوار والبحث */
   /* خدمة التوصيل باسمها الفعلي «رسوم توصيل» + نوعها حسب التكليف */
   function feeTypeLabel(svc) { return 'رسوم توصيل — ' + (/عودة|عوده|رجوع|ذهاب\s*[+&و]\s*ع/.test(String(svc || '')) ? 'ذهاب وعودة' : 'ذهاب فقط'); }
-  function buildCourierItems(courierName, trips, far, txMap) {
+  function buildCourierItems(courierName, trips, far, txMap, feeConfirms) {
     const includePickup = filterKind === 'all' || filterKind === 'pickup' || filterKind === 'both';
     const includeDelivery = filterKind === 'all' || filterKind === 'delivery' || filterKind === 'both';
     const includeFar = filterKind === 'all';
@@ -328,13 +328,15 @@
           typeIcon: t.kind === 'pickup' ? 'fa-box-open' : 'fa-truck-fast',
           typeCls: t.kind === 'pickup' ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 border border-sky-200 dark:border-sky-800' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800',
           fee: Number(t.fee) || 0,
+          confirmed: !!t.courier_confirmed_at,
+          confirmedAt: t.courier_confirmed_at || null,
           canDel: true
         };
       }),
       ...myFar.map(l => {
         const info = getTxInfo(l.transaction_id, txMap);
         return {
-          id: null,
+          id: l.id,
           rawKind: 'far',
           day: String(l.received_at || '').slice(0, 10),
           tx: l.transaction_id,
@@ -346,6 +348,8 @@
           typeIcon: 'fa-map-location-dot',
           typeCls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800',
           fee: Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0),
+          confirmed: (() => { const fc = feeConfirms && feeConfirms.get(String(l.id)); return !!fc && nn(fc.courier) === nn(l.executor) && String(fc.trip_day || '') === String(l.received_at || '').slice(0, 10) && Number(fc.amount) === (Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0)); })(),
+          confirmedAt: (feeConfirms && feeConfirms.get(String(l.id)) || {}).confirmed_at || null,
           canDel: false
         };
       })
@@ -493,12 +497,13 @@
           '<td class="px-3 py-3 whitespace-nowrap">' +
             '<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ' + it.typeCls + '"><i class="fa-solid ' + it.typeIcon + '"></i><span>' + eh(it.typeLabel) + '</span></span>' +
           '</td>' +
+          '<td class="px-3 py-3 whitespace-nowrap"><span class="rounded-full px-2 py-1 text-[10px] font-bold ' + (it.confirmed ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300') + '">' + (it.confirmed ? 'مؤكد' : 'بانتظار التأكيد') + '</span></td>' +
           '<td class="px-3 py-3 font-bold text-ink dark:text-white whitespace-nowrap text-sm">' + formatCurrency(it.fee) + '</td>' +
           '<td class="px-3 py-3 text-center whitespace-nowrap">' +
             (it.canDel && isMgr() && !r.closed ? '<button type="button" onclick="courierDelTrip(' + it.id + ')" class="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition" title="حذف المشوار"><i class="fa-solid fa-trash-can"></i></button>' : '') +
           '</td>' +
         '</tr>';
-      }).join('') : '<tr><td colspan="8" class="p-8 text-center text-slate-400 text-xs">لا توجد مشاوير مسجلة لهذا المندوب تطابق الفلتر الحالي</td></tr>';
+      }).join('') : '<tr><td colspan="9" class="p-8 text-center text-slate-400 text-xs">لا توجد مشاوير مسجلة لهذا المندوب تطابق الفلتر الحالي</td></tr>';
 
       return '<div class="card overflow-hidden border border-slate-200/90 dark:border-slate-800 transition-all shadow-xs hover:shadow-md">' +
         /* الهيدر الرئيسي لكارت المندوب */
@@ -519,7 +524,7 @@
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-sky-50 dark:bg-sky-950/60 px-2.5 py-1 font-bold text-sky-700 dark:text-sky-300"><i class="fa-solid fa-box-open"></i>استلام: ' + d.pkCount + '</span>' +
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 font-bold text-emerald-700 dark:text-emerald-300"><i class="fa-solid fa-truck-fast"></i>تسليم: ' + d.dlCount + '</span>' +
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 px-2.5 py-1 font-bold text-amber-700 dark:text-amber-300"><i class="fa-solid fa-motorcycle"></i>رسوم توصيل: ' + d.farCount + '</span>' +
-                '<span class="inline-flex items-center gap-1 rounded-lg bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 px-2.5 py-1 font-bold text-teal-800 dark:text-teal-200"><i class="fa-solid fa-coins"></i>المستحق: ' + formatCurrency(d.totalFee) + '</span>' +
+                '<span class="inline-flex items-center gap-1 rounded-lg bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 px-2.5 py-1 font-bold text-teal-800 dark:text-teal-200"><i class="fa-solid fa-coins"></i>المستحق المؤكد: ' + formatCurrency(d.totalFee) + '</span>' +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -558,6 +563,7 @@
                   '<th class="px-3 py-2.5">العميل والتليفون والعنوان</th>' +
                   '<th class="px-3 py-2.5">الخدمات</th>' +
                   '<th class="px-3 py-2.5">نوع المشوار</th>' +
+                  '<th class="px-3 py-2.5">حالة التأكيد</th>' +
                   '<th class="px-3 py-2.5">الأجر</th>' +
                   '<th class="px-3 py-2.5 text-center">إجراء</th>' +
                 '</tr>' +
@@ -580,18 +586,22 @@
     const activeRows = filterCourier === 'all' ? last.rows : last.rows.filter(r => r.c === filterCourier);
 
     const filteredCourierData = activeRows.map(r => {
-      const items = buildCourierItems(r.c, last.trips, last.far, last.txMap);
+      const items = buildCourierItems(r.c, last.trips, last.far, last.txMap, last.feeConfirms);
       const pkCount = items.filter(i => i.rawKind === 'pickup').length;
       const dlCount = items.filter(i => i.rawKind === 'delivery').length;
       const farCount = items.filter(i => i.rawKind === 'far').length;
-      const totalFee = items.reduce((s, i) => s + (Number(i.fee) || 0), 0);
+      const totalFee = items.filter(i => i.confirmed).reduce((s, i) => s + (Number(i.fee) || 0), 0);
+      const pendingCount = items.filter(i => !i.confirmed).length;
+      const pendingFee = items.filter(i => !i.confirmed).reduce((s, i) => s + (Number(i.fee) || 0), 0);
       return {
         row: r,
         items: items,
         pkCount: pkCount,
         dlCount: dlCount,
         farCount: farCount,
-        totalFee: totalFee
+        totalFee: totalFee,
+        pendingCount: pendingCount,
+        pendingFee: pendingFee
       };
     });
 
@@ -626,16 +636,18 @@
     const q = await Promise.all([
       sbClient.from('courier_trips').select('*').gte('trip_day', s).lte('trip_day', e).order('trip_day').limit(5000),
       sbClient.from('request_lines').select('id,transaction_id,client_name,phone,address,service,executor,qty,exec_unit_cost,exec_total,received_at').ilike('service', 'رسوم توصيل%').gte('received_at', (s + 'T00:00:00' > DATA_FROM_TS ? s + 'T00:00:00' : DATA_FROM_TS)).lt('received_at', e1 + 'T00:00:00').limit(5000),
-      sbClient.from('courier_closings').select('*').eq('period_start', s).eq('period_end', e)
+      sbClient.from('courier_closings').select('*').eq('period_start', s).eq('period_end', e).is('reopened_at', null),
+      sbClient.from('courier_fee_confirms').select('line_id,courier,amount,trip_day,confirmed_at')
     ]);
     if (my !== seq) return;
     const tr = q[0], fr = q[1], cl = q[2];
-    if (tr.error || cl.error) {
-      const er = tr.error || cl.error;
+    if (tr.error || fr.error || cl.error || q[3].error) {
+      const er = tr.error || fr.error || cl.error || q[3].error;
       root.innerHTML = renderFilterControlPanel(COURIERS) + '<div class="card p-6 text-center text-xs text-slate-500">' + (miss(er) ? 'لازم تشغّل ملف <b class="font-mono">phase11-couriers.sql</b> في Supabase الأول.' : 'تعذّر تحميل البيانات') + '</div>';
       return;
     }
     const trips = tr.data || [], far = fr.data || [];
+    const feeConfirms = new Map((q[3].data || []).map(x => [String(x.line_id), x]));
 
     /* بناء خريطة أسماء العملاء لكل المعاملات الخاصة بالمناديب */
     const txMap = new Map();
@@ -663,7 +675,10 @@
     const names = ALLC.filter(x => x.active || trips.some(t => nn(t.courier) === nn(x.name)) || far.some(l => nn(l.executor) === nn(x.name)) ).map(x => x.name);
     const rows = names.map(c => {
       const t = trips.filter(x => nn(x.courier) === nn(c)), fl = far.filter(l => nn(l.executor) === nn(c));
-      const fa = fl.reduce((a, l) => a + (Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0)), 0), ta = t.reduce((a, x) => a + Number(x.fee || 0), 0);
+      const isFeeConfirmed = l => { const fc = feeConfirms.get(String(l.id)); const amount = Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0); return !!fc && nn(fc.courier) === nn(l.executor) && String(fc.trip_day || '') === String(l.received_at || '').slice(0, 10) && Number(fc.amount) === amount; };
+      const confirmedTrips = t.filter(x => !!x.courier_confirmed_at), confirmedFees = fl.filter(isFeeConfirmed);
+      const ta = t.reduce((a, x) => a + Number(x.fee || 0), 0), fa = fl.reduce((a, l) => a + (Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0)), 0);
+      const confirmedTa = confirmedTrips.reduce((a, x) => a + Number(x.fee || 0), 0), confirmedFa = confirmedFees.reduce((a, l) => a + (Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0)), 0);
       return {
         c: c,
         pk: t.filter(x => x.kind === 'pickup').length,
@@ -672,11 +687,17 @@
         fa: fa,
         ta: ta,
         tot: ta + fa,
+        confirmedPk: confirmedTrips.filter(x => x.kind === 'pickup').length,
+        confirmedDl: confirmedTrips.filter(x => x.kind === 'delivery').length,
+        confirmedFar: confirmedFees.length,
+        confirmedTot: confirmedTa + confirmedFa,
+        pendingCount: (t.length + fl.length) - confirmedTrips.length - confirmedFees.length,
+        pendingAmount: (ta + fa) - (confirmedTa + confirmedFa),
         closed: (cl.data || []).find(x => nn(x.courier) === nn(c))
       };
     });
 
-    last = { s: s, e: e, rows: rows, trips: trips, far: far, txMap: txMap, filteredCourierData: [] };
+    last = { s: s, e: e, rows: rows, trips: trips, far: far, feeConfirms: feeConfirms, txMap: txMap, filteredCourierData: [] };
     paintFromLast();
   }
 
@@ -837,13 +858,14 @@
   window.courierClose = async function (c) {
     const x = last && last.rows.find(r => r.c === c); if (!x || !isMgr()) return;
     if (!confirm('تقفيل ' + c + ' عن الفترة من ' + last.s + ' إلى ' + last.e + '؟\nالإجمالي: ' + formatCurrency(x.tot))) return;
-    const r = await sbClient.from('courier_closings').insert({ courier: c, period_type: filterPreset || 'custom', period_start: last.s, period_end: last.e, trips_count: x.pk + x.dl, trips_amount: x.ta, far_amount: x.fa, total: x.tot, closed_by: uname() });
-    if (r.error) return showError('تعذّر التقفيل', r.error); showToast('تم تقفيل ' + c); render();
+    if (x.confirmedTot <= 0) return showToast('لا توجد مشاوير مؤكدة قابلة للتقفيل لهذا المندوب في الفترة المحددة', 'info');
+    const r = await sbClient.rpc('courier_close_account', { p_courier: c, p_period_type: filterPreset || 'custom', p_period_start: last.s, p_period_end: last.e });
+    if (r.error) return showError('تعذّر التقفيل', r.error); showToast('تم تقفيل ' + c + ' على المشاوير المؤكدة فقط'); render();
   };
 
   window.courierReopen = async function (id) {
     if (!isMgr() || !confirm('فتح التقفيل؟')) return;
-    const r = await sbClient.from('courier_closings').delete().eq('id', id); if (r.error) return showError('تعذّر فتح التقفيل', r.error); render();
+    const r = await sbClient.rpc('courier_reopen_account', { p_closing_id: id }); if (r.error) return showError('تعذّر فتح التقفيل', r.error); showToast('تم فتح التقفيل مع الاحتفاظ بسجل التسوية'); render();
   };
 
   window.courierDelTrip = async function (id) {
