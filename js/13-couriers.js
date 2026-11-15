@@ -436,7 +436,7 @@
   }
 
   function renderSummaryKpis(filteredCourierData) {
-    let totTrips = 0, totPk = 0, totDl = 0, totFar = 0, totMoney = 0;
+    let totTrips = 0, totPk = 0, totDl = 0, totFar = 0, totMoney = 0, totPending = 0, pendingCount = 0;
     filteredCourierData.forEach(d => {
       totTrips += d.items.length;
       totPk += d.pkCount;
@@ -461,7 +461,7 @@
       '</div>' +
       '<div class="card p-4 flex items-center gap-3.5">' +
         '<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 text-lg"><i class="fa-solid fa-sack-dollar"></i></div>' +
-        '<div><div class="text-[11px] text-slate-500">إجمالي المستحق للمناديب</div><div class="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">' + formatCurrency(totMoney) + '</div></div>' +
+        '<div><div class="text-[11px] text-slate-500">المستحق المؤكد للمناديب</div><div class="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">' + formatCurrency(totMoney) + '</div>' + (pendingCount ? '<div class="mt-1 text-[10px] font-semibold text-amber-600">معلق مستبعد: ' + pendingCount + ' · ' + formatCurrency(totPending) + '</div>' : '') + '</div>' +
       '</div>' +
     '</div>';
   }
