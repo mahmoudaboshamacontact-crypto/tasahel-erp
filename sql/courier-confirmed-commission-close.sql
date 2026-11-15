@@ -305,41 +305,68 @@ begin
   end;
 
   if p_type in ('pickup','delivery') then
-    begin
-      v_trip_id := v_ref::bigint;
-    exception when invalid_text_representation then
-      v_trip_id := null;
-    end;
+    if left(v_ref, 5) = 'trip:' then
+      begin
+        v_trip_id := substring(v_ref from 6)::bigint;
+      exception when invalid_text_representation or numeric_value_out_of_range then
+        v_trip_id := null;
+      end;
+      if v_trip_id is null then
+        raise exception 'bad trip id' using errcode = '22023';
+      end if;
 
-    if v_trip_id is null then
-      raise exception 'bad trip id' using errcode = '22023';
-    end if;
+      with u as (
+        update public.courier_trips t
+           set courier_confirmed_at = now()
+         where t.id = v_trip_id
+           and t.kind = p_type
+           and public.norm_ar(t.courier) = v_me
+           and t.trip_day <= v_today
+           and t.courier_confirmed_at is null
+        returning t.transaction_id, t.fee
+      )
+      select count(*), coalesce(sum(fee), 0), max(transaction_id)
+        into v_n, v_amt, v_tx
+        from u;
 
-    with u as (
-      update public.courier_trips t
-         set courier_confirmed_at = now()
-       where t.id = v_trip_id
-         and t.kind = p_type
-         and public.norm_ar(t.courier) = v_me
-         and t.trip_day <= v_today
-         and t.courier_confirmed_at is null
-      returning t.transaction_id, t.fee
-    )
-    select count(*), coalesce(sum(fee), 0), max(transaction_id)
-      into v_n, v_amt, v_tx
-      from u;
+      if not exists (
+        select 1 from public.courier_trips t
+         where t.id = v_trip_id and t.kind = p_type
+           and public.norm_ar(t.courier) = v_me
+      ) then
+        raise exception 'not your trip' using errcode = '42501';
+      end if;
+    else
+      -- توافق مؤقت مع النسخة القديمة من الواجهة التي كانت ترسل رقم المعاملة.
+      with u as (
+        update public.courier_trips t
+           set courier_confirmed_at = now()
+         where t.transaction_id = v_ref
+           and t.kind = p_type
+           and public.norm_ar(t.courier) = v_me
+           and t.trip_day <= v_today
+           and t.courier_confirmed_at is null
+        returning t.transaction_id, t.fee
+      )
+      select count(*), coalesce(sum(fee), 0), max(transaction_id)
+        into v_n, v_amt, v_tx
+        from u;
 
-    if not exists (
-      select 1 from public.courier_trips t
-       where t.id = v_trip_id and t.kind = p_type
-         and public.norm_ar(t.courier) = v_me
-    ) then
-      raise exception 'not your trip' using errcode = '42501';
+      if not exists (
+        select 1 from public.courier_trips t
+         where t.transaction_id = v_ref and t.kind = p_type
+           and public.norm_ar(t.courier) = v_me
+      ) then
+        raise exception 'not your trip' using errcode = '42501';
+      end if;
     end if;
   else
+    if left(v_ref, 4) = 'fee:' then
+      v_ref := substring(v_ref from 5);
+    end if;
     begin
       v_line_id := v_ref::bigint;
-    exception when invalid_text_representation then
+    exception when invalid_text_representation or numeric_value_out_of_range then
       v_line_id := null;
     end;
 
@@ -490,6 +517,9 @@ begin
   ), '[]'::jsonb);
 end;
 $$;
+
+-- منع الكتابة المباشرة من الواجهة؛ الإغلاق وإعادة الفتح يمران عبر RPC محمي.
+drop policy if exists courier_closings_mgr on public.courier_closings;
 
 -- 6) سجل تقفيلات غير قابل للمسح: إعادة الفتح تحفظ السجل وتحرر
 -- المشاوير لإمكانية تقفيلها لاحقًا دون تكرارها في تقفيلين نشطين.
