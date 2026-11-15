@@ -51,7 +51,10 @@ revoke all on public.courier_trip_issues from public, anon, authenticated;
 -- Existing closing means included in the administrative closing, not necessarily paid.
 alter table public.courier_closings
   add column if not exists paid_at timestamptz,
-  add column if not exists paid_by text;
+  add column if not exists paid_by text,
+  add column if not exists paid_method text,
+  add column if not exists paid_reference text,
+  add column if not exists paid_note text;
 
 create or replace function public.courier_ops_items(p_from date default null, p_to date default null)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
@@ -214,12 +217,25 @@ begin
   ),'[]'::jsonb);
 end $$;
 
-create or replace function public.courier_ops_mark_paid(p_closing_id bigint)
+drop function if exists public.courier_ops_mark_paid(bigint);
+create or replace function public.courier_ops_mark_paid(
+  p_closing_id bigint, p_method text default null,
+  p_reference text default null, p_note text default null
+)
 returns jsonb language plpgsql security definer set search_path=public as $$
 begin
   if not public.is_manager() then raise exception 'manager only' using errcode='42501'; end if;
+  if p_method is not null and p_method not in ('cash','bank_transfer','wallet','other') then
+    raise exception 'invalid payment method' using errcode='22023';
+  end if;
+  if char_length(coalesce(p_reference,'')) > 160 or char_length(coalesce(p_note,'')) > 1000 then
+    raise exception 'payment details too long' using errcode='22023';
+  end if;
   update public.courier_closings set paid_at=coalesce(paid_at,now()),
-    paid_by=coalesce(paid_by,auth.jwt()->>'email','manager')
+    paid_by=coalesce(paid_by,auth.jwt()->>'email','manager'),
+    paid_method=coalesce(nullif(p_method,''),paid_method),
+    paid_reference=coalesce(nullif(btrim(p_reference),''),paid_reference),
+    paid_note=coalesce(nullif(btrim(p_note),''),paid_note)
    where id=p_closing_id and reopened_at is null;
   if not found then raise exception 'active closing not found' using errcode='P0002'; end if;
   return jsonb_build_object('ok',true,'closing_id',p_closing_id);
@@ -280,7 +296,7 @@ on public.request_lines for each row execute function public.trg_courier_ops_fee
 -- Deliver public employee comments to the assigned courier and notify them.
 -- Private internal comments remain private and do not generate courier alerts.
 create or replace function public.courier_tx_notes(p_tx text)
-returns jsonb language plpgsql stable security definer set search_path=public as $
+returns jsonb language plpgsql stable security definer set search_path=public as $$
 declare v_c public.couriers;
 begin
   if not public.is_courier() then raise exception 'courier only' using errcode='42501'; end if;
@@ -302,7 +318,7 @@ begin
      where c.transaction_id=btrim(p_tx) and c.deleted_at is null
        and (c.author_id=auth.uid() or c.is_public=true)
   ),'[]'::jsonb);
-end $;
+end $$;
 
 create or replace function public.trg_courier_ops_staff_note_notice()
 returns trigger language plpgsql security definer set search_path=public as $func$
@@ -328,15 +344,198 @@ revoke all on function public.trg_courier_ops_staff_note_notice() from public,an
 revoke all on function public.courier_tx_notes(text) from public,anon;
 grant execute on function public.courier_tx_notes(text) to authenticated;
 
+
+-- Full historical date-range support for the courier ledger.
+create or replace function public.courier_items(p_from date default null, p_to date default null)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_c public.couriers;
+  v_today date := (now() at time zone 'Africa/Cairo')::date;
+  v_to date := coalesce(p_to, (now() at time zone 'Africa/Cairo')::date);
+  v_from date;
+  v_me text;
+begin
+  if not public.is_courier() then
+    raise exception 'courier only' using errcode = '42501';
+  end if;
+
+  select * into v_c
+    from public.couriers
+   where user_id = auth.uid() and active;
+
+  if v_c.id is null then
+    raise exception 'courier account not linked' using errcode = '42501';
+  end if;
+
+  v_me := public.norm_ar(v_c.name);
+  v_from := coalesce(p_from, v_today - 62);
+  if v_from > v_to then raise exception 'invalid date range' using errcode='22023'; end if;
+
+  return coalesce((
+    select jsonb_agg(to_jsonb(r) order by r.day desc, r.sort desc)
+      from (
+        select t.kind as type, t.id, t.transaction_id, t.trip_day as day,
+               t.fee as amount, t.id as sort,
+               (t.courier_confirmed_at is not null) as confirmed,
+               t.courier_confirmed_at as confirmed_at,
+               null::text as fee_kind,
+               i.client_name, i.phone, i.address, i.services, i.employee,
+               i.lines, i.n_complete, i.n_delivered, i.n_review,
+               (select p.id from public.profiles p
+                 where public.norm_ar(p.full_name) = public.norm_ar(i.employee) limit 1) as employee_id,
+               (select p.phone from public.profiles p
+                 where public.norm_ar(p.full_name) = public.norm_ar(i.employee) limit 1) as employee_phone,
+               (select count(*) from public.tx_comments c
+                 where c.transaction_id = t.transaction_id
+                   and c.author_id = auth.uid() and c.deleted_at is null) as my_notes
+          from public.courier_trips t
+          left join lateral (
+            select max(l.client_name) as client_name,
+                   max(l.phone) as phone,
+                   max(l.address) as address,
+                   max(l.employee) as employee,
+                   string_agg(distinct l.service, '، ') as services,
+                   count(*) as lines,
+                   count(*) filter (where l.complete) as n_complete,
+                   count(*) filter (where l.delivered) as n_delivered,
+                   count(*) filter (where l.under_review) as n_review
+              from public.request_lines l
+             where l.transaction_id = t.transaction_id and l.deleted_at is null
+          ) i on true
+         where public.norm_ar(t.courier) = v_me
+           and t.trip_day between v_from and v_to
+
+        union all
+
+        select 'fee', l.id, l.transaction_id, l.received_at::date,
+               f.amount, l.id,
+               (fc.line_id is not null), fc.confirmed_at,
+               case when public.norm_ar(l.service) ~ 'عوده|رجوع' then 'round' else 'one' end,
+               coalesce(l.client_name, i.client_name),
+               coalesce(l.phone, i.phone),
+               coalesce(l.address, i.address),
+               l.service, l.employee,
+               i.lines, i.n_complete, i.n_delivered, i.n_review,
+               (select p.id from public.profiles p
+                 where public.norm_ar(p.full_name) = public.norm_ar(l.employee) limit 1),
+               (select p.phone from public.profiles p
+                 where public.norm_ar(p.full_name) = public.norm_ar(l.employee) limit 1),
+               (select count(*) from public.tx_comments c
+                 where c.transaction_id = l.transaction_id
+                   and c.author_id = auth.uid() and c.deleted_at is null)
+          from public.request_lines l
+          cross join lateral (
+            select coalesce(nullif(l.exec_total, 0),
+                            coalesce(l.qty, 0) * coalesce(l.exec_unit_cost, 0)) as amount
+          ) f
+          left join public.courier_fee_confirms fc
+            on fc.line_id = l.id
+           and public.norm_ar(fc.courier) = v_me
+           and fc.amount = f.amount
+           and fc.trip_day = l.received_at::date
+          left join lateral (
+            select max(x.client_name) as client_name,
+                   max(x.phone) as phone,
+                   max(x.address) as address,
+                   count(*) as lines,
+                   count(*) filter (where x.complete) as n_complete,
+                   count(*) filter (where x.delivered) as n_delivered,
+                   count(*) filter (where x.under_review) as n_review
+              from public.request_lines x
+             where x.transaction_id = l.transaction_id and x.deleted_at is null
+          ) i on true
+         where l.deleted_at is null
+           and public.norm_ar(l.service) like 'رسوم توصيل%'
+           and public.norm_ar(l.executor) = v_me
+           and l.received_at::date between v_from and v_to
+      ) r
+  ), '[]'::jsonb);
+end;
+$$;
+
+
+-- Periodic in-app reminders while the courier portal is active (6-hour cooldown).
+create table if not exists public.courier_pending_reminder_state (
+  source_type text not null check (source_type in ('trip','fee')),
+  source_id bigint not null,
+  courier_user_id uuid not null references auth.users(id) on delete cascade,
+  last_reminded_at timestamptz not null default now(),
+  primary key (source_type,source_id,courier_user_id)
+);
+alter table public.courier_pending_reminder_state enable row level security;
+revoke all on public.courier_pending_reminder_state from public,anon,authenticated;
+create or replace function public.courier_pending_reminders()
+returns integer language plpgsql security definer set search_path=public as $$
+declare
+  v_c public.couriers; v_today date := (now() at time zone 'Africa/Cairo')::date;
+  v_last timestamptz; v_count integer := 0; r record;
+begin
+  if not public.is_courier() then raise exception 'courier only' using errcode='42501'; end if;
+  select * into v_c from public.couriers where user_id=auth.uid() and active;
+  if v_c.id is null then raise exception 'courier account not linked' using errcode='42501'; end if;
+  for r in select t.id,t.transaction_id,t.kind,t.trip_day from public.courier_trips t
+    where public.norm_ar(t.courier)=public.norm_ar(v_c.name) and t.courier_confirmed_at is null
+      and t.trip_day between v_today-62 and v_today
+  loop
+    select s.last_reminded_at into v_last from public.courier_pending_reminder_state s
+      where s.source_type='trip' and s.source_id=r.id and s.courier_user_id=auth.uid() for update;
+    if not found then
+      insert into public.courier_pending_reminder_state values('trip',r.id,auth.uid(),now()) on conflict do nothing;
+      continue;
+    end if;
+    if v_last<=now()-interval '6 hours' then
+      update public.courier_pending_reminder_state set last_reminded_at=now()
+        where source_type='trip' and source_id=r.id and courier_user_id=auth.uid();
+      insert into public.notifications(user_id,kind,title,body) values(auth.uid(),'info','تذكير: عندك مشوار غير مؤكد',
+        'المعاملة '||coalesce(r.transaction_id,'—')||' · '||
+        case r.kind when 'pickup' then 'استلام' when 'delivery' then 'تسليم' else r.kind end||
+        ' · يوم '||r.trip_day::text||' — افتح بوابة المندوب وراجع التأكيد');
+      v_count:=v_count+1;
+    end if;
+  end loop;
+  for r in select l.id,l.transaction_id,l.received_at::date as trip_day from public.request_lines l
+    where l.deleted_at is null and public.norm_ar(l.service) like 'رسوم توصيل%'
+      and public.norm_ar(l.executor)=public.norm_ar(v_c.name)
+      and l.received_at::date between v_today-62 and v_today
+      and not exists (select 1 from public.courier_fee_confirms fc where fc.line_id=l.id
+        and public.norm_ar(fc.courier)=public.norm_ar(v_c.name)
+        and fc.amount=coalesce(nullif(l.exec_total,0),coalesce(l.qty,0)*coalesce(l.exec_unit_cost,0))
+        and fc.trip_day=l.received_at::date)
+  loop
+    select s.last_reminded_at into v_last from public.courier_pending_reminder_state s
+      where s.source_type='fee' and s.source_id=r.id and s.courier_user_id=auth.uid() for update;
+    if not found then
+      insert into public.courier_pending_reminder_state values('fee',r.id,auth.uid(),now()) on conflict do nothing;
+      continue;
+    end if;
+    if v_last<=now()-interval '6 hours' then
+      update public.courier_pending_reminder_state set last_reminded_at=now()
+        where source_type='fee' and source_id=r.id and courier_user_id=auth.uid();
+      insert into public.notifications(user_id,kind,title,body) values(auth.uid(),'info','تذكير: عندك رسوم توصيل غير مؤكدة',
+        'المعاملة '||coalesce(r.transaction_id,'—')||' · يوم '||r.trip_day::text||
+        ' — افتح بوابة المندوب وراجع تأكيد رسوم التوصيل');
+      v_count:=v_count+1;
+    end if;
+  end loop;
+  return v_count;
+end $$;
+
+revoke all on function public.courier_pending_reminders() from public,anon;
+grant execute on function public.courier_pending_reminders() to authenticated;
 revoke all on function public.courier_ops_items(date,date),
  public.courier_ops_update(bigint,text,smallint,integer,text),
  public.courier_ops_report(bigint,text,text),public.courier_ops_issues(text),
  public.courier_ops_issue_update(bigint,text,text),public.courier_ops_ledger(date,date),
- public.courier_ops_closings(date,date),public.courier_ops_mark_paid(bigint)
+ public.courier_ops_closings(date,date),public.courier_ops_mark_paid(bigint,text,text,text)
  from public,anon;
 grant execute on function public.courier_ops_items(date,date),
  public.courier_ops_update(bigint,text,smallint,integer,text),
  public.courier_ops_report(bigint,text,text),public.courier_ops_issues(text),
  public.courier_ops_issue_update(bigint,text,text),public.courier_ops_ledger(date,date),
- public.courier_ops_closings(date,date),public.courier_ops_mark_paid(bigint)
+ public.courier_ops_closings(date,date),public.courier_ops_mark_paid(bigint,text,text,text)
  to authenticated;
