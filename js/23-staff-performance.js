@@ -187,8 +187,12 @@
       const b = document.createElement('button'); b.id = 'tab-perf-btn'; b.type = 'button'; b.className = BTN_OFF;
       b.setAttribute('onclick', "switchTab('perf')");
       b.innerHTML = '<i class="fa-solid fa-gauge-high"></i><span>أداء الموظفين</span>';
-      const a = $('tab-search-btn');
-      menu.insertBefore(b, a && a.parentElement === menu ? a : menu.firstChild);
+      b.setAttribute('data-tab-target', 'perf');
+      const perfBody = menu.querySelector(':scope > section[data-mg="perf"] .mg-body');
+      const a = $('tab-dash-btn') || $('tab-search-btn');
+      if (perfBody) perfBody.appendChild(b);
+      else if (a && a.parentElement) a.insertAdjacentElement('afterend', b);
+      else menu.appendChild(b);
     }
     return true;
   }

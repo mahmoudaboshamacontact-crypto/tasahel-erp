@@ -1,18 +1,16 @@
 /* =====================================================================
-   بوابة المندوب (js/70-courier-portal.js) — النسخة 3 (Courier Portal v3)
-   - المندوب بيدخل بحساب دوره courier فبتظهر له الشاشة دي بس (مفيش #app).
-   - 5 تابات:
-       1) حسابي (عمولته لايف + ملخص ترتيبه)
-       2) مشاويري (كروت المشاوير + بحث سريع + فلتر حالة التأكيد + ملاحظات سريعة)
-       3) الترتيب (لوحة شرف وترتيب الاستلامات والتسليم بين المناديب: اليوم/الأسبوع/الشهر)
-       4) المراجعة (تأكيد آخر اليوم: استلام / تسليم / رسوم توصيل)
-       5) التواصل (رسايل خاصة مع الموظفين والمدير + اتصال / واتساب)
-   - بطاقات تعريف وإرشاد (Screen Guide) أعلى كل شاشة عشان المندوب مايتوهش أبداً،
-     مع إمكانية طي/فتح الشرح وحفظ التفضيل في localStorage.
-   - للمدير داخل السيستم الأساسي:
-       • زر ثابت في القائمة الجانبية («حسابات المناديب») مع فحص للصلاحيات وFallback للإيميل
-       • شريط وزرار بارز داخل شاشة «المناديب» (#tab-couriers) لربط حسابات المناديب وإدارتهم وعرض لوحة الترتيب
-   - مش بيلمس js/13 ولا js/14 ولا أي ملف مقفول.
+   بوابة المندوب (js/70-courier-portal.js) — النسخة 5 (Courier Portal v5)
+   - 5 تابات للمندوب: حسابي / مشاويري / الترتيب / المراجعة / التواصل + ملفي الشخصي، شهور، ثيم، ساعة، أوفلاين.
+   - A) تجميع ريكوستات نفس العميل (client_name بعد التطبيع + day + type) في كارت واحد („٤ ريكوستات“)
+        في مشاويري والمراجعة بدون تغيير أي حساب فلوس، والضغط على العميل يفتح مودال „تفاصيل العميل“
+        من courier_tx_detail(p_tx) بدون أي أسعار عميل أو مدفوعات + علامة „⏳ الموظف لسه ما قفلش المعاملة“.
+   - B) تأكيد فردي لكل ريكوست لوحده („أكّد ده بس“) عبر courier_confirm_one(p_type, p_ref)
+        + علامة „📨 أبلغت الموظف (الساعة ...)“ بعد إرسال ملاحظة، وتوضيح أن „✅ تم التسليم“ لا تؤكد المشوار وحدها.
+   - C) علامات القراءة في شات المندوب: „✓ اتبعتت“ / „✓✓ اتقرت“ تحت رسائل المندوب وتتحدث مع الـ polling بدون رمشة.
+   - للمدير والموظفين داخل السيستم:
+        • إرجاع تابة وزرار „حسابات المناديب“ في القائمة الجانبية وأعلى شاشة المناديب.
+        • استبدال زر الذكاء الاصطناعي العايم (#ai-fab) بزر عائم سريع لـ „الشات الداخلي“ مع عداد الرسائل غير المقروءة.
+        • إدراج تابة „أداء الموظفين“ داخل قسم „أداء وتقارير“ بدلاً من ظهورها منفردة أعلى القائمة الجانبية.
    ===================================================================== */
 (function () {
   if (window.__courierPortal) return; window.__courierPortal = true;
@@ -22,19 +20,34 @@
   const MGR_EMAILS = ['mahmoud.aboshama@tasahel.com.eg', 'mahmoud.aboshama.contact@gmail.com'];
 
   const st = {
-    me: null, items: [], sig: '', tab: 'home', period: 'today', lbPeriod: 'month',
+    me: null, prevTab: 'home', avUrl: '', avPendingBlob: null, avPendingUrl: '', avRemoved: false, items: [], sig: '', tab: 'home', period: 'today', month: '', lbPeriod: 'month',
     day: null, type: 'all', statusFilter: 'all', q: '',
     leaderboard: [], lbsig: '', lbLoaded: false,
-    contacts: [], csig: '', chat: null, msgs: [], draft: '',
+    notesMap: {}, nsig: '',
+    contacts: [], csig: '', chat: null, msgs: [], msig: '', draft: '',
     theme: 'dark', timer: null, tick: 0,
     busy: false, offline: false, unreadSeen: 0, loaded: false,
-    guides: {}, month: null, rvOpen: false, lastOk: 0, rvf: 'all', tripScope: 'day', pPhoto: undefined, pT: undefined, pP: undefined
+    guides: {}
   };
 
-  /* ---------- صلاحية المدير (الدور أو الإيميل المعتمد) ---------- */
+  /* ---------- تطبيع الأسماء العربية (مثل normName / norm_ar) ---------- */
+  function normAr(s) {
+    if (typeof normName === 'function') {
+      try { return normName(s); } catch (e) { /* */ }
+    }
+    return String(s == null ? '' : s)
+      .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+      .replace(/[أإآٱ]/g, 'ا')
+      .replace(/ى/g, 'ي')
+      .replace(/ة/g, 'ه')
+      .replace(/[\s\p{P}]+/gu, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
   function isManagerUser() {
     if (window.__role === 'manager') return true;
-    const u = window.currentUser || (typeof currentUser !== 'undefined' ? currentUser : null);
+    const u = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null;
     const em = String((u && u.email) || '').toLowerCase().trim();
     return MGR_EMAILS.includes(em);
   }
@@ -42,56 +55,118 @@
   /* ---------- تواريخ (بتوقيت القاهرة) ---------- */
   const today = () => new Date().toLocaleDateString('en-CA', { timeZone: TZ });
   const addDays = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-  const weekStart = s => addDays(s, -((new Date(s + 'T00:00:00Z').getUTCDay() + 1) % 7));   /* الأسبوع بيبدأ السبت */
+  const weekStart = s => addDays(s, -((new Date(s + 'T00:00:00Z').getUTCDay() + 1) % 7));
   const monthStart = s => s.slice(0, 8) + '01';
+  const monthEnd = ym => {
+    const p = String(ym || '').split('-').map(Number);
+    if (p.length < 2 || !p[0] || !p[1]) return today();
+    const d = new Date(Date.UTC(p[0], p[1], 0));
+    return d.toISOString().slice(0, 10);
+  };
+  const monthLabel = ym => {
+    try {
+      return new Date(ym + '-15T12:00:00Z').toLocaleDateString('ar-EG', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    } catch (e) { return ym; }
+  };
   const dayLabel = s => { try { return new Date(s + 'T12:00:00Z').toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }); } catch (e) { return s; } };
-  const timeOf = iso => { try { return new Date(iso).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', timeZone: TZ }); } catch (e) { return ''; } };
-  const monthOf = d => d.slice(0, 7);
-  const addMonths = (m, n) => { const a = m.split('-').map(Number); return new Date(Date.UTC(a[0], a[1] - 1 + n, 1)).toISOString().slice(0, 7); };
-  const monthLabel = m => { try { return new Date(m + '-15T12:00:00Z').toLocaleDateString('ar-EG', { month: 'long', year: 'numeric', timeZone: 'UTC' }); } catch (e) { return m; } };
-  const monthEnd = m => { const t = today(), e = addDays(addMonths(m, 1) + '-01', -1); return e > t ? t : e; };
-  const minMonth = () => addMonths(monthOf(addDays(today(), -120)), 1);   /* آخر شهور كاملة متاحة من السيرفر */
-  const rangeOf = (p, m) => { const t = today(); if (p === 'today') return [t, t]; if (p === 'week') return [weekStart(t), t]; m = m || monthOf(t); return [m + '-01', monthEnd(m)]; };
+  const timeOf = iso => { try { if (!iso) return ''; return new Date(iso).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', timeZone: TZ }); } catch (e) { return ''; } };
+  const rangeOf = p => {
+    const t = today();
+    if (p === 'today') return [t, t];
+    if (p === 'week') return [weekStart(t), t];
+    if (p === 'month') {
+      const m = st.month || t.slice(0, 7);
+      return [m + '-01', m === t.slice(0, 7) ? t : monthEnd(m)];
+    }
+    return [monthStart(t), t];
+  };
   const money = n => Number(n || 0).toLocaleString('ar-EG') + ' ج';
   const num = n => Number(n || 0).toLocaleString('ar-EG');
 
-  const buzz = () => { try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) { /* */ } };
-  const cacheKey = () => 'ts_cp_cache_' + (st.me && st.me.user_id);
-  function saveCache(items) { try { localStorage.setItem(cacheKey(), JSON.stringify({ ts: Date.now(), items: items })); } catch (e) { /* */ } }
-  function loadCache() { try { const c = JSON.parse(localStorage.getItem(cacheKey()) || 'null'); if (c && Array.isArray(c.items)) return c; } catch (e) { /* */ } return null; }
-
-  /* ---------- حفظ واسترجاع حالة بطاقات التعريف (الشرح) ---------- */
+  /* ---------- حفظ واسترجاع حالة بطاقات التعريف ---------- */
   function initGuides() {
     try { st.guides = JSON.parse(localStorage.getItem('ts_cp_guides') || '{}') || {}; } catch (e) { st.guides = {}; }
   }
+  function isGuideOpen(tab) { return st.guides[tab] === true; }
   function toggleGuide(tab) {
-    st.guides[tab] = !(st.guides[tab] === true);
+    st.guides[tab] = !isGuideOpen(tab);
     try { localStorage.setItem('ts_cp_guides', JSON.stringify(st.guides)); } catch (e) { /* */ }
     renderTab(false);
   }
 
   const GUIDES = {
-    home: { icon: 'fa-chart-pie', title: 'حسابي', desc: 'هنا بتشوف فلوسك: كام مشوار عملت وكام عمولتك. اختار اليوم أو الأسبوع أو الشهر (وتقدر تتنقل بين الشهور).',
-      steps: ['الأخضر «مؤكد»: مشاوير راجعتها وأكدتها وبتتحسب لك.', 'البرتقالي «مش متأكد»: مشاوير اتسجلت باسمك ولسه مراجعتهاش.', 'في الأسبوع والشهر هتلاقي كل يوم لوحده وحالته، واضغط على اليوم عشان تراجعه.'] },
-    trips: { icon: 'fa-motorcycle', title: 'مشاويري', desc: 'كل مشاويرك بالتفصيل: اسم العميل وتليفونه وعنوانه. اختار «يوم يوم» أو «الشهر كله».',
-      steps: ['اضغط «اتصال» أو «واتساب» للعميل، واضغط العنوان يفتح الخريطة.', 'لو فيه مشكلة أو رسوم توصيل ناقصة اضغط «ملاحظة للموظف».', 'ابحث باسم العميل أو رقم المعاملة من خانة البحث.'] },
-    rank: { icon: 'fa-trophy', title: 'الترتيب', desc: 'ترتيبك وسط المناديب في عدد الاستلامات والتسليمات. للتشجيع بس، ومحدش بيشوف فلوس غيره.',
-      steps: ['الترتيب حسب إجمالي المشاوير ثم التسليمات.', 'اختار اليوم أو الأسبوع أو الشهر.'] },
-    review: { icon: 'fa-clipboard-check', title: 'المراجعة', desc: 'هنا بتراجع أيام الشهر وتأكد مشاويرك عشان تتحسب في عمولتك. اختار الشهر وشوف كل يوم متأكد ولا لأ.',
-      steps: ['اليوم اللي عليه «مش متأكد» اضغط «راجع وأكّد»، وبعدين زرار «تم تأكيد…» لكل قسم.', 'لو لقيت غلط اضغط «ملاحظة» وبلّغ الموظف قبل ما تأكد.', 'لو الموظف عدّل حاجة بعد تأكيدك، التأكيد بيتلغي وتأكد تاني.'] },
-    chat: { icon: 'fa-comments', title: 'التواصل', desc: 'رسايل خاصة مع الموظفين والإدارة، وكمان اتصال وواتساب. اضغط على الاسم عشان تكتب له.',
-      steps: ['🟢 يعني الموظف فاتح السيستم دلوقتي.', 'لو الرسالة عن طلب معين افتحها من كارت الطلب في «مشاويري».'] },
-    profile: { icon: 'fa-id-card', title: 'ملفي الشخصي', desc: 'ضيف صورتك ومسماك الوظيفي ورقم تليفونك عشان الموظفين يعرفوك ويتواصلوا معاك.',
-      steps: ['الاسم بتحدده الإدارة ومش بيتغير من هنا.', 'الصورة بتتصغّر لوحدها، اختار أي صورة من الموبايل.', 'اضغط «حفظ» في الآخر.'] }
+    profile: {
+      icon: 'fa-id-card',
+      title: 'شاشة «ملفي الشخصي» — إيه فايدتها؟',
+      desc: 'ضيف صورتك ومسماك الوظيفي ورقم تليفونك عشان الموظفين يعرفوك ويتواصلوا معاك.',
+      steps: [
+        'تقدر ترفع صورتك الشخصية من الموبايل أو الكمبيوتر وتتحفظ تلقائياً.',
+        'اكتب مسماك الوظيفي ورقم تليفونك واضغط «حفظ» عشان يظهروا للموظفين في الشات والمعاملات.'
+      ]
+    },
+    home: {
+      icon: 'fa-chart-pie',
+      title: 'شاشة «حسابي» — متابعة عمولتك ومشاويرك لحظة بلحظة',
+      desc: 'هنا بتشوف عمولتك المؤكدة عن اليوم أو الأسبوع أو الشهر، وتفصيل المشاوير اللي استلمتها أو سلمتها ومشاوير رسوم التوصيل.',
+      steps: [
+        'الأخضر (مؤكدة): مشاوير راجعتها وأكدتها ونزلت في حساب عمولتك.',
+        'البرتقالي (في انتظار تأكيدك): مشاوير اتسجلت باسمك ومستنية تراجعها وتأكدها من شاشة «المراجعة».',
+        'كارت الترتيب: بيعرفك مركزك الحالي وسط زمايلك في الاستلامات والتسليم.'
+      ]
+    },
+    trips: {
+      icon: 'fa-motorcycle',
+      title: 'شاشة «مشاويري» — خط سيرك وتفاصيل العملاء',
+      desc: 'لو العميل ليه كذا ريكوست في نفس اليوم هتلاقيهم متجمعين في كارت واحد مكتوب عليه عدد الريكوستات عشان متتلخبطش.',
+      steps: [
+        'اضغط على اسم العميل أو زرار «تفاصيل العميل» عشان تشوف كل خدماته وحالتها وتواريخ استلامك وتسليمك.',
+        'تقدر تتصل بالعميل أو تبعتله واتساب أو تفتح عنوانه على الخريطة بضغطة واحدة.',
+        'لو الموظف لسه ما قفلش المعاملة هتلاقي تنبيه واضح «⏳ الموظف لسه ما قفلش المعاملة».'
+      ]
+    },
+    rank: {
+      icon: 'fa-trophy',
+      title: 'شاشة «الترتيب» — لوحة شرف الاستلامات والتسليم',
+      desc: 'بتعرض ترتيب كل المناديب حسب عدد مرات الاستلام والتسليم ومشاوير التوصيل خلال اليوم أو الأسبوع أو الشهر.',
+      steps: [
+        'الترتيب بيتحسب تلقائياً حسب إجمالي المشاوير ثم عدد التسليمات.',
+        'كل ما تنجز مشاوير أكتر وتأكدها، مركزك بيعلى في لوحة الشرف.',
+        'الأرقام المالية الخاصة بيك بتظهرلك أنت بس في حسابي، ومحدش بيشوف عمولة زميله.'
+      ]
+    },
+    review: {
+      icon: 'fa-clipboard-check',
+      title: 'شاشة «المراجعة» — تقفيل وتأكيد شغل آخر اليوم',
+      desc: 'راجع مشاويرك آخر اليوم: تقدر تأكد كل ريكوست لوحده بزرار «أكّد ده بس» أو تأكد القسم كله مرة واحدة.',
+      steps: [
+        'اضغط على اسم العميل لو عايز تراجع تفاصيل خدماته وتتأكد إنه العميل اللي استلمت منه أو سلمته.',
+        'لو بعتّ ملاحظة للموظف هتظهرلك علامة «📨 أبلغت الموظف» بالساعة، والريكوست بيفضل ظاهر لحد ما الموظف يقفله أو أنت تأكده.',
+        'اضغط «أكّد ده بس» لتأكيد معاملة واحدة أو الزرار الكبير لتأكيد القسم كله.'
+      ]
+    },
+    chat: {
+      icon: 'fa-comments',
+      title: 'شاشة «التواصل» — رسايل خاصة ومباشرة مع الموظفين والإدارة',
+      desc: 'اتواصل مع أي موظف أو مع المدير بخصوص أي معاملة، وشوف تحت كل رسالة بعتها هل «✓ اتبعتت» ولا «✓✓ اتقرت».',
+      steps: [
+        'اضغط على اسم الموظف أو المدير لفتح المحادثة الخاصة معاه.',
+        'تحت رسالتك هتلاقي «✓ اتبعتت» وأول ما الموظف يفتحها بتتحول تلقائياً إلى «✓✓ اتقرت».',
+        'تقدر كمان تتصل بالموظف تليفونياً أو تبعتله واتساب.'
+      ]
+    }
   };
 
   function renderGuideBanner(tab) {
     const g = GUIDES[tab]; if (!g) return '';
     const open = st.guides[tab] === true;
-    return '<div class="cp-guide"><div class="cp-guide-hd"><div class="cp-guide-ic"><i class="fa-solid ' + g.icon + '"></i></div>' +
-      '<div class="cp-guide-tt"><b>شاشة «' + eh(g.title) + '» — إيه فايدتها؟</b><p>' + eh(g.desc) + '</p></div>' +
-      '<button type="button" class="cp-guide-x" data-act="guide-toggle" data-gtab="' + tab + '">' + (open ? 'إخفاء التفاصيل' : 'تفاصيل أكتر') + '</button></div>' +
-      (open ? '<ul class="cp-guide-ul">' + g.steps.map(x => '<li>' + eh(x) + '</li>').join('') + '</ul>' : '') + '</div>';
+    return '<div class="cp-guide">' +
+      '<div class="cp-guide-hd">' +
+        '<div class="cp-guide-ic"><i class="fa-solid ' + g.icon + '"></i></div>' +
+        '<div class="cp-guide-tt"><b>' + eh(g.title) + '</b><p>' + eh(g.desc) + '</p></div>' +
+        '<button type="button" class="cp-guide-x" data-act="guide-toggle" data-gtab="' + tab + '">' + (open ? 'إخفاء' : 'تفاصيل أكتر') + '</button>' +
+      '</div>' +
+      (open ? '<ul class="cp-guide-ul">' + g.steps.map(s => '<li>' + eh(s) + '</li>').join('') + '</ul>' : '') +
+    '</div>';
   }
 
   /* ---------- ثيم: صباحي (فاتح) / مسائي (داكن) ---------- */
@@ -106,128 +181,131 @@
   }
   function toggleTheme() { st.theme = st.theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('ts_cp_theme', st.theme); } catch (e) { /* */ } applyTheme(); }
 
-  /* ---------- ستايل مستقل (من غير Tailwind) ---------- */
+  /* ---------- ستايل مستقل (من غير Tailwind ومن غير !important يكسر hidden) ---------- */
   function addCss() {
     if ($('cp-style')) return;
     const s = document.createElement('style'); s.id = 'cp-style';
     s.textContent = [
-      'body.is-courier-mode #app,body.is-courier-mode #login{display:none !important}',
+      'body.is-courier-mode #app,body.is-courier-mode #login{display:none}',
+      '#courier-app.hidden,.cp-modal.hidden{display:none}',
       '#courier-app{--bg:#0a1424;--card:#10223d;--tx:#e8eef8;--mu:#8fa1ba;--bd:rgba(255,255,255,.1);--fld:rgba(255,255,255,.07);--hd:#0b1b33;--hdtx:#fff;--hdbt:rgba(255,255,255,.1);--chip:rgba(255,255,255,.07);--sh:none;--gd-bg:rgba(16,185,129,.09);--gd-bd:rgba(16,185,129,.28)}',
       '#courier-app[data-theme=light]{--bg:#eef2f7;--card:#fff;--tx:#0f172a;--mu:#64748b;--bd:#e2e8f0;--fld:#f1f5f9;--hd:#fff;--hdtx:#0f172a;--hdbt:#eef2f7;--chip:#eef2f7;--sh:0 1px 3px rgba(15,23,42,.08);--gd-bg:#ecfdf5;--gd-bd:#a7f3d0}',
-      '#courier-app{position:fixed;inset:0;z-index:99980;display:flex;flex-direction:column;background:var(--bg);color:var(--tx);font-family:inherit}',
+      '#courier-app{position:fixed;inset:0;z-index:99980;display:flex;flex-direction:column;background:var(--bg);color:var(--tx);font-family:inherit;overflow-x:hidden}',
       '#courier-app *{box-sizing:border-box}',
-      '.cp-head{flex:0 0 auto;background:var(--hd);color:var(--hdtx);border-bottom:1px solid var(--bd);padding:8px 12px;display:flex;align-items:center;gap:8px;box-shadow:var(--sh)}',
-      '.cp-who{flex:1;min-width:0}.cp-who small{display:block;color:#10b981;font-size:10px;font-weight:800}.cp-who b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-      '.cp-clock{text-align:center;line-height:1.2;padding:0 6px}.cp-clock b{display:block;font-size:17px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;direction:ltr}.cp-clock small{display:block;font-size:10px;color:var(--mu);white-space:nowrap}',
+      '.cp-head{flex:0 0 auto;background:var(--hd);color:var(--hdtx);border-bottom:1px solid var(--bd);padding:8px 10px;display:flex;align-items:center;gap:6px;box-shadow:var(--sh);flex-wrap:wrap}',
+      '.cp-who{flex:1;min-width:90px;cursor:pointer}.cp-who small{display:block;color:#10b981;font-size:10px;font-weight:800}.cp-who b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      '.cp-clock{text-align:center;line-height:1.2;padding:0 4px}.cp-clock b{display:block;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;direction:ltr}.cp-clock small{display:block;font-size:9.5px;color:var(--mu);white-space:nowrap}',
       '.cp-btn{border:0;border-radius:12px;padding:10px 14px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;color:var(--tx);background:var(--chip)}',
-      '.cp-btn:disabled{opacity:.5;cursor:default}.cp-sm{padding:7px 10px;font-size:11px;border-radius:10px}',
-      '.cp-hbtn{border:0;border-radius:10px;padding:8px 10px;font:inherit;font-size:11px;font-weight:700;cursor:pointer;color:var(--hdtx);background:var(--hdbt);white-space:nowrap}',
+      '.cp-btn:disabled{opacity:.5;cursor:default}.cp-sm{padding:6px 10px;font-size:11px;border-radius:10px}',
+      '.cp-hbtn{border:0;border-radius:10px;padding:7px 9px;font:inherit;font-size:11px;font-weight:700;cursor:pointer;color:var(--hdtx);background:var(--hdbt);white-space:nowrap}',
       '.cp-off{display:none;flex:0 0 auto;background:#b45309;color:#fff;text-align:center;font-size:12px;font-weight:700;padding:5px}.cp-off.on{display:block}',
-      '.cp-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px 24px;max-width:760px;width:100%;margin:0 auto}',
+      '.cp-body{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:12px 12px 24px;max-width:760px;width:100%;margin:0 auto}',
       '.cp-nav{flex:0 0 auto;display:flex;background:var(--hd);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom)}',
       '.cp-nav button{flex:1;border:0;background:transparent;color:var(--mu);font:inherit;font-size:11px;font-weight:700;padding:9px 2px 8px;cursor:pointer;position:relative}',
       '.cp-nav button i{display:block;font-size:17px;margin-bottom:3px}.cp-nav button.on{color:#10b981}',
       '.cp-bdg{position:absolute;top:4px;inset-inline-start:calc(50% + 6px);min-width:17px;height:17px;border-radius:9px;background:#f43f5e;color:#fff;font-size:10px;line-height:17px;padding:0 4px;font-style:normal}',
-      /* بطاقة التعريف والإرشاد لكل شاشة */
       '.cp-guide{background:var(--gd-bg);border:1px solid var(--gd-bd);border-radius:16px;padding:12px;margin-bottom:12px}',
       '.cp-guide-hd{display:flex;align-items:flex-start;gap:10px}',
-      '.cp-guide-ic{flex:0 0 auto;width:34px;height:34px;border-radius:10px;background:#10b981;color:#04110c;display:flex;align-items:center;justify-content:center;font-size:16px}',
-      '.cp-guide-tt{flex:1;min-width:0}.cp-guide-tt b{display:block;font-size:13px;font-weight:800;margin-bottom:2px}.cp-guide-tt p{margin:0;font-size:11.5px;color:var(--mu);line-height:1.55}',
+      '.cp-guide-ic{flex:0 0 auto;width:32px;height:32px;border-radius:10px;background:#10b981;color:#04110c;display:flex;align-items:center;justify-content:center;font-size:15px}',
+      '.cp-guide-tt{flex:1;min-width:0}.cp-guide-tt b{display:block;font-size:12.5px;font-weight:800;margin-bottom:2px}.cp-guide-tt p{margin:0;font-size:11.5px;color:var(--mu);line-height:1.55}',
       '.cp-guide-x{flex:0 0 auto;border:0;background:var(--chip);color:var(--mu);border-radius:8px;padding:4px 8px;font:inherit;font-size:10.5px;font-weight:700;cursor:pointer}',
       '.cp-guide-ul{margin:8px 0 0;padding:8px 18px 0 0;border-top:1px dashed var(--gd-bd);font-size:11.5px;line-height:1.65;color:var(--tx)}',
       '.cp-guide-ul li{margin-bottom:2px}',
-      '.cp-whobtn{display:flex;align-items:center;gap:8px;background:none;border:0;color:inherit;font:inherit;text-align:start;cursor:pointer;padding:0}.cp-wt{min-width:0;display:block}.cp-wt small{display:block;color:#10b981;font-size:10px;font-weight:800}.cp-wt b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-      '.cp-pav{border-radius:50%;object-fit:cover;background:var(--chip);color:var(--tx);display:inline-flex;align-items:center;justify-content:center;font-weight:800;flex:0 0 auto}',
-      '#courier-app .cp-fld{display:block;width:100%;border:1.5px solid var(--mu);background:var(--card);color:var(--tx);-webkit-text-fill-color:var(--tx);opacity:1;border-radius:12px;padding:10px 12px;font:inherit;font-size:14px;outline:none}#courier-app .cp-fld:focus{border-color:#10b981}#courier-app .cp-fld::placeholder{color:var(--mu);-webkit-text-fill-color:var(--mu);opacity:.8}',
-      '.cp-whobtn{flex:1 1 0;min-width:0}@media(max-width:480px){.cp-head>img{display:none}}',
-      '.cp-lbl{display:block;font-size:12px;font-weight:700;color:var(--mu);margin:10px 0 4px}',
-      '.cp-qr{display:flex;gap:6px;overflow-x:auto;padding:6px 0;flex:0 0 auto}.cp-qr .cp-a{white-space:nowrap}.cp-rights summary{cursor:pointer;font-size:13px}',
       '.cp-guide-mini{margin-bottom:10px;text-align:start}',
       '.cp-guide-mini button{width:100%;border:1px dashed var(--gd-bd);background:var(--gd-bg);color:#10b981;border-radius:12px;padding:7px 12px;font:inherit;font-size:11.5px;font-weight:800;cursor:pointer;text-align:start;display:flex;align-items:center;gap:6px}',
-      /* الفلاتر والكروت */
       '.cp-seg{display:flex;gap:4px;background:var(--chip);border-radius:12px;padding:3px;margin-bottom:12px}',
       '.cp-seg button{flex:1;border:0;border-radius:9px;padding:8px 4px;font:inherit;font-size:12px;font-weight:800;background:transparent;color:var(--mu);cursor:pointer}',
       '.cp-seg button.on{background:#10b981;color:#04110c}',
+      '.cp-months{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;padding-bottom:2px}',
       '.cp-hero{background:linear-gradient(135deg,#047857,#10b981);color:#04110c;border-radius:18px;padding:16px;margin-bottom:12px}',
       '.cp-hero small{display:block;font-size:12px;font-weight:700;opacity:.85}.cp-hero b{display:block;font-size:30px;font-weight:900;margin:2px 0}',
-      '.cp-hero .pend{display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(255,255,255,.35);border-radius:12px;padding:8px 10px;margin-top:8px;font-size:12px;font-weight:800}',
+      '.cp-hero .pend{display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(255,255,255,.35);border-radius:12px;padding:8px 10px;margin-top:8px;font-size:12px;font-weight:800;flex-wrap:wrap}',
       '.cp-hero .pend button{border:0;border-radius:9px;background:#04110c;color:#fff;font:inherit;font-size:11px;font-weight:800;padding:7px 10px;cursor:pointer}',
       '.cp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}.cp-grid .wide{grid-column:1/-1}',
       '.cp-kpi{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:12px;box-shadow:var(--sh)}',
       '.cp-kpi small{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mu);font-weight:700}.cp-kpi b{display:block;font-size:24px;font-weight:900;margin:4px 0 2px}',
       '.cp-kpi .m{font-size:12px;font-weight:800;color:#10b981}.cp-kpi .p{font-size:11px;font-weight:700;color:#f59e0b;margin-top:2px}.cp-kpi .s{font-size:10px;color:var(--mu);margin-top:3px}',
-      '.cp-h{font-size:13px;font-weight:800;margin:14px 2px 8px;color:var(--mu);display:flex;align-items:center;justify-content:space-between}',
+      '.cp-h{font-size:13px;font-weight:800;margin:14px 2px 8px;color:var(--mu);display:flex;align-items:center;justify-content:space-between;gap:8px}',
       '.cp-card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:12px;margin-bottom:10px;box-shadow:var(--sh)}',
       '.cp-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}',
-      '.cp-name{font-size:15px;font-weight:800;line-height:1.4}.cp-sub{font-size:11px;color:var(--mu);margin-top:2px}.cp-sub b{direction:ltr;unicode-bidi:embed;font-weight:700}',
-      '.cp-tag{flex:0 0 auto;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:800;white-space:nowrap}',
+      '.cp-name{font-size:15px;font-weight:800;line-height:1.4;cursor:pointer}.cp-name:hover{color:#10b981}',
+      '.cp-sub{font-size:11px;color:var(--mu);margin-top:2px}.cp-sub b{direction:ltr;unicode-bidi:embed;font-weight:700}',
+      '.cp-tag{flex:0 0 auto;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:800;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}',
       '.k-pk{background:rgba(37,99,235,.15);color:#3b82f6}.k-dl{background:rgba(16,185,129,.16);color:#10b981}.k-fe{background:rgba(245,158,11,.18);color:#d97706}',
-      '.ok{background:rgba(16,185,129,.16);color:#10b981}.wt{background:rgba(245,158,11,.18);color:#d97706}.gy{background:var(--chip);color:var(--mu)}.rd{background:rgba(244,63,94,.15);color:#f43f5e}',
+      '.ok{background:rgba(16,185,129,.16);color:#10b981}.wt{background:rgba(245,158,11,.18);color:#d97706}.gy{background:var(--chip);color:var(--mu)}.rd{background:rgba(244,63,94,.15);color:#f43f5e}.in{background:rgba(56,189,248,.16);color:#0284c7}',
       '.cp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.cp-chip{background:var(--chip);border-radius:8px;padding:3px 9px;font-size:11px}',
       '.cp-info{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}',
-      '.cp-a{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:10px;padding:8px 11px;font:inherit;font-size:12px;font-weight:700;text-decoration:none;color:var(--tx);background:var(--chip);cursor:pointer}',
+      '.cp-a{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:10px;padding:7px 10px;font:inherit;font-size:11.5px;font-weight:700;text-decoration:none;color:var(--tx);background:var(--chip);cursor:pointer}',
       '.cp-a.wa{background:rgba(37,211,102,.16);color:#16a34a}.cp-a.tel{direction:ltr}',
+      '.cp-a.pri{background:#10b981;color:#04110c}',
       '.cp-emp{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--bd);font-size:12px;color:var(--mu)}.cp-emp b{color:var(--tx)}',
-      '.cp-day{display:flex;align-items:center;gap:8px;margin-bottom:10px}.cp-day .t{flex:1;text-align:center;font-size:14px;font-weight:800}',
+      '.cp-txlist{margin-top:10px;border-top:1px solid var(--bd);padding-top:8px;display:flex;flex-direction:column;gap:6px}',
+      '.cp-txitem{display:flex;align-items:center;justify-content:space-between;gap:6px;background:var(--fld);border-radius:12px;padding:8px 10px;flex-wrap:wrap}',
+      '.cp-day{display:flex;align-items:center;gap:8px;margin-bottom:10px}.cp-day .t{flex:1;text-align:center;font-size:13.5px;font-weight:800}',
       '.cp-day button{border:0;height:38px;padding:0 12px;border-radius:12px;background:var(--chip);color:var(--tx);font:inherit;font-size:12px;font-weight:700;cursor:pointer}.cp-day button:disabled{opacity:.35}',
       '.cp-tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:8px;padding-bottom:2px}',
       '.cp-tab{flex:0 0 auto;border:1px solid var(--bd);background:transparent;color:var(--mu);border-radius:999px;padding:6px 12px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}',
       '.cp-tab.on{background:#10b981;border-color:#10b981;color:#04110c}.cp-tab i{font-style:normal;opacity:.75;margin-inline-start:5px}',
       '.cp-search-bar{display:flex;gap:6px;margin-bottom:10px;align-items:center}',
-      '.cp-search-bar input{flex:1;border-radius:12px;border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:9px 12px;font:inherit;font-size:12.5px;outline:none}',
+      '.cp-search-bar input{flex:1;border-radius:12px;border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:9px 12px;font:inherit;font-size:12.5px;outline:none;min-width:0}',
       '.cp-search-bar input:focus{border-color:#10b981}',
       '.cp-empty{text-align:center;color:var(--mu);font-size:13px;padding:30px 12px}',
-      '.cp-rev{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--bd);font-size:13px}.cp-rev:last-of-type{border-bottom:0}.cp-rev span{color:var(--mu);font-size:11px}',
+      '.cp-rev-grp{border:1px solid var(--bd);border-radius:14px;padding:10px;margin-top:8px;background:var(--fld)}',
+      '.cp-rev{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed var(--bd);font-size:12.5px;flex-wrap:wrap}.cp-rev:last-of-type{border-bottom:0}.cp-rev span{color:var(--mu);font-size:11px}',
       '.cp-big{width:100%;border:0;border-radius:14px;padding:13px;font:inherit;font-size:14px;font-weight:800;cursor:pointer;background:#10b981;color:#04110c;margin-top:10px}.cp-big:disabled{opacity:.5}',
       '.cp-done{margin-top:10px;text-align:center;border-radius:12px;padding:10px;font-size:13px;font-weight:800;background:rgba(16,185,129,.14);color:#10b981}',
       '.cp-old{background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.4);border-radius:14px;padding:10px;margin-bottom:10px;font-size:12px;font-weight:700;color:#d97706}.cp-old button{margin:6px 4px 0 0}',
-      /* لوحة الترتيب Leaderboard */
+      '.cp-warn-box{background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:9px 11px;margin:8px 0;font-size:12px;font-weight:700;color:#d97706;line-height:1.6}',
+      '.cp-info-box{background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.35);border-radius:12px;padding:9px 11px;margin:8px 0;font-size:11.5px;color:var(--tx);line-height:1.6}',
+      /* لوحة الترتيب */
       '.cp-podium{display:grid;grid-template-columns:1fr 1.08fr 1fr;gap:8px;align-items:end;margin-bottom:14px;padding-top:8px}',
-      '.cp-pod{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:12px 8px;text-align:center;position:relative;box-shadow:var(--sh)}',
-      '.cp-pod.r1{border-color:#f59e0b;background:linear-gradient(180deg,rgba(245,158,11,.16),var(--card));padding:16px 8px}',
+      '.cp-pod{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:12px 6px;text-align:center;position:relative;box-shadow:var(--sh);min-width:0}',
+      '.cp-pod.r1{border-color:#f59e0b;background:linear-gradient(180deg,rgba(245,158,11,.16),var(--card));padding:16px 6px}',
       '.cp-pod.r2{border-color:#94a3b8;background:linear-gradient(180deg,rgba(148,163,184,.12),var(--card))}',
       '.cp-pod.r3{border-color:#d97706;background:linear-gradient(180deg,rgba(217,119,6,.12),var(--card))}',
       '.cp-pod.me{box-shadow:0 0 0 2px #10b981}',
-      '.cp-pod-medal{font-size:24px;line-height:1;margin-bottom:4px;display:block}',
-      '.cp-pod-nm{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px}',
-      '.cp-pod-tot{font-size:20px;font-weight:900;color:#10b981;line-height:1.1}',
+      '.cp-pod-medal{font-size:22px;line-height:1;margin-bottom:4px;display:block}',
+      '.cp-pod-nm{font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px}',
+      '.cp-pod-tot{font-size:18px;font-weight:900;color:#10b981;line-height:1.1}',
       '.cp-pod-tot small{font-size:10px;font-weight:700;color:var(--mu);display:block}',
-      '.cp-pod-sub{display:flex;justify-content:center;gap:6px;margin-top:6px;font-size:10.5px;color:var(--mu);flex-wrap:wrap}',
+      '.cp-pod-sub{display:flex;justify-content:center;gap:5px;margin-top:6px;font-size:10px;color:var(--mu);flex-wrap:wrap}',
       '.cp-lb-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:11px 12px;margin-bottom:8px;box-shadow:var(--sh)}',
       '.cp-lb-row.me{border-color:#10b981;background:var(--gd-bg)}',
-      '.cp-lb-rk{flex:0 0 auto;width:32px;height:32px;border-radius:10px;background:var(--chip);color:var(--tx);font-weight:900;font-size:14px;display:flex;align-items:center;justify-content:center}',
+      '.cp-lb-rk{flex:0 0 auto;width:32px;height:32px;border-radius:10px;background:var(--chip);color:var(--tx);font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center}',
       '.cp-lb-rk.r1{background:#fef3c7;color:#b45309}.cp-lb-rk.r2{background:#e2e8f0;color:#334155}.cp-lb-rk.r3{background:#ffedd5;color:#c2410c}',
       '.cp-lb-info{flex:1;min-width:0}',
       '.cp-lb-info b{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800}',
-      '.cp-lb-stats{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;font-size:11.5px;color:var(--mu)}',
-      '.cp-lb-stats span{display:inline-flex;align-items:center;gap:4px}',
+      '.cp-lb-stats{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;font-size:11px;color:var(--mu)}',
       '.cp-lb-tot{text-align:end;flex:0 0 auto}',
-      '.cp-lb-tot b{display:block;font-size:18px;font-weight:900;color:#10b981;line-height:1.1}',
+      '.cp-lb-tot b{display:block;font-size:17px;font-weight:900;color:#10b981;line-height:1.1}',
       '.cp-lb-tot small{font-size:10px;color:var(--mu)}',
-      '.cp-motiv{background:linear-gradient(135deg,rgba(16,185,129,.18),rgba(59,130,246,.14));border:1px solid var(--gd-bd);border-radius:14px;padding:11px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12.5px;font-weight:700}',
+      '.cp-motiv{background:linear-gradient(135deg,rgba(16,185,129,.18),rgba(59,130,246,.14));border:1px solid var(--gd-bd);border-radius:14px;padding:11px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:700;flex-wrap:wrap}',
       /* الشات والمودال */
       '.cp-ct{display:flex;align-items:center;gap:10px;cursor:pointer}.cp-av{flex:0 0 auto;width:44px;height:44px;border-radius:50%;background:#10b981;color:#04110c;font-weight:900;font-size:17px;display:flex;align-items:center;justify-content:center;position:relative}',
       '.cp-av i{position:absolute;bottom:0;inset-inline-end:0;width:12px;height:12px;border-radius:50%;border:2px solid var(--card);background:#94a3b8}.cp-av i.on{background:#22c55e}',
       '.cp-ct .m{flex:1;min-width:0}.cp-ct .m b{display:block;font-size:14px}.cp-ct .m small{display:block;font-size:11px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.cp-ub{min-width:20px;height:20px;border-radius:10px;background:#f43f5e;color:#fff;font-size:11px;font-weight:800;line-height:20px;text-align:center;padding:0 6px}',
       '.cp-chat{display:flex;flex-direction:column;height:calc(100vh - 150px);min-height:300px}',
-      '.cp-chead{display:flex;align-items:center;gap:8px;margin-bottom:8px}.cp-chead b{flex:1;font-size:15px}',
+      '.cp-chead{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}.cp-chead b{flex:1;font-size:15px;min-width:100px}',
       '.cp-msgs{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:4px 2px}',
-      '.cp-m{max-width:82%;border-radius:14px;padding:8px 11px;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word;background:var(--card);border:1px solid var(--bd)}',
+      '.cp-m{max-width:84%;border-radius:14px;padding:8px 11px;font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word;background:var(--card);border:1px solid var(--bd)}',
       '.cp-m.me{align-self:flex-start;background:#10b981;border-color:#10b981;color:#04110c}.cp-m.th{align-self:flex-end}',
-      '.cp-m small{display:block;font-size:10px;opacity:.7;margin-top:2px}.cp-m .tx{display:inline-block;font-size:10px;font-weight:800;background:rgba(0,0,0,.12);border-radius:6px;padding:1px 6px;margin-bottom:3px}',
-      '.cp-comp{display:flex;gap:6px;align-items:flex-end;margin-top:8px}.cp-comp textarea{flex:1;max-height:110px}',
+      '.cp-m small{display:flex;align-items:center;gap:6px;font-size:10px;opacity:.85;margin-top:3px;flex-wrap:wrap}',
+      '.cp-m .rd-st{font-weight:800;padding:1px 6px;border-radius:6px;background:rgba(0,0,0,.12)}',
+      '.cp-m .tx{display:inline-block;font-size:10px;font-weight:800;background:rgba(0,0,0,.12);border-radius:6px;padding:1px 6px;margin-bottom:3px}',
+      '.cp-comp{display:flex;gap:6px;align-items:flex-end;margin-top:8px}.cp-comp textarea{flex:1;max-height:110px;min-width:0}',
       '.cp-field{width:100%;border-radius:10px;border:1px solid var(--bd);background:var(--fld);color:var(--tx);padding:10px 12px;font:inherit;font-size:14px;outline:none;resize:none}.cp-field:focus{border-color:#10b981}',
-      '.cp-modal{position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:16px}',
-      '.cp-box{width:100%;max-width:460px;max-height:90vh;overflow-y:auto;background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:18px;padding:16px}',
+      '.cp-modal{position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:14px}',
+      '.cp-box{width:100%;max-width:480px;max-height:90vh;overflow-y:auto;background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:18px;padding:16px}',
       '.cp-box h3{margin:0 0 6px;font-size:16px}.cp-box p{margin:0 0 10px;font-size:12px;color:var(--mu);line-height:1.7}',
-      '.cp-btns{display:flex;gap:8px;margin-top:10px}.cp-btns .cp-btn{flex:1;padding:12px}.cp-go{background:#10b981;color:#04110c}',
+      '.cp-btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}.cp-btns .cp-btn{flex:1;padding:11px;min-width:110px}.cp-go{background:#10b981;color:#04110c}',
       '.cp-kinds{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}.cp-kinds button{border:1px solid var(--bd);background:transparent;color:var(--tx);border-radius:12px;padding:10px;font:inherit;font-size:13px;font-weight:700;text-align:start;cursor:pointer}.cp-kinds button.on{border-color:#10b981;background:rgba(16,185,129,.12)}',
       '.cp-qnotes{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}',
       '.cp-qnotes button{border:1px solid var(--bd);background:var(--chip);color:var(--tx);border-radius:8px;padding:5px 9px;font:inherit;font-size:11px;font-weight:700;cursor:pointer}',
-      '.cp-qnotes button:hover{border-color:#10b981;color:#10b981}',
       '.cp-old-n{font-size:11px;color:var(--mu);border-top:1px dashed var(--bd);padding-top:6px;margin-top:6px}',
-      '.cp-toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:99999;background:#10b981;color:#04110c;font-weight:800;font-size:13px;padding:11px 18px;border-radius:12px;max-width:92vw}.cp-toast.err{background:#f43f5e;color:#fff}',
+      '.cp-dtl-sec{border:1px solid var(--bd);border-radius:12px;padding:10px;margin-bottom:10px;background:var(--fld)}',
+      '.cp-dtl-sec b.hd{display:block;font-size:12px;color:var(--mu);margin-bottom:6px}',
+      '.cp-toast{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:99999;background:#10b981;color:#04110c;font-weight:800;font-size:13px;padding:11px 18px;border-radius:12px;max-width:92vw;text-align:center}.cp-toast.err{background:#f43f5e;color:#fff}',
       '.cp-mgr-row{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--bd);flex-wrap:wrap}.cp-mgr-row .nm{flex:1 1 130px;font-weight:800;font-size:13.5px}.cp-mgr-row .em{font-size:11.5px;color:#10b981;direction:ltr;font-weight:700}',
       '.cp-mgr-row .st{flex:1 1 100%;font-size:11px;color:var(--mu);margin-top:2px}.cp-mgr-row input{flex:1 1 180px;margin:0;padding:8px 10px;font-size:12px;direction:ltr}.cp-mgr-row .cp-btn{padding:8px 12px;font-size:12px}',
       '#cp-mgr{--card:#10223d;--tx:#e8eef8;--mu:#9fb0c8;--bd:rgba(255,255,255,.12);--fld:rgba(255,255,255,.07);--chip:rgba(255,255,255,.1);--gd-bg:rgba(16,185,129,.12);--gd-bd:rgba(16,185,129,.3)}'
@@ -238,11 +316,11 @@
   /* ---------- مساعدات ---------- */
   function toast(msg, bad) {
     const t = document.createElement('div'); t.className = 'cp-toast' + (bad ? ' err' : ''); t.textContent = msg;
-    document.body.appendChild(t); setTimeout(() => t.remove(), 3200);
+    document.body.appendChild(t); setTimeout(() => t.remove(), 3600);
   }
   function errMsg(e) {
     const m = String((e && e.message) || e || '');
-    if (/not your transaction/.test(m)) return 'المعاملة دي مش على اسمك';
+    if (/not your transaction/.test(m)) return 'المعاملة دي مش متسجلة على اسمك';
     if (/body required/.test(m)) return 'اكتب الملاحظة الأول';
     if (/bad day/.test(m)) return 'مينفعش تأكد يوم لسه ماجاش';
     if (/not linked|courier only/.test(m)) return 'حسابك مش مربوط بمندوب. كلّم المدير';
@@ -255,9 +333,19 @@
   const callBtns = (phone, label) => {
     if (!phone) return '';
     const lb = label === undefined ? phone : label;
-    return '<a class="cp-a tel" href="' + eh(telHref(phone)) + '"><i class="fa-solid fa-phone"></i>' + (lb ? ' ' + eh(lb) : '') + '</a>' +
-      '<a class="cp-a wa" target="_blank" rel="noopener" href="https://wa.me/' + eh(waNum(phone)) + '"><i class="fa-brands fa-whatsapp"></i>' + (label === '' ? '' : ' واتساب') + '</a>';
+    return '<a class="cp-a tel" href="' + eh(telHref(phone)) + '"><i class="fa-solid fa-phone"></i><span>اتصال' + (lb ? ' ' + eh(lb) : '') + '</span></a>' +
+      '<a class="cp-a wa" target="_blank" rel="noopener" href="https://wa.me/' + eh(waNum(phone)) + '"><i class="fa-brands fa-whatsapp"></i><span>واتساب</span></a>';
   };
+
+  /* هل الموظف لسه ما قفلش المعاملة؟ (البند A.3) */
+  function isNotClosedByStaff(it) {
+    const lines = Number(it.lines) || 0;
+    const rev = Number(it.n_review) || 0;
+    const deliv = Number(it.n_delivered) || 0;
+    if (rev > 0) return true;
+    if (it.type === 'delivery' && lines > 0 && deliv < lines) return true;
+    return false;
+  }
 
   function txState(o) {
     const n = Number(o.lines) || 0;
@@ -273,7 +361,52 @@
   };
   const kindLabel = it => it.type === 'fee' ? (it.fee_kind === 'round' ? 'رسوم توصيل · ذهاب وعودة' : 'رسوم توصيل · ذهاب فقط') : KIND[it.type].label;
 
-  /* ---------- إحصائيات (من الداتا اللي جت من السيرفر) ---------- */
+  /* مرجع التأكيد الفردي (للبند B.1) */
+  const itemRef = it => it.type === 'fee' ? String(it.id) : String(it.transaction_id);
+
+  /* علامة 📨 أبلغت الموظف (البند B.3) */
+  function noteBadgeHtml(it) {
+    const tx = String(it.transaction_id || '');
+    const n = st.notesMap[tx];
+    const count = Number(it.my_notes) || (n ? 1 : 0);
+    if (!count) return '';
+    const tm = n && n.at ? timeOf(n.at) : '';
+    return '<span class="cp-tag in">📨 أبلغت الموظف' + (tm ? ' (الساعة ' + eh(tm) + ')' : ' (' + num(count) + ' ملاحظة)') + '</span>';
+  }
+
+  /* تجميع العناصر لنفس العميل + اليوم + النوع (البند A.1) */
+  function groupItemsByClient(rows) {
+    const groups = [];
+    const map = new Map();
+    rows.forEach(it => {
+      const cNorm = normAr(it.client_name || 'بدون اسم') || ('tx_' + it.transaction_id);
+      const key = cNorm + '||' + it.day + '||' + it.type;
+      let g = map.get(key);
+      if (!g) {
+        g = {
+          key: key,
+          client_name: it.client_name || 'بدون اسم',
+          day: it.day,
+          type: it.type,
+          phone: it.phone || '',
+          address: it.address || '',
+          employee: it.employee || '',
+          employee_id: it.employee_id || null,
+          employee_phone: it.employee_phone || '',
+          items: []
+        };
+        map.set(key, g);
+        groups.push(g);
+      }
+      if (!g.phone && it.phone) g.phone = it.phone;
+      if (!g.address && it.address) g.address = it.address;
+      if (!g.employee && it.employee) { g.employee = it.employee; g.employee_id = it.employee_id; g.employee_phone = it.employee_phone; }
+      g.items.push(it);
+    });
+    return groups;
+  }
+
+  /* ---------- إحصائيات (كل ريكوست عنصر مستقل في الداتا والمجاميع) ---------- */
   function stats(range) {
     const r = { pickup: {}, delivery: {}, fee: {} }, f = range[0], t = range[1];
     Object.keys(r).forEach(k => r[k] = { n: 0, cn: 0, amt: 0, camt: 0, pn: 0, pamt: 0 });
@@ -299,25 +432,30 @@
     if (!o) {
       o = document.createElement('div'); o.id = 'courier-app'; o.setAttribute('dir', 'rtl');
       o.addEventListener('click', onClick); o.addEventListener('keydown', onKey); o.addEventListener('input', onInput);
-      o.addEventListener('change', e => { if (e.target && e.target.id === 'cp-pfile') pickPhoto(e.target.files && e.target.files[0]); });
       document.body.appendChild(o);
     }
     o.classList.remove('hidden'); o.setAttribute('data-theme', st.theme); o.innerHTML = inner; return o;
   }
   const logoutBtn = '<button type="button" class="cp-hbtn" data-act="logout"><i class="fa-solid fa-right-from-bracket"></i> خروج</button>';
 
-  const avatar = (photo, name, size) => photo
-    ? '<img class="cp-pav" style="width:' + size + 'px;height:' + size + 'px" src="' + eh(photo) + '" alt="">'
-    : '<span class="cp-pav" style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size / 2.2) + 'px">' + eh(String(name || '؟').trim().charAt(0)) + '</span>';
-  const whoInner = () => avatar(st.me && st.me.photo, st.me && st.me.name, 36) + '<span class="cp-wt"><small>ملفي ←</small><b>' + eh(st.me && st.me.name) + '</b></span>';
-
+  function myAvHtml(sz) {
+    sz = sz || 34;
+    const url = st.avPendingUrl || st.avUrl;
+    if (url && !st.avRemoved) return '<img src="' + eh(url) + '" alt="" style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;object-fit:cover;flex:0 0 auto;border:2px solid #10b981">';
+    const ch = String((st.me && st.me.name) || 'م').trim().charAt(0) || 'م';
+    return '<span style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:#10b981;color:#04110c;font-weight:900;font-size:' + Math.round(sz * 0.44) + 'px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto">' + eh(ch) + '</span>';
+  }
+  function updateHeaderWho() {
+    const w = $('cp-who-box'); if (!w) return;
+    w.innerHTML = myAvHtml(34) + '<div style="min-width:0"><small>ملفي ←</small><b>' + eh(st.me && st.me.name) + '</b></div>';
+  }
   function shell() {
     overlay(
-      '<header class="cp-head"><img src="logo-transparent.png" alt="" style="height:30px" onerror="this.style.display=\'none\'">' +
-        '<button type="button" class="cp-who cp-whobtn" id="cp-whobtn" data-act="profile">' + whoInner() + '</button>' +
+      '<header class="cp-head"><img src="logo-transparent.png" alt="" style="height:28px" onerror="this.style.display=\'none\'">' +
+        '<div class="cp-who" id="cp-who-box" data-act="profile" title="ملفي الشخصي" style="display:flex;align-items:center;gap:8px">' + myAvHtml(34) + '<div style="min-width:0"><small>ملفي ←</small><b>' + eh(st.me && st.me.name) + '</b></div></div>' +
         '<div class="cp-clock"><b id="cp-time"></b><small id="cp-date"></small></div>' +
         '<button type="button" class="cp-hbtn" id="cp-theme" data-act="theme"></button>' + logoutBtn + '</header>' +
-      '<div class="cp-off" id="cp-off">مفيش اتصال… اللي قدامك آخر نسخة محفوظة وبحاول أتصل تاني</div>' +
+      '<div class="cp-off" id="cp-off">مفيش اتصال بالإنترنت… بحاول تاني</div>' +
       '<main class="cp-body" id="cp-body"></main>' +
       '<nav class="cp-nav" id="cp-nav"></nav><div id="cp-modal-root"></div>');
     applyTheme(); tickClock(); renderNav(); renderTab();
@@ -344,7 +482,6 @@
     if (n.dataset.h !== html) { n.dataset.h = html; n.innerHTML = html; }
   }
   function setTab(t) {
-    if (t === 'review' && st.tab === 'review') st.rvOpen = false;
     st.tab = t;
     if (t !== 'chat') st.chat = null;
     if (t === 'rank') loadLeaderboard(true);
@@ -352,16 +489,18 @@
   }
   function renderTab(top) {
     const b = $('cp-body'); if (!b) return;
-    /* حفظ موضع الكتابة لو المندوب بيبحث في المشاوير */
-    const activeId = document.activeElement && document.activeElement.id;
-    const selStart = activeId === 'cp-trip-q' ? document.activeElement.selectionStart : null;
+    /* ممنوع إعادة الرسم لو المندوب بيكتب في حقل رسالة أو نموذج */
+    const activeEl = document.activeElement;
+    const activeId = activeEl && activeEl.id;
+    if (!top && (activeId === 'cp-msg' || activeId === 'cp-nbody' || activeId === 'cp-pf-job' || activeId === 'cp-pf-phone')) return;
+    const selStart = activeId === 'cp-trip-q' ? activeEl.selectionStart : null;
     const y = b.scrollTop;
 
-    if (st.tab === 'home') b.innerHTML = viewHome();
+    if (st.tab === 'profile') b.innerHTML = viewProfile();
+    else if (st.tab === 'home') b.innerHTML = viewHome();
     else if (st.tab === 'trips') b.innerHTML = viewTrips();
     else if (st.tab === 'rank') b.innerHTML = viewLeaderboard();
     else if (st.tab === 'review') b.innerHTML = viewReview();
-    else if (st.tab === 'profile') b.innerHTML = viewProfile();
     else viewChat();
 
     b.scrollTop = top ? 0 : y;
@@ -372,79 +511,56 @@
   }
 
   /* ---------- 1) حسابي ---------- */
+  function availableMonths() {
+    const cur = today().slice(0, 7);
+    const set = new Set([cur]);
+    st.items.forEach(i => { if (i.day && i.day.length >= 7) set.add(i.day.slice(0, 7)); });
+    return Array.from(set).sort().reverse().slice(0, 6);
+  }
   function viewHome() {
-    const rng = rangeOf(st.period, st.month), s = stats(rng);
+    if (!st.month) st.month = today().slice(0, 7);
+    const s = stats(rangeOf(st.period));
     const seg = '<div class="cp-seg">' + [['today', 'اليوم'], ['week', 'الأسبوع'], ['month', 'الشهر']].map(p => '<button type="button" data-per="' + p[0] + '" class="' + (st.period === p[0] ? 'on' : '') + '">' + p[1] + '</button>').join('') + '</div>';
-    const hero = '<div class="cp-hero"><small>عمولتك المؤكدة (' + (st.period === 'today' ? 'اليوم' : st.period === 'week' ? 'هذا الأسبوع' : monthLabel(st.month)) + ')</small><b>' + money(s.total) + '</b>' +
+    const monthsBar = st.period === 'month'
+      ? '<div class="cp-months">' + availableMonths().map(m => '<button type="button" class="cp-tab' + (st.month === m ? ' on' : '') + '" data-month="' + m + '">' + eh(monthLabel(m)) + '</button>').join('') + '</div>'
+      : '';
+    const hero = '<div class="cp-hero"><small>عمولتك المؤكدة (' + (st.period === 'today' ? 'اليوم' : st.period === 'week' ? 'هذا الأسبوع' : eh(monthLabel(st.month))) + ')</small><b>' + money(s.total) + '</b>' +
       (s.pendN ? '<div class="pend"><span>+ ' + money(s.pend) + ' في انتظار تأكيدك (' + num(s.pendN) + ' مشوار)</span><button type="button" data-tab="review">راجع وأكّد</button></div>' : '<small>كل مشاويرك في الفترة دي متأكدة ✓</small>') + '</div>';
 
-    /* كارت مختصر لترتيب المندوب الحالي */
     const myRankRow = st.leaderboard.find(r => r.is_me);
     const rankTeaser = myRankRow
-      ? '<div class="cp-motiv"><div><i class="fa-solid fa-trophy" style="color:#f59e0b;margin-inline-end:6px"></i>ترتيبك الحالي في الاستلامات والتسليم: <b>المركز #' + num(myRankRow.rank) + '</b> (' + num(myRankRow.total_trips) + ' مشوار)</div><button type="button" class="cp-btn cp-sm" style="background:#10b981;color:#04110c" data-tab="rank">لوحة الترتيب</button></div>'
+      ? '<div class="cp-motiv"><div><i class="fa-solid fa-trophy" style="color:#f59e0b;margin-inline-end:6px"></i>ترتيبك في الاستلامات والتسليم: <b>المركز #' + num(myRankRow.rank) + '</b> (' + num(myRankRow.total_trips) + ' مشوار)</div><button type="button" class="cp-btn cp-sm" style="background:#10b981;color:#04110c" data-tab="rank">لوحة الترتيب</button></div>'
       : '<div class="cp-motiv"><div><i class="fa-solid fa-trophy" style="color:#f59e0b;margin-inline-end:6px"></i>شوف ترتيبك وسط زمايلك في الاستلامات والتسليم!</div><button type="button" class="cp-btn cp-sm" style="background:#10b981;color:#04110c" data-tab="rank">فتح الترتيب</button></div>';
 
-    const kpi = (k, icon, title, extra) => { const x = s[k]; return '<div class="cp-kpi"><small><i class="fa-solid ' + icon + '"></i>' + title + '</small><b>' + num(x.n) + '</b><div class="m">' + money(x.camt) + ' مؤكدة</div>' + (x.pamt ? '<div class="p">+ ' + money(x.pamt) + ' في الانتظار</div>' : '') + (extra ? '<div class="s">' + extra + '</div>' : '') + '</div>'; };
+    const kpi = (k, icon, title, extra) => { const x = s[k]; return '<div class="cp-kpi"><small><i class="fa-solid ' + icon + '"></i>' + title + '</small><b>' + num(x.n) + ' مشوار</b><div class="m">' + money(x.camt) + ' مؤكدة</div>' + (x.pamt ? '<div class="p">+ ' + money(x.pamt) + ' في الانتظار</div>' : '') + (extra ? '<div class="s">' + extra + '</div>' : '') + '</div>'; };
     const grid = '<div class="cp-grid">' + kpi('pickup', 'fa-box-archive', 'استلمت', 'عمولة الاستلام') + kpi('delivery', 'fa-truck-fast', 'سلّمت', 'عمولة التسليم') +
       '<div class="cp-kpi wide"><small><i class="fa-solid fa-motorcycle"></i>مشاوير رسوم التوصيل</small><b>' + num(s.fee.n) + ' <span style="font-size:13px;font-weight:700;color:var(--mu)">مشوار</span></b><div class="m">' + money(s.fee.camt) + ' مؤكدة</div>' +
-      (s.fee.pamt ? '<div class="p">+ ' + money(s.fee.pamt) + ' في الانتظار</div>' : '') + '<div class="s">ذهاب فقط: ' + num(s.one) + ' · ذهاب وعودة: ' + num(s.round) + '</div></div></div>';
-    const recent = st.items.slice(0, 6).map(it => '<div class="cp-card" style="padding:10px"><div class="cp-row"><div><div class="cp-name" style="font-size:14px">' + eh(it.client_name || 'بدون اسم') + '</div><div class="cp-sub">' + eh(kindLabel(it)) + ' · ' + eh(dayLabel(it.day)) + '</div></div><div style="text-align:end"><b>' + money(it.amount) + '</b><div><span class="cp-tag ' + (it.confirmed ? 'ok' : 'wt') + '">' + (it.confirmed ? 'مؤكد' : 'مش متأكد') + '</span></div></div></div></div>').join('');
+      (s.fee.pamt ? '<div class="p">+ ' + money(s.fee.pamt) + ' في الانتظار</div>' : '') + '<div class="s">ذهاب فقط: ' + num(s.one) + ' مشوار · ذهاب وعودة: ' + num(s.round) + ' مشوار</div></div></div>';
+    const recent = st.items.slice(0, 6).map(it => '<div class="cp-card" style="padding:10px" data-act="detail" data-tx="' + eh(it.transaction_id) + '"><div class="cp-row"><div><div class="cp-name" style="font-size:14px">' + eh(it.client_name || 'بدون اسم') + '</div><div class="cp-sub">' + eh(kindLabel(it)) + ' · ' + eh(dayLabel(it.day)) + '</div></div><div style="text-align:end"><b>' + money(it.amount) + '</b><div><span class="cp-tag ' + (it.confirmed ? 'ok' : 'wt') + '">' + (it.confirmed ? 'مؤكد' : 'بانتظارك') + '</span></div></div></div></div>').join('');
     const load = !st.loaded ? '<div class="cp-empty">جاري التحميل…</div>' : '';
-    const lower = st.period === 'today'
-      ? '<div class="cp-h"><span>آخر مشاويرك</span><button type="button" class="cp-a cp-sm" data-tab="trips">كل المشاوير ←</button></div>' + (recent || load || '<div class="cp-empty">لسه مفيش مشاوير متسجلة باسمك</div>')
-      : '<div class="cp-h"><span>أيام ' + (st.period === 'week' ? 'الأسبوع' : 'الشهر') + ' وحالة كل يوم</span></div>' + (dayRows(rng).map(dayRowHtml).join('') || load || '<div class="cp-empty">مفيش مشاوير في الفترة دي</div>');
-    const t0 = today(), oldPend = st.items.filter(i => !i.confirmed && i.day < t0);
-    const oldAlert = oldPend.length ? '<div class="cp-old">⚠ عندك <b>' + num(oldPend.length) + ' مشوار</b> مش متأكدين في أيام فاتت. راجعهم وأكّدهم عشان يتحسبوا في عمولتك. <button type="button" class="cp-a" data-act="goold">راجعهم دلوقتي</button></div>' : '';
-    const updLine = '<div class="cp-sub" style="margin:-4px 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">آخر تحديث: <b id="cp-upd">' + (st.lastOk ? eh(timeOf(st.lastOk)) : '—') + '</b><button type="button" class="cp-a cp-sm" data-act="refresh">تحديث الآن</button><button type="button" class="cp-a cp-sm" data-act="mynotes">ملاحظاتي</button>' + (st.period === 'month' ? '<button type="button" class="cp-a cp-sm" data-act="stmt">كشف حساب الشهر</button>' : '') + '</div>';
-    const fee = money(st.me && st.me.fee || 40);
-    const rights = '<details class="cp-card cp-rights"><summary><b>إزاي بتتحسب عمولتي؟</b> (حقوقك)</summary><div class="cp-sub" style="line-height:1.8;margin-top:8px">' +
-      '• كل مشوار <b>استلام</b> = ' + fee + '، وكل مشوار <b>تسليم</b> = ' + fee + '.<br>• مشوار <b>رسوم التوصيل</b> بيتحسب لك بالمبلغ المسجل في الطلب كله.<br>' +
-      '• الرقم الأخضر (مؤكد) هو اللي بيتحسب لك، والبرتقالي بيتحول لأخضر لما تأكده من «المراجعة».<br>• لو فيه مشوار ناقص أو مبلغ غلط، ابعت «ملاحظة للموظف» من كارت المشوار أو كلّم الإدارة من «التواصل».</div></details>';
-    return renderGuideBanner('home') + oldAlert + seg + updLine + (st.period === 'month' ? monthNav() : '') + hero + rankTeaser + grid + lower + rights;
+    return renderGuideBanner('home') + seg + monthsBar + hero + rankTeaser + grid + '<div class="cp-h"><span>آخر مشاويرك (اضغط على العميل للتفاصيل)</span><button type="button" class="cp-a cp-sm" data-tab="trips">كل المشاوير</button></div>' + (recent || load || '<div class="cp-empty">لسه مفيش مشاوير متسجلة باسمك</div>');
   }
 
-  /* ---------- شهور وأيام (مشترك بين حسابي / مشاويري / المراجعة) ---------- */
-  function monthNav() {
-    const cur = monthOf(today());
-    return '<div class="cp-day"><button type="button" data-act="mprev"' + (st.month <= minMonth() ? ' disabled' : '') + '>الشهر السابق</button><div class="t">' + eh(monthLabel(st.month)) + (st.month === cur ? ' · الحالي' : '') + '</div>' +
-      '<button type="button" data-act="mnext"' + (st.month >= cur ? ' disabled' : '') + '>الشهر التالي</button></div>';
-  }
-  function dayRows(range) {
-    const m = {};
-    st.items.forEach(it => {
-      if (it.day < range[0] || it.day > range[1]) return;
-      const d = m[it.day] || (m[it.day] = { day: it.day, n: 0, pn: 0, amt: 0, pickup: 0, delivery: 0, fee: 0 });
-      d.n++; d[it.type]++; d.amt += Number(it.amount) || 0; if (!it.confirmed) d.pn++;
-    });
-    return Object.keys(m).sort().reverse().map(k => m[k]);
-  }
-  const dayKinds = d => [d.pickup ? num(d.pickup) + ' استلام' : '', d.delivery ? num(d.delivery) + ' تسليم' : '', d.fee ? num(d.fee) + ' رسوم توصيل' : ''].filter(Boolean).join(' · ');
-  function dayRowHtml(d) {
-    return '<div class="cp-card"><div class="cp-row"><div><div class="cp-name" style="font-size:14px">' + eh(dayLabel(d.day)) + '</div><div class="cp-sub">' + eh(dayKinds(d)) + '</div></div>' +
-      '<div style="text-align:end"><b>' + money(d.amt) + '</b><div style="margin-top:3px"><span class="cp-tag ' + (d.pn ? 'wt' : 'ok') + '">' + (d.pn ? num(d.pn) + ' مش متأكد' : '✓ كله متأكد') + '</span></div></div></div>' +
-      '<div class="cp-info"><button type="button" class="cp-a" data-act="rvday" data-day="' + d.day + '">' + (d.pn ? 'راجع وأكّد اليوم ده' : 'شوف تفاصيل اليوم') + '</button></div></div>';
-  }
-
-  /* ---------- 2) مشاويري ---------- */
+  /* ---------- 2) مشاويري (تجميع ريكوستات نفس العميل + تفاصيل بالضغط) ---------- */
   function dayNav() {
     const t = today();
     return '<div class="cp-day"><button type="button" data-act="dprev">اليوم السابق</button><div class="t">' + eh(dayLabel(st.day)) + (st.day === t ? ' · النهارده' : '') + '</div>' +
       '<button type="button" data-act="dnext"' + (st.day >= t ? ' disabled' : '') + '>اليوم التالي</button></div>';
   }
   const itemsOf = d => st.items.filter(it => it.day === d);
+
   function viewTrips() {
-    const inMonth = st.tripScope === 'month', mr = rangeOf('month', st.month);
-    const all = inMonth ? st.items.filter(i => i.day >= mr[0] && i.day <= mr[1]) : itemsOf(st.day), n = k => all.filter(i => k === 'all' || i.type === k).length;
+    const all = itemsOf(st.day), n = k => all.filter(i => k === 'all' || i.type === k).length;
     const tabs = '<div class="cp-tabs">' + [['all', 'الكل'], ['pickup', 'استلام'], ['delivery', 'تسليم'], ['fee', 'رسوم توصيل']].map(t => '<button type="button" class="cp-tab' + (st.type === t[0] ? ' on' : '') + '" data-type="' + t[0] + '">' + t[1] + '<i>' + num(n(t[0])) + '</i></button>').join('') + '</div>';
     const stTabs = '<div class="cp-tabs">' + [
       ['all', 'كل الحالات (' + num(all.length) + ')'],
-      ['pending', '⏳ مش متأكد (' + num(all.filter(i => !i.confirmed).length) + ')'],
+      ['pending', '⏳ بانتظار تأكيدك (' + num(all.filter(i => !i.confirmed).length) + ')'],
       ['confirmed', '✓ مؤكدة (' + num(all.filter(i => i.confirmed).length) + ')']
     ].map(s => '<button type="button" class="cp-tab' + (st.statusFilter === s[0] ? ' on' : '') + '" data-sfilter="' + s[0] + '">' + s[1] + '</button>').join('') + '</div>';
 
     const searchBar = '<div class="cp-search-bar">' +
-      '<input id="cp-trip-q" type="search" value="' + eh(st.q) + '" placeholder="🔍 ابحث باسم العميل، رقم المعاملة، التليفون، العنوان…">' +
-      (st.q ? '<button type="button" class="cp-btn cp-sm" data-act="qclear">مسح</button>' : '') +
+      '<input id="cp-trip-q" type="search" value="' + eh(st.q) + '" placeholder="ابحث باسم العميل، رقم المعاملة، التليفون، العنوان…">' +
+      (st.q ? '<button type="button" class="cp-btn cp-sm" data-act="qclear">مسح البحث</button>' : '') +
     '</div>';
 
     const q = (st.q || '').trim().toLowerCase();
@@ -459,31 +575,110 @@
       return true;
     });
 
-    const scope = '<div class="cp-seg">' + [['day', 'يوم يوم'], ['month', 'الشهر كله']].map(x => '<button type="button" data-tscope="' + x[0] + '" class="' + (st.tripScope === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>';
-    let list = '';
-    if (!rows.length) list = '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مطابقة' : 'جاري التحميل…') + '</div>';
-    else if (inMonth) { let last = ''; rows.slice().sort((a, b) => a.day < b.day ? 1 : a.day > b.day ? -1 : 0).forEach(i => { if (i.day !== last) { last = i.day; list += '<div class="cp-h"><span>' + eh(dayLabel(i.day)) + '</span></div>'; } list += tripCard(i); }); }
-    else list = rows.map(tripCard).join('');
-    return renderGuideBanner('trips') + scope + (inMonth ? monthNav() : dayNav()) + searchBar + tabs + stTabs + list;
-  }
-  function tripCard(it) {
-    const k = KIND[it.type], [sl, sc] = txState(it);
-    const links = [];
-    if (it.phone) links.push(callBtns(it.phone));
-    if (it.address) links.push('<a class="cp-a" target="_blank" rel="noopener" href="' + eh(mapsUrl(it.address)) + '"><i class="fa-solid fa-location-dot"></i> ' + eh(it.address) + '</a>');
-    const emp = it.employee ? '<div class="cp-emp"><span>الموظف المسؤول: <b>' + eh(it.employee) + '</b></span>' +
-      (it.employee_phone ? '<a class="cp-a tel" href="' + eh(telHref(it.employee_phone)) + '"><i class="fa-solid fa-phone"></i> اتصال</a>' : '') +
-      (it.employee_id ? '<button type="button" class="cp-a" data-act="chat-emp" data-uid="' + eh(it.employee_id) + '" data-tx="' + eh(it.transaction_id) + '"><i class="fa-solid fa-comment"></i> رسالة</button>' : '') + '</div>' : '';
-    return '<div class="cp-card"><div class="cp-row"><div><div class="cp-name">' + eh(it.client_name || 'بدون اسم') + '</div><div class="cp-sub">رقم المعاملة: <b>' + eh(it.transaction_id) + '</b></div></div>' +
-      '<div style="text-align:end"><b style="font-size:16px">' + money(it.amount) + '</b><div style="margin-top:3px"><span class="cp-tag ' + (it.confirmed ? 'ok' : 'wt') + '">' + (it.confirmed ? '✓ مؤكد ' + eh(timeOf(it.confirmed_at)) : 'بانتظار تأكيدك') + '</span></div></div></div>' +
-      '<div class="cp-chips"><span class="cp-tag ' + k.cls + '"><i class="fa-solid ' + k.icon + '"></i> ' + eh(kindLabel(it)) + '</span><span class="cp-tag ' + sc + '">' + sl + '</span>' +
-      (it.type !== 'fee' ? String(it.services || '').split('، ').filter(Boolean).slice(0, 4).map(x => '<span class="cp-chip">' + eh(x) + '</span>').join('') : '') + '</div>' +
-      (links.length ? '<div class="cp-info">' + links.join('') + '</div>' : '') + emp +
-      '<div class="cp-info">' + (it.phone ? '<button type="button" class="cp-a wa" data-act="wtpl" data-tx="' + eh(it.transaction_id) + '" data-id="' + eh(it.id) + '">رسالة واتساب جاهزة للعميل</button>' : '') + '<button type="button" class="cp-a" data-act="note" data-tx="' + eh(it.transaction_id) + '"><i class="fa-solid fa-note-sticky"></i> ملاحظة للموظف / بلاغ سريع' + (Number(it.my_notes) ? ' (' + num(it.my_notes) + ')' : '') + '</button></div></div>';
+    const groups = groupItemsByClient(rows);
+    return renderGuideBanner('trips') + dayNav() + searchBar + tabs + stTabs + (groups.length ? groups.map(tripGroupCard).join('') : '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مطابقة في اليوم ده' : 'جاري التحميل…') + '</div>');
   }
 
-  /* ---------- 3) لوحة ترتيب المناديب (Leaderboard: الاستلامات والتسليم) ---------- */
-  function renderLeaderboardInner(rows, isMgrView) {
+  function tripGroupCard(g) {
+    if (g.items.length === 1) return singleTripCard(g.items[0]);
+    const k = KIND[g.type];
+    const totalAmt = g.items.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+    const allConfirmed = g.items.every(x => x.confirmed);
+    const anyNotClosed = g.items.some(isNotClosedByStaff);
+    const firstTx = g.items[0].transaction_id;
+
+    const links = [];
+    if (g.phone) links.push(callBtns(g.phone));
+    if (g.address) links.push('<a class="cp-a" target="_blank" rel="noopener" href="' + eh(mapsUrl(g.address)) + '"><i class="fa-solid fa-location-dot"></i><span>' + eh(g.address) + '</span></a>');
+
+    const emp = g.employee ? '<div class="cp-emp"><span>الموظف المسؤول: <b>' + eh(g.employee) + '</b></span>' +
+      (g.employee_phone ? '<a class="cp-a tel" href="' + eh(telHref(g.employee_phone)) + '"><i class="fa-solid fa-phone"></i><span>اتصال بالموظف</span></a>' : '') +
+      (g.employee_id ? '<button type="button" class="cp-a" data-act="chat-emp" data-uid="' + eh(g.employee_id) + '" data-tx="' + eh(firstTx) + '"><i class="fa-solid fa-comment"></i><span>رسالة للموظف</span></button>' : '') + '</div>' : '';
+
+    const txRowsHtml = g.items.map(it => {
+      const [sl, sc] = txState(it);
+      const notClosed = isNotClosedByStaff(it);
+      const nBadge = noteBadgeHtml(it);
+      return '<div class="cp-txitem">' +
+        '<div style="min-width:0;flex:1">' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+            '<b dir="ltr" style="font-size:12.5px">' + eh(it.transaction_id) + '</b>' +
+            '<span class="cp-tag ' + sc + '">' + sl + '</span>' +
+            (notClosed ? '<span class="cp-tag wt">⏳ الموظف لسه ما قفلش المعاملة</span>' : '') +
+            nBadge +
+          '</div>' +
+          (it.services ? '<div style="font-size:11px;color:var(--mu);margin-top:3px">' + eh(it.services) + '</div>' : '') +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">' +
+          '<b>' + money(it.amount) + '</b>' +
+          '<button type="button" class="cp-a cp-sm" data-act="detail" data-tx="' + eh(it.transaction_id) + '">التفاصيل</button>' +
+          (!it.confirmed ? '<button type="button" class="cp-a cp-sm pri" data-act="ask-one" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(it.transaction_id) + '" data-amt="' + eh(it.amount) + '">أكّد ده بس</button>' : '<span class="cp-tag ok">✓ مؤكد</span>') +
+          '<button type="button" class="cp-a cp-sm" data-act="note" data-tx="' + eh(it.transaction_id) + '">ملاحظة</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    return '<div class="cp-card">' +
+      '<div class="cp-row">' +
+        '<div data-act="detail" data-tx="' + eh(firstTx) + '">' +
+          '<div class="cp-name">' + eh(g.client_name) + ' <span class="cp-tag k-pk">' + num(g.items.length) + ' ريكوستات</span></div>' +
+          '<div class="cp-sub">اضغط على العميل أو أي ريكوست لعرض التفاصيل الكاملة</div>' +
+        '</div>' +
+        '<div style="text-align:end">' +
+          '<b style="font-size:16px">' + money(totalAmt) + '</b>' +
+          '<div style="margin-top:3px"><span class="cp-tag ' + (allConfirmed ? 'ok' : 'wt') + '">' + (allConfirmed ? '✓ كله مؤكد' : 'فيه ريكوستات بانتظارك') + '</span></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cp-chips">' +
+        '<span class="cp-tag ' + k.cls + '"><i class="fa-solid ' + k.icon + '"></i><span>' + eh(k.label) + '</span></span>' +
+        (anyNotClosed ? '<span class="cp-tag wt">⏳ الموظف لسه ما قفلش المعاملة</span>' : '') +
+      '</div>' +
+      (links.length ? '<div class="cp-info">' + links.join('') + '</div>' : '') +
+      '<div class="cp-txlist">' + txRowsHtml + '</div>' +
+      emp +
+    '</div>';
+  }
+
+  function singleTripCard(it) {
+    const k = KIND[it.type], [sl, sc] = txState(it);
+    const notClosed = isNotClosedByStaff(it);
+    const nBadge = noteBadgeHtml(it);
+    const links = [];
+    if (it.phone) links.push(callBtns(it.phone));
+    if (it.address) links.push('<a class="cp-a" target="_blank" rel="noopener" href="' + eh(mapsUrl(it.address)) + '"><i class="fa-solid fa-location-dot"></i><span>' + eh(it.address) + '</span></a>');
+    const emp = it.employee ? '<div class="cp-emp"><span>الموظف المسؤول: <b>' + eh(it.employee) + '</b></span>' +
+      (it.employee_phone ? '<a class="cp-a tel" href="' + eh(telHref(it.employee_phone)) + '"><i class="fa-solid fa-phone"></i><span>اتصال بالموظف</span></a>' : '') +
+      (it.employee_id ? '<button type="button" class="cp-a" data-act="chat-emp" data-uid="' + eh(it.employee_id) + '" data-tx="' + eh(it.transaction_id) + '"><i class="fa-solid fa-comment"></i><span>رسالة للموظف</span></button>' : '') + '</div>' : '';
+
+    return '<div class="cp-card">' +
+      '<div class="cp-row">' +
+        '<div data-act="detail" data-tx="' + eh(it.transaction_id) + '">' +
+          '<div class="cp-name">' + eh(it.client_name || 'بدون اسم') + '</div>' +
+          '<div class="cp-sub">رقم المعاملة: <b>' + eh(it.transaction_id) + '</b> (اضغط للتفاصيل)</div>' +
+        '</div>' +
+        '<div style="text-align:end">' +
+          '<b style="font-size:16px">' + money(it.amount) + '</b>' +
+          '<div style="margin-top:3px"><span class="cp-tag ' + (it.confirmed ? 'ok' : 'wt') + '">' + (it.confirmed ? '✓ مؤكد ' + eh(timeOf(it.confirmed_at)) : 'بانتظار تأكيدك') + '</span></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cp-chips">' +
+        '<span class="cp-tag ' + k.cls + '"><i class="fa-solid ' + k.icon + '"></i><span>' + eh(kindLabel(it)) + '</span></span>' +
+        '<span class="cp-tag ' + sc + '">' + sl + '</span>' +
+        (notClosed ? '<span class="cp-tag wt">⏳ الموظف لسه ما قفلش المعاملة</span>' : '') +
+        nBadge +
+        (it.type !== 'fee' ? String(it.services || '').split('، ').filter(Boolean).slice(0, 4).map(x => '<span class="cp-chip">' + eh(x) + '</span>').join('') : '') +
+      '</div>' +
+      (links.length ? '<div class="cp-info">' + links.join('') + '</div>' : '') + emp +
+      '<div class="cp-info">' +
+        '<button type="button" class="cp-a" data-act="detail" data-tx="' + eh(it.transaction_id) + '"><i class="fa-solid fa-eye"></i><span>تفاصيل العميل</span></button>' +
+        (!it.confirmed ? '<button type="button" class="cp-a pri" data-act="ask-one" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(it.transaction_id) + '" data-amt="' + eh(it.amount) + '"><i class="fa-solid fa-check"></i><span>أكّد ده بس</span></button>' : '') +
+        '<button type="button" class="cp-a" data-act="note" data-tx="' + eh(it.transaction_id) + '"><i class="fa-solid fa-note-sticky"></i><span>ملاحظة للموظف' + (Number(it.my_notes) ? ' (' + num(it.my_notes) + ')' : '') + '</span></button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /* ---------- 3) لوحة الترتيب ---------- */
+  function renderLeaderboardInner(rows) {
     if (!rows || !rows.length) {
       return '<div class="cp-empty">' + (st.lbLoaded ? 'لا توجد بيانات ترتيب في هذه الفترة' : 'جاري تحميل لوحة الترتيب…') + '</div>';
     }
@@ -491,26 +686,24 @@
     let motivHtml = '';
     if (me) {
       if (Number(me.rank) === 1 && Number(me.total_trips) > 0) {
-        motivHtml = '<div class="cp-motiv"><span>🥇 ما شاء الله يا <b>' + eh(me.name) + '</b>! أنت في <b>المركز الأول</b> بإجمالي <b>' + num(me.total_trips) + ' مشوار</b>. كمّل على القمة!</span></div>';
+        motivHtml = '<div class="cp-motiv"><span>🥇 ما شاء الله يا <b>' + eh(me.name) + '</b>! أنت في <b>المركز الأول</b> بإجمالي <b>' + num(me.total_trips) + ' مشوار</b>.</span></div>';
       } else {
         const above = rows.find(r => Number(r.rank) < Number(me.rank));
         const diff = above ? Math.max(1, Number(above.total_trips) - Number(me.total_trips) + 1) : 1;
-        motivHtml = '<div class="cp-motiv"><span>💪 مركزك الحالي <b>#' + num(me.rank) + '</b> (' + num(me.total_trips) + ' مشوار) — شد حيلك، فاضلك <b>' + num(diff) + ' مشوار</b> وتتقدم للمركز اللي قبلك!</span></div>';
+        motivHtml = '<div class="cp-motiv"><span>💪 مركزك الحالي <b>#' + num(me.rank) + '</b> (' + num(me.total_trips) + ' مشوار) — فاضلك <b>' + num(diff) + ' مشوار</b> وتتقدم للمركز اللي قبلك!</span></div>';
       }
     }
 
-    /* منصة التتويج لأول 3 مراكز */
     const top1 = rows[0], top2 = rows[1], top3 = rows[2];
     const podCard = (r, cls, medal, lbl) => {
       if (!r) return '<div class="cp-pod" style="opacity:.4"><span class="cp-pod-medal">' + medal + '</span><div class="cp-pod-nm">—</div></div>';
       return '<div class="cp-pod ' + cls + (r.is_me ? ' me' : '') + '">' +
         '<span class="cp-pod-medal">' + medal + '</span>' +
         '<div class="cp-pod-nm">' + eh(r.name) + (r.is_me ? ' ⭐' : '') + '</div>' +
-        '<div class="cp-pod-tot">' + num(r.total_trips) + '<small>إجمالي المشاوير</small></div>' +
+        '<div class="cp-pod-tot">' + num(r.total_trips) + ' مشوار<small>إجمالي المشاوير</small></div>' +
         '<div class="cp-pod-sub">' +
-          '<span title="استلام">📥 ' + num(r.pickups) + '</span>' +
-          '<span title="تسليم">📤 ' + num(r.deliveries) + '</span>' +
-          (Number(r.fee_trips) ? '<span title="رسوم توصيل">🛵 ' + num(r.fee_trips) + '</span>' : '') +
+          '<span>استلام ' + num(r.pickups) + '</span>' +
+          '<span>تسليم ' + num(r.deliveries) + '</span>' +
         '</div>' +
         '<div style="font-size:10px;color:var(--mu);margin-top:4px">' + lbl + '</div>' +
       '</div>';
@@ -519,29 +712,26 @@
       ? '<div class="cp-podium">' + podCard(top2, 'r2', '🥈', 'المركز الثاني') + podCard(top1, 'r1', '🥇', 'المركز الأول') + podCard(top3, 'r3', '🥉', 'المركز الثالث') + '</div>'
       : '';
 
-    /* القائمة التفصيلية لكل المناديب */
     const listHtml = rows.map(r => {
       const rk = Number(r.rank) || 1;
       const rkCls = rk === 1 ? 'r1' : rk === 2 ? 'r2' : rk === 3 ? 'r3' : '';
       const medal = rk === 1 ? '🥇' : rk === 2 ? '🥈' : rk === 3 ? '🥉' : '#' + num(rk);
-      const showMoney = (isMgrView || r.is_me) && r.confirmed_amount != null;
       return '<div class="cp-lb-row' + (r.is_me ? ' me' : '') + '">' +
         '<div class="cp-lb-rk ' + rkCls + '">' + medal + '</div>' +
         '<div class="cp-lb-info">' +
           '<b>' + eh(r.name) + (r.is_me ? ' <span class="cp-tag ok">أنت</span>' : '') + '</b>' +
           '<div class="cp-lb-stats">' +
-            '<span class="cp-tag k-pk"><i class="fa-solid fa-box-archive"></i> استلام: <b>' + num(r.pickups) + '</b></span>' +
-            '<span class="cp-tag k-dl"><i class="fa-solid fa-truck-fast"></i> تسليم: <b>' + num(r.deliveries) + '</b></span>' +
-            (Number(r.fee_trips) ? '<span class="cp-tag k-fe"><i class="fa-solid fa-motorcycle"></i> توصيل: <b>' + num(r.fee_trips) + '</b></span>' : '') +
-            '<span>✓ مؤكد: <b>' + num(r.confirmed_trips) + '/' + num(r.total_trips) + '</b></span>' +
+            '<span class="cp-tag k-pk">استلام: ' + num(r.pickups) + ' مشوار</span>' +
+            '<span class="cp-tag k-dl">تسليم: ' + num(r.deliveries) + ' مشوار</span>' +
+            (Number(r.fee_trips) ? '<span class="cp-tag k-fe">توصيل: ' + num(r.fee_trips) + ' مشوار</span>' : '') +
+            '<span>المؤكد: ' + num(r.confirmed_trips) + ' من ' + num(r.total_trips) + ' مشوار</span>' +
           '</div>' +
-          (showMoney ? '<div style="font-size:11px;color:#10b981;font-weight:800;margin-top:4px">العمولة المؤكدة: ' + money(r.confirmed_amount) + (Number(r.pending_amount) ? ' <span style="color:#f59e0b">(+ ' + money(r.pending_amount) + ' منتظر)</span>' : '') + '</div>' : '') +
         '</div>' +
         '<div class="cp-lb-tot"><b>' + num(r.total_trips) + '</b><small>مشوار</small></div>' +
       '</div>';
     }).join('');
 
-    return motivHtml + podium + '<div class="cp-h"><span>ترتيب الاستلامات والتسليم بالتفصيل</span><span>إجمالي المناديب: ' + num(rows.length) + '</span></div>' + listHtml;
+    return motivHtml + podium + '<div class="cp-h"><span>ترتيب الاستلامات والتسليم بالتفصيل</span><span>' + num(rows.length) + ' مندوب</span></div>' + listHtml;
   }
 
   function viewLeaderboard() {
@@ -550,84 +740,78 @@
       ['week', 'هذا الأسبوع'],
       ['month', 'هذا الشهر']
     ].map(p => '<button type="button" data-lbper="' + p[0] + '" class="' + (st.lbPeriod === p[0] ? 'on' : '') + '">' + p[1] + '</button>').join('') + '</div>';
-    return renderGuideBanner('rank') + seg + renderLeaderboardInner(st.leaderboard, false);
+    return renderGuideBanner('rank') + seg + renderLeaderboardInner(st.leaderboard);
   }
 
-  /* ---------- 4) المراجعة (الشهر ← الأيام ← تأكيد اليوم) ---------- */
-  function viewReview() { return st.rvOpen ? reviewDay() : reviewMonth(); }
-  function reviewMonth() {
-    const rng = rangeOf('month', st.month), rows = dayRows(rng);
-    const n = rows.reduce((a, d) => a + d.n, 0), pn = rows.reduce((a, d) => a + d.pn, 0);
-    const amt = rows.reduce((a, d) => a + d.amt, 0);
-    const sum = '<div class="cp-card"><div class="cp-row"><b>' + eh(monthLabel(st.month)) + '</b><span class="cp-tag k-pk">' + num(n) + ' مشوار · ' + money(amt) + '</span></div>' +
-      '<div class="cp-chips" style="margin-top:8px"><span class="cp-tag ok">✓ متأكد: ' + num(n - pn) + ' مشوار</span><span class="cp-tag ' + (pn ? 'wt' : 'ok') + '">' + (pn ? '⏳ مش متأكد: ' + num(pn) + ' مشوار' : 'مفيش حاجة مستنية تأكيدك') + '</span></div></div>';
-    const fl = '<div class="cp-seg">' + [['all', 'كل الأيام'], ['pending', 'مش متأكد'], ['confirmed', 'متأكد']].map(x => '<button type="button" data-rvf="' + x[0] + '" class="' + (st.rvf === x[0] ? 'on' : '') + '">' + x[1] + '</button>').join('') + '</div>';
-    const shown = rows.filter(d => st.rvf === 'all' || (st.rvf === 'pending' ? d.pn > 0 : d.pn === 0));
-    return renderGuideBanner('review') + monthNav() + sum + fl + (shown.length ? shown.map(dayRowHtml).join('') : '<div class="cp-empty">' + (st.loaded ? 'مفيش أيام مطابقة في الشهر ده' : 'جاري التحميل…') + '</div>');
-  }
-  function reviewDay() {
+  /* ---------- 4) المراجعة (تأكيد آخر اليوم: مجمع بالعميل + أكّد ده بس + أبلغت الموظف) ---------- */
+  function viewReview() {
+    const t = today();
+    const old = {}; st.items.forEach(i => { if (!i.confirmed && i.day < t) old[i.day] = (old[i.day] || 0) + 1; });
+    const oldDays = Object.keys(old).sort().reverse().slice(0, 6).filter(d => d !== st.day);
+    const oldBox = oldDays.length ? '<div class="cp-old">⚠ عندك أيام قبل كده لسه ما اتأكدتش (اضغط على اليوم لمراجعته):<br>' + oldDays.map(d => '<button type="button" class="cp-a" data-act="dset" data-day="' + d + '">' + eh(dayLabel(d)) + ' (' + num(old[d]) + ' مشوار)</button>').join('') + '</div>' : '';
     const all = itemsOf(st.day);
+
+    const renderRevItem = i => {
+      const notClosed = isNotClosedByStaff(i);
+      const nBadge = noteBadgeHtml(i);
+      return '<div class="cp-rev">' +
+        '<div style="min-width:0;flex:1">' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+            '<b class="cp-name" style="font-size:13.5px" data-act="detail" data-tx="' + eh(i.transaction_id) + '">' + eh(i.client_name || 'بدون اسم') + '</b>' +
+            '<span dir="ltr" style="font-weight:700;font-size:11.5px;color:var(--mu)">' + eh(i.transaction_id) + '</span>' +
+            (i.type === 'fee' ? '<span class="cp-chip">' + (i.fee_kind === 'round' ? 'ذهاب وعودة' : 'ذهاب فقط') + '</span>' : '') +
+          '</div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">' +
+            (notClosed ? '<span class="cp-tag wt">⏳ الموظف لسه ما قفلش المعاملة</span>' : '') +
+            nBadge +
+          '</div>' +
+        '</div>' +
+        '<div style="text-align:end;display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
+          '<b>' + money(i.amount) + '</b>' +
+          '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">' +
+            '<button type="button" class="cp-a cp-sm" data-act="detail" data-tx="' + eh(i.transaction_id) + '">التفاصيل</button>' +
+            (!i.confirmed
+              ? '<button type="button" class="cp-a cp-sm pri" data-act="ask-one" data-type="' + eh(i.type) + '" data-ref="' + eh(itemRef(i)) + '" data-tx="' + eh(i.transaction_id) + '" data-amt="' + eh(i.amount) + '">أكّد ده بس</button>'
+              : '<span class="cp-tag ok">✓ مؤكد</span>') +
+            '<button type="button" class="cp-a cp-sm" data-act="note" data-tx="' + eh(i.transaction_id) + '"><i class="fa-solid fa-flag"></i><span>ملاحظة</span></button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    };
+
     const sec = k => {
       const rows = all.filter(i => i.type === k); if (!rows.length) return '';
       const pend = rows.filter(i => !i.confirmed), tot = rows.reduce((a, i) => a + Number(i.amount || 0), 0), ptot = pend.reduce((a, i) => a + Number(i.amount || 0), 0);
       const last = rows.filter(i => i.confirmed_at).map(i => i.confirmed_at).sort().pop();
-      return '<div class="cp-card"><div class="cp-row"><b>' + KIND[k].sec + '</b><span class="cp-tag ' + KIND[k].cls + '">' + num(rows.length) + ' مشوار · ' + money(tot) + '</span></div><div style="margin-top:6px">' +
-        rows.map(i => '<div class="cp-rev"><div>' + eh(i.client_name || 'بدون اسم') + '<br><span><b dir="ltr">' + eh(i.transaction_id) + '</b>' + (i.type === 'fee' ? ' · ' + (i.fee_kind === 'round' ? 'ذهاب وعودة' : 'ذهاب فقط') : '') + '</span></div>' +
-          '<div style="text-align:end"><b>' + money(i.amount) + '</b><br><span>' + (i.confirmed ? '✓ مؤكد' : '○ مش متأكد') + ' <button type="button" class="cp-a cp-sm" data-act="note" data-tx="' + eh(i.transaction_id) + '"><i class="fa-solid fa-flag"></i> ملاحظة</button></span></div></div>').join('') + '</div>' +
-        (pend.length ? '<button type="button" class="cp-big" data-act="ask" data-kind="' + k + '" data-n="' + pend.length + '" data-amt="' + ptot + '">' + KIND[k].btn + ' · ' + money(ptot) + '</button>'
-          : '<div class="cp-done">✓ اتأكد بالكامل' + (last ? ' الساعة ' + eh(timeOf(last)) : '') + '</div>') + '</div>';
+      const groups = groupItemsByClient(rows);
+
+      const groupsHtml = groups.map(g => {
+        if (g.items.length === 1) return renderRevItem(g.items[0]);
+        const gTot = g.items.reduce((a, x) => a + Number(x.amount || 0), 0);
+        return '<div class="cp-rev-grp">' +
+          '<div class="cp-row" style="margin-bottom:4px">' +
+            '<div class="cp-name" style="font-size:14px" data-act="detail" data-tx="' + eh(g.items[0].transaction_id) + '">' +
+              eh(g.client_name) + ' <span class="cp-tag k-pk">' + num(g.items.length) + ' ريكوستات</span>' +
+            '</div>' +
+            '<b>إجمالي العميل: ' + money(gTot) + '</b>' +
+          '</div>' +
+          g.items.map(renderRevItem).join('') +
+        '</div>';
+      }).join('');
+
+      return '<div class="cp-card">' +
+        '<div class="cp-row"><b>' + KIND[k].sec + '</b><span class="cp-tag ' + KIND[k].cls + '">' + num(rows.length) + ' مشوار · ' + money(tot) + '</span></div>' +
+        '<div style="margin-top:6px">' + groupsHtml + '</div>' +
+        (pend.length
+          ? '<button type="button" class="cp-big" data-act="ask" data-kind="' + k + '" data-n="' + pend.length + '" data-amt="' + ptot + '">' + KIND[k].btn + ' للكل (' + num(pend.length) + ' مشوار · ' + money(ptot) + ')</button>'
+          : '<div class="cp-done">✓ اتأكد بالكامل' + (last ? ' الساعة ' + eh(timeOf(last)) : '') + '</div>') +
+      '</div>';
     };
     const body = ['pickup', 'delivery', 'fee'].map(sec).join('');
-    return '<div class="cp-h"><span>مراجعة يوم واحد</span><button type="button" class="cp-a cp-sm" data-act="rvback">رجوع لأيام الشهر</button></div>' + dayNav() + (body || '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مسجلة في اليوم ده' : 'جاري التحميل…') + '</div>');
+    return renderGuideBanner('review') + dayNav() + oldBox + (body || '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مسجلة في اليوم ده' : 'جاري التحميل…') + '</div>');
   }
 
-  /* ---------- ملفي الشخصي ---------- */
-  function syncDraft() { const t = $('cp-ptitle'), p = $('cp-pphone'); if (t) st.pT = t.value; if (p) st.pP = p.value; }
-  function viewProfile() {
-    const m = st.me || {}, ph = st.pPhoto === undefined ? m.photo : st.pPhoto;
-    const title = st.pT !== undefined ? st.pT : (m.title || ''), phone = st.pP !== undefined ? st.pP : (m.phone || '');
-    return '<div class="cp-h"><span>ملفي الشخصي</span><button type="button" class="cp-a cp-sm" data-act="pback">رجوع</button></div>' + renderGuideBanner('profile') +
-      '<div class="cp-card" style="text-align:center">' + avatar(ph, m.name, 96) +
-      '<div class="cp-info" style="justify-content:center;margin-top:10px"><label class="cp-a" for="cp-pfile">' + (ph ? 'غيّر الصورة' : 'اختار صورة') + '</label><input id="cp-pfile" type="file" accept="image/*" style="display:none">' +
-      (ph ? '<button type="button" class="cp-a" data-act="pdel">شيل الصورة</button>' : '') + '</div>' +
-      '<div class="cp-sub" style="margin-top:6px">' + (st.pPhoto !== undefined ? 'الصورة لسه ما اتحفظتش — اضغط «حفظ» تحت' : '') + '</div></div>' +
-      '<div class="cp-card"><label class="cp-lbl">الاسم (بتحدده الإدارة)</label><div class="cp-name">' + eh(m.name) + '</div>' +
-      '<label class="cp-lbl" for="cp-ptitle">المسمى الوظيفي</label><input id="cp-ptitle" class="cp-fld" maxlength="60" value="' + eh(title) + '" placeholder="مثال: مندوب تسليم">' +
-      '<label class="cp-lbl" for="cp-pphone">رقم التليفون</label><input id="cp-pphone" class="cp-fld" type="tel" inputmode="tel" dir="ltr" maxlength="20" value="' + eh(phone) + '" placeholder="01xxxxxxxxx">' +
-      '<button type="button" class="cp-big" data-act="psave" style="margin-top:14px">حفظ</button></div>';
-  }
-  function pickPhoto(file) {
-    if (!file || !/^image\//.test(file.type)) return toast('اختار صورة من فضلك', true);
-    const rd = new FileReader();
-    rd.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
-        const m = Math.min(img.width, img.height); c.getContext('2d').drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, S, S);
-        syncDraft(); st.pPhoto = c.toDataURL('image/jpeg', 0.8); renderTab(false);
-      };
-      img.onerror = () => toast('الصورة دي مش مقروءة، جرّب غيرها', true);
-      img.src = rd.result;
-    };
-    rd.readAsDataURL(file);
-  }
-  async function saveProfile(btn) {
-    syncDraft();
-    const m = st.me || {}, ar = '٠١٢٣٤٥٦٧٨٩';
-    const title = String(st.pT !== undefined ? st.pT : (m.title || '')).trim();
-    const phone = String(st.pP !== undefined ? st.pP : (m.phone || '')).replace(/[٠-٩]/g, d => ar.indexOf(d)).trim();
-    if (phone && !/^[0-9+ ]{7,20}$/.test(phone)) return toast('رقم التليفون غير صحيح', true);
-    btn.disabled = true; btn.textContent = 'جاري الحفظ…';
-    try {
-      const r = await sbClient.rpc('courier_profile_update', { p_title: title, p_phone: phone, p_photo: st.pPhoto === undefined ? null : st.pPhoto });
-      if (r.error) throw r.error;
-      st.me = r.data; st.pPhoto = undefined; st.pT = undefined; st.pP = undefined;
-      const w = $('cp-whobtn'); if (w) w.innerHTML = whoInner();
-      toast('تم حفظ ملفك ✓'); renderTab(false);
-    } catch (e) { toast(errMsg(e), true); btn.disabled = false; btn.textContent = 'حفظ'; }
-  }
-
-  /* ---------- 5) التواصل (رسايل خاصة + اتصال) ---------- */
+  /* ---------- 5) التواصل (مع علامات القراءة: ✓ اتبعتت / ✓✓ اتقرت) ---------- */
   const online = c => c.last_seen_at && (Date.now() - new Date(c.last_seen_at).getTime()) < 3 * 60 * 1000;
   function viewChat() {
     const b = $('cp-body'); if (!b) return;
@@ -643,47 +827,69 @@
     b.innerHTML = renderGuideBanner('chat') + (rows || '<div class="cp-empty">' + (st.loaded ? 'مفيش جهات اتصال' : 'جاري التحميل…') + '</div>');
   }
   function convView() {
-    const QR = ['وصلت', 'العميل مش بيرد', 'العنوان مش واضح', 'محتاج رسوم توصيل', 'خلصت التسليم', 'متأخر شوية'];
     const b = $('cp-body'), c = st.chat; if (!b) return;
-    b.innerHTML = '<div class="cp-chat"><div class="cp-chead"><button type="button" class="cp-btn cp-sm" data-act="chat-back">رجوع</button><b>' + eh(c.name) + '</b>' + (c.phone ? callBtns(c.phone, 'اتصال') : '') + '</div>' +
-      '<div class="cp-msgs" id="cp-msgs"></div>' + (c.tx ? '<div class="cp-sub" style="margin-top:6px">بخصوص معاملة <b>' + eh(c.tx) + '</b> <button type="button" class="cp-a cp-sm" data-act="chat-notx">شيل</button></div>' : '') +
-      '<div class="cp-qr">' + QR.map(x => '<button type="button" class="cp-a" data-act="qr" data-txt="' + eh(x) + '">' + eh(x) + '</button>').join('') + '<button type="button" class="cp-a" data-act="sendloc">ابعت موقعي</button></div>' +
-      '<div class="cp-comp"><textarea id="cp-msg" class="cp-field" rows="1" placeholder="اكتب رسالة…">' + eh(st.draft) + '</textarea><button type="button" class="cp-btn cp-go" data-act="chat-send">إرسال</button></div></div>';
+    b.innerHTML = '<div class="cp-chat"><div class="cp-chead"><button type="button" class="cp-btn cp-sm" data-act="chat-back">رجوع للقائمة</button><b>' + eh(c.name) + '</b>' + (c.phone ? callBtns(c.phone, '') : '') + '</div>' +
+      '<div class="cp-msgs" id="cp-msgs"></div>' + (c.tx ? '<div class="cp-sub" style="margin-top:6px">بخصوص معاملة <b>' + eh(c.tx) + '</b> <button type="button" class="cp-a cp-sm" data-act="chat-notx">إلغاء الإشارة</button></div>' : '') +
+      '<div class="cp-comp"><textarea id="cp-msg" class="cp-field" rows="1" placeholder="اكتب رسالتك هنا…">' + eh(st.draft) + '</textarea><button type="button" class="cp-btn cp-go" data-act="chat-send">إرسال</button></div></div>';
     paintMsgs(true);
     const t = $('cp-msg'); if (t) { t.addEventListener('input', () => { st.draft = t.value; t.style.height = 'auto'; t.style.height = Math.min(110, t.scrollHeight) + 'px'; }); }
   }
   function paintMsgs(force) {
     const m = $('cp-msgs'); if (!m) return;
     const near = force || (m.scrollHeight - m.scrollTop - m.clientHeight < 80);
-    m.innerHTML = st.msgs.length ? st.msgs.map(x => '<div class="cp-m ' + (x.mine ? 'me' : 'th') + '">' + (x.tx_id ? '<span class="tx">' + eh(x.tx_id) + '</span><br>' : '') + eh(x.body) + '<small>' + eh(timeOf(x.created_at)) + '</small></div>').join('') : '<div class="cp-empty">ابدأ المحادثة…</div>';
-    if (near) m.scrollTop = m.scrollHeight;
+    const html = st.msgs.length ? st.msgs.map(x => {
+      const readTag = x.mine
+        ? '<span class="rd-st">' + (x.read ? '✓✓ اتقرت' : '✓ اتبعتت') + '</span>'
+        : '';
+      return '<div class="cp-m ' + (x.mine ? 'me' : 'th') + '">' +
+        (x.tx_id ? '<span class="tx">معاملة ' + eh(x.tx_id) + '</span><br>' : '') +
+        eh(x.body) +
+        '<small><span>' + eh(timeOf(x.created_at)) + '</span>' + readTag + '</small>' +
+      '</div>';
+    }).join('') : '<div class="cp-empty">ابدأ المحادثة…</div>';
+    if (m.dataset.h !== html) {
+      m.dataset.h = html;
+      m.innerHTML = html;
+      if (near) m.scrollTop = m.scrollHeight;
+    }
   }
   async function openChat(uid, tx) {
     const c = st.contacts.find(x => x.id === uid); if (!c) return;
     try {
       let ch = c.channel_id;
       if (!ch) { const r = await sbClient.rpc('courier_dm', { p_other: uid }); if (r.error) throw r.error; ch = r.data; c.channel_id = ch; }
-      st.chat = { uid: uid, name: c.full_name || 'موظف', ch: ch, phone: c.phone, tx: tx || null }; st.msgs = []; st.tab = 'chat'; renderNav(); convView();
+      st.chat = { uid: uid, name: c.full_name || 'موظف', ch: ch, phone: c.phone, tx: tx || null }; st.msgs = []; st.msig = ''; st.tab = 'chat'; renderNav(); convView();
       await pollMsgs(true);
     } catch (e) { toast(errMsg(e), true); }
   }
   async function pollMsgs(first) {
     const c = st.chat; if (!c) return;
     try {
-      const last = st.msgs.length ? st.msgs[st.msgs.length - 1].created_at : null;
-      const r = await sbClient.rpc('courier_chat_messages', { p_channel: c.ch, p_after: first ? null : last });
+      /* بنجيب آخر رسايل القناة عشان علامة القراءة (read) تتحدث فوراً لما الطرف التاني يقرأ الرسالة */
+      const r = await sbClient.rpc('courier_chat_messages', { p_channel: c.ch, p_after: null });
       if (r.error) throw r.error; setOffline(false);
       if (!st.chat || st.chat.ch !== c.ch) return;
-      const have = new Set(st.msgs.map(x => x.id)), add = (r.data || []).filter(x => !have.has(x.id));
-      if (first) { st.msgs = r.data || []; paintMsgs(true); }
-      else if (add.length) { if (add.some(x => !x.mine)) buzz(); st.msgs = st.msgs.filter(x => !String(x.id).startsWith('tmp')).concat(add); paintMsgs(false); }
-      if ((first || add.some(x => !x.mine))) { sbClient.rpc('courier_chat_read', { p_channel: c.ch }); const k = st.contacts.find(x => x.channel_id === c.ch); if (k) k.unread = 0; renderNav(); }
+      const list = Array.isArray(r.data) ? r.data : [];
+      const sig = JSON.stringify(list);
+      if (first || sig !== st.msig) {
+        const hadIncoming = list.some(x => !x.mine && !st.msgs.some(o => o.id === x.id));
+        st.msig = sig;
+        st.msgs = list;
+        paintMsgs(first);
+        if (first || hadIncoming) {
+          sbClient.rpc('courier_chat_read', { p_channel: c.ch });
+          const k = st.contacts.find(x => x.channel_id === c.ch);
+          if (k) k.unread = 0;
+          renderNav();
+        }
+      }
     } catch (e) { setOffline(true); }
   }
   async function sendMsg() {
     const c = st.chat, t = $('cp-msg'); if (!c || !t) return;
     const body = t.value.trim(); if (!body || st.busy) return;
-    st.busy = true; const tmp = { id: 'tmp' + Date.now(), body: body, created_at: new Date().toISOString(), mine: true, tx_id: c.tx };
+    st.busy = true;
+    const tmp = { id: 'tmp' + Date.now(), body: body, created_at: new Date().toISOString(), mine: true, read: false, tx_id: c.tx };
     st.msgs.push(tmp); paintMsgs(true); t.value = ''; st.draft = ''; t.style.height = 'auto';
     try {
       const r = await sbClient.rpc('courier_chat_send', { p_channel: c.ch, p_body: body, p_tx: c.tx }); if (r.error) throw r.error;
@@ -692,31 +898,43 @@
     st.busy = false;
   }
 
-  /* ---------- تحميل البيانات (من غير رمشة: بنعيد الرسم بس لو البيانات اتغيّرت) ---------- */
+  /* ---------- تحميل البيانات (من غير رمشة) ---------- */
   function setOffline(v) { st.offline = v; const e = $('cp-off'); if (e) e.classList.toggle('on', !!v); }
   async function loadItems(silent) {
     try {
-      const t = today(), r = await sbClient.rpc('courier_items', { p_from: addDays(t, -120), p_to: t });
+      const t = today(), r = await sbClient.rpc('courier_items', { p_from: addDays(t, -62), p_to: t });
       if (r.error) throw r.error; setOffline(false);
       const data = Array.isArray(r.data) ? r.data : [], sig = JSON.stringify(data);
-      st.loaded = true; st.lastOk = Date.now(); const u = $('cp-upd'); if (u) u.textContent = timeOf(st.lastOk);
-      if (sig !== st.sig) { saveCache(data); st.sig = sig; st.items = data; renderNav(); if (st.tab !== 'chat' && st.tab !== 'profile') renderTab(false); }
+      st.loaded = true;
+      if (sig !== st.sig) { st.sig = sig; st.items = data; renderNav(); if (st.tab !== 'chat') renderTab(false); }
     } catch (e) { setOffline(true); if (!silent) toast(errMsg(e), true); }
+  }
+  async function loadMyNotes() {
+    try {
+      const r = await sbClient.rpc('courier_my_notes');
+      if (r.error || !Array.isArray(r.data)) return;
+      const sig = JSON.stringify(r.data);
+      if (sig !== st.nsig) {
+        st.nsig = sig;
+        const m = {};
+        r.data.forEach(x => { if (x && x.transaction_id && !m[x.transaction_id]) m[x.transaction_id] = x; });
+        st.notesMap = m;
+        if (st.tab === 'trips' || st.tab === 'review') renderTab(false);
+      }
+    } catch (e) { /* لو الدالة لسه متشغلتش منوقفش الشاشة */ }
   }
   async function loadLeaderboard(silent) {
     try {
       const rng = rangeOf(st.lbPeriod);
       const r = await sbClient.rpc('courier_leaderboard', { p_from: rng[0], p_to: rng[1] });
       if (r.error) {
-        /* Fallback لو الدالة لسه متشغلتش في Supabase: نحسب بيانات المندوب نفسه */
         if (!st.leaderboard.length && st.me) {
           const s = stats(rng);
           st.leaderboard = [{
             id: st.me.id, name: st.me.name, is_me: true, rank: 1,
             pickups: s.pickup.n, deliveries: s.delivery.n, fee_trips: s.fee.n,
             total_trips: s.pickup.n + s.delivery.n + s.fee.n,
-            confirmed_trips: s.pickup.cn + s.delivery.cn + s.fee.cn,
-            confirmed_amount: s.total, pending_amount: s.pend
+            confirmed_trips: s.pickup.cn + s.delivery.cn + s.fee.cn
           }];
           st.lbLoaded = true;
           if (st.tab === 'rank' || st.tab === 'home') renderTab(false);
@@ -738,7 +956,7 @@
       if (sig !== st.csig) {
         const u0 = unreadTotal(); st.csig = sig; st.contacts = data; const u1 = unreadTotal();
         renderNav(); if (st.tab === 'chat' && !st.chat) viewChat();
-        if (u1 > u0 && st.loaded && !(st.chat)) { toast('وصلتك رسالة جديدة 💬'); buzz(); }
+        if (u1 > u0 && st.loaded && !(st.chat)) toast('وصلتك رسالة جديدة 💬');
       }
     } catch (e) { if (!silent) toast(errMsg(e), true); }
   }
@@ -746,110 +964,306 @@
     st.tick++; tickClock();
     if (document.hidden || !st.me) return;
     if (st.chat && st.tick % 4 === 0) pollMsgs(false);
-    if (st.tick % 20 === 0) loadItems(true);
+    if (st.tick % 20 === 0) { loadItems(true); loadMyNotes(); }
     if (st.tick % 30 === 0) loadLeaderboard(true);
     if (st.tick % 15 === 0) loadContacts(true);
     if (st.tick % 60 === 0) sbClient.rpc('touch_last_seen');
   }
 
-  /* ---------- رسائل واتساب جاهزة للعميل ---------- */
-  function openWaTemplates(id, tx) {
-    const it = st.items.find(o => String(o.id) === String(id) && String(o.transaction_id) === String(tx)) || byTx(tx); if (!it || !it.phone) return;
-    const me = (st.me && st.me.name) || '', cl = it.client_name || 'حضرتك', head = 'السلام عليكم ' + cl + '، أنا ' + me + ' مندوب تساهيل';
-    const T = [
-      ['وصلت', head + '، وصلت لحضرتك بخصوص المعاملة رقم ' + tx + '.'],
-      ['في الطريق', head + '، أنا في الطريق لحضرتك بخصوص المعاملة رقم ' + tx + ' وهوصل خلال دقائق.'],
-      ['العنوان / اللوكيشن', head + '، ممكن توضحلي العنوان أو تبعتلي اللوكيشن عشان أوصلك بسرعة؟ (المعاملة ' + tx + ')'],
-      ['اتصلت ومردتش', head + '، حاولت أتصل بحضرتك بخصوص المعاملة رقم ' + tx + ' ومردتش، ياريت تكلمني في أقرب وقت.'],
-      ['اعتذار عن التأخير', head + '، بعتذر عن التأخير بخصوص المعاملة رقم ' + tx + '، وهكون عندك في أقرب وقت.']
-    ];
-    modal('<b style="font-size:15px">اختار الرسالة (هتفتح واتساب والنص جاهز، وانت اللي تبعت)</b><div style="margin-top:10px">' +
-      T.map(t => '<a class="cp-a wa" style="display:block;margin-bottom:8px;text-align:start;white-space:normal" target="_blank" rel="noopener" href="https://wa.me/' + eh(waNum(it.phone)) + '?text=' + encodeURIComponent(t[1]) + '"><b>' + eh(t[0]) + '</b><br><span style="font-weight:500">' + eh(t[1]) + '</span></a>').join('') +
-      '</div><button type="button" class="cp-btn" style="width:100%" data-act="mclose-btn">إغلاق</button>');
-  }
-
-  /* ---------- ملاحظاتي (وحالة كل واحدة) ---------- */
-  async function openMyNotes() {
-    modal('<div class="cp-empty">جاري التحميل…</div>');
-    try {
-      const r = await sbClient.rpc('courier_my_notes'); if (r.error) throw r.error;
-      const L = Array.isArray(r.data) ? r.data : [];
-      const lab = x => x === 'resolved' ? ['ok', '✓ اتحلّت'] : x === 'seen' ? ['k-pk', '👁 الموظف شافها'] : ['wt', '⏳ لسه ماتشافتش'];
-      modal('<b style="font-size:15px">ملاحظاتي اللي بعتّها (آخر ٩٠ يوم)</b><div style="margin-top:10px;max-height:60vh;overflow:auto">' + (L.length ? L.map(n => { const l = lab(n.status);
-        return '<div class="cp-card" style="padding:10px"><div class="cp-row"><div><div class="cp-name" style="font-size:13px">' + eh(n.client_name || 'بدون اسم') + '</div><div class="cp-sub">معاملة <b dir="ltr">' + eh(n.transaction_id) + '</b> · ' + eh(dayLabel(String(n.created_at).slice(0, 10))) + '</div></div><span class="cp-tag ' + l[0] + '">' + l[1] + '</span></div><div class="cp-sub" style="margin-top:6px;white-space:normal">' + eh(n.body) + '</div></div>'; }).join('') : '<div class="cp-empty">مفيش ملاحظات لسه</div>') +
-        '</div><button type="button" class="cp-btn" style="width:100%;margin-top:8px" data-act="mclose-btn">إغلاق</button>');
-    } catch (e) { modal('<div class="cp-empty">' + eh(errMsg(e)) + '</div><button type="button" class="cp-btn" style="width:100%" data-act="mclose-btn">إغلاق</button>'); }
-  }
-
-  /* ---------- كشف حساب الشهر (عرض + نسخة واتساب + طباعة) ---------- */
-  function stmtData() {
-    const rng = rangeOf('month', st.month), rows = st.items.filter(i => i.day >= rng[0] && i.day <= rng[1]).sort((a, b) => a.day < b.day ? -1 : a.day > b.day ? 1 : 0);
-    const c = rows.filter(i => i.confirmed), pn = rows.filter(i => !i.confirmed);
-    const sum = a => a.reduce((x, i) => x + Number(i.amount || 0), 0);
-    return { rows: rows, c: c, p: pn, ca: sum(c), pa: sum(pn) };
-  }
-  function openStatement() {
-    const d = stmtData(), nm = (st.me && st.me.name) || '';
-    modal('<b style="font-size:15px">كشف حساب ' + eh(monthLabel(st.month)) + ' — ' + eh(nm) + '</b>' +
-      '<div class="cp-chips" style="margin:8px 0"><span class="cp-tag ok">✓ مؤكد: ' + num(d.c.length) + ' مشوار · ' + money(d.ca) + '</span><span class="cp-tag ' + (d.p.length ? 'wt' : 'ok') + '">' + (d.p.length ? '⏳ مش متأكد: ' + num(d.p.length) + ' مشوار · ' + money(d.pa) : 'مفيش حاجة مش متأكدة') + '</span></div>' +
-      '<div style="max-height:46vh;overflow:auto">' + (d.rows.length ? d.rows.map(i => '<div class="cp-rev"><div>' + eh(i.client_name || 'بدون اسم') + '<br><span>' + eh(dayLabel(i.day)) + ' · ' + eh(kindLabel(i)) + ' · <b dir="ltr">' + eh(i.transaction_id) + '</b></span></div><div style="text-align:end"><b>' + money(i.amount) + '</b><br><span>' + (i.confirmed ? '✓ مؤكد' : '○ مش متأكد') + '</span></div></div>').join('') : '<div class="cp-empty">مفيش مشاوير في الشهر ده</div>') + '</div>' +
-      '<div class="cp-info" style="margin-top:10px"><button type="button" class="cp-a wa" data-act="stmt-wa">ابعته واتساب</button><button type="button" class="cp-a" data-act="stmt-print">طباعة / حفظ PDF</button><button type="button" class="cp-btn" data-act="mclose-btn">إغلاق</button></div>');
-  }
-  function stmtText() {
-    const d = stmtData(), by = {}; d.rows.forEach(i => { const x = by[i.day] || (by[i.day] = { n: 0, a: 0, p: 0 }); x.n++; x.a += Number(i.amount || 0); if (!i.confirmed) x.p++; });
-    const lines = Object.keys(by).sort().map(k => dayLabel(k) + ': ' + num(by[k].n) + ' مشوار · ' + money(by[k].a) + (by[k].p ? ' (' + num(by[k].p) + ' مش متأكد)' : ' ✓'));
-    return 'كشف حساب ' + monthLabel(st.month) + ' — ' + ((st.me && st.me.name) || '') + '\n' + lines.join('\n') + '\n\nمؤكد: ' + num(d.c.length) + ' مشوار · ' + money(d.ca) + '\nمش متأكد: ' + num(d.p.length) + ' مشوار · ' + money(d.pa);
-  }
-  function printStatement() {
-    const d = stmtData(), w = window.open('', '_blank'); if (!w) return toast('المتصفح منع نافذة الطباعة، اسمح بالنوافذ وجرّب تاني', true);
-    const tr = d.rows.map(i => '<tr><td>' + eh(i.day) + '</td><td>' + eh(i.transaction_id) + '</td><td>' + eh(i.client_name || '') + '</td><td>' + eh(kindLabel(i)) + '</td><td>' + money(i.amount) + '</td><td>' + (i.confirmed ? 'مؤكد' : 'مش متأكد') + '</td></tr>').join('');
-    w.document.write('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>كشف حساب</title><style>body{font-family:sans-serif;padding:16px}table{width:100%;border-collapse:collapse;font-size:13px}td,th{border:1px solid #999;padding:5px;text-align:right}h2{margin:0 0 4px}</style></head><body><h2>كشف حساب ' + eh(monthLabel(st.month)) + '</h2><div>المندوب: ' + eh((st.me && st.me.name) || '') + '</div><br><table><tr><th>التاريخ</th><th>المعاملة</th><th>العميل</th><th>النوع</th><th>المبلغ</th><th>الحالة</th></tr>' + tr + '</table><p><b>مؤكد:</b> ' + num(d.c.length) + ' مشوار · ' + money(d.ca) + '<br><b>مش متأكد:</b> ' + num(d.p.length) + ' مشوار · ' + money(d.pa) + '</p></body></html>');
-    w.document.close(); setTimeout(() => { try { w.focus(); w.print(); } catch (e) { /* */ } }, 300);
-  }
-
-  /* ---------- مودالات الملاحظات السريعة والتأكيد ---------- */
+  /* ---------- مودالات: تفاصيل العميل (A.2) + التأكيد الفردي (B.1) + الملاحظة (B.3/B.4) + ملفي الشخصي ---------- */
   function modal(html) { const r = $('cp-modal-root'); if (!r) return; r.innerHTML = '<div class="cp-modal" data-act="mclose"><div class="cp-box">' + html + '</div></div>'; const f = r.querySelector('textarea,input'); if (f) setTimeout(() => f.focus(), 60); }
   const closeModal = () => { const r = $('cp-modal-root'); if (r) r.innerHTML = ''; };
   const byTx = tx => st.items.find(o => String(o.transaction_id) === String(tx));
+
+  const STATUS_AR = {
+    'Delivered': ['تم التسليم', 'gy'],
+    'Complete': ['مكتملة (جاهزة للتسليم)', 'ok'],
+    'Under Review': ['تحت المراجعة', 'wt'],
+    'In Progress': ['جاري التنفيذ', 'k-pk'],
+    'Pending Exec': ['بانتظار المنفذ', 'wt'],
+    'Pending Client': ['بانتظار العميل', 'wt']
+  };
+
+  /* مودال تفاصيل العميل والمعاملة (البند A.2) — بدون أي أسعار عميل أو مدفوعات */
+  async function openClientDetail(tx) {
+    const fallbackItem = byTx(tx);
+    const sameClientItems = fallbackItem
+      ? st.items.filter(x => normAr(x.client_name) === normAr(fallbackItem.client_name) && x.day === fallbackItem.day)
+      : [];
+
+    modal('<h3>تفاصيل العميل والمعاملة</h3><p>جاري تحميل بيانات المعاملة <b dir="ltr">' + eh(tx) + '</b>…</p><div class="cp-btns"><button type="button" class="cp-btn" data-act="mclose-btn">إغلاق</button></div>');
+
+    let d = null;
+    try {
+      const r = await sbClient.rpc('courier_tx_detail', { p_tx: String(tx) });
+      if (!r.error && r.data) d = r.data;
+    } catch (e) { /* نستخدم البيانات المتاحة في الذاكرة كـ fallback لو الدالة لسه متشغلتش */ }
+
+    const clientName = (d && d.client_name) || (fallbackItem && fallbackItem.client_name) || 'بدون اسم';
+    const phone = (d && d.phone) || (fallbackItem && fallbackItem.phone) || '';
+    const address = (d && d.address) || (fallbackItem && fallbackItem.address) || '';
+    const employee = (d && d.employee) || (fallbackItem && fallbackItem.employee) || '';
+    const empId = (d && d.employee_id) || (fallbackItem && fallbackItem.employee_id) || '';
+    const empPhone = (d && d.employee_phone) || (fallbackItem && fallbackItem.employee_phone) || '';
+    const lines = (d && Array.isArray(d.lines)) ? d.lines : [];
+    const trips = (d && Array.isArray(d.trips)) ? d.trips : [];
+    const notes = (d && Array.isArray(d.notes)) ? d.notes : [];
+
+    const notClosed = fallbackItem ? isNotClosedByStaff(fallbackItem) : lines.some(l => !l.delivered || l.under_review);
+
+    /* التبديل السريع بين ريكوستات نفس العميل لو ليه كذا ريكوست */
+    const switcherHtml = sameClientItems.length > 1
+      ? '<div class="cp-dtl-sec"><b class="hd">ريكوستات العميل ده في نفس اليوم (' + num(sameClientItems.length) + ' ريكوستات):</b><div class="cp-chips">' +
+          sameClientItems.map(it => '<button type="button" class="cp-a cp-sm' + (String(it.transaction_id) === String(tx) ? ' pri' : '') + '" data-act="detail" data-tx="' + eh(it.transaction_id) + '">' + eh(it.transaction_id) + ' (' + eh(KIND[it.type].label) + ')</button>').join('') +
+        '</div></div>'
+      : '';
+
+    const contactLinks = [];
+    if (phone) contactLinks.push(callBtns(phone));
+    if (address) contactLinks.push('<a class="cp-a" target="_blank" rel="noopener" href="' + eh(mapsUrl(address)) + '"><i class="fa-solid fa-location-dot"></i><span>خريطة: ' + eh(address) + '</span></a>');
+
+    const linesHtml = lines.length
+      ? lines.map(l => {
+          const [stLbl, stCls] = STATUS_AR[l.status] || [l.status || 'جاري التنفيذ', 'k-pk'];
+          return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 0;border-bottom:1px dashed var(--bd);font-size:12px">' +
+            '<span>• ' + eh(l.service || 'خدمة') + (l.received_at ? ' <small style="color:var(--mu)">(' + eh(String(l.received_at).slice(0, 10)) + ')</small>' : '') + '</span>' +
+            '<span class="cp-tag ' + stCls + '">' + eh(stLbl) + '</span>' +
+          '</div>';
+        }).join('')
+      : '<div style="font-size:12px;color:var(--mu)">' + eh((fallbackItem && fallbackItem.services) || 'لا توجد تفاصيل خدمات') + '</div>';
+
+    const tripsHtml = trips.length
+      ? trips.map(t => {
+          const kl = t.kind === 'pickup' ? '📥 استلمت من العميل' : '📤 سلّمت للعميل';
+          return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 0;font-size:12px">' +
+            '<span><b>' + kl + '</b> · يوم ' + eh(dayLabel(t.trip_day)) + '</span>' +
+            '<span class="cp-tag ' + (t.confirmed ? 'ok' : 'wt') + '">' + (t.confirmed ? '✓ مؤكد ' + eh(timeOf(t.courier_confirmed_at)) : 'بانتظار تأكيدك') + '</span>' +
+          '</div>';
+        }).join('')
+      : (fallbackItem ? '<div style="font-size:12px">' + eh(kindLabel(fallbackItem)) + ' · ' + eh(dayLabel(fallbackItem.day)) + '</div>' : '');
+
+    const empHtml = employee
+      ? '<div class="cp-dtl-sec"><b class="hd">الموظف المسؤول عن المعاملة:</b><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>' + eh(employee) + '</b><div style="display:flex;gap:6px">' +
+          (empPhone ? '<a class="cp-a cp-sm tel" href="' + eh(telHref(empPhone)) + '"><i class="fa-solid fa-phone"></i><span>اتصال</span></a>' : '') +
+          (empId ? '<button type="button" class="cp-a cp-sm" data-act="chat-emp" data-uid="' + eh(empId) + '" data-tx="' + eh(tx) + '"><i class="fa-solid fa-comment"></i><span>رسالة للموظف</span></button>' : '') +
+        '</div></div></div>'
+      : '';
+
+    const notesHtml = notes.length
+      ? '<div class="cp-dtl-sec"><b class="hd">📨 ملاحظاتك المسجلة على المعاملة (' + num(notes.length) + '):</b>' +
+          notes.map(n => '<div style="font-size:11.5px;padding:4px 0;border-bottom:1px dashed var(--bd)">' + eh(n.body) + ' <small style="color:var(--mu)">(' + eh(timeOf(n.at)) + ')</small></div>').join('') +
+        '</div>'
+      : '';
+
+    const unconfirmedItems = st.items.filter(x => String(x.transaction_id) === String(tx) && !x.confirmed);
+
+    modal(
+      '<h3>' + eh(clientName) + '</h3>' +
+      '<p>رقم المعاملة: <b dir="ltr">' + eh(tx) + '</b></p>' +
+      switcherHtml +
+      (notClosed ? '<div class="cp-warn-box">⏳ الموظف لسه ما قفلش المعاملة بالكامل على السيستم. لو سلّمتها فعلاً للعميل تقدر تبعت ملاحظة للموظف أو تأكد مشوارك.</div>' : '') +
+      '<div class="cp-info-box">💡 الريكوست بيفضل ظاهر في قائمتك لحد ما الموظف يقفله أو أنت تأكده.</div>' +
+      (contactLinks.length ? '<div class="cp-info" style="margin-bottom:10px">' + contactLinks.join('') + '</div>' : '') +
+      '<div class="cp-dtl-sec"><b class="hd">الخدمات وحالتها (بدون أسعار العميل):</b>' + linesHtml + '</div>' +
+      '<div class="cp-dtl-sec"><b class="hd">تواريخ استلامك وتسليمك على المعاملة:</b>' + tripsHtml + '</div>' +
+      empHtml +
+      notesHtml +
+      '<div class="cp-btns">' +
+        unconfirmedItems.map(u => '<button type="button" class="cp-btn cp-go" data-act="ask-one" data-type="' + eh(u.type) + '" data-ref="' + eh(itemRef(u)) + '" data-tx="' + eh(u.transaction_id) + '" data-amt="' + eh(u.amount) + '">✓ أكّد ده بس (' + eh(KIND[u.type].label) + ' · ' + money(u.amount) + ')</button>').join('') +
+        '<button type="button" class="cp-btn" data-act="note" data-tx="' + eh(tx) + '"><i class="fa-solid fa-flag"></i> ملاحظة للموظف</button>' +
+        '<button type="button" class="cp-btn" data-act="mclose-btn">إغلاق</button>' +
+      '</div>'
+    );
+  }
+
+  /* ---------- شاشة ملفي الشخصي الكاملة (زي النسخة 4 بالظبط) ---------- */
+  async function loadMyAvatar() {
+    if (!st.me || !st.me.avatar_path) { st.avUrl = ''; updateHeaderWho(); return; }
+    try {
+      const r = await sbClient.storage.from('avatars').createSignedUrl(st.me.avatar_path, 43200);
+      if (r && r.data && r.data.signedUrl) {
+        st.avUrl = r.data.signedUrl;
+        updateHeaderWho();
+        if (st.tab === 'profile') renderTab(false);
+      }
+    } catch (e) { /* */ }
+  }
+  function openProfileModal() {
+    if (st.tab !== 'profile') st.prevTab = st.tab || 'home';
+    st.avPendingBlob = null;
+    if (st.avPendingUrl) { try { URL.revokeObjectURL(st.avPendingUrl); } catch (e) {} st.avPendingUrl = ''; }
+    st.avRemoved = false;
+    st.tab = 'profile';
+    renderNav();
+    renderTab(true);
+  }
+  function viewProfile() {
+    const m = st.me || {};
+    const hasImg = !!(st.avPendingUrl || (st.avUrl && !st.avRemoved) || (m.avatar_path && !st.avRemoved));
+    return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+        '<b style="font-size:15px">ملفي الشخصي</b>' +
+        '<button type="button" class="cp-btn cp-sm" data-act="pf-back">رجوع</button>' +
+      '</div>' +
+      renderGuideBanner('profile') +
+      '<div class="cp-card" style="text-align:center;padding:20px 12px">' +
+        '<div style="display:flex;justify-content:center;margin-bottom:10px">' + myAvHtml(88) + '</div>' +
+        '<input type="file" id="cp-pf-file" accept="image/*" style="display:none">' +
+        '<div style="display:flex;justify-content:center;gap:8px">' +
+          '<button type="button" class="cp-btn cp-sm" data-act="pf-pick">غيّر الصورة</button>' +
+          (hasImg ? '<button type="button" class="cp-btn cp-sm" data-act="pf-rm">شيل الصورة</button>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="cp-card">' +
+        '<div style="margin-bottom:12px">' +
+          '<small style="display:block;font-size:11px;color:var(--mu);margin-bottom:3px">الاسم (بتحدده الإدارة)</small>' +
+          '<b style="font-size:15px">' + eh(m.name || '') + '</b>' +
+        '</div>' +
+        '<div style="margin-bottom:12px">' +
+          '<label for="cp-pf-job" style="display:block;font-size:11.5px;color:var(--mu);margin-bottom:5px;font-weight:700">المسمى الوظيفي</label>' +
+          '<input id="cp-pf-job" type="text" class="cp-field" maxlength="80" value="' + eh(m.job_title || '') + '" placeholder="مثال: مندوب توصيل">' +
+        '</div>' +
+        '<div style="margin-bottom:14px">' +
+          '<label for="cp-pf-phone" style="display:block;font-size:11.5px;color:var(--mu);margin-bottom:5px;font-weight:700">رقم التليفون</label>' +
+          '<input id="cp-pf-phone" type="tel" dir="ltr" class="cp-field" maxlength="20" value="' + eh(m.phone || '') + '" placeholder="01xxxxxxxxx">' +
+        '</div>' +
+        '<button type="button" class="cp-big" style="margin-top:0" data-act="pf-save">حفظ</button>' +
+      '</div>';
+  }
+  function pickCourierPhoto() {
+    const inp = $('cp-pf-file'); if (!inp) return;
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      try {
+        const blob = await (typeof compressImage === 'function' ? compressImage(f, 320) : Promise.resolve(f));
+        st.avPendingBlob = blob;
+        if (st.avPendingUrl) URL.revokeObjectURL(st.avPendingUrl);
+        st.avPendingUrl = URL.createObjectURL(blob);
+        st.avRemoved = false;
+        updateHeaderWho();
+        renderTab(false);
+      } catch (e) { toast('تعذّر قراءة الصورة', true); }
+    };
+    inp.click();
+  }
+  async function saveCourierProfile(btn) {
+    if (st.busy || !st.me) return;
+    const job = (($('cp-pf-job') || {}).value || '').trim();
+    const phone = (($('cp-pf-phone') || {}).value || '').trim();
+    st.busy = true; if (btn) btn.disabled = true;
+    try {
+      let avPath = st.avRemoved ? null : (st.me.avatar_path || null);
+      if (st.avPendingBlob) {
+        const p = st.me.user_id + '/avatar-' + Date.now() + '.jpg';
+        const up = await sbClient.storage.from('avatars').upload(p, st.avPendingBlob, { contentType: 'image/jpeg', upsert: true });
+        if (up.error) throw up.error;
+        avPath = p;
+      }
+      const r = await sbClient.rpc('courier_save_profile', { p_job: job, p_phone: phone, p_avatar: avPath });
+      if (r.error) throw r.error;
+      if (r.data) st.me = Object.assign({}, st.me, r.data);
+      else { st.me.job_title = job; st.me.phone = phone; st.me.avatar_path = avPath; }
+      if (st.avPendingUrl) { st.avUrl = st.avPendingUrl; st.avPendingUrl = ''; st.avPendingBlob = null; }
+      else if (st.avRemoved) { st.avUrl = ''; }
+      updateHeaderWho();
+      toast('تم حفظ ملفك الشخصي ✓');
+      renderTab(false);
+    } catch (e) { toast(errMsg(e), true); }
+    if (btn) btn.disabled = false;
+    st.busy = false;
+  }
+
   const NK = [
     ['note', '🛵 ملاحظة للموظف'],
     ['problem', '🚩 مشكلة في المعاملة أو العميل'],
     ['missing_fee', '⚠ المشوار برسوم توصيل ومش متسجّل لي رسوم']
   ];
   const QUICK_NOTES = [
+    '✅ تم التسليم',
+    '✅ تم الاستلام',
     '📞 العميل لا يرد على التليفون',
-    '📅 العميل طلب تأجيل الموعد لبكرة',
-    '📍 العنوان غير واضح ومحتاج تواصل',
-    '✅ تم الاستلام من العميل بنجاح',
-    '🚚 تم التسليم للعميل بنجاح',
-    '💰 العميل دفع رسوم التوصيل كاش'
+    '📅 العميل طلب تأجيل الموعد',
+    '📍 العنوان غير واضح ومحتاج تواصل'
   ];
 
   async function askNote(tx) {
     const o = byTx(tx); st.noteKind = 'note';
-    modal('<h3>ملاحظة للموظف / بلاغ سريع</h3><p>على معاملة <b>' + eh(o ? o.client_name : '') + '</b> (<b dir="ltr">' + eh(tx) + '</b>). بتظهر كتعليق على المعاملة وبيوصل إشعار فوري للموظف المسؤول وللمدير.</p>' +
+    modal('<h3>ملاحظة للموظف</h3><p>على معاملة <b>' + eh(o ? o.client_name : '') + '</b> (<b dir="ltr">' + eh(tx) + '</b>). بتظهر كتعليق على المعاملة وبيوصل إشعار فوري للموظف المسؤول وللمدير.</p>' +
+      '<div class="cp-info-box">📌 ملاحظة مهمة: الريكوست بيفضل ظاهر لحد ما الموظف يقفله أو انت تأكده بزرار «أكّد ده بس».</div>' +
       '<div class="cp-kinds" id="cp-kinds">' + NK.map(k => '<button type="button" data-act="nkind" data-k="' + k[0] + '" class="' + (k[0] === 'note' ? 'on' : '') + '">' + k[1] + '</button>').join('') + '</div>' +
       '<div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:5px">اختصارات سريعة (اضغط لإدراج النص):</div>' +
       '<div class="cp-qnotes">' + QUICK_NOTES.map(qn => '<button type="button" data-act="qnote" data-txt="' + eh(qn) + '">' + eh(qn) + '</button>').join('') + '</div>' +
-      '<textarea id="cp-nbody" class="cp-field" rows="3" maxlength="500" placeholder="اكتب التفاصيل أو اختار من الأزرار فوق…"></textarea>' +
+      '<textarea id="cp-nbody" class="cp-field" rows="3" maxlength="500" placeholder="اكتب التفاصيل…"></textarea>' +
       '<div class="cp-btns"><button type="button" class="cp-btn cp-go" data-act="nsend" data-tx="' + eh(tx) + '">إرسال للموظف</button><button type="button" class="cp-btn" data-act="mclose-btn">إلغاء</button></div><div class="cp-old-n" id="cp-oldn"></div>');
     try {
       const r = await sbClient.rpc('courier_tx_notes', { p_tx: tx }); const n = (r.data || []); const e = $('cp-oldn');
-      if (e) e.innerHTML = n.length ? '<b>ملاحظاتك السابقة على المعاملة:</b>' + n.map(x => '<div style="margin-top:4px">' + eh(x.body) + ' <span>(' + eh(timeOf(x.at)) + ')</span></div>').join('') : '';
+      if (e) e.innerHTML = n.length ? '<b>ملاحظاتك السابقة:</b>' + n.map(x => '<div style="margin-top:4px">' + eh(x.body) + ' <span>(' + eh(timeOf(x.at)) + ')</span></div>').join('') : '';
     } catch (e) { /* */ }
   }
+
   async function sendNote(tx, btn) {
-    if (st.busy) return; const body = ($('cp-nbody') || {}).value || '';
-    if (st.noteKind !== 'missing_fee' && !body.trim()) { toast('اكتب الملاحظة أو اختار سبب سريع الأول', true); return; }
+    if (st.busy) return; const body = (($('cp-nbody') || {}).value || '').trim();
+    if (st.noteKind !== 'missing_fee' && !body) { toast('اكتب الملاحظة الأول', true); return; }
     st.busy = true; if (btn) btn.disabled = true;
     try {
-      const r = await sbClient.rpc('courier_add_note', { p_tx: tx, p_kind: st.noteKind, p_body: body }); if (r.error) throw r.error;
-      closeModal(); toast('اتبعتت للموظف المسؤول ✓'); st.sig = ''; loadItems(true);
+      const r = await sbClient.rpc('courier_add_note', { p_tx: tx, p_kind: st.noteKind, p_body: body });
+      if (r.error) throw r.error;
+      /* تحديث فوري لعلامة 📨 أبلغت الموظف (البند B.3) */
+      const nowIso = new Date().toISOString();
+      st.notesMap[String(tx)] = { id: Date.now(), transaction_id: String(tx), body: body, at: nowIso };
+      st.items.forEach(it => { if (String(it.transaction_id) === String(tx)) it.my_notes = (Number(it.my_notes) || 0) + 1; });
+      closeModal();
+      /* البند B.4: لو الملاحظة فيها تم التسليم نوضحله اضغط أكّد ده بس */
+      if (/تم التسليم/.test(body)) {
+        toast('اتبعتت للموظف. ولو عايز المشوار يتحسب في عمولتك اضغط «أكّد ده بس»');
+      } else {
+        toast('اتبعتت للموظف ✓');
+      }
+      renderTab(false);
+      st.sig = '';
+      loadItems(true);
+      loadMyNotes();
     } catch (e) { toast(errMsg(e), true); if (btn) btn.disabled = false; }
     st.busy = false;
   }
+
+  /* تأكيد مشوار واحد لوحده „أكّد ده بس“ (البند B.1 / B.2 + تحذير A.3) */
+  function askConfirmOne(type, ref, tx, amt) {
+    const it = byTx(tx);
+    const warn = it && isNotClosedByStaff(it)
+      ? '<div class="cp-warn-box">⏳ تنبيه: الموظف لسه ما قفلش المعاملة دي على السيستم. متأكد إنك نفذت المشوار وعايز تأكده دلوقتي؟</div>'
+      : '';
+    modal(
+      '<h3>تأكيد مشوار واحد («أكّد ده بس»)</h3>' +
+      '<p>هتأكد مشوار <b>' + eh((KIND[type] && KIND[type].label) || 'المشوار') + '</b> للعميل <b>' + eh(it ? it.client_name : '') + '</b> (<b dir="ltr">' + eh(tx) + '</b>) بقيمة <b>' + money(amt) + '</b>.</p>' +
+      warn +
+      '<div class="cp-btns">' +
+        '<button type="button" class="cp-btn cp-go" data-act="do-confirm-one" data-type="' + eh(type) + '" data-ref="' + eh(ref) + '">أيوه، أكّد ده بس</button>' +
+        '<button type="button" class="cp-btn" data-act="mclose-btn">رجوع</button>' +
+      '</div>'
+    );
+  }
+
+  async function doConfirmOne(type, ref, btn) {
+    if (st.busy) return; st.busy = true; if (btn) btn.disabled = true;
+    try {
+      const r = await sbClient.rpc('courier_confirm_one', { p_type: type, p_ref: String(ref) });
+      if (r.error) throw r.error;
+      closeModal();
+      toast('اتأكد المشوار بنجاح ✓');
+      st.sig = '';
+      await Promise.all([loadItems(true), loadLeaderboard(true)]);
+    } catch (e) { toast(errMsg(e), true); if (btn) btn.disabled = false; }
+    st.busy = false;
+  }
+
   function askConfirm(kind, n, amt) {
-    modal('<h3>تأكيد ' + KIND[kind].sec + ' — ' + eh(dayLabel(st.day)) + '</h3><p>هتأكد <b>' + num(n) + '</b> مشوار بإجمالي <b>' + money(amt) + '</b> وهيتحسبوا في عمولتك المؤكدة. متأكد إنك راجعتهم؟</p>' +
+    const dayRows = itemsOf(st.day).filter(i => i.type === kind && !i.confirmed);
+    const unclosedCount = dayRows.filter(isNotClosedByStaff).length;
+    const warn = unclosedCount
+      ? '<div class="cp-warn-box">⏳ تنبيه: فيه <b>' + num(unclosedCount) + ' معاملة</b> الموظف لسه ما قفلهاش على السيستم. تقدر تأكد كل ريكوست لوحده بزرار «أكّد ده بس» أو تكمل التأكيد الجماعي لو متأكد.</div>'
+      : '';
+    modal('<h3>تأكيد ' + KIND[kind].sec + ' — ' + eh(dayLabel(st.day)) + '</h3><p>هتأكد <b>' + num(n) + ' مشوار</b> بإجمالي <b>' + money(amt) + '</b> وهيتحسبوا في عمولتك. متأكد إنك راجعتهم؟</p>' +
+      warn +
       '<div class="cp-btns"><button type="button" class="cp-btn cp-go" data-act="do-confirm" data-kind="' + kind + '">أيوه، تم التأكيد</button><button type="button" class="cp-btn" data-act="mclose-btn">رجوع</button></div>');
   }
   async function doConfirm(kind, btn) {
@@ -873,63 +1287,46 @@
     }
   }
   function onClick(e) {
-    const el = e.target.closest('[data-act],[data-tab],[data-per],[data-lbper],[data-type],[data-sfilter],[data-tscope],[data-rvf]'); if (!el) return;
-    if (el.dataset.tab) return setTab(el.dataset.tab);
-    if (el.dataset.per) { st.period = el.dataset.per; return renderTab(false); }
-    if (el.dataset.lbper) { st.lbPeriod = el.dataset.lbper; st.lbsig = ''; renderTab(false); return loadLeaderboard(false); }
-    if (el.dataset.tscope) { st.tripScope = el.dataset.tscope; return renderTab(false); }
-    if (el.dataset.rvf) { st.rvf = el.dataset.rvf; return renderTab(false); }
-    if (el.dataset.type) { st.type = el.dataset.type; return renderTab(false); }
-    if (el.dataset.sfilter) { st.statusFilter = el.dataset.sfilter; return renderTab(false); }
+    const el = e.target.closest('[data-act],[data-tab],[data-per],[data-month],[data-lbper],[data-type],[data-sfilter]'); if (!el) return;
+    if (!el.dataset.act) {
+      if (el.dataset.tab) return setTab(el.dataset.tab);
+      if (el.dataset.per) { st.period = el.dataset.per; return renderTab(false); }
+      if (el.dataset.month) { st.month = el.dataset.month; return renderTab(false); }
+      if (el.dataset.lbper) { st.lbPeriod = el.dataset.lbper; st.lbsig = ''; renderTab(false); return loadLeaderboard(false); }
+      if (el.dataset.type) { st.type = el.dataset.type; return renderTab(false); }
+      if (el.dataset.sfilter) { st.statusFilter = el.dataset.sfilter; return renderTab(false); }
+    }
     const a = el.dataset.act, tx = el.dataset.tx;
     switch (a) {
       case 'mclose': if (e.target === el) closeModal(); return;
       case 'mclose-btn': return closeModal();
       case 'logout': return window.handleLogout && window.handleLogout();
       case 'theme': return toggleTheme();
+      case 'profile': return openProfileModal();
+      case 'pf-back': st.tab = st.prevTab || 'home'; renderNav(); return renderTab(true);
+      case 'pf-pick': return pickCourierPhoto();
+      case 'pf-rm': st.avPendingBlob = null; if (st.avPendingUrl) { URL.revokeObjectURL(st.avPendingUrl); st.avPendingUrl = ''; } st.avRemoved = true; updateHeaderWho(); return renderTab(false);
+      case 'pf-save': return saveCourierProfile(el);
       case 'guide-toggle': return toggleGuide(el.dataset.gtab);
-      case 'mprev': if (st.month > minMonth()) { st.month = addMonths(st.month, -1); st.rvOpen = false; renderTab(false); } return;
-      case 'mnext': if (st.month < monthOf(today())) { st.month = addMonths(st.month, 1); st.rvOpen = false; renderTab(false); } return;
-      case 'rvday': st.day = el.dataset.day; st.month = monthOf(el.dataset.day); st.rvOpen = true; return st.tab === 'review' ? renderTab(true) : setTab('review');
-      case 'rvback': st.rvOpen = false; return renderTab(true);
-      case 'profile': return setTab('profile');
-      case 'pback': st.pPhoto = undefined; st.pT = undefined; st.pP = undefined; return setTab('home');
-      case 'pdel': syncDraft(); st.pPhoto = ''; return renderTab(false);
-      case 'psave': return saveProfile(el);
-      case 'refresh': return loadItems(false).then(() => toast('اتحدّث ✓'));
-      case 'goold': { const o = st.items.filter(i => !i.confirmed && i.day < today()).map(i => i.day).sort().pop(); if (o) st.month = monthOf(o); st.rvf = 'pending'; st.rvOpen = false; return setTab('review'); }
-      case 'qr': { const t = $('cp-msg'); if (t) { t.value = (t.value ? t.value.trim() + ' ' : '') + el.dataset.txt; st.draft = t.value; t.focus(); } return; }
-      case 'sendloc': {
-        if (!navigator.geolocation) return toast('الموبايل ده مش بيدعم تحديد الموقع', true);
-        toast('بجيب موقعك…');
-        navigator.geolocation.getCurrentPosition(pos => {
-          const t = $('cp-msg'); if (!t) return;
-          const link = 'https://www.google.com/maps?q=' + pos.coords.latitude.toFixed(6) + ',' + pos.coords.longitude.toFixed(6);
-          t.value = (t.value ? t.value.trim() + ' ' : 'موقعي: ') + link; st.draft = t.value; t.focus(); toast('الموقع اتحط في الرسالة، اضغط إرسال');
-        }, () => toast('مقدرتش أجيب موقعك، اتأكد إن الموقع شغال', true), { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
-        return;
-      }
-      case 'wtpl': return openWaTemplates(el.dataset.id, tx);
-      case 'mynotes': return openMyNotes();
-      case 'stmt': return openStatement();
-      case 'stmt-wa': return window.open('https://wa.me/?text=' + encodeURIComponent(stmtText()), '_blank');
-      case 'stmt-print': return printStatement();
       case 'qclear': st.q = ''; return renderTab(false);
       case 'dprev': st.day = addDays(st.day, -1); return renderTab(false);
       case 'dnext': if (st.day < today()) { st.day = addDays(st.day, 1); renderTab(false); } return;
       case 'dset': st.day = el.dataset.day; return renderTab(true);
+      case 'detail': return openClientDetail(tx);
       case 'note': return askNote(tx);
       case 'nkind': st.noteKind = el.dataset.k; document.querySelectorAll('#cp-kinds button').forEach(b => b.classList.toggle('on', b === el)); return;
       case 'qnote': {
         const nb = $('cp-nbody');
-        if (nb) { nb.value = (nb.value ? nb.value.trim() + ' — ' : '') + (el.dataset.txt || ''); nb.focus(); }
+        if (nb) { nb.value = el.dataset.txt || ''; nb.focus(); }
         return;
       }
       case 'nsend': return sendNote(tx, el);
+      case 'ask-one': return askConfirmOne(el.dataset.type, el.dataset.ref, el.dataset.tx, el.dataset.amt);
+      case 'do-confirm-one': return doConfirmOne(el.dataset.type, el.dataset.ref, el);
       case 'ask': return askConfirm(el.dataset.kind, el.dataset.n, el.dataset.amt);
       case 'do-confirm': return doConfirm(el.dataset.kind, el);
       case 'chat-open': return openChat(el.dataset.uid, null);
-      case 'chat-emp': st.tab = 'chat'; st.chat = null; renderNav(); return loadContacts(true).then(() => openChat(el.dataset.uid, tx));
+      case 'chat-emp': closeModal(); st.tab = 'chat'; st.chat = null; renderNav(); return loadContacts(true).then(() => openChat(el.dataset.uid, tx));
       case 'chat-back': st.chat = null; renderTab(true); return;
       case 'chat-send': return sendMsg();
       case 'chat-notx': if (st.chat) { st.chat.tx = null; const t = $('cp-msg'); st.draft = t ? t.value : st.draft; convView(); } return;
@@ -937,24 +1334,18 @@
   }
 
   async function showCourier() {
-    initTheme(); initGuides(); st.day = today(); st.month = monthOf(today());
+    initTheme(); initGuides(); st.day = today(); st.month = st.day.slice(0, 7);
     overlay('<div class="cp-empty" style="margin:auto">جاري التحميل…</div>');
-    try { const r = await sbClient.rpc('courier_me'); if (r.error) throw r.error; st.me = r.data; try { localStorage.setItem('ts_cp_me', JSON.stringify(st.me)); } catch (x) { /* */ } }
-    catch (e) {
-      st.err = e; let m = null; try { m = JSON.parse(localStorage.getItem('ts_cp_me') || 'null'); } catch (x) { /* */ }
-      const denied = e && (e.code === '42501' || /not linked|courier only/.test(String(e.message || '')));
-      if (m && m.user_id && !denied) { st.me = m; st.offline = true; }
-    }
-    if (!st.me) { const e = st.err || new Error('تعذر تحميل البوابة'); overlay('<header class="cp-head"><div class="cp-who"><b>بوابة المندوب</b></div>' + logoutBtn + '</header><div class="cp-empty" style="margin:auto">' + eh(errMsg(e)) + '</div>'); return; }
-    const cc = loadCache(); if (cc) { st.items = cc.items; st.loaded = true; st.lastOk = cc.ts; }
-    shell(); sbClient.rpc('touch_last_seen');
-    await Promise.all([loadItems(false), loadLeaderboard(true), loadContacts(true)]);
+    try { const r = await sbClient.rpc('courier_me'); if (r.error) throw r.error; st.me = r.data; }
+    catch (e) { overlay('<header class="cp-head"><div class="cp-who"><b>بوابة المندوب</b></div>' + logoutBtn + '</header><div class="cp-empty" style="margin:auto">' + eh(errMsg(e)) + '</div>'); return; }
+    shell(); loadMyAvatar(); sbClient.rpc('touch_last_seen');
+    await Promise.all([loadItems(false), loadMyNotes(), loadLeaderboard(true), loadContacts(true)]);
     clearInterval(st.timer); st.timer = setInterval(tick, 1000);
   }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && st.me && $('courier-app')) { loadItems(true); loadLeaderboard(true); loadContacts(true); if (st.chat) pollMsgs(false); } });
-  window.addEventListener('online', () => { if (st.me) { loadItems(true); loadLeaderboard(true); loadContacts(true); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && st.me && $('courier-app')) { loadItems(true); loadMyNotes(); loadLeaderboard(true); loadContacts(true); if (st.chat) pollMsgs(false); } });
+  window.addEventListener('online', () => { if (st.me) { loadItems(true); loadMyNotes(); loadLeaderboard(true); loadContacts(true); } });
 
-  /* ---------- نقطة الدخول: لو الدور courier نعرض البوابة، غير كده السيستم يكمل عادي ---------- */
+  /* ---------- نقطة الدخول ---------- */
   const _li = window.loadInitialData;
   window.loadInitialData = async function () {
     let role = null;
@@ -962,7 +1353,6 @@
     if (role === 'courier') { window.__role = 'courier'; return showCourier(); }
     if (role) window.__role = role;
     if (isManagerUser()) ensureManagerUi();
-    if (role === 'manager' || role === 'staff') loadCourierPhotos();
     try {
       const out = await _li.apply(this, arguments);
       if (isManagerUser()) ensureManagerUi();
@@ -972,30 +1362,16 @@
       throw err;
     }
   };
-  /* الموظفين يشوفوا صورة المندوب في الشات بتاعهم (الصور بتتحمل للموظفين بس) */
-  async function loadCourierPhotos() { try { const r = await sbClient.rpc('courier_photos'); if (!r.error && r.data) window.__courierPhotos = r.data; } catch (e) { /* */ } }
-  const _av = window.avatarHtml;
-  if (typeof _av === 'function') {
-    window.avatarHtml = function (p, size) {
-      const ph = window.__courierPhotos && p && window.__courierPhotos[p.id];
-      if (!ph || !/^data:image\//.test(ph)) return _av.apply(this, arguments);
-      size = size || 40;
-      return '<img src="' + eh(ph) + '" alt="" class="rounded-full object-cover shrink-0" style="width:' + size + 'px;height:' + size + 'px">';
-    };
-  }
   const _sl = window.showLoginScreen;
   window.showLoginScreen = function () {
-    clearInterval(st.timer); try { if (st.me) { localStorage.removeItem(cacheKey()); localStorage.removeItem('ts_cp_me'); } } catch (e) { /* */ } st.me = null; st.sig = ''; st.lbsig = ''; st.csig = ''; st.items = []; st.leaderboard = []; st.contacts = []; st.chat = null; st.msgs = []; st.loaded = false; st.lbLoaded = false; st.tab = 'home'; st.rvOpen = false; st.pPhoto = undefined; st.pT = undefined; st.pP = undefined;
+    clearInterval(st.timer); st.me = null; st.sig = ''; st.lbsig = ''; st.nsig = ''; st.csig = ''; st.msig = ''; st.items = []; st.leaderboard = []; st.notesMap = {}; st.contacts = []; st.chat = null; st.msgs = []; st.loaded = false; st.lbLoaded = false; st.tab = 'home';
     document.body.classList.remove('is-courier-mode', 'is-partner-mode');
     const o = $('courier-app'); if (o) o.remove();
     return _sl.apply(this, arguments);
   };
 
   /* =====================================================================
-     المدير: ربط حسابات المناديب + إضافة/إيقاف مناديب + لوحة ترتيب المناديب
-     يظهر في مكانين عشان مايختفيش أبداً:
-     1) زرار ثابت في القائمة الجانبية (#tab-cpmgr-btn)
-     2) شريط بارز أعلى شاشة «المناديب» (#tab-couriers)
+     المدير: ربط حسابات المناديب + متابعة الترتيب
      ===================================================================== */
   function addMgrBtn() {
     if (!isManagerUser()) return;
@@ -1005,8 +1381,8 @@
       b.id = 'tab-cpmgr-btn';
       b.type = 'button';
       b.className = 'tab-btn';
-      b.innerHTML = '<i class="fa-solid fa-id-card text-emerald-500"></i><span>حسابات وبوابة المناديب</span>';
-      b.addEventListener('click', () => { if (window.closeNavMenu) window.closeNavMenu(); openMgr('accounts'); });
+      b.innerHTML = '<i class="fa-solid fa-id-card text-emerald-500"></i><span>حسابات المناديب</span>';
+      b.addEventListener('click', () => { if (window.closeNavMenu) window.closeNavMenu(); openMgr(); });
       const anchor = $('tab-couriers-btn') || $('tab-notes-btn');
       const adminBody = menu.querySelector(':scope > section[data-mg="admin"] .mg-body');
       if (anchor && anchor.parentElement) anchor.insertAdjacentElement('afterend', b);
@@ -1027,18 +1403,14 @@
       '<div class="flex items-center gap-3">' +
         '<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white text-base shadow-xs"><i class="fa-solid fa-id-card"></i></div>' +
         '<div>' +
-          '<div class="text-sm font-bold text-ink dark:text-white">بوابة وحسابات المناديب ولوحة الترتيب (Leaderboard)</div>' +
-          '<div class="text-xs text-slate-500 dark:text-slate-400">اربط كل مندوب بحساب الدخول بتاعه، ضيف أو وقّف مناديب، وتابع ترتيب الاستلامات والتسليم لحظة بلحظة.</div>' +
+          '<div class="text-sm font-bold text-ink dark:text-white">بوابة وحسابات المناديب (ربط الإيميلات وإدارة الدخول)</div>' +
+          '<div class="text-xs text-slate-500 dark:text-slate-400">اربط كل مندوب بحساب الدخول بتاعه في Supabase وتابع المشاوير المنتظرة والملاحظات.</div>' +
         '</div>' +
       '</div>' +
-      '<div class="flex flex-wrap items-center gap-2">' +
-        '<button type="button" id="cp-open-mgr-acc" class="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-xs flex items-center gap-1.5"><i class="fa-solid fa-link"></i><span>ربط وإدارة حسابات المناديب</span></button>' +
-        '<button type="button" id="cp-open-mgr-lb" class="rounded-xl bg-amber-500 hover:bg-amber-600 px-4 py-2 text-xs font-bold text-slate-950 shadow-xs flex items-center gap-1.5"><i class="fa-solid fa-trophy"></i><span>لوحة ترتيب الاستلامات والتسليم</span></button>' +
-      '</div>';
+      '<button type="button" id="cp-open-mgr-acc" class="rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-xs flex items-center gap-1.5"><i class="fa-solid fa-link"></i><span>حسابات المناديب</span></button>';
     root.insertBefore(bar, root.firstChild);
-    const b1 = $('cp-open-mgr-acc'), b2 = $('cp-open-mgr-lb');
-    if (b1) b1.onclick = () => openMgr('accounts');
-    if (b2) b2.onclick = () => openMgr('leaderboard');
+    const b1 = $('cp-open-mgr-acc');
+    if (b1) b1.onclick = () => openMgr();
   }
 
   let mgrObsBound = false;
@@ -1071,147 +1443,33 @@
   }
 
   function mgrShell(inner) {
-    addCss();
-    let o = $('cp-mgr');
-    if (!o) {
-      o = document.createElement('div'); o.id = 'cp-mgr'; o.className = 'cp-modal'; o.setAttribute('dir', 'rtl');
-      document.body.appendChild(o);
-    }
-    o.innerHTML = '<div class="cp-box" style="max-width:640px">' + inner + '</div>';
-    return o;
+    addCss(); let o = $('cp-mgr'); if (!o) { o = document.createElement('div'); o.id = 'cp-mgr'; o.className = 'cp-modal'; o.setAttribute('dir', 'rtl'); document.body.appendChild(o); }
+    o.innerHTML = '<div class="cp-box" style="max-width:560px">' + inner + '</div>'; return o;
   }
-
-  let mgrTab = 'accounts', mgrLbPeriod = 'month';
-  window.openCourierPortalManager = openMgr;
-
-  async function openMgr(initialTab) {
-    if (initialTab === 'accounts' || initialTab === 'leaderboard') mgrTab = initialTab;
-    const o = mgrShell('<h3>إدارة بوابة المناديب والترتيب</h3><p>جاري التحميل…</p>');
+  async function openMgr() {
+    const o = mgrShell('<h3>حسابات المناديب</h3><p>جاري التحميل…</p>');
     o.onclick = ev => { if (ev.target === o) o.remove(); };
-
-    const rng = rangeOf(mgrLbPeriod);
-    const [r, ov, lb] = await Promise.all([
-      sbClient.rpc('list_courier_accounts'),
-      sbClient.rpc('courier_overview').then(x => x, () => ({ data: [] })),
-      sbClient.rpc('courier_leaderboard', { p_from: rng[0], p_to: rng[1] }).then(x => x, () => ({ data: [] }))
-    ]);
-
-    if (r.error) {
-      mgrShell('<h3>حسابات المناديب</h3><p>مش قادر أحمّل القايمة. اتأكد إنك شغّلت <code>sql/courier-portal.sql</code> في Supabase SQL Editor.</p><div class="cp-btns"><button type="button" class="cp-btn" id="cp-mgr-x">إغلاق</button></div>');
-      $('cp-mgr-x').onclick = () => $('cp-mgr').remove();
-      return;
-    }
-
-    const navTabs = '<div class="cp-seg" style="margin-bottom:14px">' +
-      '<button type="button" id="cp-mtab-acc" class="' + (mgrTab === 'accounts' ? 'on' : '') + '"><i class="fa-solid fa-id-card"></i> ربط وإدارة المناديب</button>' +
-      '<button type="button" id="cp-mtab-lb" class="' + (mgrTab === 'leaderboard' ? 'on' : '') + '"><i class="fa-solid fa-trophy"></i> لوحة ترتيب الاستلامات والتسليم</button>' +
-    '</div>';
-
-    let contentHtml = '';
-    if (mgrTab === 'accounts') {
-      const info = {}; ((ov && ov.data) || []).forEach(x => { info[x.id] = x; });
-      const allCouriers = r.data || [];
-      const activeCouriers = allCouriers.filter(c => c.active);
-      const inactiveCouriers = allCouriers.filter(c => !c.active);
-
-      const addCourierForm =
-        '<form id="cp-mgr-add-c" style="display:flex;gap:8px;margin-bottom:12px;padding:10px;background:var(--fld);border-radius:12px;border:1px solid var(--bd);align-items:center;flex-wrap:wrap">' +
-          '<b style="font-size:12px"><i class="fa-solid fa-user-plus" style="color:#10b981;margin-inline-end:4px"></i>إضافة مندوب جديد:</b>' +
-          '<input id="cp-mgr-new-name" class="cp-field" style="flex:1;min-width:160px;padding:7px 10px;font-size:12.5px" required placeholder="اسم المندوب الثلاثي أو الثنائي">' +
-          '<button type="submit" class="cp-btn cp-go" style="padding:8px 14px;font-size:12px">إضافة للقائمة</button>' +
-        '</form>';
-
-      const rows = activeCouriers.map(c => c.user_id
-        ? '<div class="cp-mgr-row">' +
-            '<span class="nm"><i class="fa-solid fa-circle-check" style="color:#10b981;margin-inline-end:5px"></i>' + eh(c.name) + '</span>' +
-            '<span class="em">' + eh(c.email || 'مربوط بحساب') + '</span>' +
-            ((c.profile_title || c.profile_phone) ? '<span class="st">' + eh([c.profile_title, c.profile_phone].filter(Boolean).join(' · ')) + '</span>' : '') +
-            '<button type="button" class="cp-btn" style="background:#be123c;color:#fff" data-unlink="' + eh(c.user_id) + '">فك الربط</button>' +
-            '<button type="button" class="cp-btn" data-toggle-c="' + eh(c.id) + '" data-active="false">إيقاف المندوب</button>' +
-            (info[c.id] ? '<span class="st">مشاوير بانتظار تأكيد المندوب (آخر 30 يوم): <b>' + num(info[c.id].pending_trips) + '</b> · ملاحظاته آخر 7 أيام: <b>' + num(info[c.id].notes_7d) + '</b></span>' : '') +
-          '</div>'
-        : '<form class="cp-mgr-row" data-link="' + eh(c.id) + '">' +
-            '<span class="nm">' + eh(c.name) + ' <small style="color:#f59e0b;font-size:10px">(غير مربوط)</small></span>' +
-            '<input class="cp-field" type="email" required placeholder="اكتب إيميل حساب المندوب في Supabase">' +
-            '<button type="submit" class="cp-btn cp-go">ربط الحساب</button>' +
-            '<button type="button" class="cp-btn" data-toggle-c="' + eh(c.id) + '" data-active="false">إيقاف</button>' +
-          '</form>'
-      ).join('');
-
-      const inactiveHtml = inactiveCouriers.length
-        ? '<div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--bd)"><div style="font-size:11.5px;color:var(--mu);font-weight:700;margin-bottom:6px">مناديب موقوفون (' + num(inactiveCouriers.length) + '):</div>' +
-          inactiveCouriers.map(c => '<div class="cp-mgr-row" style="opacity:.75"><span class="nm">' + eh(c.name) + '</span><button type="button" class="cp-btn cp-go" data-toggle-c="' + eh(c.id) + '" data-active="true">إعادة تفعيل</button></div>').join('') + '</div>'
-        : '';
-
-      contentHtml =
-        '<p>1) اعمل حساب للمندوب من Supabase (<b>Authentication ← Users ← Add user</b>).<br>2) اكتب إيميله قدام اسمه هنا واضغط <b>«ربط الحساب»</b>. المندوب هيدخل يشوف شغله وعمولته وترتيبه ويتواصل معاكم.</p>' +
-        addCourierForm +
-        (rows || '<p>مفيش مناديب نشطين حالياً. ضيف مندوب من الفورم فوق.</p>') +
-        inactiveHtml;
-    } else {
-      const lbRows = (lb && Array.isArray(lb.data)) ? lb.data : [];
-      const perBar = '<div class="cp-tabs" style="margin-bottom:12px">' + [
-        ['today', 'اليوم'],
-        ['week', 'هذا الأسبوع'],
-        ['month', 'هذا الشهر']
-      ].map(p => '<button type="button" class="cp-tab' + (mgrLbPeriod === p[0] ? ' on' : '') + '" data-mgr-lbper="' + p[0] + '">' + p[1] + '</button>').join('') + '</div>';
-      st.lbLoaded = true;
-      contentHtml = '<p>ترتيب المناديب حسب إجمالي الاستلامات والتسليم ومشاوير رسوم التوصيل (مع إجمالي العمولات المؤكدة والمنتظرة):</p>' +
-        perBar + renderLeaderboardInner(lbRows, true);
-    }
-
-    const m = mgrShell(
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
-        '<h3 style="margin:0"><i class="fa-solid fa-motorcycle" style="color:#10b981;margin-inline-end:6px"></i>إدارة بوابة المناديب والترتيب</h3>' +
-        '<button type="button" class="cp-btn cp-sm" id="cp-mgr-x">إغلاق ✕</button>' +
-      '</div>' +
-      navTabs + contentHtml
-    );
-
+    const [r, ov] = await Promise.all([sbClient.rpc('list_courier_accounts'), sbClient.rpc('courier_overview').then(x => x, () => ({ data: [] }))]);
+    if (r.error) { mgrShell('<h3>حسابات المناديب</h3><p>مش قادر أحمّل القايمة. اتأكد إنك شغّلت sql/courier-portal.sql.</p><div class="cp-btns"><button type="button" class="cp-btn" id="cp-mgr-x">إغلاق</button></div>'); $('cp-mgr-x').onclick = () => $('cp-mgr').remove(); return; }
+    const info = {}; ((ov && ov.data) || []).forEach(x => { info[x.id] = x; });
+    const rows = (r.data || []).filter(c => c.active).map(c => c.user_id
+      ? '<div class="cp-mgr-row"><span class="nm">' + eh(c.name) + '</span><span class="em">' + eh(c.email || 'مربوط') + '</span><button type="button" class="cp-btn" style="background:#be123c;color:#fff" data-unlink="' + eh(c.user_id) + '">إيقاف</button>' +
+        (info[c.id] ? '<span class="st">مشاوير لسه ما اتأكدتش (آخر 30 يوم): <b>' + num(info[c.id].pending_trips) + ' مشوار</b> · ملاحظات آخر 7 أيام: <b>' + num(info[c.id].notes_7d) + ' ملاحظة</b></span>' : '') + '</div>'
+      : '<form class="cp-mgr-row" data-link="' + eh(c.id) + '"><span class="nm">' + eh(c.name) + '</span><input class="cp-field" type="email" required placeholder="إيميل حساب المندوب"><button class="cp-btn cp-go">ربط</button></form>').join('');
+    const m = mgrShell('<h3>حسابات المناديب</h3><p>1) اعمل حساب للمندوب من Supabase (Authentication ← Add user). 2) اكتب إيميله قدام اسمه هنا واضغط «ربط». المندوب هيدخل ويشوف شغله هو بس: مشاويره وعمولته، ويتواصل معاكم.</p>' + (rows || '<p>مفيش مناديب نشطين.</p>') +
+      '<div class="cp-btns" style="margin-top:12px"><button type="button" class="cp-btn" id="cp-mgr-x">إغلاق</button></div>');
     m.onclick = ev => { if (ev.target === m) m.remove(); };
     $('cp-mgr-x').onclick = () => m.remove();
-    const tAcc = $('cp-mtab-acc'), tLb = $('cp-mtab-lb');
-    if (tAcc) tAcc.onclick = () => openMgr('accounts');
-    if (tLb) tLb.onclick = () => openMgr('leaderboard');
-
-    m.querySelectorAll('[data-mgr-lbper]').forEach(b => b.addEventListener('click', () => {
-      mgrLbPeriod = b.dataset.mgrLbper;
-      openMgr('leaderboard');
-    }));
-
-    const addForm = $('cp-mgr-add-c');
-    if (addForm) {
-      addForm.addEventListener('submit', async ev => {
-        ev.preventDefault();
-        const nm = ($('cp-mgr-new-name').value || '').replace(/\s+/g, ' ').trim();
-        if (!nm) return;
-        const ins = await sbClient.from('couriers').insert({ name: nm, active: true, sort_order: ((r.data && r.data.length) || 0) + 1 });
-        if (ins.error) return toast('تعذّرت إضافة المندوب: ' + ins.error.message, true);
-        toast('تمت إضافة المندوب ' + nm + ' ✓');
-        openMgr('accounts');
-      });
-    }
-
     m.querySelectorAll('[data-link]').forEach(f => f.addEventListener('submit', async ev => {
       ev.preventDefault();
       const x = await sbClient.rpc('assign_courier', { p_email: f.querySelector('input').value.trim(), p_courier_id: Number(f.dataset.link) });
-      if (x.error) return toast(/no such account/.test(x.error.message) ? 'مفيش حساب بالإيميل ده في Supabase' : /another role/.test(x.error.message) ? 'الحساب ده مربوط بدور تاني (موظف/مدير/منفذ)' : errMsg(x.error), true);
-      toast('اتربط حساب المندوب بنجاح ✓'); openMgr('accounts');
+      if (x.error) return toast(/no such account/.test(x.error.message) ? 'مفيش حساب بالإيميل ده في Supabase' : /another role/.test(x.error.message) ? 'الحساب ده ليه دور تاني' : errMsg(x.error), true);
+      toast('اتربط الحساب ✓'); openMgr();
     }));
-
     m.querySelectorAll('[data-unlink]').forEach(b => b.addEventListener('click', async () => {
-      if (!window.confirm('فك ربط وإيقاف حساب دخول المندوب ده؟')) return;
+      if (!window.confirm('إيقاف حساب المندوب ده؟ مش هيقدر يدخل تاني.')) return;
       const x = await sbClient.rpc('remove_role', { p_user: b.dataset.unlink });
-      if (x.error) return toast(errMsg(x.error), true);
-      toast('تم فك ربط الحساب ✓'); openMgr('accounts');
-    }));
-
-    m.querySelectorAll('[data-toggle-c]').forEach(b => b.addEventListener('click', async () => {
-      const id = Number(b.dataset.toggleC), act = b.dataset.active === 'true';
-      if (!act && !window.confirm('إيقاف المندوب ده من القائمة النشطة؟')) return;
-      const u = await sbClient.from('couriers').update({ active: act }).eq('id', id);
-      if (u.error) return toast(errMsg(u.error), true);
-      toast(act ? 'تم تفعيل المندوب ✓' : 'تم إيقاف المندوب'); openMgr('accounts');
+      if (x.error) return toast(errMsg(x.error), true); toast('اتوقف الحساب'); openMgr();
     }));
   }
 })();

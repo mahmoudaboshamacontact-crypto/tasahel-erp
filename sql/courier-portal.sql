@@ -20,10 +20,6 @@ alter table public.user_roles
 
 -- 2) ربط المندوب بحساب الدخول (مندوب واحد = حساب واحد)
 alter table public.couriers add column if not exists user_id uuid unique references auth.users(id) on delete set null;
--- بيانات بروفايل المندوب (المندوب بيعدّلها بنفسه، والإدارة بتشوفها)
-alter table public.couriers add column if not exists profile_title text;
-alter table public.couriers add column if not exists profile_phone text;
-alter table public.couriers add column if not exists profile_photo text;
 
 create or replace function public.is_courier()
 returns boolean language sql stable security definer set search_path = public as $$
@@ -65,13 +61,12 @@ end $$;
 
 drop function if exists public.list_courier_accounts();
 create or replace function public.list_courier_accounts()
-returns table (id bigint, name text, active boolean, user_id uuid, email text, profile_title text, profile_phone text, profile_photo text)
+returns table (id bigint, name text, active boolean, user_id uuid, email text)
 language plpgsql stable security definer set search_path = public as $$
 begin
   if not public.is_manager() then raise exception 'not allowed' using errcode = '42501'; end if;
   return query
-    select c.id, c.name, c.active, c.user_id, (select a.email::text from auth.users a where a.id = c.user_id),
-           c.profile_title, c.profile_phone, c.profile_photo
+    select c.id, c.name, c.active, c.user_id, (select a.email::text from auth.users a where a.id = c.user_id)
     from public.couriers c order by c.sort_order, c.id;
 end $$;
 
@@ -121,70 +116,47 @@ create policy cfc_select_staff on public.courier_fee_confirms for select to auth
 -- 5) دوال المندوب (كلها للمندوب فقط، وبتشتغل على شغله هو)
 create or replace function public.courier_me()
 returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare r public.couriers;
+declare
+  r public.couriers;
+  p public.profiles;
 begin
   if not public.is_courier() then raise exception 'courier only' using errcode = '42501'; end if;
   select * into r from public.couriers where user_id = auth.uid() and active;
   if r.id is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
-  return jsonb_build_object('id', r.id, 'name', r.name, 'user_id', auth.uid(),
-                            'fee', coalesce((select max(fee) from public.courier_trips where fee > 0), 40),
-                            'title', r.profile_title, 'phone', r.profile_phone, 'photo', r.profile_photo);
+  select * into p from public.profiles where id = auth.uid();
+  return jsonb_build_object(
+    'id', r.id,
+    'name', r.name,
+    'user_id', auth.uid(),
+    'job_title', coalesce(p.job_title, ''),
+    'phone', coalesce(p.phone, ''),
+    'avatar_path', p.avatar_path,
+    'fee', coalesce((select max(fee) from public.courier_trips where fee > 0), 40)
+  );
 end $$;
 
--- تعديل بروفايلي (المسمى/التليفون/الصورة). p_photo: null = سيب الصورة زي ما هي، '' = شيل الصورة
-create or replace function public.courier_profile_update(p_title text, p_phone text, p_photo text default null)
+create or replace function public.courier_save_profile(p_job text default null, p_phone text default null, p_avatar text default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare v_id bigint; v_title text := nullif(btrim(coalesce(p_title, '')), ''); v_phone text := nullif(btrim(coalesce(p_phone, '')), '');
+declare
+  r public.couriers;
+  v_job text := nullif(btrim(coalesce(p_job, '')), '');
+  v_phone text := nullif(btrim(coalesce(p_phone, '')), '');
+  v_av text := nullif(btrim(coalesce(p_avatar, '')), '');
 begin
   if not public.is_courier() then raise exception 'courier only' using errcode = '42501'; end if;
-  select id into v_id from public.couriers where user_id = auth.uid() and active;
-  if v_id is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
-  if v_title is not null and char_length(v_title) > 60 then raise exception 'المسمى الوظيفي طويل (٦٠ حرف كحد أقصى)'; end if;
-  if v_phone is not null and v_phone !~ '^[0-9+ ]{7,20}$' then raise exception 'رقم التليفون غير صحيح'; end if;
-  if p_photo is not null and p_photo <> '' and (char_length(p_photo) > 150000 or p_photo !~ '^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$') then
-    raise exception 'الصورة غير صالحة أو كبيرة';
-  end if;
-  update public.couriers set profile_title = v_title, profile_phone = v_phone,
-         profile_photo = case when p_photo is null then profile_photo when p_photo = '' then null else p_photo end
-   where id = v_id;
+  select * into r from public.couriers where user_id = auth.uid() and active;
+  if r.id is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
+  insert into public.profiles (id, full_name, job_title, phone, avatar_path)
+  values (auth.uid(), r.name, v_job, v_phone, v_av)
+  on conflict (id) do update
+    set full_name = coalesce(nullif(public.profiles.full_name, ''), excluded.full_name),
+        job_title = excluded.job_title,
+        phone = excluded.phone,
+        avatar_path = excluded.avatar_path;
   return public.courier_me();
 end $$;
-
--- ملاحظاتي وحالة كل واحدة: اتحلّت (لو كانت «رسوم ناقصة» واتسجل للمندوب رسوم توصيل) / الموظف شافها (إشعار اتقرا) / لسه ماتشافتش
-create or replace function public.courier_my_notes()
-returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare v_me text;
-begin
-  if not public.is_courier() then raise exception 'courier only' using errcode = '42501'; end if;
-  select public.norm_ar(name) into v_me from public.couriers where user_id = auth.uid() and active;
-  if v_me is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
-  return coalesce((
-    select jsonb_agg(to_jsonb(r) order by r.created_at desc) from (
-      select c.id, c.transaction_id, c.body, c.created_at,
-             (select max(l.client_name) from public.request_lines l where l.transaction_id = c.transaction_id and l.deleted_at is null) as client_name,
-             case
-               when c.body like '⚠ المشوار ده برسوم توصيل%' and exists (
-                      select 1 from public.request_lines l where l.transaction_id = c.transaction_id and l.deleted_at is null
-                         and public.norm_ar(l.service) like 'رسوم توصيل%' and public.norm_ar(l.executor) = v_me) then 'resolved'
-               when exists (select 1 from public.notifications n where n.body = c.body and n.read) then 'seen'
-               else 'sent' end as status
-        from public.tx_comments c
-       where c.author_id = auth.uid() and c.deleted_at is null and c.created_at > now() - interval '90 days'
-       order by c.created_at desc limit 100) r), '[]'::jsonb);
-end $$;
-revoke all on function public.courier_my_notes() from public, anon;
-grant execute on function public.courier_my_notes() to authenticated;
-
--- صور المناديب للموظفين (عشان تظهر في الشات بتاعهم). للموظفين والمدير فقط
-create or replace function public.courier_photos()
-returns jsonb language plpgsql stable security definer set search_path = public as $$
-begin
-  if not public.is_staff() then raise exception 'not allowed' using errcode = '42501'; end if;
-  return coalesce((select jsonb_object_agg(c.user_id::text, c.profile_photo) from public.couriers c
-                    where c.user_id is not null and c.profile_photo is not null), '{}'::jsonb);
-end $$;
-revoke all on function public.courier_photos() from public, anon;
-grant execute on function public.courier_photos() to authenticated;
+revoke all on function public.courier_save_profile(text, text, text) from public, anon;
+grant execute on function public.courier_save_profile(text, text, text) to authenticated;
 
 -- شغلي: مشاويري (استلام/تسليم) + رسوم التوصيل المسجّلة باسمي، في فترة (افتراضي آخر 62 يوم)
 create or replace function public.courier_items(p_from date default null, p_to date default null)
@@ -391,18 +363,25 @@ begin
   return cid;
 end $$;
 
+drop function if exists public.courier_chat_messages(uuid, timestamptz);
 create or replace function public.courier_chat_messages(p_channel uuid, p_after timestamptz default null)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare me uuid := auth.uid();
+declare
+  me uuid := auth.uid();
+  v_other_read timestamptz;
 begin
   if not public.is_courier() then raise exception 'courier only' using errcode = '42501'; end if;
   if not exists (select 1 from public.channels c join public.channel_members m on m.channel_id = c.id
                   where c.id = p_channel and c.kind = 'dm' and m.user_id = me) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
+  select max(cm.last_read_at) into v_other_read
+    from public.channel_members cm
+   where cm.channel_id = p_channel and cm.user_id <> me;
   return coalesce((
     select jsonb_agg(to_jsonb(x) order by x.created_at) from (
-      select m.id, m.body, m.created_at, m.tx_id, (m.sender_id = me) as mine
+      select m.id, m.body, m.created_at, m.tx_id, (m.sender_id = me) as mine,
+             case when m.sender_id = me then coalesce(v_other_read >= m.created_at, false) else true end as read
         from public.messages m
        where m.channel_id = p_channel and (p_after is null or m.created_at > p_after)
        order by m.created_at desc limit 120) x), '[]'::jsonb);
@@ -444,13 +423,13 @@ begin
 end $$;
 
 revoke all on function
-  public.courier_me(), public.courier_profile_update(text, text, text), public.courier_items(date, date), public.courier_confirm_day(text, date),
+  public.courier_me(), public.courier_items(date, date), public.courier_confirm_day(text, date),
   public.courier_add_note(text, text, text), public.courier_tx_notes(text), public.courier_contacts(),
   public.courier_dm(uuid), public.courier_chat_messages(uuid, timestamptz), public.courier_chat_send(uuid, text, text),
   public.courier_chat_read(uuid), public.courier_overview(), public.norm_ar(text)
   from public, anon;
 grant execute on function
-  public.courier_me(), public.courier_profile_update(text, text, text), public.courier_items(date, date), public.courier_confirm_day(text, date),
+  public.courier_me(), public.courier_items(date, date), public.courier_confirm_day(text, date),
   public.courier_add_note(text, text, text), public.courier_tx_notes(text), public.courier_contacts(),
   public.courier_dm(uuid), public.courier_chat_messages(uuid, timestamptz), public.courier_chat_send(uuid, text, text),
   public.courier_chat_read(uuid), public.courier_overview(), public.norm_ar(text)
@@ -536,48 +515,236 @@ end $$;
 -- select proname from pg_proc where proname like 'courier_%' or proname in ('assign_courier','list_courier_accounts','is_courier','norm_ar');
 
 -- =====================================================================
--- 9) إضافات النسخة 3 (Courier Portal v3):
---    لوحة ترتيب الاستلامات والتسليم (Leaderboard) + إحصائيات شاملة للمدير
---    قابل لإعادة التشغيل بأمان (Idempotent) — إضافة فقط بدون مساس بالدوال السابقة.
+-- 9) إضافات بوابة المندوب (v5):
+--    - courier_tx_detail(p_tx): تفاصيل المعاملة للمندوب (بدون أسعار عميل أو مدفوعات)
+--    - courier_confirm_one(p_type, p_ref): تأكيد مشوار/بند واحد لوحده („أكّد ده بس“)
+--    - courier_my_notes(): آخر ملاحظات المندوب عشان علامة „📨 أبلغت الموظف“
+--    - courier_leaderboard(p_from, p_to): لوحة ترتيب الاستلامات والتسليم
 -- =====================================================================
 
--- استبعاد الجهات (مش أشخاص) من الترتيب؛ المدير يقدر يغيّر العمود بعدين
-alter table public.couriers add column if not exists in_ranking boolean not null default true;
-update public.couriers set in_ranking = false
- where public.norm_ar(name) in (public.norm_ar('الفرع'), public.norm_ar('ارامكس'), public.norm_ar('توصيل عن طريق اوبر'), public.norm_ar('seles'));
+-- 9-أ) تفاصيل المعاملة للمندوب (البند A.2)
+drop function if exists public.courier_tx_detail(text);
+create or replace function public.courier_tx_detail(p_tx text)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_c public.couriers;
+  v_me text;
+  v_tx text := btrim(coalesce(p_tx, ''));
+  v_client text;
+  v_phone text;
+  v_addr text;
+  v_emp text;
+  v_emp_id uuid;
+  v_emp_phone text;
+begin
+  if not public.is_courier() then raise exception 'courier only' using errcode = '42501'; end if;
+  select * into v_c from public.couriers where user_id = auth.uid() and active;
+  if v_c.id is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
+  v_me := public.norm_ar(v_c.name);
 
--- لوحة ترتيب المناديب (تعمل للمندوب وللمدير/الموظف):
--- - المندوب يشوف: الترتيب، الاسم، عدد الاستلامات، عدد التسليمات، مشاوير التوصيل، الإجمالي، ونسبة التأكيد (بدون كشف مبالغ غيره).
--- - المدير يشوف بالإضافة لذلك: إجمالي المبالغ والعمولات المؤكدة والمنتظرة لكل مندوب.
+  if not (exists (select 1 from public.courier_trips t where t.transaction_id = v_tx and public.norm_ar(t.courier) = v_me)
+       or exists (select 1 from public.request_lines l where l.transaction_id = v_tx and l.deleted_at is null
+                    and public.norm_ar(l.service) like 'رسوم توصيل%' and public.norm_ar(l.executor) = v_me)) then
+    raise exception 'not your transaction' using errcode = '42501';
+  end if;
+
+  select max(l.client_name), max(l.phone), max(l.address), max(l.employee)
+    into v_client, v_phone, v_addr, v_emp
+    from public.request_lines l
+   where l.transaction_id = v_tx and l.deleted_at is null;
+
+  select p.id, p.phone into v_emp_id, v_emp_phone
+    from public.profiles p
+   where public.norm_ar(p.full_name) = public.norm_ar(v_emp)
+   limit 1;
+
+  return jsonb_build_object(
+    'transaction_id', v_tx,
+    'client_name', v_client,
+    'phone', v_phone,
+    'address', v_addr,
+    'employee', v_emp,
+    'employee_id', v_emp_id,
+    'employee_phone', v_emp_phone,
+    'lines', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id,
+        'service', l.service,
+        'status', coalesce(l.status, case when l.delivered then 'Delivered' when l.complete then 'Complete' when l.under_review then 'Under Review' else 'In Progress' end),
+        'complete', coalesce(l.complete, false),
+        'delivered', coalesce(l.delivered, false),
+        'under_review', coalesce(l.under_review, false),
+        'received_at', l.received_at
+      ) order by l.id)
+      from public.request_lines l
+      where l.transaction_id = v_tx and l.deleted_at is null
+    ), '[]'::jsonb),
+    'trips', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', t.id,
+        'kind', t.kind,
+        'trip_day', t.trip_day,
+        'fee', t.fee,
+        'confirmed', (t.courier_confirmed_at is not null),
+        'courier_confirmed_at', t.courier_confirmed_at
+      ) order by t.trip_day desc, t.id desc)
+      from public.courier_trips t
+      where t.transaction_id = v_tx and public.norm_ar(t.courier) = v_me
+    ), '[]'::jsonb),
+    'notes', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', c.id,
+        'body', c.body,
+        'at', c.created_at
+      ) order by c.created_at desc)
+      from public.tx_comments c
+      where c.transaction_id = v_tx and c.author_id = auth.uid() and c.deleted_at is null
+    ), '[]'::jsonb)
+  );
+end $$;
+
+-- 9-ب) تأكيد ريكوست/مشوار واحد لوحده „أكّد ده بس“ (البند B.1)
+drop function if exists public.courier_confirm_one(text, text);
+create or replace function public.courier_confirm_one(p_type text, p_ref text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_c public.couriers;
+  v_today date := (now() at time zone 'Africa/Cairo')::date;
+  v_me text;
+  v_ref text := btrim(coalesce(p_ref, ''));
+  v_n int := 0;
+  v_amt numeric := 0;
+  v_tx text;
+  v_line_id bigint;
+  v_label text;
+begin
+  if not public.is_courier() then raise exception 'courier only' using errcode = '42501'; end if;
+  select * into v_c from public.couriers where user_id = auth.uid() and active;
+  if v_c.id is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
+  if p_type not in ('pickup','delivery','fee') then raise exception 'bad kind' using errcode = '22023'; end if;
+  if v_ref = '' then raise exception 'bad ref' using errcode = '22023'; end if;
+  v_me := public.norm_ar(v_c.name);
+  v_label := case p_type when 'pickup' then 'تأكيد المندوب للاستلام' when 'delivery' then 'تأكيد المندوب للتسليم' else 'تأكيد المندوب لرسوم التوصيل' end;
+
+  if p_type in ('pickup','delivery') then
+    if not exists (
+      select 1 from public.courier_trips t
+       where t.kind = p_type and public.norm_ar(t.courier) = v_me
+         and (t.transaction_id = v_ref or t.id::text = v_ref)
+    ) then
+      raise exception 'not your transaction' using errcode = '42501';
+    end if;
+
+    with u as (
+      update public.courier_trips t
+         set courier_confirmed_at = now()
+       where t.kind = p_type
+         and public.norm_ar(t.courier) = v_me
+         and (t.transaction_id = v_ref or t.id::text = v_ref)
+         and t.trip_day <= v_today
+         and t.courier_confirmed_at is null
+      returning t.transaction_id, t.fee
+    )
+    select count(*), coalesce(sum(fee), 0), max(transaction_id) into v_n, v_amt, v_tx from u;
+  else
+    begin
+      v_line_id := v_ref::bigint;
+    exception when others then
+      v_line_id := null;
+    end;
+
+    if not exists (
+      select 1 from public.request_lines l
+       where l.deleted_at is null
+         and public.norm_ar(l.service) like 'رسوم توصيل%'
+         and public.norm_ar(l.executor) = v_me
+         and ((v_line_id is not null and l.id = v_line_id) or l.transaction_id = v_ref)
+    ) then
+      raise exception 'not your transaction' using errcode = '42501';
+    end if;
+
+    with src as (
+      select l.id, l.transaction_id,
+             coalesce(nullif(l.exec_total, 0), coalesce(l.qty, 0) * coalesce(l.exec_unit_cost, 0)) as amount
+        from public.request_lines l
+       where l.deleted_at is null
+         and public.norm_ar(l.service) like 'رسوم توصيل%'
+         and public.norm_ar(l.executor) = v_me
+         and ((v_line_id is not null and l.id = v_line_id) or (v_line_id is null and l.transaction_id = v_ref))
+         and l.received_at::date <= v_today
+       limit 1
+    ),
+    ins as (
+      insert into public.courier_fee_confirms (line_id, courier, amount, confirmed_by)
+      select s.id, v_c.name, s.amount, auth.uid() from src s
+      on conflict (line_id) do update
+        set courier = excluded.courier, amount = excluded.amount, confirmed_at = now(), confirmed_by = excluded.confirmed_by
+        where public.courier_fee_confirms.courier is distinct from excluded.courier or public.courier_fee_confirms.amount is distinct from excluded.amount
+      returning line_id, amount
+    )
+    select count(*), coalesce(sum(i.amount), 0), max(s.transaction_id)
+      into v_n, v_amt, v_tx
+      from ins i join src s on s.id = i.line_id;
+  end if;
+
+  if v_n > 0 and v_tx is not null then
+    insert into public.audit_log (transaction_id, action, service, user_name, details)
+    values (v_tx, 'updated', 'مندوب: ' || v_c.name, v_c.name,
+            jsonb_build_object(v_label, jsonb_build_object('old', 'غير مؤكد', 'new', 'مؤكد')));
+  end if;
+
+  return jsonb_build_object('ok', true, 'count', v_n, 'amount', v_amt, 'transaction_id', v_tx);
+end $$;
+
+-- 9-ج) آخر ملاحظات المندوب على معاملاته (عشان علامة „📨 أبلغت الموظف (الساعة ...)“)
+drop function if exists public.courier_my_notes();
+create or replace function public.courier_my_notes()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_c public.couriers;
+begin
+  if not public.is_courier() then raise exception 'courier only' using errcode = '42501'; end if;
+  select * into v_c from public.couriers where user_id = auth.uid() and active;
+  if v_c.id is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
+  return coalesce((
+    select jsonb_agg(to_jsonb(r) order by r.at desc) from (
+      select distinct on (c.transaction_id)
+             c.id, c.transaction_id, c.body, c.created_at as at
+        from public.tx_comments c
+       where c.author_id = auth.uid() and c.deleted_at is null
+       order by c.transaction_id, c.created_at desc
+       limit 200
+    ) r
+  ), '[]'::jsonb);
+end $$;
+
+-- 9-د) لوحة ترتيب المناديب (للمندوب: أعداد فقط بدون كشف عمولات غيره)
+drop function if exists public.courier_leaderboard(date, date);
 create or replace function public.courier_leaderboard(p_from date default null, p_to date default null)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare
+  v_c public.couriers;
   v_today date := (now() at time zone 'Africa/Cairo')::date;
   v_to date := coalesce(p_to, v_today);
   v_from date := greatest(coalesce(p_from, date_trunc('month', v_today)::date), v_to - 366);
-  v_is_mgr boolean := coalesce(public.is_manager(), false);
-  v_is_staff boolean := coalesce(public.is_staff(), false);
-  v_is_courier boolean := coalesce(public.is_courier(), false);
   v_uid uuid := auth.uid();
 begin
-  if not (v_is_courier or v_is_mgr or v_is_staff) then
-    raise exception 'not allowed' using errcode = '42501';
-  end if;
+  if not public.is_courier() then raise exception 'courier only' using errcode = '42501'; end if;
+  select * into v_c from public.couriers where user_id = v_uid and active;
+  if v_c.id is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
 
   return coalesce((
     with active_couriers as (
       select c.id, c.name, public.norm_ar(c.name) as norm_name, c.user_id, c.sort_order
         from public.couriers c
-       where c.active = true and c.in_ranking
+       where c.active = true
     ),
     trips_agg as (
       select public.norm_ar(t.courier) as norm_name,
              count(*) filter (where t.kind = 'pickup') as pickups_total,
              count(*) filter (where t.kind = 'pickup' and t.courier_confirmed_at is not null) as pickups_confirmed,
              count(*) filter (where t.kind = 'delivery') as deliveries_total,
-             count(*) filter (where t.kind = 'delivery' and t.courier_confirmed_at is not null) as deliveries_confirmed,
-             coalesce(sum(t.fee) filter (where t.courier_confirmed_at is not null), 0) as trips_confirmed_amt,
-             coalesce(sum(t.fee) filter (where t.courier_confirmed_at is null), 0) as trips_pending_amt
+             count(*) filter (where t.kind = 'delivery' and t.courier_confirmed_at is not null) as deliveries_confirmed
         from public.courier_trips t
        where t.trip_day between v_from and v_to
          and t.courier is not null and t.courier <> '—'
@@ -586,9 +753,7 @@ begin
     fees_agg as (
       select public.norm_ar(l.executor) as norm_name,
              count(*) as fees_total,
-             count(*) filter (where fc.line_id is not null) as fees_confirmed,
-             coalesce(sum(coalesce(nullif(l.exec_total, 0), coalesce(l.qty, 0) * coalesce(l.exec_unit_cost, 0))) filter (where fc.line_id is not null), 0) as fees_confirmed_amt,
-             coalesce(sum(coalesce(nullif(l.exec_total, 0), coalesce(l.qty, 0) * coalesce(l.exec_unit_cost, 0))) filter (where fc.line_id is null), 0) as fees_pending_amt
+             count(*) filter (where fc.line_id is not null) as fees_confirmed
         from public.request_lines l
         left join public.courier_fee_confirms fc
           on fc.line_id = l.id
@@ -602,7 +767,6 @@ begin
       select ac.id,
              ac.name,
              (ac.user_id = v_uid) as is_me,
-             (ac.user_id is not null) as has_account,
              coalesce(ta.pickups_total, 0) as pickups,
              coalesce(ta.pickups_confirmed, 0) as pickups_confirmed,
              coalesce(ta.deliveries_total, 0) as deliveries,
@@ -611,13 +775,6 @@ begin
              coalesce(fa.fees_confirmed, 0) as fee_trips_confirmed,
              (coalesce(ta.pickups_total, 0) + coalesce(ta.deliveries_total, 0) + coalesce(fa.fees_total, 0)) as total_trips,
              (coalesce(ta.pickups_confirmed, 0) + coalesce(ta.deliveries_confirmed, 0) + coalesce(fa.fees_confirmed, 0)) as confirmed_trips,
-             (coalesce(ta.pickups_total, 0) + coalesce(ta.deliveries_total, 0)) as std_trips,
-             case when v_is_mgr or ac.user_id = v_uid
-                  then (coalesce(ta.trips_confirmed_amt, 0) + coalesce(fa.fees_confirmed_amt, 0))
-                  else null end as confirmed_amount,
-             case when v_is_mgr or ac.user_id = v_uid
-                  then (coalesce(ta.trips_pending_amt, 0) + coalesce(fa.fees_pending_amt, 0))
-                  else null end as pending_amount,
              ac.sort_order
         from active_couriers ac
         left join trips_agg ta on ta.norm_name = ac.norm_name
@@ -635,5 +792,16 @@ begin
   ), '[]'::jsonb);
 end $$;
 
-revoke all on function public.courier_leaderboard(date, date) from public, anon;
-grant execute on function public.courier_leaderboard(date, date) to authenticated;
+revoke all on function
+  public.courier_tx_detail(text),
+  public.courier_confirm_one(text, text),
+  public.courier_my_notes(),
+  public.courier_leaderboard(date, date)
+  from public, anon;
+
+grant execute on function
+  public.courier_tx_detail(text),
+  public.courier_confirm_one(text, text),
+  public.courier_my_notes(),
+  public.courier_leaderboard(date, date)
+  to authenticated;
