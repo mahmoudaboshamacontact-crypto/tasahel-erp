@@ -49,6 +49,7 @@ drop trigger if exists courier_fee_confirm_reset on public.request_lines;
 create trigger courier_fee_confirm_reset
 before update or delete on public.request_lines
 for each row execute function public.trg_courier_fee_confirm_reset();
+revoke all on function public.trg_courier_fee_confirm_reset() from public, anon, authenticated;
 
 -- 2) عرض رسوم التوصيل كمؤكدة فقط إذا تطابق المندوب والمبلغ واليوم.
 create or replace function public.courier_items(p_from date default null, p_to date default null)
