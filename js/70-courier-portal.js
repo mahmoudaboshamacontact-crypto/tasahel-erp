@@ -26,7 +26,7 @@
     notesMap: {}, nsig: '',
     contacts: [], csig: '', chat: null, msgs: [], msig: '', draft: '',
     theme: 'dark', timer: null, tick: 0,
-    busy: false, offline: false, unreadSeen: 0, loaded: false,
+    busy: false, offline: false, unreadSeen: 0, loaded: false, itemsLoading: null, refreshing: false, lastSync: null,
     guides: {}
   };
 
@@ -454,6 +454,7 @@
       '<header class="cp-head"><img src="logo-transparent.png" alt="" style="height:28px" onerror="this.style.display=\'none\'">' +
         '<div class="cp-who" id="cp-who-box" data-act="profile" title="ملفي الشخصي" style="display:flex;align-items:center;gap:8px">' + myAvHtml(34) + '<div style="min-width:0"><small>ملفي ←</small><b>' + eh(st.me && st.me.name) + '</b></div></div>' +
         '<div class="cp-clock"><b id="cp-time"></b><small id="cp-date"></small></div>' +
+        '<button type="button" class="cp-hbtn" data-act="refresh" title="تحديث البيانات" aria-label="تحديث البيانات"><i class="fa-solid fa-rotate"></i></button>' +
         '<button type="button" class="cp-hbtn" id="cp-theme" data-act="theme"></button>' + logoutBtn + '</header>' +
       '<div class="cp-off" id="cp-off">مفيش اتصال بالإنترنت… بحاول تاني</div>' +
       '<main class="cp-body" id="cp-body"></main>' +
@@ -543,11 +544,15 @@
       : '';
     const pendingSection = '<div class="cp-h"><span>المشاوير المطلوب تأكيدها اليوم</span><button type="button" class="cp-a cp-sm" data-tab="trips">كل مشاويري</button></div>' +
       (groups.length ? groups.map(tripGroupCard).join('') : '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير محتاجة تأكيد النهارده 🎉' : 'جاري تحميل المشاوير…') + '</div>');
+    const confirmedGroups = groupItemsByClient(confirmed);
+    const confirmedSection = confirmedGroups.length
+      ? '<div class="cp-h" style="margin-top:14px"><span>المشاوير اللي اتأكدت النهارده</span><span class="cp-tag ok">' + num(confirmed.length) + '</span></div>' + confirmedGroups.map(tripGroupCard).join('')
+      : '';
     const quickLinks = '<div class="cp-grid" style="margin-top:12px">' +
       '<button type="button" class="cp-btn" data-tab="review"><i class="fa-solid fa-clipboard-check"></i> مراجعة وتأكيد</button>' +
       '<button type="button" class="cp-btn" data-tab="account"><i class="fa-solid fa-wallet"></i> حسابي وعمولاتي</button>' +
       '</div>';
-    return greeting + kpis + overdueBox + pendingSection + quickLinks;
+    return greeting + kpis + overdueBox + pendingSection + confirmedSection + quickLinks;
   }
 
   function viewHome() {
@@ -592,17 +597,18 @@
     ].map(s => '<button type="button" class="cp-tab' + (st.statusFilter === s[0] ? ' on' : '') + '" data-sfilter="' + s[0] + '">' + s[1] + '</button>').join('') + '</div>';
 
     const searchBar = '<div class="cp-search-bar">' +
-      '<input id="cp-trip-q" type="search" value="' + eh(st.q) + '" placeholder="ابحث باسم العميل، رقم المعاملة، التليفون، العنوان…">' +
-      (st.q ? '<button type="button" class="cp-btn cp-sm" data-act="qclear">مسح البحث</button>' : '') +
+      '<input id="cp-trip-q" type="search" value="' + eh(st.q) + '" placeholder="ابحث باسم العميل، رقم المعاملة، التليفون، العنوان…" aria-label="البحث في المشاوير">' +
+      '<button type="button" class="cp-btn cp-go cp-sm" data-act="qsearch"><i class="fa-solid fa-magnifying-glass"></i> بحث</button>' +
+      (st.q ? '<button type="button" class="cp-btn cp-sm" data-act="qclear">مسح</button>' : '') +
     '</div>';
 
-    const q = (st.q || '').trim().toLowerCase();
+    const q = normAr((st.q || '').trim());
     const rows = all.filter(i => {
       if (st.type !== 'all' && i.type !== st.type) return false;
       if (st.statusFilter === 'pending' && i.confirmed) return false;
       if (st.statusFilter === 'confirmed' && !i.confirmed) return false;
       if (q) {
-        const hay = [i.client_name, i.transaction_id, i.phone, i.address, i.services, i.employee].map(x => String(x || '').toLowerCase()).join(' ');
+        const hay = normAr([i.client_name, i.transaction_id, i.phone, i.address, i.services, i.employee].map(x => String(x || '')).join(' '));
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -934,13 +940,38 @@
   /* ---------- تحميل البيانات (من غير رمشة) ---------- */
   function setOffline(v) { st.offline = v; const e = $('cp-off'); if (e) e.classList.toggle('on', !!v); }
   async function loadItems(silent) {
-    try {
-      const t = today(), r = await sbClient.rpc('courier_items', { p_from: addDays(t, -62), p_to: t });
-      if (r.error) throw r.error; setOffline(false);
-      const data = Array.isArray(r.data) ? r.data : [], sig = JSON.stringify(data);
-      st.loaded = true;
-      if (sig !== st.sig) { st.sig = sig; st.items = data; renderNav(); if (st.tab !== 'chat') renderTab(false); }
-    } catch (e) { setOffline(true); if (!silent) toast(errMsg(e), true); }
+    if (st.itemsLoading) return st.itemsLoading;
+    st.itemsLoading = (async () => {
+      try {
+        const t = today(), r = await sbClient.rpc('courier_items', { p_from: addDays(t, -62), p_to: t });
+        if (r.error) throw r.error;
+        setOffline(false);
+        const data = Array.isArray(r.data) ? r.data : [], sig = JSON.stringify(data);
+        st.loaded = true;
+        st.lastSync = Date.now();
+        if (sig !== st.sig) { st.sig = sig; st.items = data; renderNav(); if (st.tab !== 'chat') renderTab(false); }
+        return true;
+      } catch (e) {
+        setOffline(true);
+        if (!silent) toast(errMsg(e), true);
+        return false;
+      }
+    })();
+    const result = await st.itemsLoading;
+    st.itemsLoading = null;
+    return result;
+  }
+
+  async function refreshPortal(btn) {
+    if (st.refreshing) return;
+    st.refreshing = true;
+    if (btn) btn.disabled = true;
+    const ok = await loadItems(false);
+    await Promise.all([loadMyNotes(), loadLeaderboard(true), loadContacts(true)]);
+    st.refreshing = false;
+    if (btn && btn.isConnected) btn.disabled = false;
+    if (ok) toast('تم تحديث بيانات المشاوير ✓');
+    else toast('تعذر تحديث المشاوير. راجع الاتصال وحاول تاني.', true);
   }
   async function loadMyNotes() {
     try {
@@ -997,9 +1028,8 @@
     st.tick++; tickClock();
     if (document.hidden || !st.me) return;
     if (st.chat && st.tick % 4 === 0) pollMsgs(false);
-    if (st.tick % 20 === 0) { loadItems(true); loadMyNotes(); }
-    if (st.tick % 30 === 0) loadLeaderboard(true);
-    if (st.tick % 15 === 0) loadContacts(true);
+    if (st.tick % 30 === 0) { loadItems(true); loadMyNotes(); loadContacts(true); }
+    if (st.tick % 90 === 0) loadLeaderboard(true);
     if (st.tick % 60 === 0) sbClient.rpc('touch_last_seen');
   }
 
@@ -1311,13 +1341,15 @@
 
   /* ---------- الأحداث ---------- */
   function onKey(e) {
-    if (e.target && e.target.id === 'cp-msg' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
-  }
-  function onInput(e) {
-    if (e.target && e.target.id === 'cp-trip-q') {
+    if (e.target && e.target.id === 'cp-msg' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); return; }
+    if (e.target && e.target.id === 'cp-trip-q' && e.key === 'Enter') {
+      e.preventDefault();
       st.q = e.target.value;
       renderTab(false);
     }
+  }
+  function onInput(e) {
+    if (e.target && e.target.id === 'cp-trip-q') st.q = e.target.value;
   }
   function onClick(e) {
     const el = e.target.closest('[data-act],[data-tab],[data-per],[data-month],[data-lbper],[data-type],[data-sfilter]'); if (!el) return;
@@ -1335,12 +1367,19 @@
       case 'mclose-btn': return closeModal();
       case 'logout': return window.handleLogout && window.handleLogout();
       case 'theme': return toggleTheme();
+      case 'refresh': return refreshPortal(el);
       case 'profile': return openProfileModal();
       case 'pf-back': st.tab = st.prevTab || 'account'; renderNav(); return renderTab(true);
       case 'pf-pick': return pickCourierPhoto();
       case 'pf-rm': st.avPendingBlob = null; if (st.avPendingUrl) { URL.revokeObjectURL(st.avPendingUrl); st.avPendingUrl = ''; } st.avRemoved = true; updateHeaderWho(); return renderTab(false);
       case 'pf-save': return saveCourierProfile(el);
       case 'guide-toggle': return toggleGuide(el.dataset.gtab);
+      case 'qsearch': {
+        const input = $('cp-trip-q');
+        if (input) st.q = input.value;
+        renderTab(false);
+        return;
+      }
       case 'qclear': st.q = ''; return renderTab(false);
       case 'dprev': st.day = addDays(st.day, -1); return renderTab(false);
       case 'dnext': if (st.day < today()) { st.day = addDays(st.day, 1); renderTab(false); } return;
