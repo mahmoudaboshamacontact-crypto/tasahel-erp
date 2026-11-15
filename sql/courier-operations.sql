@@ -268,7 +268,7 @@ drop trigger if exists courier_ops_fee_notice on public.request_lines;
 create trigger courier_ops_fee_notice after insert or update of executor,exec_total,exec_unit_cost,qty,received_at,service,deleted_at
 on public.request_lines for each row execute function public.trg_courier_ops_fee_notice();
 
-\nrevoke all on function public.courier_ops_items(date,date),
+revoke all on function public.courier_ops_items(date,date),
  public.courier_ops_update(bigint,text,smallint,integer,text),
  public.courier_ops_report(bigint,text,text),public.courier_ops_issues(text),
  public.courier_ops_issue_update(bigint,text,text),public.courier_ops_ledger(date,date),
