@@ -7,7 +7,7 @@
   const money = n => Number(n || 0).toLocaleString('ar-EG') + ' ج';
   const labels = {new:'جديد',collecting:'جاري الاستلام',collected:'تم الاستلام',on_the_way:'في الطريق',delivered:'تم التسليم'};
   const issueLabels = {customer_unavailable:'العميل غير متاح',wrong_address:'عنوان خطأ',incorrect_fee:'رسوم غير صحيحة',pickup_problem:'مشكلة في الاستلام',other:'مشكلة أخرى'};
-  const state = {items:[],issues:[],ledger:[],closings:[],tab:'route',busy:false,managerBusy:false};
+  const state = {items:[],issues:[],ledger:[],closings:[],ledgerFrom:'',ledgerTo:'',tab:'route',busy:false,managerBusy:false};
   const statusOptions = Object.keys(labels).map(k=>'<option value="'+k+'">'+labels[k]+'</option>').join('');
   function rpc(name,args) { return sbClient.rpc(name,args || {}); }
   function toast(s,bad) { if (typeof showToast==='function') showToast(s,bad?'error':'success'); else alert(s); }
@@ -37,8 +37,12 @@
     const r=await rpc('courier_ops_issues',{p_status:null}); if(r.error)throw r.error;
     state.issues=Array.isArray(r.data)?r.data:[];
   }
+  function localDay(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function dayOffset(n) { const d=new Date(); d.setDate(d.getDate()+n); return localDay(d); }
   async function loadLedger() {
-    const r=await rpc('courier_ops_ledger',{p_from:null,p_to:null}); if(r.error)throw r.error;
+    state.ledgerFrom=state.ledgerFrom||dayOffset(-62); state.ledgerTo=state.ledgerTo||dayOffset(0);
+    if(state.ledgerFrom>state.ledgerTo) throw new Error('تاريخ البداية لازم يكون قبل تاريخ النهاية');
+    const r=await rpc('courier_ops_ledger',{p_from:state.ledgerFrom,p_to:state.ledgerTo}); if(r.error)throw r.error;
     state.ledger=Array.isArray(r.data)?r.data:[];
   }
   function routeView() {
@@ -52,14 +56,14 @@
   function ledgerView() {
     const fmtDate = v => v ? new Date(v).toLocaleString('ar-EG') : '—';
     const rows=state.ledger.map(x=>{
-      const closeState=x.included_in_closing?(x.paid_at?'تم الصرف':'دخل التقفيل'):(x.released_at?'أُعيد فتح التقفيل':'لم يدخل التقفيل');
+      const closeState=x.included_in_closing?(x.paid_at?'تم تسجيل الصرف':'دخل التقفيل'):(x.released_at?'أُعيد فتح التقفيل':'لم يدخل التقفيل');
       return '<tr><td>'+esc(x.day)+'</td><td>'+esc(x.transaction_id)+'</td><td>'+esc(x.type)+'</td><td>'+money(x.amount)+'</td><td>'+(x.confirmed?'مؤكد':'معلق')+'</td><td>'+esc(fmtDate(x.confirmed_at))+'</td><td>'+esc(closeState)+'</td><td>'+esc(x.paid_at?fmtDate(x.paid_at):'—')+'</td></tr>';
     }).join('');
     const total=state.ledger.filter(x=>x.confirmed).reduce((a,x)=>a+Number(x.amount||0),0);
     const closed=state.ledger.filter(x=>x.confirmed&&x.included_in_closing).reduce((a,x)=>a+Number(x.amount||0),0);
     const paid=state.ledger.filter(x=>x.confirmed&&x.included_in_closing&&x.paid_at).reduce((a,x)=>a+Number(x.amount||0),0);
     const unpaid=Math.max(0,closed-paid);
-    return '<div class="cp-grid"><div class="cp-kpi"><small>إجمالي المؤكد</small><b>'+money(total)+'</b></div><div class="cp-kpi"><small>دخل التقفيل</small><b>'+money(closed)+'</b></div><div class="cp-kpi"><small>تم تسجيل صرفه</small><b>'+money(paid)+'</b></div><div class="cp-kpi"><small>دخل التقفيل ولم يُصرف</small><b>'+money(unpaid)+'</b></div><div class="cp-kpi"><small>مؤكد لم يدخل التقفيل</small><b>'+money(total-closed)+'</b></div></div><div style="overflow:auto"><table class="cp-table" style="width:100%;font-size:11px"><thead><tr><th>التاريخ</th><th>المعاملة</th><th>النوع</th><th>العمولة</th><th>التأكيد</th><th>تاريخ التأكيد</th><th>حالة التقفيل</th><th>تاريخ الصرف</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="cp-sub">«تم تسجيل صرفه» تعني أن الإدارة سجلت الصرف في النظام، وليست إثباتًا بنكيًا.</p>';
+    return '<form id="cop-ledger-range" class="cp-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><label class="cp-sub" style="flex:1;min-width:125px">من تاريخ<input class="cp-field" type="date" name="from" value="'+esc(state.ledgerFrom)+'" required></label><label class="cp-sub" style="flex:1;min-width:125px">إلى تاريخ<input class="cp-field" type="date" name="to" value="'+esc(state.ledgerTo)+'" required></label><button class="cp-btn cp-go" type="submit">عرض الفترة</button></form><p class="cp-sub">اختر أي فترة تاريخية لعرض كشف حسابك.</p><div class="cp-grid"><div class="cp-kpi"><small>إجمالي المؤكد</small><b>'+money(total)+'</b></div><div class="cp-kpi"><small>دخل التقفيل</small><b>'+money(closed)+'</b></div><div class="cp-kpi"><small>تم تسجيل صرفه</small><b>'+money(paid)+'</b></div><div class="cp-kpi"><small>دخل التقفيل ولم يُصرف</small><b>'+money(unpaid)+'</b></div><div class="cp-kpi"><small>مؤكد لم يدخل التقفيل</small><b>'+money(total-closed)+'</b></div></div><div style="overflow:auto"><table class="cp-table" style="width:100%;font-size:11px"><thead><tr><th>التاريخ</th><th>المعاملة</th><th>النوع</th><th>العمولة</th><th>التأكيد</th><th>تاريخ التأكيد</th><th>حالة التقفيل</th><th>تاريخ الصرف</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="cp-sub">«تم تسجيل صرفه» تعني أن الإدارة سجلت الصرف في النظام، وليست إثباتًا بنكيًا.</p>';
   }
   async function render() {
     const c=$('cop-content'); if(!c)return; tabButtons(); c.innerHTML='<div class="cp-empty">جاري تحميل البيانات…</div>';
@@ -93,7 +97,7 @@
       }
       return render();
     }
-    if(a==='paid'){return;}
+    if(a==='paid')return paymentForm(b.dataset.id);
     if(a==='issue-state'){
       const resolution=b.dataset.state==='resolved'?(prompt('اكتب ملخص الحل (اختياري):')||'') : null;
       const r=await rpc('courier_ops_issue_update',{p_issue_id:Number(b.dataset.id),p_status:b.dataset.state,p_resolution:resolution});
@@ -109,6 +113,17 @@
     }
   }
   async function onSubmit(e) {
+    if(e.target.id==='cop-ledger-range'){
+      e.preventDefault();state.ledgerFrom=e.target.elements.from.value;state.ledgerTo=e.target.elements.to.value;
+      if(!state.ledgerFrom||!state.ledgerTo||state.ledgerFrom>state.ledgerTo)return toast('راجع تاريخ البداية والنهاية',true);
+      return render();
+    }
+    if(e.target.id==='cop-payment-form'){
+      e.preventDefault();const f=e.target;
+      const r=await rpc('courier_ops_mark_paid',{p_closing_id:Number(f.dataset.id),p_method:f.elements.method.value,p_reference:f.elements.reference.value.trim()||null,p_note:f.elements.note.value.trim()||null});
+      if(r.error)return toast(r.error.message,true);
+      toast('تم تسجيل الصرف وبياناته');const m=$('courier-ops-modal');if(m)m.style.display='none';state.managerBusy=false;return loadManagerPanel();
+    }
     if(e.target.id!=='cop-report-form')return;e.preventDefault();
     const f=e.target,r=await rpc('courier_ops_report',{p_trip_id:Number(f.dataset.id),p_issue_type:f.elements.type.value,p_details:f.elements.details.value.trim()});
     if(r.error)return toast(r.error.message,true);toast('تم إرسال البلاغ للإدارة');state.tab='issues';return render();
@@ -123,17 +138,16 @@
     try{
       const [ir,cr,tr]=await Promise.all([rpc('courier_ops_issues',{p_status:null}),rpc('courier_ops_closings',{p_from:null,p_to:null}),rpc('courier_ops_items',{p_from:null,p_to:null})]);
       if(ir.error)throw ir.error;if(cr.error)throw cr.error;if(tr.error)throw tr.error;state.issues=ir.data||[];state.closings=cr.data||[];state.items=tr.data||[];
-      c.innerHTML='<b>حالات المشاوير التشغيلية</b>'+state.items.slice(0,12).map(x=>'<div class="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.transaction_id)+' · '+esc(x.client_name||'بدون اسم')+'</span><select class="field !w-auto !py-1 text-xs" data-cop-status="'+x.id+'">'+Object.keys(labels).map(k=>'<option value="'+k+'" '+(x.operational_status===k?'selected':'')+'>'+labels[k]+'</option>').join('')+'</select></div>').join('')+'<hr><b>البلاغات المفتوحة: '+state.issues.filter(x=>x.status!=='resolved').length+'</b>'+state.issues.slice(0,8).map(x=>'<div class="border-b border-slate-200 dark:border-slate-700 py-2"><b>'+esc(issueLabels[x.issue_type]||x.issue_type)+'</b> · '+esc(x.courier)+' · '+esc(x.transaction_id)+'<div>'+esc(x.details)+'</div><span>'+({open:'مفتوح',in_progress:'جاري الحل',resolved:'تم الحل'}[x.status])+'</span><button class="text-emerald-600 font-bold mr-2" data-cop="issue-state" data-id="'+x.id+'" data-state="resolved">حل البلاغ</button></div>').join('')+'<hr><b>التقفيلات الأخيرة</b>'+state.closings.slice(0,8).map(x=>'<div class="flex justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.period_start)+' → '+esc(x.period_end)+' · '+money(x.total)+' · '+(x.paid_at?'تم الصرف':'لم يُسجل الصرف')+'</span>'+(isManager()?'<button class="text-emerald-600 font-bold" data-cop="paid" data-id="'+x.id+'" '+(x.paid_at?'disabled':'')+'>تسجيل الصرف</button>':'')+'</div>').join('');
+      c.innerHTML='<b>حالات المشاوير التشغيلية</b>'+state.items.slice(0,12).map(x=>'<div class="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.transaction_id)+' · '+esc(x.client_name||'بدون اسم')+'</span><select class="field !w-auto !py-1 text-xs" data-cop-status="'+x.id+'">'+Object.keys(labels).map(k=>'<option value="'+k+'" '+(x.operational_status===k?'selected':'')+'>'+labels[k]+'</option>').join('')+'</select></div>').join('')+'<hr><b>البلاغات المفتوحة: '+state.issues.filter(x=>x.status!=='resolved').length+'</b>'+state.issues.slice(0,8).map(x=>'<div class="border-b border-slate-200 dark:border-slate-700 py-2"><b>'+esc(issueLabels[x.issue_type]||x.issue_type)+'</b> · '+esc(x.courier)+' · '+esc(x.transaction_id)+'<div>'+esc(x.details)+'</div><span>'+({open:'مفتوح',in_progress:'جاري الحل',resolved:'تم الحل'}[x.status])+'</span><button class="text-emerald-600 font-bold mr-2" data-cop="issue-state" data-id="'+x.id+'" data-state="resolved">حل البلاغ</button></div>').join('')+'<hr><b>التقفيلات الأخيرة</b>'+state.closings.slice(0,8).map(x=>'<div class="flex justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.period_start)+' → '+esc(x.period_end)+' · '+money(x.total)+' · '+(x.paid_at?'تم الصرف':'لم يُسجل الصرف')+'</span>'+(x.paid_method?'<small> · '+esc(({cash:'نقدي',bank_transfer:'تحويل بنكي',wallet:'محفظة إلكترونية',other:'أخرى'}[x.paid_method]||x.paid_method))+'</small>':'')+(x.paid_reference?'<small> · مرجع: '+esc(x.paid_reference)+'</small>':'')+(x.paid_note?'<small> · '+esc(x.paid_note)+'</small>':'')+(isManager()?'<button class="text-emerald-600 font-bold" data-cop="paid" data-id="'+x.id+'" '+(x.paid_at?'disabled':'')+'>تسجيل الصرف</button>':'')+'</div>').join('');
     }catch(e){c.textContent='تعذر تحميل متابعة التشغيل. '+(e.message||'');}
     finally{state.managerBusy=false;}
   }
-  async function onManagerAction(e) {
-    const b=e.target.closest('[data-cop="paid"]');if(!b)return;
-    if(!confirm('تسجيل أن هذا التقفيل تم صرفه للمندوب؟'))return;
-    const r=await rpc('courier_ops_mark_paid',{p_closing_id:Number(b.dataset.id)});if(r.error)return toast(r.error.message,true);
-    toast('تم تسجيل الصرف');state.managerBusy=false;loadManagerPanel();
+  function paymentForm(id) {
+    if(!isManager())return toast('تسجيل الصرف متاح للمدير فقط',true);
+    shell();
+    $('cop-content').innerHTML='<h3>تسجيل صرف مستحقات المندوب</h3><p class="cp-sub">سجّل طريقة الصرف والمرجع المتاح. البيانات دي سجل إداري داخلي وليست تأكيدًا من البنك.</p><form id="cop-payment-form" data-id="'+Number(id)+'" class="cp-card"><label class="cp-sub">طريقة الصرف<select class="cp-field" name="method" required><option value="cash">نقدي</option><option value="bank_transfer">تحويل بنكي</option><option value="wallet">محفظة إلكترونية</option><option value="other">أخرى</option></select></label><label class="cp-sub">رقم مرجع التحويل / الإيصال (اختياري)<input class="cp-field" name="reference" maxlength="160" placeholder="رقم العملية أو الإيصال"></label><label class="cp-sub">ملاحظات (اختياري)<textarea class="cp-field" name="note" maxlength="1000" rows="3"></textarea></label><div class="cp-btns"><button class="cp-btn cp-go" type="submit">تأكيد تسجيل الصرف</button><button class="cp-btn" type="button" data-cop="close">إلغاء</button></div></form>';
   }
-  document.addEventListener('click',e=>{onClick(e);onManagerAction(e);});
+  document.addEventListener('click',onClick);
   document.addEventListener('change',onChange);
   document.addEventListener('submit',onSubmit);
   const obs=new MutationObserver(()=>{addCourierButton();injectManagerPanel();});
