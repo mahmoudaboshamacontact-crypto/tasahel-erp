@@ -164,7 +164,17 @@
     } else if (k === 'task') {
       const x = notes.find(n => String(n.id) === String(id));
       if (x && !x.read) { x.read = true; renderUB(); try { await sbClient.from('notifications').update({ read: true }).eq('id', x.id); } catch (e) { /* */ } }
-      if (x && String(x.kind).indexOf('task') === 0) switchTab('tasks');
+      if (x && String(x.kind).indexOf('task') === 0) {
+        switchTab('tasks');
+      } else if (x && String(x.title || '').startsWith('ملاحظة من المندوب ')) {
+        const match = String(x.title).match(/\sعلى\s+(.+)$/);
+        const tx = match && match[1] ? match[1].trim() : '';
+        if (tx && typeof window.openTxInTransactionsTab === 'function') {
+          window.openTxInTransactionsTab(tx);
+        } else if (tx) {
+          showToast('تمت قراءة الإشعار، لكن تعذّر فتح المعاملة تلقائيًا', 'info', 5000);
+        }
+      }
     } else if (k === 'cmt') {
       const c = cmts.find(n => String(n.id) === String(id)); if (!c) return;
       seen.add(String(c.id)); saveSeen(); renderUB();

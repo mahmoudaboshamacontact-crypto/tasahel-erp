@@ -738,6 +738,7 @@ begin
       select c.id, c.name, public.norm_ar(c.name) as norm_name, c.user_id, c.sort_order
         from public.couriers c
        where c.active = true
+         and c.user_id is not null
     ),
     trips_agg as (
       select public.norm_ar(t.courier) as norm_name,
