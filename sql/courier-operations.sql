@@ -268,7 +268,59 @@ drop trigger if exists courier_ops_fee_notice on public.request_lines;
 create trigger courier_ops_fee_notice after insert or update of executor,exec_total,exec_unit_cost,qty,received_at,service,deleted_at
 on public.request_lines for each row execute function public.trg_courier_ops_fee_notice();
 
-revoke all on function public.courier_ops_items(date,date),
+
+-- Deliver public employee comments to the assigned courier and notify them.
+-- Private internal comments remain private and do not generate courier alerts.
+create or replace function public.courier_tx_notes(p_tx text)
+returns jsonb language plpgsql stable security definer set search_path=public as $
+declare v_c public.couriers;
+begin
+  if not public.is_courier() then raise exception 'courier only' using errcode='42501'; end if;
+  select * into v_c from public.couriers where user_id=auth.uid() and active;
+  if v_c.id is null then raise exception 'courier account not linked' using errcode='42501'; end if;
+  if not (
+    exists (select 1 from public.courier_trips t
+             where t.transaction_id=btrim(p_tx)
+               and public.norm_ar(t.courier)=public.norm_ar(v_c.name))
+    or exists (select 1 from public.request_lines l
+                where l.transaction_id=btrim(p_tx) and l.deleted_at is null
+                  and public.norm_ar(l.service) like 'رسوم توصيل%'
+                  and public.norm_ar(l.executor)=public.norm_ar(v_c.name))
+  ) then raise exception 'not your transaction' using errcode='42501'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('id',c.id,'body',c.body,'at',c.created_at,'author_name',c.author_name)
+                     order by c.created_at desc)
+      from public.tx_comments c
+     where c.transaction_id=btrim(p_tx) and c.deleted_at is null
+       and (c.author_id=auth.uid() or c.is_public=true)
+  ),'[]'::jsonb);
+end $;
+
+create or replace function public.trg_courier_ops_staff_note_notice()
+returns trigger language plpgsql security definer set search_path=public as $func$
+begin
+  if new.deleted_at is not null or coalesce(new.is_public,false) is not true
+     or not (public.is_manager() or public.is_staff()) then return new; end if;
+  insert into public.notifications(user_id,kind,title,body)
+  select distinct c.user_id,'info',
+         'ملاحظة جديدة من الموظف على مشوارك — '||new.transaction_id,
+         left(coalesce(new.body,''),700)
+    from public.courier_trips t
+    join public.couriers c
+      on c.active and c.user_id is not null
+     and public.norm_ar(c.name)=public.norm_ar(t.courier)
+   where t.transaction_id=new.transaction_id;
+  return new;
+end $func$;
+drop trigger if exists courier_ops_staff_note_notice on public.tx_comments;
+create trigger courier_ops_staff_note_notice
+after insert on public.tx_comments for each row
+execute function public.trg_courier_ops_staff_note_notice();
+revoke all on function public.trg_courier_ops_staff_note_notice() from public,anon,authenticated;
+revoke all on function public.courier_tx_notes(text) from public,anon;
+grant execute on function public.courier_tx_notes(text) to authenticated;
+
+\nrevoke all on function public.courier_ops_items(date,date),
  public.courier_ops_update(bigint,text,smallint,integer,text),
  public.courier_ops_report(bigint,text,text),public.courier_ops_issues(text),
  public.courier_ops_issue_update(bigint,text,text),public.courier_ops_ledger(date,date),
