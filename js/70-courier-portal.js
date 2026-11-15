@@ -1029,10 +1029,19 @@
     if (!st.me || (!force && Date.now()-st.pendingReminderCheck < 15*60*1000)) return;
     st.pendingReminderCheck=Date.now();
     try {
-      const r=await sbClient.rpc('courier_pending_reminders');
-      if(r.error)throw r.error;
-      const n=Number(r.data)||0;
-      if(n>0)toast('عندك '+num(n)+' تذكير لمشاوير أو رسوم توصيل لسه محتاجة تأكيد');
+      /* يطلق فحص التذكير داخل الجلسة أيضًا؛ والـ Cron يغطي حالة إغلاق البوابة. */
+      try { await sbClient.rpc('courier_pending_reminders'); } catch(e) { /* optional until migration is applied */ }
+      const q=await sbClient.from('notifications')
+        .select('id,title,body,created_at')
+        .eq('read',false)
+        .in('title',['تذكير: عندك مشوار غير مؤكد','تذكير: عندك رسوم توصيل غير مؤكدة'])
+        .order('created_at',{ascending:false}).limit(20);
+      if(q.error)throw q.error;
+      const pending=Array.isArray(q.data)?q.data:[];
+      if(pending.length){
+        toast('عندك '+num(pending.length)+' تذكير لمشاوير أو رسوم توصيل محتاجة تأكيد');
+        await sbClient.from('notifications').update({read:true}).in('id',pending.map(x=>x.id));
+      }
     } catch(e) { /* لا نعطل البوابة إذا لم تُشغّل migration بعد */ }
   }
   function tick() {
