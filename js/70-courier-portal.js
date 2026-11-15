@@ -28,7 +28,7 @@
     contacts: [], csig: '', chat: null, msgs: [], draft: '',
     theme: 'dark', timer: null, tick: 0,
     busy: false, offline: false, unreadSeen: 0, loaded: false,
-    guides: {}, month: null, rvOpen: false, rvf: 'all', tripScope: 'day', pPhoto: undefined, pT: undefined, pP: undefined
+    guides: {}, month: null, rvOpen: false, lastOk: 0, rvf: 'all', tripScope: 'day', pPhoto: undefined, pT: undefined, pP: undefined
   };
 
   /* ---------- صلاحية المدير (الدور أو الإيميل المعتمد) ---------- */
@@ -54,6 +54,11 @@
   const rangeOf = (p, m) => { const t = today(); if (p === 'today') return [t, t]; if (p === 'week') return [weekStart(t), t]; m = m || monthOf(t); return [m + '-01', monthEnd(m)]; };
   const money = n => Number(n || 0).toLocaleString('ar-EG') + ' ج';
   const num = n => Number(n || 0).toLocaleString('ar-EG');
+
+  const buzz = () => { try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) { /* */ } };
+  const cacheKey = () => 'ts_cp_cache_' + (st.me && st.me.user_id);
+  function saveCache(items) { try { localStorage.setItem(cacheKey(), JSON.stringify({ ts: Date.now(), items: items })); } catch (e) { /* */ } }
+  function loadCache() { try { const c = JSON.parse(localStorage.getItem(cacheKey()) || 'null'); if (c && Array.isArray(c.items)) return c; } catch (e) { /* */ } return null; }
 
   /* ---------- حفظ واسترجاع حالة بطاقات التعريف (الشرح) ---------- */
   function initGuides() {
@@ -136,6 +141,7 @@
       '#courier-app .cp-fld{display:block;width:100%;border:1.5px solid var(--mu);background:var(--card);color:var(--tx);-webkit-text-fill-color:var(--tx);opacity:1;border-radius:12px;padding:10px 12px;font:inherit;font-size:14px;outline:none}#courier-app .cp-fld:focus{border-color:#10b981}#courier-app .cp-fld::placeholder{color:var(--mu);-webkit-text-fill-color:var(--mu);opacity:.8}',
       '.cp-whobtn{flex:1 1 0;min-width:0}@media(max-width:480px){.cp-head>img{display:none}}',
       '.cp-lbl{display:block;font-size:12px;font-weight:700;color:var(--mu);margin:10px 0 4px}',
+      '.cp-qr{display:flex;gap:6px;overflow-x:auto;padding:6px 0;flex:0 0 auto}.cp-qr .cp-a{white-space:nowrap}.cp-rights summary{cursor:pointer;font-size:13px}',
       '.cp-guide-mini{margin-bottom:10px;text-align:start}',
       '.cp-guide-mini button{width:100%;border:1px dashed var(--gd-bd);background:var(--gd-bg);color:#10b981;border-radius:12px;padding:7px 12px;font:inherit;font-size:11.5px;font-weight:800;cursor:pointer;text-align:start;display:flex;align-items:center;gap:6px}',
       /* الفلاتر والكروت */
@@ -311,7 +317,7 @@
         '<button type="button" class="cp-who cp-whobtn" id="cp-whobtn" data-act="profile">' + whoInner() + '</button>' +
         '<div class="cp-clock"><b id="cp-time"></b><small id="cp-date"></small></div>' +
         '<button type="button" class="cp-hbtn" id="cp-theme" data-act="theme"></button>' + logoutBtn + '</header>' +
-      '<div class="cp-off" id="cp-off">مفيش اتصال بالإنترنت… بحاول تاني</div>' +
+      '<div class="cp-off" id="cp-off">مفيش اتصال… اللي قدامك آخر نسخة محفوظة وبحاول أتصل تاني</div>' +
       '<main class="cp-body" id="cp-body"></main>' +
       '<nav class="cp-nav" id="cp-nav"></nav><div id="cp-modal-root"></div>');
     applyTheme(); tickClock(); renderNav(); renderTab();
@@ -387,7 +393,14 @@
     const lower = st.period === 'today'
       ? '<div class="cp-h"><span>آخر مشاويرك</span><button type="button" class="cp-a cp-sm" data-tab="trips">كل المشاوير ←</button></div>' + (recent || load || '<div class="cp-empty">لسه مفيش مشاوير متسجلة باسمك</div>')
       : '<div class="cp-h"><span>أيام ' + (st.period === 'week' ? 'الأسبوع' : 'الشهر') + ' وحالة كل يوم</span></div>' + (dayRows(rng).map(dayRowHtml).join('') || load || '<div class="cp-empty">مفيش مشاوير في الفترة دي</div>');
-    return renderGuideBanner('home') + seg + (st.period === 'month' ? monthNav() : '') + hero + rankTeaser + grid + lower;
+    const t0 = today(), oldPend = st.items.filter(i => !i.confirmed && i.day < t0);
+    const oldAlert = oldPend.length ? '<div class="cp-old">⚠ عندك <b>' + num(oldPend.length) + ' مشوار</b> مش متأكدين في أيام فاتت. راجعهم وأكّدهم عشان يتحسبوا في عمولتك. <button type="button" class="cp-a" data-act="goold">راجعهم دلوقتي</button></div>' : '';
+    const updLine = '<div class="cp-sub" style="margin:-4px 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">آخر تحديث: <b id="cp-upd">' + (st.lastOk ? eh(timeOf(st.lastOk)) : '—') + '</b><button type="button" class="cp-a cp-sm" data-act="refresh">تحديث الآن</button></div>';
+    const fee = money(st.me && st.me.fee || 40);
+    const rights = '<details class="cp-card cp-rights"><summary><b>إزاي بتتحسب عمولتي؟</b> (حقوقك)</summary><div class="cp-sub" style="line-height:1.8;margin-top:8px">' +
+      '• كل مشوار <b>استلام</b> = ' + fee + '، وكل مشوار <b>تسليم</b> = ' + fee + '.<br>• مشوار <b>رسوم التوصيل</b> بيتحسب لك بالمبلغ المسجل في الطلب كله.<br>' +
+      '• الرقم الأخضر (مؤكد) هو اللي بيتحسب لك، والبرتقالي بيتحول لأخضر لما تأكده من «المراجعة».<br>• لو فيه مشوار ناقص أو مبلغ غلط، ابعت «ملاحظة للموظف» من كارت المشوار أو كلّم الإدارة من «التواصل».</div></details>';
+    return renderGuideBanner('home') + oldAlert + seg + updLine + (st.period === 'month' ? monthNav() : '') + hero + rankTeaser + grid + lower + rights;
   }
 
   /* ---------- شهور وأيام (مشترك بين حسابي / مشاويري / المراجعة) ---------- */
@@ -630,9 +643,11 @@
     b.innerHTML = renderGuideBanner('chat') + (rows || '<div class="cp-empty">' + (st.loaded ? 'مفيش جهات اتصال' : 'جاري التحميل…') + '</div>');
   }
   function convView() {
+    const QR = ['وصلت', 'العميل مش بيرد', 'العنوان مش واضح', 'محتاج رسوم توصيل', 'خلصت التسليم', 'متأخر شوية'];
     const b = $('cp-body'), c = st.chat; if (!b) return;
     b.innerHTML = '<div class="cp-chat"><div class="cp-chead"><button type="button" class="cp-btn cp-sm" data-act="chat-back">رجوع</button><b>' + eh(c.name) + '</b>' + (c.phone ? callBtns(c.phone, 'اتصال') : '') + '</div>' +
       '<div class="cp-msgs" id="cp-msgs"></div>' + (c.tx ? '<div class="cp-sub" style="margin-top:6px">بخصوص معاملة <b>' + eh(c.tx) + '</b> <button type="button" class="cp-a cp-sm" data-act="chat-notx">شيل</button></div>' : '') +
+      '<div class="cp-qr">' + QR.map(x => '<button type="button" class="cp-a" data-act="qr" data-txt="' + eh(x) + '">' + eh(x) + '</button>').join('') + '<button type="button" class="cp-a" data-act="sendloc">ابعت موقعي</button></div>' +
       '<div class="cp-comp"><textarea id="cp-msg" class="cp-field" rows="1" placeholder="اكتب رسالة…">' + eh(st.draft) + '</textarea><button type="button" class="cp-btn cp-go" data-act="chat-send">إرسال</button></div></div>';
     paintMsgs(true);
     const t = $('cp-msg'); if (t) { t.addEventListener('input', () => { st.draft = t.value; t.style.height = 'auto'; t.style.height = Math.min(110, t.scrollHeight) + 'px'; }); }
@@ -661,7 +676,7 @@
       if (!st.chat || st.chat.ch !== c.ch) return;
       const have = new Set(st.msgs.map(x => x.id)), add = (r.data || []).filter(x => !have.has(x.id));
       if (first) { st.msgs = r.data || []; paintMsgs(true); }
-      else if (add.length) { st.msgs = st.msgs.filter(x => !String(x.id).startsWith('tmp')).concat(add); paintMsgs(false); }
+      else if (add.length) { if (add.some(x => !x.mine)) buzz(); st.msgs = st.msgs.filter(x => !String(x.id).startsWith('tmp')).concat(add); paintMsgs(false); }
       if ((first || add.some(x => !x.mine))) { sbClient.rpc('courier_chat_read', { p_channel: c.ch }); const k = st.contacts.find(x => x.channel_id === c.ch); if (k) k.unread = 0; renderNav(); }
     } catch (e) { setOffline(true); }
   }
@@ -684,8 +699,8 @@
       const t = today(), r = await sbClient.rpc('courier_items', { p_from: addDays(t, -120), p_to: t });
       if (r.error) throw r.error; setOffline(false);
       const data = Array.isArray(r.data) ? r.data : [], sig = JSON.stringify(data);
-      st.loaded = true;
-      if (sig !== st.sig) { st.sig = sig; st.items = data; renderNav(); if (st.tab !== 'chat' && st.tab !== 'profile') renderTab(false); }
+      st.loaded = true; st.lastOk = Date.now(); const u = $('cp-upd'); if (u) u.textContent = timeOf(st.lastOk);
+      if (sig !== st.sig) { saveCache(data); st.sig = sig; st.items = data; renderNav(); if (st.tab !== 'chat' && st.tab !== 'profile') renderTab(false); }
     } catch (e) { setOffline(true); if (!silent) toast(errMsg(e), true); }
   }
   async function loadLeaderboard(silent) {
@@ -723,7 +738,7 @@
       if (sig !== st.csig) {
         const u0 = unreadTotal(); st.csig = sig; st.contacts = data; const u1 = unreadTotal();
         renderNav(); if (st.tab === 'chat' && !st.chat) viewChat();
-        if (u1 > u0 && st.loaded && !(st.chat)) toast('وصلتك رسالة جديدة 💬');
+        if (u1 > u0 && st.loaded && !(st.chat)) { toast('وصلتك رسالة جديدة 💬'); buzz(); }
       }
     } catch (e) { if (!silent) toast(errMsg(e), true); }
   }
@@ -826,6 +841,19 @@
       case 'pback': st.pPhoto = undefined; st.pT = undefined; st.pP = undefined; return setTab('home');
       case 'pdel': syncDraft(); st.pPhoto = ''; return renderTab(false);
       case 'psave': return saveProfile(el);
+      case 'refresh': return loadItems(false).then(() => toast('اتحدّث ✓'));
+      case 'goold': { const o = st.items.filter(i => !i.confirmed && i.day < today()).map(i => i.day).sort().pop(); if (o) st.month = monthOf(o); st.rvf = 'pending'; st.rvOpen = false; return setTab('review'); }
+      case 'qr': { const t = $('cp-msg'); if (t) { t.value = (t.value ? t.value.trim() + ' ' : '') + el.dataset.txt; st.draft = t.value; t.focus(); } return; }
+      case 'sendloc': {
+        if (!navigator.geolocation) return toast('الموبايل ده مش بيدعم تحديد الموقع', true);
+        toast('بجيب موقعك…');
+        navigator.geolocation.getCurrentPosition(pos => {
+          const t = $('cp-msg'); if (!t) return;
+          const link = 'https://www.google.com/maps?q=' + pos.coords.latitude.toFixed(6) + ',' + pos.coords.longitude.toFixed(6);
+          t.value = (t.value ? t.value.trim() + ' ' : 'موقعي: ') + link; st.draft = t.value; t.focus(); toast('الموقع اتحط في الرسالة، اضغط إرسال');
+        }, () => toast('مقدرتش أجيب موقعك، اتأكد إن الموقع شغال', true), { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+        return;
+      }
       case 'qclear': st.q = ''; return renderTab(false);
       case 'dprev': st.day = addDays(st.day, -1); return renderTab(false);
       case 'dnext': if (st.day < today()) { st.day = addDays(st.day, 1); renderTab(false); } return;
@@ -851,8 +879,14 @@
   async function showCourier() {
     initTheme(); initGuides(); st.day = today(); st.month = monthOf(today());
     overlay('<div class="cp-empty" style="margin:auto">جاري التحميل…</div>');
-    try { const r = await sbClient.rpc('courier_me'); if (r.error) throw r.error; st.me = r.data; }
-    catch (e) { overlay('<header class="cp-head"><div class="cp-who"><b>بوابة المندوب</b></div>' + logoutBtn + '</header><div class="cp-empty" style="margin:auto">' + eh(errMsg(e)) + '</div>'); return; }
+    try { const r = await sbClient.rpc('courier_me'); if (r.error) throw r.error; st.me = r.data; try { localStorage.setItem('ts_cp_me', JSON.stringify(st.me)); } catch (x) { /* */ } }
+    catch (e) {
+      st.err = e; let m = null; try { m = JSON.parse(localStorage.getItem('ts_cp_me') || 'null'); } catch (x) { /* */ }
+      const denied = e && (e.code === '42501' || /not linked|courier only/.test(String(e.message || '')));
+      if (m && m.user_id && !denied) { st.me = m; st.offline = true; }
+    }
+    if (!st.me) { const e = st.err || new Error('تعذر تحميل البوابة'); overlay('<header class="cp-head"><div class="cp-who"><b>بوابة المندوب</b></div>' + logoutBtn + '</header><div class="cp-empty" style="margin:auto">' + eh(errMsg(e)) + '</div>'); return; }
+    const cc = loadCache(); if (cc) { st.items = cc.items; st.loaded = true; st.lastOk = cc.ts; }
     shell(); sbClient.rpc('touch_last_seen');
     await Promise.all([loadItems(false), loadLeaderboard(true), loadContacts(true)]);
     clearInterval(st.timer); st.timer = setInterval(tick, 1000);
@@ -868,6 +902,7 @@
     if (role === 'courier') { window.__role = 'courier'; return showCourier(); }
     if (role) window.__role = role;
     if (isManagerUser()) ensureManagerUi();
+    if (role === 'manager' || role === 'staff') loadCourierPhotos();
     try {
       const out = await _li.apply(this, arguments);
       if (isManagerUser()) ensureManagerUi();
@@ -877,9 +912,20 @@
       throw err;
     }
   };
+  /* الموظفين يشوفوا صورة المندوب في الشات بتاعهم (الصور بتتحمل للموظفين بس) */
+  async function loadCourierPhotos() { try { const r = await sbClient.rpc('courier_photos'); if (!r.error && r.data) window.__courierPhotos = r.data; } catch (e) { /* */ } }
+  const _av = window.avatarHtml;
+  if (typeof _av === 'function') {
+    window.avatarHtml = function (p, size) {
+      const ph = window.__courierPhotos && p && window.__courierPhotos[p.id];
+      if (!ph || !/^data:image\//.test(ph)) return _av.apply(this, arguments);
+      size = size || 40;
+      return '<img src="' + eh(ph) + '" alt="" class="rounded-full object-cover shrink-0" style="width:' + size + 'px;height:' + size + 'px">';
+    };
+  }
   const _sl = window.showLoginScreen;
   window.showLoginScreen = function () {
-    clearInterval(st.timer); st.me = null; st.sig = ''; st.lbsig = ''; st.csig = ''; st.items = []; st.leaderboard = []; st.contacts = []; st.chat = null; st.msgs = []; st.loaded = false; st.lbLoaded = false; st.tab = 'home'; st.rvOpen = false; st.pPhoto = undefined; st.pT = undefined; st.pP = undefined;
+    clearInterval(st.timer); try { if (st.me) { localStorage.removeItem(cacheKey()); localStorage.removeItem('ts_cp_me'); } } catch (e) { /* */ } st.me = null; st.sig = ''; st.lbsig = ''; st.csig = ''; st.items = []; st.leaderboard = []; st.contacts = []; st.chat = null; st.msgs = []; st.loaded = false; st.lbLoaded = false; st.tab = 'home'; st.rvOpen = false; st.pPhoto = undefined; st.pT = undefined; st.pP = undefined;
     document.body.classList.remove('is-courier-mode', 'is-partner-mode');
     const o = $('courier-app'); if (o) o.remove();
     return _sl.apply(this, arguments);

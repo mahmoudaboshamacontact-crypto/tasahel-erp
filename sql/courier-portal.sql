@@ -150,6 +150,17 @@ begin
   return public.courier_me();
 end $$;
 
+-- صور المناديب للموظفين (عشان تظهر في الشات بتاعهم). للموظفين والمدير فقط
+create or replace function public.courier_photos()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_staff() then raise exception 'not allowed' using errcode = '42501'; end if;
+  return coalesce((select jsonb_object_agg(c.user_id::text, c.profile_photo) from public.couriers c
+                    where c.user_id is not null and c.profile_photo is not null), '{}'::jsonb);
+end $$;
+revoke all on function public.courier_photos() from public, anon;
+grant execute on function public.courier_photos() to authenticated;
+
 -- شغلي: مشاويري (استلام/تسليم) + رسوم التوصيل المسجّلة باسمي، في فترة (افتراضي آخر 62 يوم)
 create or replace function public.courier_items(p_from date default null, p_to date default null)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
