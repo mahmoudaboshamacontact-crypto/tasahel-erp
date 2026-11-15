@@ -167,7 +167,7 @@
       if (x && String(x.kind).indexOf('task') === 0) {
         switchTab('tasks');
       } else if (x && String(x.title || '').startsWith('ملاحظة من المندوب ')) {
-        const match = String(x.title).match(/\\sعلى\\s+(.+)$/);
+        const match = String(x.title).match(/\sعلى\s+(.+)$/);
         const tx = match && match[1] ? match[1].trim() : '';
         if (tx && typeof window.openTxInTransactionsTab === 'function') {
           window.openTxInTransactionsTab(tx);
