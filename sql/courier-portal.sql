@@ -20,6 +20,10 @@ alter table public.user_roles
 
 -- 2) ربط المندوب بحساب الدخول (مندوب واحد = حساب واحد)
 alter table public.couriers add column if not exists user_id uuid unique references auth.users(id) on delete set null;
+-- بيانات بروفايل المندوب (المندوب بيعدّلها بنفسه، والإدارة بتشوفها)
+alter table public.couriers add column if not exists profile_title text;
+alter table public.couriers add column if not exists profile_phone text;
+alter table public.couriers add column if not exists profile_photo text;
 
 create or replace function public.is_courier()
 returns boolean language sql stable security definer set search_path = public as $$
@@ -59,13 +63,15 @@ begin
    where m.user_id = u and m.channel_id = c.id and c.kind = 'general';
 end $$;
 
+drop function if exists public.list_courier_accounts();
 create or replace function public.list_courier_accounts()
-returns table (id bigint, name text, active boolean, user_id uuid, email text)
+returns table (id bigint, name text, active boolean, user_id uuid, email text, profile_title text, profile_phone text, profile_photo text)
 language plpgsql stable security definer set search_path = public as $$
 begin
   if not public.is_manager() then raise exception 'not allowed' using errcode = '42501'; end if;
   return query
-    select c.id, c.name, c.active, c.user_id, (select a.email::text from auth.users a where a.id = c.user_id)
+    select c.id, c.name, c.active, c.user_id, (select a.email::text from auth.users a where a.id = c.user_id),
+           c.profile_title, c.profile_phone, c.profile_photo
     from public.couriers c order by c.sort_order, c.id;
 end $$;
 
@@ -121,7 +127,27 @@ begin
   select * into r from public.couriers where user_id = auth.uid() and active;
   if r.id is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
   return jsonb_build_object('id', r.id, 'name', r.name, 'user_id', auth.uid(),
-                            'fee', coalesce((select max(fee) from public.courier_trips where fee > 0), 40));
+                            'fee', coalesce((select max(fee) from public.courier_trips where fee > 0), 40),
+                            'title', r.profile_title, 'phone', r.profile_phone, 'photo', r.profile_photo);
+end $$;
+
+-- تعديل بروفايلي (المسمى/التليفون/الصورة). p_photo: null = سيب الصورة زي ما هي، '' = شيل الصورة
+create or replace function public.courier_profile_update(p_title text, p_phone text, p_photo text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_id bigint; v_title text := nullif(btrim(coalesce(p_title, '')), ''); v_phone text := nullif(btrim(coalesce(p_phone, '')), '');
+begin
+  if not public.is_courier() then raise exception 'courier only' using errcode = '42501'; end if;
+  select id into v_id from public.couriers where user_id = auth.uid() and active;
+  if v_id is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
+  if v_title is not null and char_length(v_title) > 60 then raise exception 'المسمى الوظيفي طويل (٦٠ حرف كحد أقصى)'; end if;
+  if v_phone is not null and v_phone !~ '^[0-9+ ]{7,20}$' then raise exception 'رقم التليفون غير صحيح'; end if;
+  if p_photo is not null and p_photo <> '' and (char_length(p_photo) > 150000 or p_photo !~ '^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$') then
+    raise exception 'الصورة غير صالحة أو كبيرة';
+  end if;
+  update public.couriers set profile_title = v_title, profile_phone = v_phone,
+         profile_photo = case when p_photo is null then profile_photo when p_photo = '' then null else p_photo end
+   where id = v_id;
+  return public.courier_me();
 end $$;
 
 -- شغلي: مشاويري (استلام/تسليم) + رسوم التوصيل المسجّلة باسمي، في فترة (افتراضي آخر 62 يوم)
@@ -382,13 +408,13 @@ begin
 end $$;
 
 revoke all on function
-  public.courier_me(), public.courier_items(date, date), public.courier_confirm_day(text, date),
+  public.courier_me(), public.courier_profile_update(text, text, text), public.courier_items(date, date), public.courier_confirm_day(text, date),
   public.courier_add_note(text, text, text), public.courier_tx_notes(text), public.courier_contacts(),
   public.courier_dm(uuid), public.courier_chat_messages(uuid, timestamptz), public.courier_chat_send(uuid, text, text),
   public.courier_chat_read(uuid), public.courier_overview(), public.norm_ar(text)
   from public, anon;
 grant execute on function
-  public.courier_me(), public.courier_items(date, date), public.courier_confirm_day(text, date),
+  public.courier_me(), public.courier_profile_update(text, text, text), public.courier_items(date, date), public.courier_confirm_day(text, date),
   public.courier_add_note(text, text, text), public.courier_tx_notes(text), public.courier_contacts(),
   public.courier_dm(uuid), public.courier_chat_messages(uuid, timestamptz), public.courier_chat_send(uuid, text, text),
   public.courier_chat_read(uuid), public.courier_overview(), public.norm_ar(text)
