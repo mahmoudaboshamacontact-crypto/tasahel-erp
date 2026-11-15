@@ -235,7 +235,7 @@ begin
     insert into public.notifications(user_id,kind,title,body) values(v_uid,'info',v_title,v_body);
   end if;
   return new;
-end $;
+end $func$;
 drop trigger if exists courier_ops_trip_notice on public.courier_trips;
 create trigger courier_ops_trip_notice after insert or update of courier,fee,trip_day,transaction_id,kind
 on public.courier_trips for each row execute function public.trg_courier_ops_trip_notice();
@@ -260,7 +260,7 @@ begin
       'المعاملة '||coalesce(new.transaction_id,'—')||' · '||coalesce(new.received_at::date::text,''));
   end if;
   return new;
-end $;
+end $func$;
 drop trigger if exists courier_ops_fee_notice on public.request_lines;
 create trigger courier_ops_fee_notice after insert or update of executor,exec_total,exec_unit_cost,qty,received_at,service,deleted_at
 on public.request_lines for each row execute function public.trg_courier_ops_fee_notice();
