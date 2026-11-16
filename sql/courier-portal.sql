@@ -293,6 +293,14 @@ begin
   if v_body is not null and char_length(v_body) > 500 then raise exception 'body too long' using errcode = '22023'; end if;
   v_me := public.norm_ar(v_c.name);
 
+  if v_tx <> '' and not exists (select 1 from public.request_lines l where l.transaction_id = v_tx and l.deleted_at is null) then
+    select l.transaction_id into v_tx
+      from public.request_lines l
+     where l.tracking_token = btrim(coalesce(p_tx, '')) and l.deleted_at is null
+     limit 1;
+    v_tx := coalesce(v_tx, btrim(coalesce(p_tx, '')));
+  end if;
+
   if not (exists (select 1 from public.courier_trips t where t.transaction_id = v_tx and public.norm_ar(t.courier) = v_me)
        or exists (select 1 from public.request_lines l where l.transaction_id = v_tx and l.deleted_at is null
                     and public.norm_ar(l.service) like 'رسوم توصيل%' and public.norm_ar(l.executor) = v_me)) then

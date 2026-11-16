@@ -253,35 +253,35 @@
     renderTab(false);
   }
 
+  function refreshMyPosQuiet() {
+    try {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(
+        pos => { st.myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
+        () => {},
+        { enableHighAccuracy: false, timeout: 4000, maximumAge: 120000 }
+      );
+    } catch (e) {}
+  }
+
   function autoOptimizeRoute(openMapAfter) {
     const validTxs = st.routeTxIds.filter(tx => byTx(tx));
     if (!validTxs.length) {
       toast('اضغط «➕ ضيف لخط السير» على العملاء اللي نازلهم الأول', true);
       return;
     }
-    const finish = (lat, lng, hasGps) => {
-      sortRouteSelectionNearestFirst(lat, lng);
-      saveRouteState();
-      renderTab(false);
-      if (openMapAfter) {
-        const itemsList = st.routeTxIds.map(tx => byTx(tx)).filter(Boolean);
-        const url = buildMultiStopMapsUrl(itemsList, hasGps ? { lat: lat, lng: lng } : null);
-        if (url) window.open(url, '_blank', 'noopener');
-      } else {
-        toast('تم ترتيب خط السير تلقائياً من الأقرب لمكانك ✓');
-      }
-    };
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          st.myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          finish(pos.coords.latitude, pos.coords.longitude, true);
-        },
-        () => finish(30.0012, 31.1765, false),
-        { enableHighAccuracy: false, timeout: 3000, maximumAge: 180000 }
-      );
+    const basePos = st.myPos || { lat: 30.0012, lng: 31.1765 };
+    sortRouteSelectionNearestFirst(basePos.lat, basePos.lng);
+    saveRouteState();
+    renderTab(false);
+    if (openMapAfter) {
+      const itemsList = st.routeTxIds.map(tx => byTx(tx)).filter(Boolean);
+      const url = buildMultiStopMapsUrl(itemsList, st.myPos || null);
+      if (url) window.open(url, '_blank', 'noopener');
+      refreshMyPosQuiet();
     } else {
-      finish(30.0012, 31.1765, false);
+      refreshMyPosQuiet();
+      toast('تم ترتيب خط السير تلقائياً من الأقرب لمكانك ✓');
     }
   }
 
@@ -302,13 +302,13 @@
   function buildMultiStopMapsUrl(itemsList, startPos) {
     const stops = (itemsList || []).map(stopDestinationQuery).filter(Boolean);
     if (!stops.length) return '';
-    if (stops.length === 1 && !startPos) {
-      return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(stops[0]);
-    }
-    const origin = startPos ? (startPos.lat + ',' + startPos.lng) : stops[0];
     const dest = stops[stops.length - 1];
-    const mid = startPos ? stops.slice(0, -1) : stops.slice(1, -1);
-    return 'https://www.google.com/maps/dir/?api=1&origin=' + encodeURIComponent(origin) +
+    const mid = stops.slice(0, -1);
+    const originPart = (startPos && startPos.lat && startPos.lng)
+      ? ('&origin=' + encodeURIComponent(startPos.lat + ',' + startPos.lng))
+      : '';
+    return 'https://www.google.com/maps/dir/?api=1' +
+      originPart +
       '&destination=' + encodeURIComponent(dest) +
       (mid.length ? '&waypoints=' + encodeURIComponent(mid.slice(0, 9).join('|')) : '') +
       '&travelmode=driving';
@@ -370,16 +370,22 @@
       '</div>';
     }
 
+    const total = activeItems.length;
     const stepsChain = activeItems.map((it, idx) => {
       const z = detectZoneAndCoords(it);
-      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;background:var(--fld);border-radius:10px;margin-top:6px">' +
+      const stepLabel = idx === 0
+        ? 'المحطة ١ (الأولى — اتحرك لها دلوقتي)'
+        : (idx === total - 1 ? 'المحطة ' + num(idx + 1) + ' (الأخيرة)' : 'المحطة ' + num(idx + 1) + ' (بعدها)');
+      return '<div style="text-align:center;font-size:11px;color:#10b981;font-weight:700;margin:4px 0">⬇️ ' + (idx === 0 ? 'تبدأ من موقعك الحالي إلى:' : 'ثم التحرك إلى:') + '</div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:var(--fld);border:1px solid ' + (idx === 0 ? '#10b981' : 'var(--bd)') + ';border-radius:10px">' +
         '<div style="min-width:0;flex:1">' +
+          '<div style="font-size:11px;font-weight:800;color:' + (idx === 0 ? '#10b981' : 'var(--mu)') + ';margin-bottom:2px">' + stepLabel + '</div>' +
           '<span class="cp-tag ok" style="margin-inline-end:6px">' + num(idx + 1) + '</span>' +
           '<b style="font-size:13px">' + eh(it.client_name || 'عميل') + '</b> ' +
           '<small style="color:#10b981;font-weight:700">(' + eh(z.zone) + ')</small>' +
           (it.address ? '<div style="font-size:11px;color:var(--mu);margin-top:2px">' + eh(it.address) + '</div>' : '') +
         '</div>' +
-        '<div style="display:flex;gap:4px;shrink:0">' +
+        '<div style="display:flex;gap:4px;flex-shrink:0">' +
           '<button type="button" class="cp-a cp-sm" data-act="on-my-way" data-tx="' + eh(it.transaction_id) + '">🛵 في طريقي</button>' +
           '<button type="button" class="cp-a cp-sm" data-act="route-toggle" data-tx="' + eh(it.transaction_id) + '" title="إزالة">✕</button>' +
         '</div>' +
@@ -389,12 +395,15 @@
     return '<section class="cp-card" style="border:2px solid #10b981">' +
       '<div class="cp-row" style="align-items:center">' +
         '<div>' +
-          '<b style="font-size:14.5px;color:#10b981">🗺️ خط سيرك الجاهز (' + num(activeItems.length) + ' محطات مرتبة تلقائياً للأقرب)</b>' +
+          '<b style="font-size:14.5px;color:#10b981">🗺️ خط سيرك الجاهز (' + num(total) + ' محطات مرتبة من موقعك)</b>' +
         '</div>' +
         '<button type="button" class="cp-a cp-sm" data-act="route-clear">مسح الكل</button>' +
       '</div>' +
+      '<div style="padding:6px 10px;margin-top:6px;border-radius:8px;background:rgba(16,185,129,.12);font-size:12px;font-weight:800;color:#10b981">' +
+        '📍 نقطة البداية: موقعك الجغرافي الحالي (GPS)' +
+      '</div>' +
       '<div>' + stepsChain + '</div>' +
-      '<button type="button" class="cp-big" data-act="route-autosort"><i class="fa-solid fa-location-arrow"></i> ابدأ التحرك وافتح خط السير على الخريطة</button>' +
+      '<button type="button" class="cp-big" data-act="route-autosort"><i class="fa-solid fa-location-arrow"></i> ابدأ التحرك من موقعي وافتح الخريطة</button>' +
     '</section>';
   }
 
@@ -439,9 +448,17 @@
   function extractTxFromScan(raw) {
     const s = String(raw || '').trim();
     if (!s) return '';
-    const mUrl = s.match(/[?&](?:tx|id|code)=([^&#\s]+)/i);
+    try {
+      if (/^https?:\/\//i.test(s) || s.indexOf('?') !== -1) {
+        const u = new URL(s.startsWith('http') ? s : ('https://x.local/' + s.replace(/^\/+/, '')));
+        const q = u.searchParams.get('token') || u.searchParams.get('tx') || u.searchParams.get('id') || u.searchParams.get('code') || '';
+        if (q) return q.trim();
+      }
+    } catch (e) {}
+    const mUrl = s.match(/[?&](?:token|tx|id|code)=([^&#\s]+)/i);
     if (mUrl && mUrl[1]) return decodeURIComponent(mUrl[1]).trim();
-    const mTx = s.match(/(TX-\d{4}-\d+|[A-Za-z0-9_-]{6,24})/);
+    if (/^https?:\/\//i.test(s)) return '';
+    const mTx = s.match(/(TX-\d{4}-\d+|[A-Za-z0-9_-]{6,64})/);
     return mTx ? mTx[1] : s;
   }
   async function openQrScannerModal() {
@@ -477,6 +494,8 @@
               const tx = extractTxFromScan(codes[0].rawValue);
               stopQrCamera();
               if (tx) { openClientDetail(tx); return; }
+              toast('كود الـ QR ده مش خاص بمعاملة تساهيل', true);
+              return;
             }
           } catch (e) {}
           requestAnimationFrame(scanLoop);
@@ -926,7 +945,7 @@
       '<div class="cp-off" id="cp-off">مفيش اتصال بالإنترنت… بحاول تاني</div>' +
       '<main class="cp-body" id="cp-body"></main>' +
       '<nav class="cp-nav" id="cp-nav"></nav><div id="cp-modal-root"></div>');
-    applyTheme(); tickClock(); renderNav(); renderTab();
+    applyTheme(); tickClock(); renderNav(); renderTab(); refreshMyPosQuiet();
   }
   function tickClock() {
     const t = $('cp-time'), d = $('cp-date'); if (!t) return;
@@ -1549,18 +1568,40 @@
 
   /* مودال تفاصيل العميل والمعاملة (البند A.2) — بدون أي أسعار عميل أو مدفوعات */
   async function openClientDetail(tx) {
-    const fallbackItem = byTx(tx);
-    const sameClientItems = fallbackItem
-      ? st.items.filter(x => normAr(x.client_name) === normAr(fallbackItem.client_name) && x.day === fallbackItem.day)
-      : [];
+    let fallbackItem = byTx(tx);
 
     modal('<h3>تفاصيل العميل والمعاملة</h3><p>جاري تحميل بيانات المعاملة <b dir="ltr">' + eh(tx) + '</b>…</p><div class="cp-btns"><button type="button" class="cp-btn" data-act="mclose-btn">إغلاق</button></div>');
 
-    let d = null;
+    let d = null, rpcErr = '';
     try {
       const r = await sbClient.rpc('courier_tx_detail', { p_tx: String(tx) });
       if (!r.error && r.data) d = r.data;
-    } catch (e) { /* نستخدم البيانات المتاحة في الذاكرة كـ fallback لو الدالة لسه متشغلتش */ }
+      else if (r && r.error) rpcErr = String(r.error.message || '');
+    } catch (e) { rpcErr = String((e && e.message) || ''); }
+
+    if (d && d.transaction_id) {
+      tx = String(d.transaction_id);
+      fallbackItem = byTx(tx) || fallbackItem;
+    }
+
+    if (!d && !fallbackItem) {
+      const isNotYours = /not your transaction/i.test(rpcErr);
+      modal(
+        '<h3>' + (isNotYours ? 'المعاملة غير مسجلة على حسابك' : 'تعذر فتح المعاملة') + '</h3>' +
+        '<p>' + (isNotYours
+          ? 'الإيصال ده سليم لكن المعاملة مش مسجلة باسمك كمندوب حالياً على السيستم. لو استلمتها أو هتسلمها راجع الموظف يضيفك عليها.'
+          : 'مقدرتش ألاقي تفاصيل المعاملة بالكود ده (<b dir="ltr">' + eh(tx) + '</b>). تأكد إنك حدّثت ملف SQL الخاص ببوابة المندوب أو جرّب تمسح الإيصال تاني.') + '</p>' +
+        '<div class="cp-btns">' +
+          '<button type="button" class="cp-btn cp-go" data-act="qr-scan"><i class="fa-solid fa-qrcode"></i> مسح كود تاني</button>' +
+          '<button type="button" class="cp-btn" data-act="mclose-btn">إغلاق</button>' +
+        '</div>'
+      );
+      return;
+    }
+
+    const sameClientItems = fallbackItem
+      ? st.items.filter(x => normAr(x.client_name) === normAr(fallbackItem.client_name) && x.day === fallbackItem.day)
+      : [];
 
     const clientName = (d && d.client_name) || (fallbackItem && fallbackItem.client_name) || 'بدون اسم';
     const phone = (d && d.phone) || (fallbackItem && fallbackItem.phone) || '';
@@ -1909,7 +1950,7 @@
         const inp = $('cp-qr-manual');
         const code = extractTxFromScan(inp ? inp.value : '');
         stopQrCamera();
-        if (!code) return toast('اكتب رقم المعاملة الأول', true);
+        if (!code) return toast('اكتب رقم المعاملة أو امسح كود إيصال صحيح', true);
         return openClientDetail(code);
       }
       case 'ledger-toggle': {
