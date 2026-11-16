@@ -171,14 +171,25 @@
         if (pick === null) return false;
       }
     }
-    const ok = await _as(ids, status);
-    if (ok && pick) {
-      for (const t of need) {
-        const saved = await putTrip(t, 'delivery', pick, today());
-        if (!saved) showToast('تم تحديث حالة المعاملة، لكن تعذّر تسجيل مشوار المندوب. راجع سجل المناديب قبل المتابعة.', 'error', 10000);
-      }
+    // Update request-line status and create/update delivery trips atomically in Supabase.
+    const day = today();
+    const r = await sbClient.rpc('courier_apply_delivery', {
+      p_line_ids: ids.map(id => Number(id)),
+      p_trip_transactions: pick ? need : [],
+      p_courier: pick || null,
+      p_trip_day: day
+    });
+    if (r.error) {
+      if (miss(r.error)) sqlHint();
+      else showError('تعذّر حفظ التسليم ومشوار المندوب معًا؛ لم يتم اعتماد التغيير', r.error);
+      return false;
     }
-    return ok;
+    const updated = r.data && Array.isArray(r.data.updated_lines) ? r.data.updated_lines : [];
+    updated.forEach(row => {
+      const line = allRequestLines.find(x => String(x.id) === String(row.id));
+      if (line) Object.assign(line, row, { delivered_date: day });
+    });
+    return updated.length === new Set(ids.map(String)).size;
   };
 
   /* ---------- 5) تاب المناديب + فلاتر متقدمة + كروت مناديب احترافية بالسهم ---------- */
