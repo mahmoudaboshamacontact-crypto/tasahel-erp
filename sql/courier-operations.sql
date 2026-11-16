@@ -193,6 +193,7 @@ returns jsonb language plpgsql stable security definer set search_path=public as
 declare v_c public.couriers; v_items jsonb;
 begin
   if not public.is_courier() then raise exception 'courier only' using errcode='42501'; end if;
+  delete from public.courier_pending_reminder_state where last_reminded_at < now() - interval '65 days';
   select * into v_c from public.couriers where user_id=auth.uid() and active;
   if v_c.id is null then raise exception 'courier account not linked' using errcode='42501'; end if;
   select coalesce(jsonb_agg(
@@ -305,6 +306,7 @@ returns jsonb language plpgsql stable security definer set search_path=public as
 declare v_c public.couriers;
 begin
   if not public.is_courier() then raise exception 'courier only' using errcode='42501'; end if;
+  delete from public.courier_pending_reminder_state where last_reminded_at < now() - interval '65 days';
   select * into v_c from public.couriers where user_id=auth.uid() and active;
   if v_c.id is null then raise exception 'courier account not linked' using errcode='42501'; end if;
   if not (
@@ -350,120 +352,7 @@ revoke all on function public.courier_tx_notes(text) from public,anon;
 grant execute on function public.courier_tx_notes(text) to authenticated;
 
 
--- Full historical date-range support for the courier ledger.
-create or replace function public.courier_items(p_from date default null, p_to date default null)
-returns jsonb
-language plpgsql
-stable
-security definer
-set search_path = public
-as $$
-declare
-  v_c public.couriers;
-  v_today date := (now() at time zone 'Africa/Cairo')::date;
-  v_to date := coalesce(p_to, (now() at time zone 'Africa/Cairo')::date);
-  v_from date;
-  v_me text;
-begin
-  if not public.is_courier() then
-    raise exception 'courier only' using errcode = '42501';
-  end if;
-
-  select * into v_c
-    from public.couriers
-   where user_id = auth.uid() and active;
-
-  if v_c.id is null then
-    raise exception 'courier account not linked' using errcode = '42501';
-  end if;
-
-  v_me := public.norm_ar(v_c.name);
-  v_from := coalesce(p_from, v_today - 62);
-  if v_from > v_to then raise exception 'invalid date range' using errcode='22023'; end if;
-
-  return coalesce((
-    select jsonb_agg(to_jsonb(r) order by r.day desc, r.sort desc)
-      from (
-        select t.kind as type, t.id, t.transaction_id, t.trip_day as day,
-               t.fee as amount, t.id as sort,
-               (t.courier_confirmed_at is not null) as confirmed,
-               t.courier_confirmed_at as confirmed_at,
-               null::text as fee_kind,
-               i.client_name, i.phone, i.address, i.services, i.employee,
-               i.lines, i.n_complete, i.n_delivered, i.n_review,
-               (select p.id from public.profiles p
-                 where public.norm_ar(p.full_name) = public.norm_ar(i.employee) limit 1) as employee_id,
-               (select p.phone from public.profiles p
-                 where public.norm_ar(p.full_name) = public.norm_ar(i.employee) limit 1) as employee_phone,
-               (select count(*) from public.tx_comments c
-                 where c.transaction_id = t.transaction_id
-                   and c.author_id = auth.uid() and c.deleted_at is null) as my_notes
-          from public.courier_trips t
-          left join lateral (
-            select max(l.client_name) as client_name,
-                   max(l.phone) as phone,
-                   max(l.address) as address,
-                   max(l.employee) as employee,
-                   string_agg(distinct l.service, '، ') as services,
-                   count(*) as lines,
-                   count(*) filter (where l.complete) as n_complete,
-                   count(*) filter (where l.delivered) as n_delivered,
-                   count(*) filter (where l.under_review) as n_review
-              from public.request_lines l
-             where l.transaction_id = t.transaction_id and l.deleted_at is null
-          ) i on true
-         where public.norm_ar(t.courier) = v_me
-           and t.trip_day between v_from and v_to
-           and coalesce(i.lines, 0) > 0
-
-        union all
-
-        select 'fee', l.id, l.transaction_id, l.received_at::date,
-               f.amount, l.id,
-               (fc.line_id is not null), fc.confirmed_at,
-               case when public.norm_ar(l.service) ~ 'عوده|رجوع' then 'round' else 'one' end,
-               coalesce(l.client_name, i.client_name),
-               coalesce(l.phone, i.phone),
-               coalesce(l.address, i.address),
-               l.service, l.employee,
-               i.lines, i.n_complete, i.n_delivered, i.n_review,
-               (select p.id from public.profiles p
-                 where public.norm_ar(p.full_name) = public.norm_ar(l.employee) limit 1),
-               (select p.phone from public.profiles p
-                 where public.norm_ar(p.full_name) = public.norm_ar(l.employee) limit 1),
-               (select count(*) from public.tx_comments c
-                 where c.transaction_id = l.transaction_id
-                   and c.author_id = auth.uid() and c.deleted_at is null)
-          from public.request_lines l
-          cross join lateral (
-            select coalesce(nullif(l.exec_total, 0),
-                            coalesce(l.qty, 0) * coalesce(l.exec_unit_cost, 0)) as amount
-          ) f
-          left join public.courier_fee_confirms fc
-            on fc.line_id = l.id
-           and public.norm_ar(fc.courier) = v_me
-           and fc.amount = f.amount
-           and coalesce(fc.trip_day, l.received_at::date) = l.received_at::date
-          left join lateral (
-            select max(x.client_name) as client_name,
-                   max(x.phone) as phone,
-                   max(x.address) as address,
-                   count(*) as lines,
-                   count(*) filter (where x.complete) as n_complete,
-                   count(*) filter (where x.delivered) as n_delivered,
-                   count(*) filter (where x.under_review) as n_review
-              from public.request_lines x
-             where x.transaction_id = l.transaction_id and x.deleted_at is null
-          ) i on true
-         where l.deleted_at is null
-           and public.norm_ar(l.service) like 'رسوم توصيل%'
-           and public.norm_ar(l.executor) = v_me
-           and l.received_at::date between v_from and v_to
-      ) r
-  ), '[]'::jsonb);
-end;
-$$;
-
+-- (دالة courier_items محدّثة بالفعل في ملف courier-confirmed-commission-close.sql لدعم كل الفترات التاريخية بدون حد 120 يوم)
 
 -- Periodic in-app reminders while the courier portal is active (12-hour cooldown, aggregated into 1 unread notification per courier).
 create table if not exists public.courier_pending_reminder_state (
@@ -490,6 +379,7 @@ declare
   r record;
 begin
   if not public.is_courier() then raise exception 'courier only' using errcode='42501'; end if;
+  delete from public.courier_pending_reminder_state where last_reminded_at < now() - interval '65 days';
   select * into v_c from public.couriers where user_id=auth.uid() and active;
   if v_c.id is null then raise exception 'courier account not linked' using errcode='42501'; end if;
 
@@ -586,6 +476,7 @@ begin
   if v_hour < 10 or v_hour > 22 then
     return 0;
   end if;
+  delete from public.courier_pending_reminder_state where last_reminded_at < now() - interval '65 days';
 
   for v_c in
     select c.user_id, c.name from public.couriers c
@@ -663,8 +554,6 @@ revoke all on function public.courier_dispatch_pending_reminders() from public,a
 do $cron$
 begin
   create extension if not exists pg_cron with schema pg_catalog;
-  grant usage on schema cron to postgres;
-  grant all privileges on all tables in schema cron to postgres;
   perform cron.unschedule(jobid) from cron.job where jobname = 'courier-pending-reminders';
   perform cron.schedule(
     'courier-pending-reminders',
@@ -815,7 +704,7 @@ create or replace function public.courier_apply_delivery(
 )
 returns jsonb
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 declare
@@ -1009,3 +898,58 @@ begin
 end $$;
 revoke all on function public.courier_save_pin(bigint, double precision, double precision) from public, anon;
 grant execute on function public.courier_save_pin(bigint, double precision, double precision) to authenticated;
+
+-- ترتيب ذري لخط السير في طلب RPC واحد بدلاً من إرسال N طلبات منفصلة
+create or replace function public.courier_ops_reorder(p_trip_ids bigint[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_c public.couriers;
+  v_manager boolean := public.is_manager() or public.is_staff();
+  v_count integer := 0;
+begin
+  if not public.is_courier() and not v_manager then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if coalesce(cardinality(p_trip_ids), 0) = 0 then
+    return jsonb_build_object('ok', true, 'updated', 0);
+  end if;
+  if public.is_courier() then
+    select * into v_c from public.couriers where user_id = auth.uid() and active;
+    if v_c.id is null then
+      raise exception 'courier account not linked' using errcode = '42501';
+    end if;
+    if exists (
+      select 1 from public.courier_trips t
+       where t.id = any(p_trip_ids)
+         and public.norm_ar(t.courier) <> public.norm_ar(v_c.name)
+    ) then
+      raise exception 'not your trip' using errcode = '42501';
+    end if;
+  end if;
+
+  with ord as (
+    select x.trip_id, x.ord::integer as route_order
+      from unnest(p_trip_ids) with ordinality as x(trip_id, ord)
+      join public.courier_trips t on t.id = x.trip_id
+  ),
+  up as (
+    insert into public.courier_trip_ops (trip_id, route_order, updated_at, updated_by)
+    select o.trip_id, o.route_order, now(), auth.uid()
+      from ord o
+    on conflict (trip_id) do update
+      set route_order = excluded.route_order,
+          updated_at = now(),
+          updated_by = auth.uid()
+    where public.courier_trip_ops.route_order is distinct from excluded.route_order
+    returning trip_id
+  )
+  select count(*) into v_count from up;
+
+  return jsonb_build_object('ok', true, 'updated', v_count);
+end $$;
+revoke all on function public.courier_ops_reorder(bigint[]) from public, anon;
+grant execute on function public.courier_ops_reorder(bigint[]) to authenticated;
