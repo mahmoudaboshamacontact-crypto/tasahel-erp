@@ -93,7 +93,7 @@ begin
              (t.courier_confirmed_at is not null) as confirmed, t.courier_confirmed_at as confirmed_at,
              null::text as fee_kind, i.client_name, i.phone, i.address, i.services, i.employee,
              i.tracking_token, i.lines, i.n_complete, i.n_delivered, i.n_review,
-             greatest(0, coalesce(i.total_due, 0) - coalesce(i.total_paid, 0)) as cod_remaining,
+             coalesce(i.cod_due, 0) as cod_remaining,
              (select p.id from public.profiles p where public.norm_ar(p.full_name) = public.norm_ar(i.employee) limit 1) as employee_id,
              (select p.phone from public.profiles p where public.norm_ar(p.full_name) = public.norm_ar(i.employee) limit 1) as employee_phone,
              (select count(*) from public.tx_comments c where c.transaction_id = t.transaction_id and c.author_id = auth.uid() and c.deleted_at is null) as my_notes,
@@ -110,8 +110,7 @@ begin
                  string_agg(distinct l.service, '، ') as services, count(*) as lines,
                  count(*) filter (where l.complete) as n_complete, count(*) filter (where l.delivered) as n_delivered,
                  count(*) filter (where l.under_review) as n_review,
-                 sum(coalesce(l.total, 0)) as total_due,
-                 max(coalesce(l.paid, 0)) as total_paid
+                 case when max(coalesce(l.payment_method, '')) ~* 'عند الاستلام|تحصيل|آجل|باقي|cod' then sum(coalesce(l.total, 0)) else 0 end as cod_due
             from public.request_lines l where l.transaction_id = t.transaction_id and l.deleted_at is null) i on true
        where public.norm_ar(t.courier) = v_me and t.trip_day between v_from and v_to and coalesce(i.lines, 0) > 0
       union all
@@ -120,7 +119,7 @@ begin
              case when public.norm_ar(l.service) ~ 'عوده|رجوع' then 'round' else 'one' end,
              coalesce(l.client_name, i.client_name), coalesce(l.phone, i.phone), coalesce(l.address, i.address), l.service, l.employee,
              coalesce(l.tracking_token, i.tracking_token), i.lines, i.n_complete, i.n_delivered, i.n_review,
-             greatest(0, coalesce(i.total_due, 0) - coalesce(i.total_paid, 0)),
+             coalesce(i.cod_due, 0),
              (select p.id from public.profiles p where public.norm_ar(p.full_name) = public.norm_ar(l.employee) limit 1),
              (select p.phone from public.profiles p where public.norm_ar(p.full_name) = public.norm_ar(l.employee) limit 1),
              (select count(*) from public.tx_comments c where c.transaction_id = l.transaction_id and c.author_id = auth.uid() and c.deleted_at is null),
@@ -138,8 +137,7 @@ begin
           select max(x.client_name) as client_name, max(x.phone) as phone, max(x.address) as address, max(x.tracking_token) as tracking_token, count(*) as lines,
                  count(*) filter (where x.complete) as n_complete, count(*) filter (where x.delivered) as n_delivered,
                  count(*) filter (where x.under_review) as n_review,
-                 sum(coalesce(x.total, 0)) as total_due,
-                 max(coalesce(x.paid, 0)) as total_paid
+                 case when max(coalesce(x.payment_method, '')) ~* 'عند الاستلام|تحصيل|آجل|باقي|cod' then sum(coalesce(x.total, 0)) else 0 end as cod_due
             from public.request_lines x where x.transaction_id = l.transaction_id and x.deleted_at is null) i on true
        where l.deleted_at is null and public.norm_ar(l.service) like 'رسوم توصيل%'
          and public.norm_ar(l.executor) = v_me and l.received_at::date between v_from and v_to
