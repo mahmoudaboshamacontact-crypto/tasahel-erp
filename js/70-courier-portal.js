@@ -198,15 +198,48 @@
   function routeIndexOf(tx) {
     return st.routeTxIds.indexOf(String(tx));
   }
+  function sortRouteSelectionNearestFirst(startLat, startLng) {
+    const validTxs = st.routeTxIds.filter(tx => byTx(tx));
+    if (validTxs.length < 2) return validTxs;
+    const pool = validTxs.map(tx => {
+      const item = byTx(tx);
+      const z = detectZoneAndCoords(item);
+      return { tx: tx, item: item, lat: z.lat, lng: z.lng, zone: z.zone };
+    });
+    const sorted = [];
+    let curLat = startLat || 30.0012, curLng = startLng || 31.1765;
+    while (pool.length > 0) {
+      let bestIdx = 0, bestDist = Infinity;
+      for (let i = 0; i < pool.length; i++) {
+        const d = haversineKm(curLat, curLng, pool[i].lat, pool[i].lng);
+        if (d < bestDist) { bestDist = d; bestIdx = i; }
+      }
+      const picked = pool.splice(bestIdx, 1)[0];
+      sorted.push(picked);
+      curLat = picked.lat;
+      curLng = picked.lng;
+    }
+    st.routeTxIds = sorted.map(x => x.tx);
+    const tripIds = sorted.map(s => s.item && s.item.type !== 'fee' && s.item.id ? Number(s.item.id) : null).filter(Boolean);
+    if (tripIds.length > 1) {
+      sbClient.rpc('courier_ops_reorder', { p_trip_ids: tripIds }).catch(() => null);
+    }
+    return st.routeTxIds;
+  }
+
   function toggleRouteTx(tx) {
     tx = String(tx || '');
     if (!tx) return;
     const idx = st.routeTxIds.indexOf(tx);
     if (idx === -1) {
       st.routeTxIds.push(tx);
-      toast('اتضاف لخط سيرك (محطة #' + num(st.routeTxIds.length) + ') 🗺️');
+      const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
+      sortRouteSelectionNearestFirst(pos.lat, pos.lng);
+      toast('اتضاف واترتب في خط سيرك تلقائياً ✓');
     } else {
       st.routeTxIds.splice(idx, 1);
+      const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
+      sortRouteSelectionNearestFirst(pos.lat, pos.lng);
       toast('اتشال من خط السير');
     }
     saveRouteState();
@@ -216,73 +249,39 @@
     st.routeTxIds = [];
     st.activeTx = '';
     saveRouteState();
-    toast('تم مسح خط السير المختار');
+    toast('تم مسح خط السير');
     renderTab(false);
   }
 
-  /* ترتيب خط السير تلقائياً (Nearest-Neighbor) من موقع المندوب الحالي للأقرب فالأقرب */
   function autoOptimizeRoute(openMapAfter) {
     const validTxs = st.routeTxIds.filter(tx => byTx(tx));
-    if (validTxs.length < 2) {
-      if (validTxs.length === 1 && openMapAfter) {
-        const single = byTx(validTxs[0]);
-        if (single) window.open(smartMapsUrl(single), '_blank', 'noopener');
-      } else {
-        toast('اختار مشوارين أو أكتر الأول بزرار «➕ ضيف لخط السير» عشان أرتبهملك أوتوماتيك', true);
-      }
+    if (!validTxs.length) {
+      toast('اضغط «➕ ضيف لخط السير» على العملاء اللي نازلهم الأول', true);
       return;
     }
-
-    const runSort = (startLat, startLng, fromGps) => {
-      const pool = validTxs.map(tx => {
-        const item = byTx(tx);
-        const z = detectZoneAndCoords(item);
-        return { tx: tx, item: item, lat: z.lat, lng: z.lng, zone: z.zone };
-      });
-      const sorted = [];
-      let curLat = startLat, curLng = startLng;
-      while (pool.length > 0) {
-        let bestIdx = 0, bestDist = Infinity;
-        for (let i = 0; i < pool.length; i++) {
-          const d = haversineKm(curLat, curLng, pool[i].lat, pool[i].lng);
-          if (d < bestDist) { bestDist = d; bestIdx = i; }
-        }
-        const picked = pool.splice(bestIdx, 1)[0];
-        sorted.push(picked);
-        curLat = picked.lat;
-        curLng = picked.lng;
-      }
-      st.routeTxIds = sorted.map(x => x.tx);
+    const finish = (lat, lng, hasGps) => {
+      sortRouteSelectionNearestFirst(lat, lng);
       saveRouteState();
       renderTab(false);
-      toast('✨ تم ترتيب ' + num(sorted.length) + ' محطات أوتوماتيك من الأقرب ليك' + (fromGps ? ' (حسب موقعك GPS)' : '') + ' ✓');
-
-      /* حفظ الترتيب في الخلفية في جدول التشغيل لو متاح */
-      sorted.forEach((s, idx) => {
-        if (s.item && s.item.type !== 'fee' && s.item.id) {
-          sbClient.rpc('courier_ops_update', { p_trip_id: Number(s.item.id), p_route_order: idx + 1, p_status: null, p_priority: null, p_note: null }).catch(() => null);
-        }
-      });
-
       if (openMapAfter) {
-        const url = buildMultiStopMapsUrl(sorted.map(x => x.item), fromGps ? { lat: startLat, lng: startLng } : null);
+        const itemsList = st.routeTxIds.map(tx => byTx(tx)).filter(Boolean);
+        const url = buildMultiStopMapsUrl(itemsList, hasGps ? { lat: lat, lng: lng } : null);
         if (url) window.open(url, '_blank', 'noopener');
+      } else {
+        toast('تم ترتيب خط السير تلقائياً من الأقرب لمكانك ✓');
       }
     };
-
-    /* نقطة الانطلاق الافتراضية: مقر تساهيل في فيصل (أو موقع المندوب الحالي لو الـ GPS شغال) */
-    const defaultLat = 30.0012, defaultLng = 31.1765;
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         pos => {
           st.myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          runSort(pos.coords.latitude, pos.coords.longitude, true);
+          finish(pos.coords.latitude, pos.coords.longitude, true);
         },
-        () => runSort(defaultLat, defaultLng, false),
-        { enableHighAccuracy: false, timeout: 3500, maximumAge: 120000 }
+        () => finish(30.0012, 31.1765, false),
+        { enableHighAccuracy: false, timeout: 3000, maximumAge: 180000 }
       );
     } else {
-      runSort(defaultLat, defaultLng, false);
+      finish(30.0012, 31.1765, false);
     }
   }
 
@@ -362,35 +361,27 @@
     }
   }
 
-  /* لوحة خط السير الذكي (تظهر أعلى اليوم ومشاويري لما المندوب يختار محطات) */
+  /* لوحة خط السير المبسطة والواضحة جداً للمندوب (تترتب أوتوماتيك بمجرد الاختيار) */
   function renderSmartRoutePanel() {
-    /* تنظيف أي معاملات اتأكدت خلاص من خط السير النشط */
     const activeItems = st.routeTxIds.map(tx => byTx(tx)).filter(it => it && !it.confirmed);
-    if (!activeItems.length && !st.activeTx) {
-      return '<div class="cp-card" style="border:1px dashed var(--gd-bd);background:var(--gd-bg);padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
-        '<div style="font-size:12px"><b>🗺️ خط السير الذكي:</b> اضغط <b>«➕ ضيف لخط السير»</b> على العملاء اللي نازلهم دلوقتي، والسيستم هيرتبهم أوتوماتيك من الأقرب ليك!</div>' +
+    if (!activeItems.length) {
+      return '<div class="cp-card" style="border:1px dashed var(--gd-bd);background:var(--gd-bg);padding:10px 12px">' +
+        '<div style="font-size:12px"><b>🗺️ إزاي تعمل خط سيرك؟</b> دوس على زرار <b>«➕ ضيف لخط السير»</b> تحت أي عميل ناوي تروحله دلوقتي، والسيستم هيرتبهملك أوتوماتيك من الأقرب للأبعد ويفتحلك الخريطة!</div>' +
       '</div>';
     }
 
-    const mapUrl = buildMultiStopMapsUrl(activeItems, st.myPos);
-    const stationsHtml = activeItems.map((it, idx) => {
+    const stepsChain = activeItems.map((it, idx) => {
       const z = detectZoneAndCoords(it);
-      const isCurrent = String(it.transaction_id) === String(st.activeTx);
-      return '<div class="cp-txitem" style="' + (isCurrent ? 'border:1.5px solid #10b981;background:var(--gd-bg)' : '') + '">' +
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;background:var(--fld);border-radius:10px;margin-top:6px">' +
         '<div style="min-width:0;flex:1">' +
-          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-            '<span class="cp-tag ok">محطة ' + num(idx + 1) + '</span>' +
-            (isCurrent ? '<span class="cp-tag k-pk">🛵 في طريقي الآن</span>' : '') +
-            '<b class="cp-name" style="font-size:13.5px" data-act="detail" data-tx="' + eh(it.transaction_id) + '">' + eh(it.client_name || 'عميل') + '</b>' +
-            '<span class="cp-chip">📍 ' + eh(z.zone) + '</span>' +
-          '</div>' +
-          (it.address ? '<div style="font-size:11px;color:var(--mu);margin-top:3px">' + eh(it.address) + '</div>' : '') +
+          '<span class="cp-tag ok" style="margin-inline-end:6px">' + num(idx + 1) + '</span>' +
+          '<b style="font-size:13px">' + eh(it.client_name || 'عميل') + '</b> ' +
+          '<small style="color:#10b981;font-weight:700">(' + eh(z.zone) + ')</small>' +
+          (it.address ? '<div style="font-size:11px;color:var(--mu);margin-top:2px">' + eh(it.address) + '</div>' : '') +
         '</div>' +
-        '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">' +
+        '<div style="display:flex;gap:4px;shrink:0">' +
           '<button type="button" class="cp-a cp-sm" data-act="on-my-way" data-tx="' + eh(it.transaction_id) + '">🛵 في طريقي</button>' +
-          '<a class="cp-a cp-sm" target="_blank" rel="noopener" href="' + eh(smartMapsUrl(it)) + '">خريطة</a>' +
-          (!it.confirmed ? '<button type="button" class="cp-a cp-sm pri" data-act="ask-one" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(it.transaction_id) + '" data-amt="' + eh(it.amount) + '">✓ أكّد</button>' : '') +
-          '<button type="button" class="cp-a cp-sm" data-act="route-toggle" data-tx="' + eh(it.transaction_id) + '" title="إزالة من الخط">✕</button>' +
+          '<button type="button" class="cp-a cp-sm" data-act="route-toggle" data-tx="' + eh(it.transaction_id) + '" title="إزالة">✕</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -398,16 +389,12 @@
     return '<section class="cp-card" style="border:2px solid #10b981">' +
       '<div class="cp-row" style="align-items:center">' +
         '<div>' +
-          '<b style="font-size:14.5px;color:#10b981"><i class="fa-solid fa-route"></i> خط سيرك المختار الآن (' + num(activeItems.length) + ' محطات)</b>' +
-          '<div class="cp-sub">مرتب حسب اختيارك — اضغط «رتّب أوتوماتيك» لترتيبهم من الأقرب لمكانك</div>' +
+          '<b style="font-size:14.5px;color:#10b981">🗺️ خط سيرك الجاهز (' + num(activeItems.length) + ' محطات مرتبة تلقائياً للأقرب)</b>' +
         '</div>' +
-        '<button type="button" class="cp-a cp-sm" data-act="route-clear">مسح الخط</button>' +
+        '<button type="button" class="cp-a cp-sm" data-act="route-clear">مسح الكل</button>' +
       '</div>' +
-      '<div class="cp-info" style="margin-top:8px">' +
-        '<button type="button" class="cp-a pri" data-act="route-autosort"><i class="fa-solid fa-wand-magic-sparkles"></i><span>✨ رتّب الخط أوتوماتيك (الأقرب فالأقرب)</span></button>' +
-        (mapUrl ? '<a class="cp-a" style="background:#2563eb;color:#fff" target="_blank" rel="noopener noreferrer" href="' + eh(mapUrl) + '"><i class="fa-solid fa-map-location-dot"></i><span>افتح خط السير كامل على Google Maps</span></a>' : '') +
-      '</div>' +
-      '<div class="cp-txlist">' + stationsHtml + '</div>' +
+      '<div>' + stepsChain + '</div>' +
+      '<button type="button" class="cp-big" data-act="route-autosort"><i class="fa-solid fa-location-arrow"></i> ابدأ التحرك وافتح خط السير على الخريطة</button>' +
     '</section>';
   }
 

@@ -133,6 +133,45 @@
   }
 
   let prePickedCourier = undefined;
+
+  function syncDeliveredCourierInModal(tx, courierName) {
+    try {
+      const grid = document.querySelector('#tx-modal-body .ts-dtl-grid');
+      if (!grid) return;
+      let c = grid.querySelector('[data-ts-delivered]');
+      const labelTxt = (!courierName || courierName === '—') ? 'العميل استلم بنفسه من المكتب' : courierName;
+      if (!c) {
+        c = document.createElement('div');
+        c.className = 'ts-dtl-card';
+        c.setAttribute('data-ts-delivered', '1');
+        grid.insertBefore(c, grid.querySelector('.ts-dtl-card-wide') || null);
+      }
+      c.innerHTML = '<div class="ts-dtl-label"><i class="fa-solid fa-truck-fast text-emerald-500"></i><span>مندوب التسليم</span></div><div class="ts-dtl-val">' + eh(labelTxt) + '</div>' +
+        '<div class="ts-deliv-by" dir="ltr" style="text-align:start">' + eh(today()) + '</div>';
+    } catch (e) {}
+  }
+
+  /* حقن زرار واضح وسريع «🚚 تم التسليم وتحديد المندوب» في نافذة المعاملة (مفيد جداً بعد مسح QR الإيصال) */
+  const _otmCourier = window.openTxModal;
+  if (typeof _otmCourier === 'function') {
+    window.openTxModal = function (tx) {
+      const res = _otmCourier.apply(this, arguments);
+      try {
+        const actLeft = $('tx-modal-actions-left');
+        if (actLeft && !$('tx-quick-deliver-btn')) {
+          const btn = document.createElement('button');
+          btn.id = 'tx-quick-deliver-btn';
+          btn.type = 'button';
+          btn.className = 'px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs';
+          btn.innerHTML = '<i class="fa-solid fa-truck-fast"></i><span>تم التسليم (تحديد المندوب)</span>';
+          btn.onclick = () => window.stageTxStatus('Delivered');
+          actLeft.insertBefore(btn, actLeft.firstChild);
+        }
+      } catch (e) {}
+      return res;
+    };
+  }
+
   const _stg = window.stageTxStatus;
   if (typeof _stg === 'function') {
     window.stageTxStatus = async function (s) {
@@ -141,7 +180,21 @@
         if (pick === null) return;
         prePickedCourier = pick;
         _stg(s);
-        if (typeof window.saveTxChanges === 'function') await window.saveTxChanges();
+        const curTx = typeof openTxCurrent !== 'undefined' ? openTxCurrent : null;
+        const allIds = curTx
+          ? (window.allRequestLines || []).filter(l => String(l.transaction_id) === String(curTx)).map(l => String(l.id))
+          : [];
+        const anyDirty = Array.from(document.querySelectorAll('#tx-modal-body .st-sel')).some(el => el.value !== el.dataset.orig);
+        if (anyDirty && typeof window.saveTxChanges === 'function') {
+          await window.saveTxChanges();
+        } else if (allIds.length) {
+          /* لو المعاملة كانت Delivered أصلاً والموظف بيحدد أو يغير اسم المندوب */
+          if (await window.applyStatus(allIds, 'Delivered')) {
+            showToast('تم تسجيل التسليم ومندوب التسليم ✓');
+            if (typeof afterStatusChange === 'function') afterStatusChange();
+          }
+        }
+        if (curTx) syncDeliveredCourierInModal(curTx, pick);
         prePickedCourier = undefined;
       } else {
         _stg(s);
@@ -176,7 +229,6 @@
         if (pick === null) return false;
       }
     }
-    // Update request-line status and create/update delivery trips atomically in Supabase.
     const day = today();
     const r = await sbClient.rpc('courier_apply_delivery', {
       p_line_ids: ids.map(id => Number(id)),
@@ -185,6 +237,22 @@
       p_trip_day: day
     });
     if (r.error) {
+      const errStr = ((r.error && r.error.message) || '') + ' ' + ((r.error && r.error.code) || '');
+      /* توافق آمن: لو دالة courier_apply_delivery لسه متشغلتش في Supabase ننفذ بالطريقة الأساسية فوراً عشان الشغل مايوقفش */
+      if (/42883|PGRST202|Could not find the function|courier_apply_delivery/i.test(errStr)) {
+        const ok = await _as(ids, status);
+        if (!ok) return false;
+        for (const t of need) {
+          if (pick) {
+            const saved = await putTrip(t, 'delivery', pick, day);
+            if (!saved) return false;
+          } else {
+            await sbClient.from('courier_trips').delete().eq('transaction_id', t).eq('kind', 'delivery').is('courier_confirmed_at', null);
+          }
+          syncDeliveredCourierInModal(t, pick);
+        }
+        return true;
+      }
       if (miss(r.error)) sqlHint();
       else showError('تعذّر حفظ التسليم ومشوار المندوب معًا؛ لم يتم اعتماد التغيير', r.error);
       return false;
@@ -194,6 +262,7 @@
       const line = allRequestLines.find(x => String(x.id) === String(row.id));
       if (line) Object.assign(line, row, { delivered_date: day });
     });
+    txs.forEach(t => syncDeliveredCourierInModal(t, pick));
     return updated.length === new Set(ids.map(String)).size;
   };
 
@@ -672,11 +741,15 @@
     const activeElId = document.activeElement && document.activeElement.id;
     const selStart = activeElId === 'cr-f-q' ? document.activeElement.selectionStart : null;
 
+    const topBar = $('cp-couriers-top-bar');
+    const opsPanel = $('cop-manager-panel');
     let h = renderFilterControlPanel(allNames);
     h += renderSummaryKpis(filteredCourierData);
     h += renderCourierAccordionCards(filteredCourierData);
     h += manageCard();
     root.innerHTML = h;
+    if (topBar) root.insertBefore(topBar, root.firstChild);
+    if (opsPanel) root.appendChild(opsPanel);
 
     if (activeElId === 'cr-f-q' && $('cr-f-q')) {
       const inp = $('cr-f-q');

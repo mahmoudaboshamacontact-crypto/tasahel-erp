@@ -1,4 +1,4 @@
-/* Courier Operations UI — loaded after courier portal v6. */
+/* Courier Operations UI — loaded after courier portal. */
 (function () {
   'use strict';
   if (window.__courierOpsUi) return; window.__courierOpsUi = true;
@@ -8,30 +8,32 @@
   const labels = {new:'جديد',collecting:'جاري الاستلام',collected:'تم الاستلام',on_the_way:'في الطريق',delivered:'تم التسليم'};
   const typeLabels = {pickup:'استلام',delivery:'تسليم',fee:'رسوم توصيل'};
   const issueLabels = {customer_unavailable:'العميل غير متاح',wrong_address:'عنوان خطأ',incorrect_fee:'رسوم غير صحيحة',pickup_problem:'مشكلة في الاستلام',other:'مشكلة أخرى'};
-  const state = {items:[],issues:[],ledger:[],closings:[],notifications:[],staffUsers:[],ledgerFrom:'',ledgerTo:'',tab:'route',busy:false,managerBusy:false,managerLoadedAt:0,managerHtml:''};
+  const state = {items:[],issues:[],ledger:[],closings:[],notifications:[],staffUsers:[],ledgerFrom:'',ledgerTo:'',tab:'route',busy:false,managerBusy:false,managerLoadedAt:0,managerHtml:'',resolvingIssueId:null};
   const statusOptions = Object.keys(labels).map(k=>'<option value="'+k+'">'+labels[k]+'</option>').join('');
   function rpc(name,args) { return sbClient.rpc(name,args || {}); }
   function toast(s,bad) { if (typeof showToast==='function') showToast(s,bad?'error':'success'); else alert(s); }
-  function isManager() { return window.__role==='manager'||(typeof currentUser!=='undefined'&&currentUser&&/mahmoud\.aboshama@tasahel\.com\.eg|mahmoud\.aboshama\.contact@gmail\.com/i.test(currentUser.email||'')); }
-  function isStaff() { return isManager()||window.__role==='staff'; }
-  function addCourierButton() { /* تم دمج خط السير الذكي وكشف الحساب مباشرة داخل تابات بوابة المندوب الأساسية لمنع التشتيت */ }
+  function isManager() { return window.__role === 'manager'; }
+  function isStaff() { return isManager() || window.__role === 'staff'; }
+  function isCourier() { return window.__role === 'courier'; }
+
   function shell() {
     if (typeof window.__ensureCourierPortalCss === 'function') window.__ensureCourierPortalCss();
     let root=$('courier-ops-modal');
     if (!root) { root=document.createElement('div'); root.id='courier-ops-modal'; root.dir='rtl'; root.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(2,6,23,.78);display:none;overflow:auto;padding:12px'; document.body.appendChild(root); }
     const cpApp = $('courier-app');
-    const theme = cpApp ? (cpApp.getAttribute('data-theme') || 'dark') : 'dark';
+    const theme = cpApp ? (cpApp.getAttribute('data-theme') || 'dark') : (document.documentElement.classList.contains('dark') ? 'dark' : 'light');
     root.setAttribute('data-theme', theme);
     root.style.display='block';
-    root.innerHTML='<section style="max-width:760px;min-height:80vh;margin:0 auto;background:var(--bg,#10223d);color:var(--tx,#e8eef8);border:1px solid var(--bd,rgba(255,255,255,.15));border-radius:18px;padding:14px"><header style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:17px">التشغيل وكشف الحساب</b><button type="button" data-cop="close" class="cp-btn">إغلاق ✕</button></header><nav style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0"><button type="button" class="cp-btn" data-cop="tab" data-tab="route">خط السير</button><button type="button" class="cp-btn" data-cop="tab" data-tab="issues">البلاغات</button><button type="button" class="cp-btn" data-cop="tab" data-tab="ledger">كشف الحساب</button><button type="button" class="cp-btn" data-cop="tab" data-tab="notifications">الإشعارات</button></nav><div id="cop-content">جاري التحميل…</div></section>';
+    const ledgerBtn = isCourier() ? '<button type="button" class="cp-btn" data-cop="tab" data-tab="ledger">كشف الحساب</button>' : '';
+    root.innerHTML='<section style="max-width:760px;min-height:80vh;margin:0 auto;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:18px;padding:14px"><header style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:17px">التشغيل والمتابعة</b><button type="button" data-cop="close" class="cp-btn">إغلاق ✕</button></header><nav style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0"><button type="button" class="cp-btn" data-cop="tab" data-tab="route">خط السير</button><button type="button" class="cp-btn" data-cop="tab" data-tab="issues">البلاغات</button>'+ledgerBtn+'<button type="button" class="cp-btn" data-cop="tab" data-tab="notifications">الإشعارات</button></nav><div id="cop-content">جاري التحميل…</div></section>';
   }
   function tabButtons() {
     const root=$('courier-ops-modal'); if(!root)return;
-    root.querySelectorAll('[data-cop="tab"]').forEach(b=>{b.style.background=b.dataset.tab===state.tab?'#10b981':'rgba(255,255,255,.08)';b.style.color=b.dataset.tab===state.tab?'#052e24':'#e8eef8';});
+    root.querySelectorAll('[data-cop="tab"]').forEach(b=>{b.style.background=b.dataset.tab===state.tab?'#10b981':'var(--chip)';b.style.color=b.dataset.tab===state.tab?'#052e24':'var(--tx)';});
   }
   async function loadRoute() {
     const r=await rpc('courier_ops_items',{p_from:null,p_to:null}); if(r.error)throw r.error;
-    state.items=Array.isArray(r.data)?r.data:[];
+    state.items=(Array.isArray(r.data)?r.data:[]).filter(x=>x&&x.client_name&&String(x.client_name).trim()&&String(x.client_name).trim()!=='بدون اسم');
   }
   async function loadIssues() {
     const r=await rpc('courier_ops_issues',{p_status:null}); if(r.error)throw r.error;
@@ -53,6 +55,7 @@
   function localDay(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function dayOffset(n) { const d=new Date(); d.setDate(d.getDate()+n); return localDay(d); }
   async function loadLedger() {
+    if (!isCourier()) { state.ledger = []; return; }
     state.ledgerFrom=state.ledgerFrom||dayOffset(-62); state.ledgerTo=state.ledgerTo||dayOffset(0);
     if(state.ledgerFrom>state.ledgerTo) throw new Error('تاريخ البداية لازم يكون قبل تاريخ النهاية');
     const r=await rpc('courier_ops_ledger',{p_from:state.ledgerFrom,p_to:state.ledgerTo}); if(r.error)throw r.error;
@@ -67,13 +70,19 @@
         '&travelmode=driving'
       : '';
     const mapAction=routeUrl
-      ? '<div class="cp-card" style="margin:8px 0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><div><b>خريطة خط السير بالكامل</b><div class="cp-sub">فتح '+routeStops.length+' محطات حسب الترتيب الحالي على Google Maps'+(state.items.filter(x=>x.address&&String(x.address).trim()).length>11?' — أول 11 محطة فقط في رابط واحد':'')+'</div></div><a class="cp-btn cp-go" target="_blank" rel="noopener noreferrer" href="'+esc(routeUrl)+'">فتح خط السير على الخريطة</a></div>'
+      ? '<div class="cp-card" style="margin:8px 0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><div><b>خريطة خط السير بالكامل</b><div class="cp-sub">فتح '+routeStops.length+' محطات حسب الترتيب الحالي على Google Maps</div></div><a class="cp-btn cp-go" target="_blank" rel="noopener noreferrer" href="'+esc(routeUrl)+'">فتح خط السير على الخريطة</a></div>'
       : '';
-    const rows=state.items.map((x,i)=>'<article class="cp-card" style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><div><b>'+esc(x.client_name||'بدون اسم')+'</b><div class="cp-sub">معاملة '+esc(x.transaction_id)+' · '+esc(x.trip_day)+' · '+(x.kind==='pickup'?'استلام':'تسليم')+'</div><div class="cp-sub">'+esc(x.address||'لا يوجد عنوان')+'</div></div><b>'+money(x.fee)+'</b></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><label class="cp-sub">الحالة التشغيلية <select data-cop-status="'+x.id+'" class="cp-field">'+statusOptions.replace('value="'+x.operational_status+'"','value="'+x.operational_status+'" selected')+'</select></label><label class="cp-sub">الأولوية <select data-cop-priority="'+x.id+'" class="cp-field">'+[1,2,3,4,5].map(n=>'<option value="'+n+'" '+(Number(x.priority)===n?'selected':'')+'>'+({1:'عاجل',2:'عالية',3:'عادية',4:'منخفضة',5:'عند التفرغ'}[n])+'</option>').join('')+'</select></label><button type="button" class="cp-btn cp-sm" data-cop="up" data-id="'+x.id+'" '+(i===0?'disabled':'')+'>↑</button><button type="button" class="cp-btn cp-sm" data-cop="down" data-id="'+x.id+'" '+(i===state.items.length-1?'disabled':'')+'>↓</button><button type="button" class="cp-btn cp-sm" data-cop="report" data-id="'+x.id+'">إبلاغ عن مشكلة</button><button type="button" class="cp-btn cp-sm" data-cop="history" data-id="'+x.id+'">سجل التغييرات</button>'+(x.address?'<a class="cp-btn cp-sm" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(x.address)+'">فتح الخريطة</a>':'')+'</div></article>').join('');
+    const rows=state.items.map((x,i)=>'<article class="cp-card" style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><div><b>'+esc(x.client_name||'بدون اسم')+'</b><div class="cp-sub">معاملة '+esc(x.transaction_id)+' · '+esc(x.trip_day)+' · '+(x.kind==='pickup'?'استلام':'تسليم')+'</div><div class="cp-sub">'+esc(x.address||'لا يوجد عنوان')+'</div></div><b>'+money(x.fee)+'</b></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><label class="cp-sub">الحالة التشغيلية <select data-cop-status="'+x.id+'" class="cp-field">'+statusOptions.replace('value="'+x.operational_status+'"','value="'+x.operational_status+'" selected')+'</select></label><label class="cp-sub">الأولوية <select data-cop-priority="'+x.id+'" class="cp-field">'+[1,2,3,4,5].map(n=>'<option value="'+n+'" '+(Number(x.priority)===n?'selected':'')+'>'+({1:'عاجل',2:'عالية',3:'عادية',4:'منخفضة',5:'عند التفرغ'}[n])+'</option>').join('')+'</select></label><button type="button" class="cp-btn cp-sm" data-cop="up" data-id="'+x.id+'" '+(i===0?'disabled':'')+'>↑ لأعلى</button><button type="button" class="cp-btn cp-sm" data-cop="down" data-id="'+x.id+'" '+(i===state.items.length-1?'disabled':'')+'>↓ لأسفل</button><button type="button" class="cp-btn cp-sm" data-cop="report" data-id="'+x.id+'">إبلاغ عن مشكلة</button><button type="button" class="cp-btn cp-sm" data-cop="history" data-id="'+x.id+'">سجل التغييرات</button>'+(x.address?'<a class="cp-btn cp-sm" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(x.address)+'">فتح الخريطة</a>':'')+'</div></article>').join('');
     return '<p class="cp-sub">الحالة التشغيلية مستقلة عن التأكيد المالي. تحديث الحالة لا يؤكد المشوار ولا يضيفه للعمولة.</p>'+mapAction+(rows||'<div class="cp-empty">لا توجد مشاوير مسجلة في الفترة الحالية.</div>');
   }
   function issuesView() {
-    const rows=state.issues.map(x=>'<article class="cp-card" style="margin:8px 0"><b>'+esc(issueLabels[x.issue_type]||x.issue_type)+'</b><div class="cp-sub">معاملة '+esc(x.transaction_id)+' · '+esc(x.courier)+' · '+esc(x.created_at)+'</div><p>'+esc(x.details)+'</p><span class="cp-tag '+(x.status==='resolved'?'ok':'wt')+'">'+({open:'مفتوح',in_progress:'جاري الحل',resolved:'تم الحل'}[x.status]||x.status)+'</span>'+(isStaff()?'<div class="cp-sub">المسؤول: '+esc(x.assignee_name||'غير معين')+'</div><label class="cp-sub">تعيين المسؤول<select class="cp-field" data-cop-assign="'+x.id+'"><option value="">بدون مسؤول</option>'+state.staffUsers.map(u=>'<option value="'+u.id+'" '+(x.assigned_to===u.id?'selected':'')+'>'+esc(u.full_name)+'</option>').join('')+'</select></label><div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="cp-btn cp-sm" data-cop="issue-state" data-id="'+x.id+'" data-state="in_progress">بدء المتابعة</button><button type="button" class="cp-btn cp-sm" data-cop="issue-state" data-id="'+x.id+'" data-state="resolved">تم الحل</button></div>':'')+(x.resolution?'<p class="cp-sub">الإجراء: '+esc(x.resolution)+'</p>':'')+'</article>').join('');
+    const rows=state.issues.map(x=>{
+      const isResolving = state.resolvingIssueId === Number(x.id);
+      const resolveBox = isResolving
+        ? '<form class="cp-resolve-form" data-id="'+x.id+'" style="margin-top:8px"><input class="cp-field" name="resolution" maxlength="500" placeholder="اكتب ملخص الحل (اختياري)…" style="margin-bottom:6px"><div style="display:flex;gap:6px"><button type="submit" class="cp-btn cp-go cp-sm">تأكيد الحل</button><button type="button" class="cp-btn cp-sm" data-cop="cancel-resolve">إلغاء</button></div></form>'
+        : '';
+      return '<article class="cp-card" style="margin:8px 0"><b>'+esc(issueLabels[x.issue_type]||x.issue_type)+'</b><div class="cp-sub">معاملة '+esc(x.transaction_id)+' · '+esc(x.courier)+' · '+esc(x.created_at)+'</div><p>'+esc(x.details)+'</p><span class="cp-tag '+(x.status==='resolved'?'ok':'wt')+'">'+({open:'مفتوح',in_progress:'جاري الحل',resolved:'تم الحل'}[x.status]||x.status)+'</span>'+(isStaff()?'<div class="cp-sub">المسؤول: '+esc(x.assignee_name||'غير معين')+'</div><label class="cp-sub">تعيين المسؤول<select class="cp-field" data-cop-assign="'+x.id+'"><option value="">بدون مسؤول</option>'+state.staffUsers.map(u=>'<option value="'+u.id+'" '+(x.assigned_to===u.id?'selected':'')+'>'+esc(u.full_name)+'</option>').join('')+'</select></label><div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="cp-btn cp-sm" data-cop="issue-state" data-id="'+x.id+'" data-state="in_progress">بدء المتابعة</button><button type="button" class="cp-btn cp-sm" data-cop="ask-resolve" data-id="'+x.id+'">تم الحل</button></div>'+resolveBox:'')+(x.resolution?'<p class="cp-sub">الإجراء: '+esc(x.resolution)+'</p>':'')+'</article>';
+    }).join('');
     return (isStaff()?'<p class="cp-sub">بلاغات الفريق مع تعيين المسؤول ومتابعة الحالة.</p>':'<p class="cp-sub">تابع حالة البلاغات التي أرسلتها.</p>')+(rows||'<div class="cp-empty">لا توجد بلاغات.</div>');
   }
   function ledgerView() {
@@ -94,7 +103,8 @@
       if(state.tab==='route'){await loadRoute();c.innerHTML=routeView();}
       else if(state.tab==='issues'){await loadIssues();if(isStaff()){const u=await rpc('courier_ops_staff_users');if(u.error)throw u.error;state.staffUsers=Array.isArray(u.data)?u.data:[];}c.innerHTML=issuesView();}
       else if(state.tab==='notifications'){await loadNotifications();c.innerHTML=notificationsView();}
-      else {await loadLedger();c.innerHTML=ledgerView();}
+      else if(isCourier()){await loadLedger();c.innerHTML=ledgerView();}
+      else {state.tab='route';await loadRoute();c.innerHTML=routeView();}
     } catch(e) { c.innerHTML='<div class="cp-empty">تعذر تحميل البيانات. تأكد من تشغيل sql/courier-operations.sql بعد ملفات بوابة المندوب والتقفيل.</div>'; }
     tabButtons();
   }
@@ -113,18 +123,22 @@
     if(a==='up'||a==='down'){
       if(state.busy)return;
       const id=Number(b.dataset.id);
-      const i=state.items.findIndex(z=>Number(z.id)===id), j=i+(a==='up'?-1:1);
-      if(i<0||j<0||j>=state.items.length)return;
+      const next=state.items.slice();
+      const i=next.findIndex(z=>Number(z.id)===id), j=i+(a==='up'?-1:1);
+      if(i<0||j<0||j>=next.length)return;
+      [next[i],next[j]]=[next[j],next[i]];
       state.busy=true;
       try {
-        const itemA=state.items[i], itemB=state.items[j];
-        const orderA=j+1, orderB=i+1;
-        const [r1,r2]=await Promise.all([
-          rpc('courier_ops_update',{p_trip_id:Number(itemA.id),p_route_order:orderA,p_status:null,p_priority:null,p_note:null}),
-          rpc('courier_ops_update',{p_trip_id:Number(itemB.id),p_route_order:orderB,p_status:null,p_priority:null,p_note:null})
-        ]);
-        if(r1.error)throw r1.error;
-        if(r2.error)throw r2.error;
+        const ids=next.map(x=>Number(x.id));
+        const q=await rpc('courier_ops_reorder',{p_trip_ids:ids});
+        if(q.error){
+          const [r1,r2]=await Promise.all([
+            rpc('courier_ops_update',{p_trip_id:Number(next[i].id),p_route_order:i+1,p_status:null,p_priority:null,p_note:null}),
+            rpc('courier_ops_update',{p_trip_id:Number(next[j].id),p_route_order:j+1,p_status:null,p_priority:null,p_note:null})
+          ]);
+          if(r1.error)throw r1.error;
+          if(r2.error)throw r2.error;
+        }
       } catch(err) {
         toast(err.message||'تعذر تغيير الترتيب',true);
       } finally {
@@ -135,9 +149,22 @@
     if(a==='paid')return paymentForm(b.dataset.id);
     if(a==='history'){shell();state.tab='route';await loadTripHistory(b.dataset.id);return;}
     if(a==='notification-read'){const r=await rpc('courier_ops_notification_read',{p_notification_id:Number(b.dataset.id)});if(r.error)return toast(r.error.message,true);await loadNotifications();return render();}
+    if(a==='ask-resolve'){
+      state.resolvingIssueId=Number(b.dataset.id);
+      if($('courier-ops-modal')&&$('courier-ops-modal').style.display==='block'&&state.tab==='issues'){
+        const c=$('cop-content');if(c)c.innerHTML=issuesView();
+      } else {
+        shell();state.tab='issues';await render();
+      }
+      return;
+    }
+    if(a==='cancel-resolve'){
+      state.resolvingIssueId=null;
+      const c=$('cop-content');if(c)c.innerHTML=issuesView();
+      return;
+    }
     if(a==='issue-state'){
-      const resolution=b.dataset.state==='resolved'?(prompt('اكتب ملخص الحل (اختياري):')||'') : null;
-      const r=await rpc('courier_ops_issue_update',{p_issue_id:Number(b.dataset.id),p_status:b.dataset.state,p_resolution:resolution});
+      const r=await rpc('courier_ops_issue_update',{p_issue_id:Number(b.dataset.id),p_status:b.dataset.state,p_resolution:null});
       if(r.error)return toast(r.error.message,true);toast('تم تحديث حالة البلاغ');if(isStaff()&&(!$('courier-ops-modal')||$('courier-ops-modal').style.display==='none'))return loadManagerPanel(true);return render();
     }
   }
@@ -151,6 +178,17 @@
     }
   }
   async function onSubmit(e) {
+    if(e.target.classList && e.target.classList.contains('cp-resolve-form')){
+      e.preventDefault();
+      const f=e.target, id=Number(f.dataset.id), resolution=(f.elements.resolution.value||'').trim()||null;
+      const r=await rpc('courier_ops_issue_update',{p_issue_id:id,p_status:'resolved',p_resolution:resolution});
+      if(r.error)return toast(r.error.message,true);
+      state.resolvingIssueId=null;
+      toast('تم حل البلاغ');
+      await loadManagerPanel(true);
+      if($('courier-ops-modal')&&$('courier-ops-modal').style.display==='block')return render();
+      return;
+    }
     if(e.target.id==='cop-ledger-range'){
       e.preventDefault();state.ledgerFrom=e.target.elements.from.value;state.ledgerTo=e.target.elements.to.value;
       if(!state.ledgerFrom||!state.ledgerTo||state.ledgerFrom>state.ledgerTo)return toast('راجع تاريخ البداية والنهاية',true);
@@ -167,7 +205,8 @@
     if(r.error)return toast(r.error.message,true);toast('تم إرسال البلاغ للإدارة');state.tab='issues';return render();
   }
   function injectManagerPanel() {
-    if(!isStaff())return;const root=$('tab-couriers');if(!root||root.classList.contains('hidden')||$('cop-manager-panel'))return;
+    if(!isStaff())return;const root=$('tab-couriers');if(!root||root.classList.contains('hidden'))return;
+    if($('cop-manager-panel'))return;
     const box=document.createElement('section');box.id='cop-manager-panel';box.className='card p-4 space-y-3';
     box.innerHTML='<div class="flex items-center justify-between gap-2"><b>متابعة تشغيل المناديب والبلاغات</b><div class="flex gap-2"><button type="button" class="rounded-lg bg-slate-600 text-white px-3 py-2 text-xs font-bold" id="cop-manager-notifications">الإشعارات</button><button type="button" class="rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold" id="cop-manager-refresh">تحديث</button></div></div><div id="cop-manager-content" class="text-xs text-slate-500">'+(state.managerHtml||'جاري تحميل البلاغات والتقفيلات…')+'</div>';
     root.appendChild(box);
@@ -181,8 +220,10 @@
     state.managerBusy=true;c.textContent='جاري التحميل…';
     try{
       const [ir,cr,tr]=await Promise.all([rpc('courier_ops_issues',{p_status:null}),rpc('courier_ops_closings',{p_from:null,p_to:null}),rpc('courier_ops_items',{p_from:null,p_to:null})]);
-      if(ir.error)throw ir.error;if(cr.error)throw cr.error;if(tr.error)throw tr.error;state.issues=ir.data||[];state.closings=cr.data||[];state.items=(tr.data||[]).filter(x=>x&&x.client_name&&String(x.client_name).trim()&&String(x.client_name).trim()!=='بدون اسم');
-      const html='<b>حالات المشاوير التشغيلية</b>'+state.items.slice(0,12).map(x=>'<div class="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.transaction_id)+' · '+esc(x.client_name||'بدون اسم')+'</span><div class="flex items-center gap-2"><button type="button" class="text-emerald-600 font-bold" data-cop="history" data-id="'+x.id+'">السجل</button><select class="field !w-auto !py-1 text-xs" data-cop-status="'+x.id+'">'+Object.keys(labels).map(k=>'<option value="'+k+'" '+(x.operational_status===k?'selected':'')+'>'+labels[k]+'</option>').join('')+'</select></div></div>').join('')+'<hr><b>البلاغات المفتوحة: '+state.issues.filter(x=>x.status!=='resolved').length+'</b>'+state.issues.slice(0,8).map(x=>'<div class="border-b border-slate-200 dark:border-slate-700 py-2"><b>'+esc(issueLabels[x.issue_type]||x.issue_type)+'</b> · '+esc(x.courier)+' · '+esc(x.transaction_id)+'<div>'+esc(x.details)+'</div><span>'+({open:'مفتوح',in_progress:'جاري الحل',resolved:'تم الحل'}[x.status])+'</span><button type="button" class="text-emerald-600 font-bold mr-2" data-cop="issue-state" data-id="'+x.id+'" data-state="resolved">حل البلاغ</button></div>').join('')+'<hr><b>التقفيلات الأخيرة</b>'+state.closings.slice(0,8).map(x=>'<div class="flex justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.period_start)+' → '+esc(x.period_end)+' · '+money(x.total)+' · '+(x.paid_at?'تم الصرف':'لم يُسجل الصرف')+'</span>'+(x.paid_method?'<small> · '+esc(({cash:'نقدي',bank_transfer:'تحويل بنكي',wallet:'محفظة إلكترونية',other:'أخرى'}[x.paid_method]||x.paid_method))+'</small>':'')+(x.paid_reference?'<small> · مرجع: '+esc(x.paid_reference)+'</small>':'')+(x.paid_note?'<small> · '+esc(x.paid_note)+'</small>':'')+(isManager()?'<button type="button" class="text-emerald-600 font-bold" data-cop="paid" data-id="'+x.id+'" '+(x.paid_at?'disabled':'')+'>تسجيل الصرف</button>':'')+'</div>').join('');
+      if(ir.error)throw ir.error;if(cr.error)throw cr.error;if(tr.error)throw tr.error;
+      state.issues=ir.data||[];state.closings=cr.data||[];
+      state.items=(tr.data||[]).filter(x=>x&&x.client_name&&String(x.client_name).trim()&&String(x.client_name).trim()!=='بدون اسم');
+      const html='<b>حالات المشاوير التشغيلية</b>'+state.items.slice(0,12).map(x=>'<div class="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.transaction_id)+' · '+esc(x.client_name||'بدون اسم')+'</span><div class="flex items-center gap-2"><button type="button" class="text-emerald-600 font-bold" data-cop="history" data-id="'+x.id+'">السجل</button><select class="field !w-auto !py-1 text-xs" data-cop-status="'+x.id+'">'+Object.keys(labels).map(k=>'<option value="'+k+'" '+(x.operational_status===k?'selected':'')+'>'+labels[k]+'</option>').join('')+'</select></div></div>').join('')+'<hr><b>البلاغات المفتوحة: '+state.issues.filter(x=>x.status!=='resolved').length+'</b>'+state.issues.slice(0,8).map(x=>'<div class="border-b border-slate-200 dark:border-slate-700 py-2"><b>'+esc(issueLabels[x.issue_type]||x.issue_type)+'</b> · '+esc(x.courier)+' · '+esc(x.transaction_id)+'<div>'+esc(x.details)+'</div><span>'+({open:'مفتوح',in_progress:'جاري الحل',resolved:'تم الحل'}[x.status])+'</span><button type="button" class="text-emerald-600 font-bold mr-2" data-cop="ask-resolve" data-id="'+x.id+'">حل البلاغ</button></div>').join('')+'<hr><b>التقفيلات الأخيرة</b>'+state.closings.slice(0,8).map(x=>'<div class="flex justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.period_start)+' → '+esc(x.period_end)+' · '+money(x.total)+' · '+(x.paid_at?'تم الصرف':'لم يُسجل الصرف')+'</span>'+(x.paid_method?'<small> · '+esc(({cash:'نقدي',bank_transfer:'تحويل بنكي',wallet:'محفظة إلكترونية',other:'أخرى'}[x.paid_method]||x.paid_method))+'</small>':'')+(x.paid_reference?'<small> · مرجع: '+esc(x.paid_reference)+'</small>':'')+(x.paid_note?'<small> · '+esc(x.paid_note)+'</small>':'')+(isManager()?'<button type="button" class="text-emerald-600 font-bold" data-cop="paid" data-id="'+x.id+'" '+(x.paid_at?'disabled':'')+'>تسجيل الصرف</button>':'')+'</div>').join('');
       state.managerHtml=html;
       state.managerLoadedAt=Date.now();
       const target=$('cop-manager-content');
@@ -198,7 +239,27 @@
   document.addEventListener('click',onClick);
   document.addEventListener('change',onChange);
   document.addEventListener('submit',onSubmit);
-  const obs=new MutationObserver(()=>{addCourierButton();injectManagerPanel();});
-  obs.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
-  addCourierButton();injectManagerPanel();
+
+  /* ربط نظيف بتبديل التبويبات وتحميل البيانات بدون MutationObserver على document.body */
+  const _st = window.switchTab;
+  if (typeof _st === 'function' && !_st.__copWrapped) {
+    const wrappedSwitch = function (id) {
+      const r = _st.apply(this, arguments);
+      if (id === 'couriers') setTimeout(injectManagerPanel, 60);
+      return r;
+    };
+    wrappedSwitch.__copWrapped = true;
+    window.switchTab = wrappedSwitch;
+  }
+  const _li = window.loadInitialData;
+  if (typeof _li === 'function' && !_li.__copWrapped) {
+    const wrappedLoad = async function () {
+      const r = await _li.apply(this, arguments);
+      setTimeout(injectManagerPanel, 120);
+      return r;
+    };
+    wrappedLoad.__copWrapped = true;
+    window.loadInitialData = wrappedLoad;
+  }
+  injectManagerPanel();
 })();
