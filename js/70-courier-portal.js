@@ -188,8 +188,8 @@
     s.textContent = [
       'body.is-courier-mode #app,body.is-courier-mode #login{display:none}',
       '#courier-app.hidden,.cp-modal.hidden{display:none}',
-      '#courier-app{--bg:#0a1424;--card:#10223d;--tx:#e8eef8;--mu:#8fa1ba;--bd:rgba(255,255,255,.1);--fld:rgba(255,255,255,.07);--hd:#0b1b33;--hdtx:#fff;--hdbt:rgba(255,255,255,.1);--chip:rgba(255,255,255,.07);--sh:none;--gd-bg:rgba(16,185,129,.09);--gd-bd:rgba(16,185,129,.28)}',
-      '#courier-app[data-theme=light]{--bg:#eef2f7;--card:#fff;--tx:#0f172a;--mu:#64748b;--bd:#e2e8f0;--fld:#f1f5f9;--hd:#fff;--hdtx:#0f172a;--hdbt:#eef2f7;--chip:#eef2f7;--sh:0 1px 3px rgba(15,23,42,.08);--gd-bg:#ecfdf5;--gd-bd:#a7f3d0}',
+      '#courier-app,#courier-ops-modal{--bg:#0a1424;--card:#10223d;--tx:#e8eef8;--mu:#8fa1ba;--bd:rgba(255,255,255,.1);--fld:rgba(255,255,255,.07);--hd:#0b1b33;--hdtx:#fff;--hdbt:rgba(255,255,255,.1);--chip:rgba(255,255,255,.07);--sh:none;--gd-bg:rgba(16,185,129,.09);--gd-bd:rgba(16,185,129,.28)}',
+      '#courier-app[data-theme=light],#courier-ops-modal[data-theme=light]{--bg:#eef2f7;--card:#fff;--tx:#0f172a;--mu:#64748b;--bd:#e2e8f0;--fld:#f1f5f9;--hd:#fff;--hdtx:#0f172a;--hdbt:#eef2f7;--chip:#eef2f7;--sh:0 1px 3px rgba(15,23,42,.08);--gd-bg:#ecfdf5;--gd-bd:#a7f3d0}',
       '#courier-app{position:fixed;inset:0;z-index:99980;display:flex;flex-direction:column;background:var(--bg);color:var(--tx);font-family:inherit;overflow-x:hidden}',
       '#courier-app *{box-sizing:border-box}',
       '.cp-head{flex:0 0 auto;background:var(--hd);color:var(--hdtx);border-bottom:1px solid var(--bd);padding:8px 10px;display:flex;align-items:center;gap:6px;box-shadow:var(--sh);flex-wrap:wrap}',
@@ -312,6 +312,7 @@
     ].join('\n');
     document.head.appendChild(s);
   }
+  window.__ensureCourierPortalCss = addCss;
 
   /* ---------- مساعدات ---------- */
   function toast(msg, bad) {
@@ -1026,23 +1027,28 @@
     } catch (e) { if (!silent) toast(errMsg(e), true); }
   }
   async function checkPendingReminders(force) {
-    if (!st.me || (!force && Date.now()-st.pendingReminderCheck < 15*60*1000)) return;
-    st.pendingReminderCheck=Date.now();
+    if (!st.me || (!force && Date.now() - st.pendingReminderCheck < 15 * 60 * 1000)) return;
+    st.pendingReminderCheck = Date.now();
     try {
-      /* يطلق فحص التذكير داخل الجلسة أيضًا؛ والـ Cron يغطي حالة إغلاق البوابة. */
-      try { await sbClient.rpc('courier_pending_reminders'); } catch(e) { /* optional until migration is applied */ }
-      const q=await sbClient.from('notifications')
-        .select('id,title,body,created_at')
-        .eq('read',false)
-        .in('title',['تذكير: عندك مشوار غير مؤكد','تذكير: عندك رسوم توصيل غير مؤكدة'])
-        .order('created_at',{ascending:false}).limit(20);
-      if(q.error)throw q.error;
-      const pending=Array.isArray(q.data)?q.data:[];
-      if(pending.length){
-        toast('عندك '+num(pending.length)+' تذكير لمشاوير أو رسوم توصيل محتاجة تأكيد');
-        await sbClient.from('notifications').update({read:true}).in('id',pending.map(x=>x.id));
+      /* يطلق فحص التذكير داخل الجلسة عبر دالة SECURITY DEFINER متوافقة مع سياسة courier_block */
+      let newCount = 0;
+      try {
+        const pr = await sbClient.rpc('courier_pending_reminders');
+        if (!pr.error && typeof pr.data === 'number') newCount = pr.data;
+      } catch (e) { /* optional until migration is applied */ }
+
+      const q = await sbClient.rpc('courier_ops_notifications', { p_limit: 20 });
+      if (q.error) {
+        if (newCount > 0) toast('عندك ' + num(newCount) + ' مشوار أو رسوم توصيل محتاجة تأكيد');
+        return;
       }
-    } catch(e) { /* لا نعطل البوابة إذا لم تُشغّل migration بعد */ }
+      const list = Array.isArray(q.data) ? q.data : [];
+      const pending = list.filter(x => !x.read && (x.title === 'تذكير: عندك مشوار غير مؤكد' || x.title === 'تذكير: عندك رسوم توصيل غير مؤكدة'));
+      if (pending.length) {
+        toast(pending[0].body || ('عندك ' + num(pending.length) + ' تذكير لمشاوير أو رسوم توصيل محتاجة تأكيد'));
+        await Promise.all(pending.map(x => sbClient.rpc('courier_ops_notification_read', { p_notification_id: Number(x.id) }).catch(() => null)));
+      }
+    } catch (e) { /* لا نعطل البوابة إذا لم تُشغّل migration بعد */ }
   }
   function tick() {
     st.tick++; tickClock();
