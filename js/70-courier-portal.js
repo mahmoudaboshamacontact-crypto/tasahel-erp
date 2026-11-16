@@ -1632,7 +1632,8 @@
         if (sig !== st.sig) { st.sig = sig; st.items = data; renderNav(); if (st.tab !== 'chat') renderTab(false); }
         return true;
       } catch (e) {
-        setOffline(true);
+        if (!navigator.onLine) setOffline(true);
+        else setOffline(false);
         if (!silent) toast(errMsg(e), true);
         return false;
       }
