@@ -156,7 +156,8 @@ begin
   end if;
   return coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc) from (
     select i.*,t.courier,t.transaction_id,t.trip_day,t.kind,
-           (select p.full_name from public.profiles p where p.id=i.reporter_id) as reporter_name
+           (select p.full_name from public.profiles p where p.id=i.reporter_id) as reporter_name,
+           (select p.full_name from public.profiles p where p.id=i.assigned_to) as assignee_name
       from public.courier_trip_issues i join public.courier_trips t on t.id=i.trip_id
      where (v_manager or i.reporter_id=auth.uid())
        and (p_status is null or i.status=p_status)
@@ -621,3 +622,116 @@ grant execute on function public.courier_ops_items(date,date),
  public.courier_ops_issue_update(bigint,text,text),public.courier_ops_ledger(date,date),
  public.courier_ops_closings(date,date),public.courier_ops_mark_paid(bigint,text,text,text)
  to authenticated;
+
+
+-- Audit trail for every operational state / priority / route change.
+create table if not exists public.courier_trip_ops_history (
+  id bigserial primary key,
+  trip_id bigint not null references public.courier_trips(id) on delete restrict,
+  action text not null check (action in ('created','updated')),
+  old_values jsonb,
+  new_values jsonb not null,
+  actor_id uuid references auth.users(id) on delete set null,
+  changed_at timestamptz not null default now()
+);
+create index if not exists courier_trip_ops_history_trip_idx
+  on public.courier_trip_ops_history(trip_id, changed_at desc);
+alter table public.courier_trip_ops_history enable row level security;
+revoke all on public.courier_trip_ops_history from public, anon, authenticated;
+
+create or replace function public.trg_courier_trip_ops_history()
+returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  if TG_OP='INSERT' then
+    insert into public.courier_trip_ops_history(trip_id,action,new_values,actor_id)
+    values(NEW.trip_id,'created',to_jsonb(NEW),coalesce(NEW.updated_by,auth.uid()));
+    return NEW;
+  end if;
+  if row(OLD.operational_status,OLD.priority,OLD.route_order,OLD.operational_note)
+     is distinct from row(NEW.operational_status,NEW.priority,NEW.route_order,NEW.operational_note) then
+    insert into public.courier_trip_ops_history(trip_id,action,old_values,new_values,actor_id)
+    values(NEW.trip_id,'updated',to_jsonb(OLD),to_jsonb(NEW),coalesce(NEW.updated_by,auth.uid()));
+  end if;
+  return NEW;
+end $$;
+drop trigger if exists courier_trip_ops_history_log on public.courier_trip_ops;
+create trigger courier_trip_ops_history_log
+after insert or update on public.courier_trip_ops
+for each row execute function public.trg_courier_trip_ops_history();
+revoke all on function public.trg_courier_trip_ops_history() from public,anon,authenticated;
+
+create or replace function public.courier_ops_staff_users()
+returns jsonb language plpgsql stable security definer set search_path=public as $$
+begin
+  if not (public.is_manager() or public.is_staff()) then raise exception 'staff only' using errcode='42501'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'full_name',p.full_name) order by p.full_name)
+    from public.profiles p join public.user_roles ur on ur.user_id=p.id
+    where ur.role in ('manager','staff')),'[]'::jsonb);
+end $$;
+
+create or replace function public.courier_ops_issue_assign(p_issue_id bigint,p_assigned_to uuid)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare v_i public.courier_trip_issues; v_name text;
+begin
+  if not (public.is_manager() or public.is_staff()) then raise exception 'staff only' using errcode='42501'; end if;
+  if p_assigned_to is not null and not exists (
+    select 1 from public.user_roles where user_id=p_assigned_to and role in ('manager','staff')
+  ) then raise exception 'assignee must be a manager or staff member' using errcode='22023'; end if;
+  update public.courier_trip_issues set assigned_to=p_assigned_to,updated_at=now()
+   where id=p_issue_id returning * into v_i;
+  if v_i.id is null then raise exception 'issue not found' using errcode='P0002'; end if;
+  select full_name into v_name from public.profiles where id=p_assigned_to;
+  return jsonb_build_object('ok',true,'issue_id',p_issue_id,'assigned_to',p_assigned_to,'assignee_name',v_name);
+end $$;
+
+create or replace function public.courier_ops_notifications(p_limit integer default 50)
+returns jsonb language plpgsql stable security definer set search_path=public as $$
+begin
+  if auth.uid() is null then raise exception 'authentication required' using errcode='42501'; end if;
+  return coalesce((select jsonb_agg(to_jsonb(n) order by n.created_at desc) from (
+    select id,kind,title,body,read,created_at from public.notifications
+     where user_id=auth.uid() order by created_at desc
+     limit greatest(1,least(coalesce(p_limit,50),100))
+  ) n),'[]'::jsonb);
+end $$;
+
+create or replace function public.courier_ops_notification_read(p_notification_id bigint)
+returns jsonb language plpgsql security definer set search_path=public as $$
+begin
+  if auth.uid() is null then raise exception 'authentication required' using errcode='42501'; end if;
+  update public.notifications set read=true where id=p_notification_id and user_id=auth.uid();
+  if not found then raise exception 'notification not found or not owned by user' using errcode='P0002'; end if;
+  return jsonb_build_object('ok',true,'id',p_notification_id);
+end $$;
+
+create or replace function public.courier_ops_trip_history(p_trip_id bigint)
+returns jsonb language plpgsql stable security definer set search_path=public as $$
+declare v_t public.courier_trips; v_c public.couriers;
+begin
+  select * into v_t from public.courier_trips where id=p_trip_id;
+  if v_t.id is null then raise exception 'trip not found' using errcode='P0002'; end if;
+  if public.is_courier() then
+    select * into v_c from public.couriers where user_id=auth.uid() and active;
+    if v_c.id is null or public.norm_ar(v_t.courier)<>public.norm_ar(v_c.name) then raise exception 'not your trip' using errcode='42501'; end if;
+  elsif not (public.is_manager() or public.is_staff()) then
+    raise exception 'not allowed' using errcode='42501';
+  end if;
+  return coalesce((select jsonb_agg(to_jsonb(x) order by x.changed_at desc) from (
+    select h.id,h.action,h.old_values,h.new_values,h.changed_at,
+           (select p.full_name from public.profiles p where p.id=h.actor_id) as actor_name
+      from public.courier_trip_ops_history h where h.trip_id=p_trip_id
+  ) x),'[]'::jsonb);
+end $$;
+
+revoke all on function public.courier_ops_staff_users(),
+ public.courier_ops_issue_assign(bigint,uuid),
+ public.courier_ops_notifications(integer),
+ public.courier_ops_notification_read(bigint),
+ public.courier_ops_trip_history(bigint)
+from public,anon;
+grant execute on function public.courier_ops_staff_users(),
+ public.courier_ops_issue_assign(bigint,uuid),
+ public.courier_ops_notifications(integer),
+ public.courier_ops_notification_read(bigint),
+ public.courier_ops_trip_history(bigint)
+to authenticated;
