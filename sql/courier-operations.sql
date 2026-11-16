@@ -735,3 +735,128 @@ grant execute on function public.courier_ops_staff_users(),
  public.courier_ops_notification_read(bigint),
  public.courier_ops_trip_history(bigint)
 to authenticated;
+
+
+-- Atomic delivery status + courier trip registration.
+-- A delivery cannot be marked Delivered by this flow unless the same transaction
+-- also records the selected courier trip (or explicitly records customer self-pickup).
+create or replace function public.courier_apply_delivery(
+  p_line_ids bigint[],
+  p_trip_transactions text[] default '{}'::text[],
+  p_courier text default null,
+  p_trip_day date default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_courier text;
+  v_day date := coalesce(p_trip_day, (now() at time zone 'Africa/Cairo')::date);
+  v_input_count integer;
+  v_updated_count integer;
+  v_tx text;
+  v_actor text := coalesce(auth.jwt()->>'email', 'system');
+begin
+  if not (public.is_manager() or public.is_staff()) then
+    raise exception 'staff only' using errcode = '42501';
+  end if;
+  if coalesce(cardinality(p_line_ids), 0) = 0 then
+    raise exception 'no request lines supplied' using errcode = '22023';
+  end if;
+
+  select count(distinct x) into v_input_count
+    from unnest(p_line_ids) as x;
+  if v_input_count = 0 then
+    raise exception 'no request lines supplied' using errcode = '22023';
+  end if;
+
+  if nullif(btrim(coalesce(p_courier, '')), '') is not null then
+    select c.name into v_courier
+      from public.couriers c
+     where c.active = true
+       and public.norm_ar(c.name) = public.norm_ar(p_courier)
+     order by c.id
+     limit 1;
+    if v_courier is null then
+      raise exception 'active courier not found' using errcode = 'P0002';
+    end if;
+  end if;
+
+  -- Validate the complete selection before changing any row.
+  select count(*) into v_updated_count
+    from public.request_lines l
+   where l.id = any(p_line_ids)
+     and l.deleted_at is null;
+  if v_updated_count <> v_input_count then
+    raise exception 'some request lines are missing or deleted' using errcode = 'P0002';
+  end if;
+
+  -- Keep compatibility with installations where delivered_date is not present.
+  begin
+    update public.request_lines
+       set status = 'Delivered',
+           delivered = true,
+           complete = true,
+           under_review = false,
+           delivered_date = v_day
+     where id = any(p_line_ids)
+       and deleted_at is null;
+  exception when undefined_column then
+    update public.request_lines
+       set status = 'Delivered',
+           delivered = true,
+           complete = true,
+           under_review = false
+     where id = any(p_line_ids)
+       and deleted_at is null;
+  end;
+  get diagnostics v_updated_count = row_count;
+  if v_updated_count <> v_input_count then
+    raise exception 'delivery status update was incomplete' using errcode = '40001';
+  end if;
+
+  -- Upsert one delivery trip per selected transaction, in the same DB transaction.
+  if v_courier is not null then
+    for v_tx in
+      select distinct l.transaction_id
+        from public.request_lines l
+       where l.id = any(p_line_ids)
+         and l.deleted_at is null
+         and l.transaction_id = any(coalesce(p_trip_transactions, '{}'::text[]))
+         and l.transaction_id is not null
+    loop
+      insert into public.courier_trips
+        (transaction_id, kind, courier, fee, trip_day, created_by)
+      values
+        (v_tx, 'delivery', v_courier, 40, v_day, v_actor)
+      on conflict (transaction_id, kind) do update
+        set courier = excluded.courier,
+            fee = excluded.fee,
+            trip_day = excluded.trip_day,
+            created_by = excluded.created_by;
+    end loop;
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'updated_lines', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id,
+        'status', l.status,
+        'delivered', l.delivered,
+        'complete', l.complete,
+        'under_review', l.under_review
+      ))
+        from public.request_lines l
+       where l.id = any(p_line_ids)
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+revoke all on function public.courier_apply_delivery(bigint[],text[],text,date)
+  from public, anon;
+grant execute on function public.courier_apply_delivery(bigint[],text[],text,date)
+  to authenticated;
