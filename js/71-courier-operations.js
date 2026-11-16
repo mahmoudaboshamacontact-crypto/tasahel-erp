@@ -14,12 +14,7 @@
   function toast(s,bad) { if (typeof showToast==='function') showToast(s,bad?'error':'success'); else alert(s); }
   function isManager() { return window.__role==='manager'||(typeof currentUser!=='undefined'&&currentUser&&/mahmoud\.aboshama@tasahel\.com\.eg|mahmoud\.aboshama\.contact@gmail\.com/i.test(currentUser.email||'')); }
   function isStaff() { return isManager()||window.__role==='staff'; }
-  function addCourierButton() {
-    const nav=$('cp-nav'); if (!nav || nav.querySelector('[data-cop-open]')) return;
-    const b=document.createElement('button'); b.type='button'; b.dataset.copOpen='1';
-    b.innerHTML='<i class="fa-solid fa-route"></i>التشغيل'; b.style.cssText='flex:1;border:0;background:transparent;color:#10b981;font:inherit;font-size:11px;font-weight:800;padding:9px 2px;cursor:pointer';
-    nav.appendChild(b);
-  }
+  function addCourierButton() { /* تم دمج خط السير الذكي وكشف الحساب مباشرة داخل تابات بوابة المندوب الأساسية لمنع التشتيت */ }
   function shell() {
     if (typeof window.__ensureCourierPortalCss === 'function') window.__ensureCourierPortalCss();
     let root=$('courier-ops-modal');
@@ -186,7 +181,7 @@
     state.managerBusy=true;c.textContent='جاري التحميل…';
     try{
       const [ir,cr,tr]=await Promise.all([rpc('courier_ops_issues',{p_status:null}),rpc('courier_ops_closings',{p_from:null,p_to:null}),rpc('courier_ops_items',{p_from:null,p_to:null})]);
-      if(ir.error)throw ir.error;if(cr.error)throw cr.error;if(tr.error)throw tr.error;state.issues=ir.data||[];state.closings=cr.data||[];state.items=tr.data||[];
+      if(ir.error)throw ir.error;if(cr.error)throw cr.error;if(tr.error)throw tr.error;state.issues=ir.data||[];state.closings=cr.data||[];state.items=(tr.data||[]).filter(x=>x&&x.client_name&&String(x.client_name).trim()&&String(x.client_name).trim()!=='بدون اسم');
       const html='<b>حالات المشاوير التشغيلية</b>'+state.items.slice(0,12).map(x=>'<div class="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.transaction_id)+' · '+esc(x.client_name||'بدون اسم')+'</span><div class="flex items-center gap-2"><button type="button" class="text-emerald-600 font-bold" data-cop="history" data-id="'+x.id+'">السجل</button><select class="field !w-auto !py-1 text-xs" data-cop-status="'+x.id+'">'+Object.keys(labels).map(k=>'<option value="'+k+'" '+(x.operational_status===k?'selected':'')+'>'+labels[k]+'</option>').join('')+'</select></div></div>').join('')+'<hr><b>البلاغات المفتوحة: '+state.issues.filter(x=>x.status!=='resolved').length+'</b>'+state.issues.slice(0,8).map(x=>'<div class="border-b border-slate-200 dark:border-slate-700 py-2"><b>'+esc(issueLabels[x.issue_type]||x.issue_type)+'</b> · '+esc(x.courier)+' · '+esc(x.transaction_id)+'<div>'+esc(x.details)+'</div><span>'+({open:'مفتوح',in_progress:'جاري الحل',resolved:'تم الحل'}[x.status])+'</span><button type="button" class="text-emerald-600 font-bold mr-2" data-cop="issue-state" data-id="'+x.id+'" data-state="resolved">حل البلاغ</button></div>').join('')+'<hr><b>التقفيلات الأخيرة</b>'+state.closings.slice(0,8).map(x=>'<div class="flex justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.period_start)+' → '+esc(x.period_end)+' · '+money(x.total)+' · '+(x.paid_at?'تم الصرف':'لم يُسجل الصرف')+'</span>'+(x.paid_method?'<small> · '+esc(({cash:'نقدي',bank_transfer:'تحويل بنكي',wallet:'محفظة إلكترونية',other:'أخرى'}[x.paid_method]||x.paid_method))+'</small>':'')+(x.paid_reference?'<small> · مرجع: '+esc(x.paid_reference)+'</small>':'')+(x.paid_note?'<small> · '+esc(x.paid_note)+'</small>':'')+(isManager()?'<button type="button" class="text-emerald-600 font-bold" data-cop="paid" data-id="'+x.id+'" '+(x.paid_at?'disabled':'')+'>تسجيل الصرف</button>':'')+'</div>').join('');
       state.managerHtml=html;
       state.managerLoadedAt=Date.now();

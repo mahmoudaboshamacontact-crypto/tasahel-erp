@@ -709,7 +709,7 @@
       root.innerHTML = renderFilterControlPanel(COURIERS) + '<div class="card p-6 text-center text-xs text-slate-500">' + (miss(er) ? 'لازم تشغّل ملف <b class="font-mono">phase11-couriers.sql</b> في Supabase الأول.' : 'تعذّر تحميل البيانات') + '</div>';
       return;
     }
-    const trips = tr.data || [], far = fr.data || [];
+    let trips = tr.data || [], far = fr.data || [];
     const activeClosings = (cl.data || []).filter(x => !x.reopened_at);
     const feeConfirms = new Map((q[3].data || []).map(x => [String(x.line_id), x]));
     const closedItemKeys = new Set(((q[4] && q[4].data) || []).filter(x => !x.released_at).map(x => String(x.source_type) + ':' + String(x.source_id)));
@@ -737,6 +737,8 @@
       } catch (err) {}
     }
 
+    /* استبعاد المشاوير اليتيمة المرتبطة بمعاملات محذوفة من request_lines (التي كانت تظهر بدون اسم) */
+    trips = trips.filter(t => t && t.transaction_id && txMap.has(String(t.transaction_id)));
     const names = ALLC.filter(x => x.active || trips.some(t => nn(t.courier) === nn(x.name)) || far.some(l => nn(l.executor) === nn(x.name)) ).map(x => x.name);
     const rows = names.map(c => {
       const t = trips.filter(x => nn(x.courier) === nn(c)), fl = far.filter(l => nn(l.executor) === nn(c));
