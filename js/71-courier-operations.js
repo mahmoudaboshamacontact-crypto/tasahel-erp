@@ -7,7 +7,7 @@
   const money = n => Number(n || 0).toLocaleString('ar-EG') + ' ج';
   const labels = {new:'جديد',collecting:'جاري الاستلام',collected:'تم الاستلام',on_the_way:'في الطريق',delivered:'تم التسليم'};
   const issueLabels = {customer_unavailable:'العميل غير متاح',wrong_address:'عنوان خطأ',incorrect_fee:'رسوم غير صحيحة',pickup_problem:'مشكلة في الاستلام',other:'مشكلة أخرى'};
-  const state = {items:[],issues:[],ledger:[],closings:[],ledgerFrom:'',ledgerTo:'',tab:'route',busy:false,managerBusy:false};
+  const state = {items:[],issues:[],ledger:[],closings:[],notifications:[],staffUsers:[],ledgerFrom:'',ledgerTo:'',tab:'route',busy:false,managerBusy:false};
   const statusOptions = Object.keys(labels).map(k=>'<option value="'+k+'">'+labels[k]+'</option>').join('');
   function rpc(name,args) { return sbClient.rpc(name,args || {}); }
   function toast(s,bad) { if (typeof showToast==='function') showToast(s,bad?'error':'success'); else alert(s); }
@@ -23,7 +23,7 @@
     let root=$('courier-ops-modal');
     if (!root) { root=document.createElement('div'); root.id='courier-ops-modal'; root.dir='rtl'; root.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(2,6,23,.78);display:none;overflow:auto;padding:12px'; document.body.appendChild(root); }
     root.style.display='block';
-    root.innerHTML='<section style="max-width:760px;min-height:80vh;margin:0 auto;background:#10223d;color:#e8eef8;border:1px solid rgba(255,255,255,.15);border-radius:18px;padding:14px"><header style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:17px">التشغيل وكشف الحساب</b><button data-cop="close" class="cp-btn">إغلاق ✕</button></header><nav style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0"><button class="cp-btn" data-cop="tab" data-tab="route">خط السير</button><button class="cp-btn" data-cop="tab" data-tab="issues">البلاغات</button><button class="cp-btn" data-cop="tab" data-tab="ledger">كشف الحساب</button></nav><div id="cop-content">جاري التحميل…</div></section>';
+    root.innerHTML='<section style="max-width:760px;min-height:80vh;margin:0 auto;background:#10223d;color:#e8eef8;border:1px solid rgba(255,255,255,.15);border-radius:18px;padding:14px"><header style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:17px">التشغيل وكشف الحساب</b><button data-cop="close" class="cp-btn">إغلاق ✕</button></header><nav style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0"><button class="cp-btn" data-cop="tab" data-tab="route">خط السير</button><button class="cp-btn" data-cop="tab" data-tab="issues">البلاغات</button><button class="cp-btn" data-cop="tab" data-tab="ledger">كشف الحساب</button><button class="cp-btn" data-cop="tab" data-tab="notifications">الإشعارات</button></nav><div id="cop-content">جاري التحميل…</div></section>';
   }
   function tabButtons() {
     const root=$('courier-ops-modal'); if(!root)return;
@@ -36,6 +36,19 @@
   async function loadIssues() {
     const r=await rpc('courier_ops_issues',{p_status:null}); if(r.error)throw r.error;
     state.issues=Array.isArray(r.data)?r.data:[];
+  }
+  async function loadNotifications(){
+    const r=await rpc('courier_ops_notifications',{p_limit:50});if(r.error)throw r.error;
+    state.notifications=Array.isArray(r.data)?r.data:[];
+  }
+  async function loadTripHistory(id){
+    const r=await rpc('courier_ops_trip_history',{p_trip_id:Number(id)});if(r.error)throw r.error;
+    const rows=(Array.isArray(r.data)?r.data:[]).map(x=>'<article class="cp-card" style="margin:8px 0"><b>'+esc(x.action==='created'?'إنشاء سجل الحالة':'تحديث حالة المشوار')+'</b><div class="cp-sub">'+esc(x.changed_at)+' · '+esc(x.actor_name||'النظام')+'</div><div>من: '+esc(x.old_values?.operational_status||'—')+' ← إلى: '+esc(x.new_values?.operational_status||'—')+'</div><div class="cp-sub">الأولوية: '+esc(x.new_values?.priority??'—')+' · ترتيب المسار: '+esc(x.new_values?.route_order??'—')+'</div></article>').join('');
+    const c=$('cop-content');if(c)c.innerHTML='<h3>سجل تغييرات المشوار</h3><button class="cp-btn" data-cop="tab" data-tab="route">رجوع</button>'+(rows||'<div class="cp-empty">لا يوجد سجل تغييرات حتى الآن.</div>');
+  }
+  function notificationsView(){
+    const rows=state.notifications.map(n=>'<article class="cp-card" style="margin:8px 0;opacity:'+(n.read?'0.68':'1')+'"><div style="display:flex;justify-content:space-between;gap:8px"><b>'+esc(n.title||'إشعار')+'</b><small>'+esc(n.created_at||'')+'</small></div><p>'+esc(n.body||'')+'</p>'+(n.read?'':'<button class="cp-btn cp-sm" data-cop="notification-read" data-id="'+n.id+'">تحديد كمقروء</button>')+'</article>').join('');
+    return '<p class="cp-sub">إشعارات حسابك، مرتبة من الأحدث.</p>'+(rows||'<div class="cp-empty">لا توجد إشعارات.</div>');
   }
   function localDay(d) { return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function dayOffset(n) { const d=new Date(); d.setDate(d.getDate()+n); return localDay(d); }
@@ -50,8 +63,8 @@
     return '<p class="cp-sub">الحالة التشغيلية مستقلة عن التأكيد المالي. تحديث الحالة لا يؤكد المشوار ولا يضيفه للعمولة.</p>'+(rows||'<div class="cp-empty">لا توجد مشاوير مسجلة في الفترة الحالية.</div>');
   }
   function issuesView() {
-    const rows=state.issues.map(x=>'<article class="cp-card" style="margin:8px 0"><b>'+esc(issueLabels[x.issue_type]||x.issue_type)+'</b><div class="cp-sub">معاملة '+esc(x.transaction_id)+' · '+esc(x.courier)+' · '+esc(x.created_at)+'</div><p>'+esc(x.details)+'</p><span class="cp-tag '+(x.status==='resolved'?'ok':'wt')+'">'+({open:'مفتوح',in_progress:'جاري الحل',resolved:'تم الحل'}[x.status]||x.status)+'</span>'+(isStaff()?'<div style="display:flex;gap:6px;margin-top:8px"><button class="cp-btn cp-sm" data-cop="issue-state" data-id="'+x.id+'" data-state="in_progress">بدء المتابعة</button><button class="cp-btn cp-sm" data-cop="issue-state" data-id="'+x.id+'" data-state="resolved">تم الحل</button></div>':'')+(x.resolution?'<p class="cp-sub">الإجراء: '+esc(x.resolution)+'</p>':'')+'</article>').join('');
-    return (isStaff()?'<p class="cp-sub">بلاغات الفريق ومتابعة حالتها.</p>':'<p class="cp-sub">تابع حالة البلاغات التي أرسلتها.</p>')+(rows||'<div class="cp-empty">لا توجد بلاغات.</div>');
+    const rows=state.issues.map(x=>'<article class="cp-card" style="margin:8px 0"><b>'+esc(issueLabels[x.issue_type]||x.issue_type)+'</b><div class="cp-sub">معاملة '+esc(x.transaction_id)+' · '+esc(x.courier)+' · '+esc(x.created_at)+'</div><p>'+esc(x.details)+'</p><span class="cp-tag '+(x.status==='resolved'?'ok':'wt')+'">'+({open:'مفتوح',in_progress:'جاري الحل',resolved:'تم الحل'}[x.status]||x.status)+'</span>'+(isStaff()?'<div class="cp-sub">المسؤول: '+esc(x.assignee_name||'غير معين')+'</div><label class="cp-sub">تعيين المسؤول<select class="cp-field" data-cop-assign="'+x.id+'"><option value="">بدون مسؤول</option>'+state.staffUsers.map(u=>'<option value="'+u.id+'" '+(x.assigned_to===u.id?'selected':'')+'>'+esc(u.full_name)+'</option>').join('')+'</select></label><div style="display:flex;gap:6px;margin-top:8px"><button class="cp-btn cp-sm" data-cop="issue-state" data-id="'+x.id+'" data-state="in_progress">بدء المتابعة</button><button class="cp-btn cp-sm" data-cop="issue-state" data-id="'+x.id+'" data-state="resolved">تم الحل</button></div>':'')+(x.resolution?'<p class="cp-sub">الإجراء: '+esc(x.resolution)+'</p>':'')+'</article>').join('');
+    return (isStaff()?'<p class="cp-sub">بلاغات الفريق مع تعيين المسؤول ومتابعة الحالة.</p>':'<p class="cp-sub">تابع حالة البلاغات التي أرسلتها.</p>')+(rows||'<div class="cp-empty">لا توجد بلاغات.</div>');
   }
   function ledgerView() {
     const fmtDate = v => v ? new Date(v).toLocaleString('ar-EG') : '—';
@@ -69,7 +82,8 @@
     const c=$('cop-content'); if(!c)return; tabButtons(); c.innerHTML='<div class="cp-empty">جاري تحميل البيانات…</div>';
     try {
       if(state.tab==='route'){await loadRoute();c.innerHTML=routeView();}
-      else if(state.tab==='issues'){await loadIssues();c.innerHTML=issuesView();}
+      else if(state.tab==='issues'){await loadIssues();if(isStaff()){const u=await rpc('courier_ops_staff_users');if(u.error)throw u.error;state.staffUsers=Array.isArray(u.data)?u.data:[];}c.innerHTML=issuesView();}
+      else if(state.tab==='notifications'){await loadNotifications();c.innerHTML=notificationsView();}
       else {await loadLedger();c.innerHTML=ledgerView();}
     } catch(e) { c.innerHTML='<div class="cp-empty">تعذر تحميل البيانات. تأكد من تشغيل sql/courier-operations.sql بعد ملفات بوابة المندوب والتقفيل.</div>'; }
     tabButtons();
@@ -98,6 +112,8 @@
       return render();
     }
     if(a==='paid')return paymentForm(b.dataset.id);
+    if(a==='history')return loadTripHistory(b.dataset.id);
+    if(a==='notification-read'){const r=await rpc('courier_ops_notification_read',{p_notification_id:Number(b.dataset.id)});if(r.error)return toast(r.error.message,true);await loadNotifications();return render();}
     if(a==='issue-state'){
       const resolution=b.dataset.state==='resolved'?(prompt('اكتب ملخص الحل (اختياري):')||'') : null;
       const r=await rpc('courier_ops_issue_update',{p_issue_id:Number(b.dataset.id),p_status:b.dataset.state,p_resolution:resolution});
@@ -106,6 +122,7 @@
   }
   async function onChange(e) {
     const el=e.target;
+    if(el.matches('[data-cop-assign]')){const r=await rpc('courier_ops_issue_assign',{p_issue_id:Number(el.dataset.copAssign),p_assigned_to:el.value||null});if(r.error){toast(r.error.message,true);return;}toast('تم تحديث المسؤول');return render();}
     if(el.matches('[data-cop-status],[data-cop-priority]')){
       const id=Number(el.dataset.copStatus||el.dataset.copPriority),x=state.items.find(z=>Number(z.id)===id);if(!x)return;
       const args={p_trip_id:id,p_status:el.dataset.copStatus?el.value:null,p_priority:el.dataset.copPriority?Number(el.value):null,p_route_order:null,p_note:null};
