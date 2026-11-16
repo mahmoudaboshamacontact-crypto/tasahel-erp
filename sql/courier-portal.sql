@@ -195,7 +195,7 @@ begin
                  count(*) filter (where l.complete) as n_complete, count(*) filter (where l.delivered) as n_delivered,
                  count(*) filter (where l.under_review) as n_review
             from public.request_lines l where l.transaction_id = t.transaction_id and l.deleted_at is null) i on true
-       where public.norm_ar(t.courier) = v_me and t.trip_day between v_from and v_to
+       where public.norm_ar(t.courier) = v_me and t.trip_day between v_from and v_to and coalesce(i.lines, 0) > 0
       union all
       -- رسوم التوصيل (ذهاب أو ذهاب وعودة) المسجّلة باسمي
       select 'fee', l.id, l.transaction_id, l.received_at::date, f.amount, l.id,
@@ -421,7 +421,7 @@ begin
   if not public.is_manager() then raise exception 'not allowed' using errcode = '42501'; end if;
   return coalesce((
     select jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name, 'user_id', c.user_id,
-      'pending_trips', (select count(*) from public.courier_trips t where public.norm_ar(t.courier) = public.norm_ar(c.name) and t.courier_confirmed_at is null and t.fee > 0 and t.trip_day >= current_date - 30),
+      'pending_trips', (select count(*) from public.courier_trips t where public.norm_ar(t.courier) = public.norm_ar(c.name) and t.courier_confirmed_at is null and t.fee > 0 and t.trip_day >= current_date - 30 and exists (select 1 from public.request_lines l where l.transaction_id = t.transaction_id and l.deleted_at is null)),
       'notes_7d', (select count(*) from public.tx_comments x where x.author_id = c.user_id and x.created_at > now() - interval '7 days' and x.deleted_at is null)
     ) order by c.sort_order, c.id) from public.couriers c where c.active and c.user_id is not null), '[]'::jsonb);
 end $$;
@@ -841,6 +841,7 @@ begin
         from public.courier_trips t
        where t.trip_day between v_from and v_to
          and t.courier is not null and t.courier <> '—'
+         and exists (select 1 from public.request_lines l where l.transaction_id = t.transaction_id and l.deleted_at is null)
        group by public.norm_ar(t.courier)
     ),
     fees_agg as (

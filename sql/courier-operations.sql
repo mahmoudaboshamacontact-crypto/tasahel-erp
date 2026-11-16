@@ -15,6 +15,10 @@ create table if not exists public.courier_trip_ops (
   updated_at timestamptz not null default now(),
   updated_by uuid references auth.users(id) on delete set null
 );
+alter table public.courier_trip_ops
+  add column if not exists client_lat double precision,
+  add column if not exists client_lng double precision;
+
 create index if not exists courier_trip_ops_route_idx
   on public.courier_trip_ops (route_order, priority, trip_id);
 alter table public.courier_trip_ops enable row level security;
@@ -68,25 +72,25 @@ begin
     if v_c.id is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
   end if;
   return coalesce((
-    select jsonb_agg(to_jsonb(x) order by case when x.route_order=0 then 2147483647 else x.route_order end, x.priority, x.trip_day, x.id)
+    select jsonb_agg(to_jsonb(x) order by x.trip_day desc, case when x.route_order=0 then 2147483647 else x.route_order end, x.priority, x.id desc)
     from (
       select t.id, t.transaction_id, t.kind, t.courier, t.trip_day,
              t.fee, t.courier_confirmed_at,
              coalesce(o.operational_status,'new') as operational_status,
              coalesce(o.priority,3) as priority,
              coalesce(o.route_order,0) as route_order,
-             o.operational_note, o.updated_at,
+             o.operational_note, o.client_lat, o.client_lng, o.updated_at,
              max(l.client_name) as client_name, max(l.phone) as phone,
              max(l.address) as address,
              string_agg(distinct l.service,'، ') as services
         from public.courier_trips t
         left join public.courier_trip_ops o on o.trip_id=t.id
-        left join public.request_lines l on l.transaction_id=t.transaction_id and l.deleted_at is null
+        join public.request_lines l on l.transaction_id=t.transaction_id and l.deleted_at is null
        where t.trip_day between coalesce(p_from,(now() at time zone 'Africa/Cairo')::date-30)
                             and coalesce(p_to,(now() at time zone 'Africa/Cairo')::date)
          and exists (select 1 from public.couriers active_c where active_c.active=true and (v_manager or active_c.user_id is not null) and public.norm_ar(active_c.name)=public.norm_ar(t.courier))
          and (v_manager or public.norm_ar(t.courier)=public.norm_ar(v_c.name))
-       group by t.id,o.operational_status,o.priority,o.route_order,o.operational_note,o.updated_at
+       group by t.id,o.operational_status,o.priority,o.route_order,o.operational_note,o.client_lat,o.client_lng,o.updated_at
     ) x
   ),'[]'::jsonb);
 end $$;
@@ -410,6 +414,7 @@ begin
           ) i on true
          where public.norm_ar(t.courier) = v_me
            and t.trip_day between v_from and v_to
+           and coalesce(i.lines, 0) > 0
 
         union all
 
@@ -494,6 +499,7 @@ begin
      where public.norm_ar(t.courier)=public.norm_ar(v_c.name)
        and t.courier_confirmed_at is null
        and t.trip_day between v_today-62 and v_today
+       and exists (select 1 from public.request_lines l where l.transaction_id=t.transaction_id and l.deleted_at is null)
   loop
     select s.last_reminded_at into v_last
       from public.courier_pending_reminder_state s
@@ -589,7 +595,7 @@ begin
     for r in
       select t.id, t.transaction_id, t.kind, t.trip_day from public.courier_trips t
        where public.norm_ar(t.courier)=public.norm_ar(v_c.name)
-         and t.courier_confirmed_at is null and t.trip_day between v_today-62 and v_today
+         and t.courier_confirmed_at is null and t.trip_day between v_today-62 and v_today and exists (select 1 from public.request_lines l where l.transaction_id=t.transaction_id and l.deleted_at is null)
     loop
       select s.last_reminded_at into v_last from public.courier_pending_reminder_state s
        where s.source_type='trip' and s.source_id=r.id and s.courier_user_id=v_c.user_id for update;
@@ -961,3 +967,45 @@ begin
       t.relname);
   end loop;
 end $$;
+
+-- حفظ اللوكيشن الفعلي للعميل (GPS Pin) من موبايل المندوب
+create or replace function public.courier_save_pin(
+  p_trip_id bigint,
+  p_lat double precision,
+  p_lng double precision
+)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_t public.courier_trips;
+  v_c public.couriers;
+  v_manager boolean := public.is_manager() or public.is_staff();
+begin
+  if not public.is_courier() and not v_manager then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if p_lat is null or p_lng is null or p_lat not between -90 and 90 or p_lng not between -180 and 180 then
+    raise exception 'invalid coordinates' using errcode = '22023';
+  end if;
+  select * into v_t from public.courier_trips where id = p_trip_id;
+  if v_t.id is null then
+    raise exception 'trip not found' using errcode = 'P0002';
+  end if;
+  if public.is_courier() then
+    select * into v_c from public.couriers where user_id = auth.uid() and active;
+    if v_c.id is null or public.norm_ar(v_t.courier) <> public.norm_ar(v_c.name) then
+      raise exception 'not your trip' using errcode = '42501';
+    end if;
+  end if;
+
+  insert into public.courier_trip_ops (trip_id, client_lat, client_lng, updated_at, updated_by)
+  values (p_trip_id, p_lat, p_lng, now(), auth.uid())
+  on conflict (trip_id) do update
+    set client_lat = excluded.client_lat,
+        client_lng = excluded.client_lng,
+        updated_at = now(),
+        updated_by = auth.uid();
+
+  return jsonb_build_object('ok', true, 'trip_id', p_trip_id, 'lat', p_lat, 'lng', p_lng);
+end $$;
+revoke all on function public.courier_save_pin(bigint, double precision, double precision) from public, anon;
+grant execute on function public.courier_save_pin(bigint, double precision, double precision) to authenticated;

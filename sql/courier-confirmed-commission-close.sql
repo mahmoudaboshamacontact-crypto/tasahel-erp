@@ -138,6 +138,7 @@ begin
           ) i on true
          where public.norm_ar(t.courier) = v_me
            and t.trip_day between v_from and v_to
+           and coalesce(i.lines, 0) > 0
 
         union all
 
@@ -496,6 +497,7 @@ begin
         from public.courier_trips t
        where t.trip_day between v_from and v_to
          and t.courier is not null and t.courier <> '—'
+         and exists (select 1 from public.request_lines l where l.transaction_id = t.transaction_id and l.deleted_at is null)
        group by public.norm_ar(t.courier)
     ),
     fees_agg as (
@@ -716,6 +718,7 @@ begin
        and t.trip_day between p_period_start and p_period_end
        and t.courier_confirmed_at is not null
        and coalesce(t.fee, 0) > 0
+       and exists (select 1 from public.request_lines l where l.transaction_id = t.transaction_id and l.deleted_at is null)
        and not exists (
          select 1 from public.courier_closing_items ci
           where ci.source_type = t.kind
