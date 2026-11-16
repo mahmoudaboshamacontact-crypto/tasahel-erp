@@ -875,7 +875,13 @@
       '.cp-v12-slide b{font-size:12.5px;color:#10b981;font-weight:900;pointer-events:none}',
       '.cp-v12-stepper{display:flex;align-items:center;gap:6px;overflow-x:auto;padding:6px 2px;margin-bottom:6px}',
       '.cp-v12-step{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px;background:var(--fld);color:var(--mu);border:1px solid var(--bd)}',
-      '.cp-v12-step.on{background:#10b981;color:#04110c;border-color:#10b981}'
+      '.cp-v12-step.on{background:#10b981;color:#04110c;border-color:#10b981}',
+      /* إصلاح الكلام الأبيض: ثيم الشركة (html.dark body.reels) كان بيكسب على حقول المندوب. نثبّت ألوان الحقول من متغيرات البوابة بتخصيص أعلى */
+      '#courier-app,#courier-ops-modal,#cp-mgr{color-scheme:dark}',
+      '#courier-app[data-theme=light],#courier-ops-modal[data-theme=light]{color-scheme:light}',
+      'html body :is(#courier-app,#courier-ops-modal,#cp-mgr) :is(input,textarea,select):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]){color:var(--tx)!important;-webkit-text-fill-color:var(--tx)!important;caret-color:var(--tx);background-color:var(--fld)!important;border-color:var(--bd)!important}',
+      'html body :is(#courier-app,#courier-ops-modal,#cp-mgr) :is(input,textarea)::placeholder{color:var(--mu)!important;-webkit-text-fill-color:var(--mu)!important;opacity:.85}',
+      'html body :is(#courier-app,#courier-ops-modal,#cp-mgr) select option{background:var(--card)!important;color:var(--tx)!important}'
     ].join('\n');
     document.head.appendChild(s);
   }
