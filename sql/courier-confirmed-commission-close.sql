@@ -1,3 +1,7 @@
+-- 0) ضمان وجود عمود in_ranking لاستبعاد الجهات غير الأشخاص من لوحة الترتيب (PR #107)
+alter table public.couriers
+  add column if not exists in_ranking boolean not null default true;
+
 -- ============================================================
 -- المرحلة 11: تأكيد المشاوير والتقفيل المالي الآمن للمندوبين
 -- يُشغّل بعد sql/courier-portal.sql
@@ -26,8 +30,22 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_closed boolean := false;
 begin
+  if to_regclass('public.courier_closing_items') is not null then
+    select exists (
+      select 1 from public.courier_closing_items ci
+       where ci.source_type = 'fee'
+         and ci.source_id = old.id
+         and ci.released_at is null
+    ) into v_closed;
+  end if;
+
   if tg_op = 'DELETE' then
+    if v_closed then
+      raise exception 'لا يمكن حذف بند رسوم توصيل دخل في تقفيل حساب نشط — افتح التقفيل أولاً' using errcode = '42501';
+    end if;
     delete from public.courier_fee_confirms where line_id = old.id;
     return old;
   end if;
@@ -39,6 +57,9 @@ begin
      or new.qty is distinct from old.qty
      or new.exec_unit_cost is distinct from old.exec_unit_cost
      or new.deleted_at is distinct from old.deleted_at then
+    if v_closed then
+      raise exception 'لا يمكن تعديل البيانات المالية لبند رسوم توصيل دخل في تقفيل حساب نشط — افتح التقفيل أولاً' using errcode = '42501';
+    end if;
     delete from public.courier_fee_confirms where line_id = old.id;
   end if;
   return new;
@@ -79,7 +100,10 @@ begin
   end if;
 
   v_me := public.norm_ar(v_c.name);
-  v_from := greatest(coalesce(p_from, v_today - 62), v_to - 120);
+  v_from := coalesce(p_from, v_today - 62);
+  if v_from > v_to then
+    raise exception 'invalid date range' using errcode = '22023';
+  end if;
 
   return coalesce((
     select jsonb_agg(to_jsonb(r) order by r.day desc, r.sort desc)
@@ -142,7 +166,7 @@ begin
             on fc.line_id = l.id
            and public.norm_ar(fc.courier) = v_me
            and fc.amount = f.amount
-           and fc.trip_day = l.received_at::date
+           and coalesce(fc.trip_day, l.received_at::date) = l.received_at::date
           left join lateral (
             select max(x.client_name) as client_name,
                    max(x.phone) as phone,
@@ -459,7 +483,9 @@ begin
       select c.id, c.name, public.norm_ar(c.name) as norm_name,
              c.user_id, c.sort_order
         from public.couriers c
-       where c.active = true and c.user_id is not null
+       where c.active = true
+         and c.user_id is not null
+         and coalesce(c.in_ranking, true) = true
     ),
     trips_agg as (
       select public.norm_ar(t.courier) as norm_name,
@@ -485,7 +511,7 @@ begin
           on fc.line_id = l.id
          and public.norm_ar(fc.courier) = public.norm_ar(l.executor)
          and fc.amount = f.amount
-         and fc.trip_day = l.received_at::date
+         and coalesce(fc.trip_day, l.received_at::date) = l.received_at::date
        where l.deleted_at is null
          and public.norm_ar(l.service) like 'رسوم توصيل%'
          and l.received_at::date between v_from and v_to
@@ -520,8 +546,12 @@ begin
 end;
 $$;
 
--- منع الكتابة المباشرة من الواجهة؛ الإغلاق وإعادة الفتح يمران عبر RPC محمي.
+-- منع الكتابة المباشرة من الواجهة؛ الإغلاق وإعادة الفتح يمران عبر RPC محمي، مع ضمان بقاء القراءة متاحة للموظفين والمدير.
 drop policy if exists courier_closings_mgr on public.courier_closings;
+grant select on table public.courier_closings to authenticated;
+drop policy if exists courier_closings_select_staff on public.courier_closings;
+create policy courier_closings_select_staff on public.courier_closings
+  for select to authenticated using (public.is_staff() or public.is_manager());
 
 -- 6) سجل تقفيلات غير قابل للمسح: إعادة الفتح تحفظ السجل وتحرر
 -- المشاوير لإمكانية تقفيلها لاحقًا دون تكرارها في تقفيلين نشطين.
@@ -556,6 +586,58 @@ create table if not exists public.courier_closing_items (
 
 alter table public.courier_closing_items enable row level security;
 revoke all on table public.courier_closing_items from public, anon, authenticated;
+grant select on table public.courier_closing_items to authenticated;
+drop policy if exists courier_closing_items_select_staff on public.courier_closing_items;
+create policy courier_closing_items_select_staff on public.courier_closing_items
+  for select to authenticated using (public.is_staff() or public.is_manager());
+drop policy if exists courier_block on public.courier_closing_items;
+create policy courier_block on public.courier_closing_items
+  as restrictive for all to authenticated
+  using (not (select public.is_courier()))
+  with check (not (select public.is_courier()));
+
+-- حماية المشاوير الداخلة في تقفيل نشط من الحذف أو التعديل المالي قبل إعادة فتح التقفيل
+create or replace function public.trg_protect_closed_courier_trip()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_closed boolean := false;
+begin
+  select exists (
+    select 1 from public.courier_closing_items ci
+     where ci.source_type = old.kind
+       and ci.source_id = old.id
+       and ci.released_at is null
+  ) into v_closed;
+
+  if not v_closed then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  if tg_op = 'DELETE' then
+    raise exception 'لا يمكن حذف مشوار دخل في تقفيل حساب نشط — افتح التقفيل أولاً' using errcode = '42501';
+  end if;
+
+  if new.courier is distinct from old.courier
+     or new.fee is distinct from old.fee
+     or new.trip_day is distinct from old.trip_day
+     or new.transaction_id is distinct from old.transaction_id
+     or new.kind is distinct from old.kind
+     or (old.courier_confirmed_at is not null and new.courier_confirmed_at is null) then
+    raise exception 'لا يمكن تعديل البيانات المالية لمشوار دخل في تقفيل حساب نشط — افتح التقفيل أولاً' using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+drop trigger if exists a_protect_closed_courier_trip on public.courier_trips;
+create trigger a_protect_closed_courier_trip
+before update or delete on public.courier_trips
+for each row execute function public.trg_protect_closed_courier_trip();
+revoke all on function public.trg_protect_closed_courier_trip() from public, anon, authenticated;
 
 create unique index if not exists courier_closing_items_active_source_uidx
   on public.courier_closing_items (source_type, source_id)
@@ -653,7 +735,7 @@ begin
         on fc.line_id = l.id
        and public.norm_ar(fc.courier) = public.norm_ar(v_name)
        and fc.amount = f.amount
-       and fc.trip_day = l.received_at::date
+       and coalesce(fc.trip_day, l.received_at::date) = l.received_at::date
      where l.deleted_at is null
        and public.norm_ar(l.service) like 'رسوم توصيل%'
        and public.norm_ar(l.executor) = public.norm_ar(v_name)

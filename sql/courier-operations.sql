@@ -84,7 +84,7 @@ begin
         left join public.request_lines l on l.transaction_id=t.transaction_id and l.deleted_at is null
        where t.trip_day between coalesce(p_from,(now() at time zone 'Africa/Cairo')::date-30)
                             and coalesce(p_to,(now() at time zone 'Africa/Cairo')::date)
-         and exists (select 1 from public.couriers active_c where active_c.active=true and active_c.user_id is not null and public.norm_ar(active_c.name)=public.norm_ar(t.courier))
+         and exists (select 1 from public.couriers active_c where active_c.active=true and (v_manager or active_c.user_id is not null) and public.norm_ar(active_c.name)=public.norm_ar(t.courier))
          and (v_manager or public.norm_ar(t.courier)=public.norm_ar(v_c.name))
        group by t.id,o.operational_status,o.priority,o.route_order,o.operational_note,o.updated_at
     ) x
@@ -438,7 +438,7 @@ begin
             on fc.line_id = l.id
            and public.norm_ar(fc.courier) = v_me
            and fc.amount = f.amount
-           and fc.trip_day = l.received_at::date
+           and coalesce(fc.trip_day, l.received_at::date) = l.received_at::date
           left join lateral (
             select max(x.client_name) as client_name,
                    max(x.phone) as phone,
@@ -460,7 +460,7 @@ end;
 $$;
 
 
--- Periodic in-app reminders while the courier portal is active (6-hour cooldown).
+-- Periodic in-app reminders while the courier portal is active (12-hour cooldown, aggregated into 1 unread notification per courier).
 create table if not exists public.courier_pending_reminder_state (
   source_type text not null check (source_type in ('trip','fee')),
   source_id bigint not null,
@@ -470,79 +470,124 @@ create table if not exists public.courier_pending_reminder_state (
 );
 alter table public.courier_pending_reminder_state enable row level security;
 revoke all on public.courier_pending_reminder_state from public,anon,authenticated;
+
 create or replace function public.courier_pending_reminders()
 returns integer language plpgsql security definer set search_path=public as $$
 declare
-  v_c public.couriers; v_today date := (now() at time zone 'Africa/Cairo')::date;
-  v_last timestamptz; v_count integer := 0; r record;
+  v_c public.couriers;
+  v_today date := (now() at time zone 'Africa/Cairo')::date;
+  v_last timestamptz;
+  v_due_trips integer := 0;
+  v_due_fees integer := 0;
+  v_existing_id bigint;
+  v_title text := 'تذكير: عندك مشوار غير مؤكد';
+  v_body text;
+  r record;
 begin
   if not public.is_courier() then raise exception 'courier only' using errcode='42501'; end if;
   select * into v_c from public.couriers where user_id=auth.uid() and active;
   if v_c.id is null then raise exception 'courier account not linked' using errcode='42501'; end if;
-  for r in select t.id,t.transaction_id,t.kind,t.trip_day from public.courier_trips t
-    where public.norm_ar(t.courier)=public.norm_ar(v_c.name) and t.courier_confirmed_at is null
-      and t.trip_day between v_today-62 and v_today
+
+  for r in
+    select t.id, t.transaction_id, t.kind, t.trip_day
+      from public.courier_trips t
+     where public.norm_ar(t.courier)=public.norm_ar(v_c.name)
+       and t.courier_confirmed_at is null
+       and t.trip_day between v_today-62 and v_today
   loop
-    select s.last_reminded_at into v_last from public.courier_pending_reminder_state s
-      where s.source_type='trip' and s.source_id=r.id and s.courier_user_id=auth.uid() for update;
+    select s.last_reminded_at into v_last
+      from public.courier_pending_reminder_state s
+     where s.source_type='trip' and s.source_id=r.id and s.courier_user_id=auth.uid()
+       for update;
     if not found then
       insert into public.courier_pending_reminder_state values('trip',r.id,auth.uid(),now()) on conflict do nothing;
       continue;
     end if;
-    if v_last<=now()-interval '6 hours' then
+    if v_last <= now() - interval '12 hours' then
       update public.courier_pending_reminder_state set last_reminded_at=now()
-        where source_type='trip' and source_id=r.id and courier_user_id=auth.uid();
-      insert into public.notifications(user_id,kind,title,body) values(auth.uid(),'info','تذكير: عندك مشوار غير مؤكد',
-        'المعاملة '||coalesce(r.transaction_id,'—')||' · '||
-        case r.kind when 'pickup' then 'استلام' when 'delivery' then 'تسليم' else r.kind end||
-        ' · يوم '||r.trip_day::text||' — افتح بوابة المندوب وراجع التأكيد');
-      v_count:=v_count+1;
+       where source_type='trip' and source_id=r.id and courier_user_id=auth.uid();
+      v_due_trips := v_due_trips + 1;
     end if;
   end loop;
-  for r in select l.id,l.transaction_id,l.received_at::date as trip_day from public.request_lines l
-    where l.deleted_at is null and public.norm_ar(l.service) like 'رسوم توصيل%'
-      and public.norm_ar(l.executor)=public.norm_ar(v_c.name)
-      and l.received_at::date between v_today-62 and v_today
-      and not exists (select 1 from public.courier_fee_confirms fc where fc.line_id=l.id
-        and public.norm_ar(fc.courier)=public.norm_ar(v_c.name)
-        and fc.amount=coalesce(nullif(l.exec_total,0),coalesce(l.qty,0)*coalesce(l.exec_unit_cost,0))
-        and fc.trip_day=l.received_at::date)
+
+  for r in
+    select l.id, l.transaction_id, l.received_at::date as trip_day
+      from public.request_lines l
+     where l.deleted_at is null
+       and public.norm_ar(l.service) like 'رسوم توصيل%'
+       and public.norm_ar(l.executor)=public.norm_ar(v_c.name)
+       and l.received_at::date between v_today-62 and v_today
+       and not exists (
+         select 1 from public.courier_fee_confirms fc
+          where fc.line_id=l.id
+            and public.norm_ar(fc.courier)=public.norm_ar(v_c.name)
+            and fc.amount=coalesce(nullif(l.exec_total,0),coalesce(l.qty,0)*coalesce(l.exec_unit_cost,0))
+            and coalesce(fc.trip_day,l.received_at::date)=l.received_at::date
+       )
   loop
-    select s.last_reminded_at into v_last from public.courier_pending_reminder_state s
-      where s.source_type='fee' and s.source_id=r.id and s.courier_user_id=auth.uid() for update;
+    select s.last_reminded_at into v_last
+      from public.courier_pending_reminder_state s
+     where s.source_type='fee' and s.source_id=r.id and s.courier_user_id=auth.uid()
+       for update;
     if not found then
       insert into public.courier_pending_reminder_state values('fee',r.id,auth.uid(),now()) on conflict do nothing;
       continue;
     end if;
-    if v_last<=now()-interval '6 hours' then
+    if v_last <= now() - interval '12 hours' then
       update public.courier_pending_reminder_state set last_reminded_at=now()
-        where source_type='fee' and source_id=r.id and courier_user_id=auth.uid();
-      insert into public.notifications(user_id,kind,title,body) values(auth.uid(),'info','تذكير: عندك رسوم توصيل غير مؤكدة',
-        'المعاملة '||coalesce(r.transaction_id,'—')||' · يوم '||r.trip_day::text||
-        ' — افتح بوابة المندوب وراجع تأكيد رسوم التوصيل');
-      v_count:=v_count+1;
+       where source_type='fee' and source_id=r.id and courier_user_id=auth.uid();
+      v_due_fees := v_due_fees + 1;
     end if;
   end loop;
-  return v_count;
+
+  if (v_due_trips + v_due_fees) > 0 then
+    v_body := 'عندك ' || (v_due_trips + v_due_fees)::text || ' مشوار/رسوم توصيل بانتظار تأكيدك في بوابة المندوب.';
+    select id into v_existing_id
+      from public.notifications
+     where user_id = auth.uid()
+       and read = false
+       and title in ('تذكير: عندك مشوار غير مؤكد','تذكير: عندك رسوم توصيل غير مؤكدة')
+     order by created_at desc
+     limit 1;
+    if v_existing_id is not null then
+      update public.notifications
+         set body = v_body, created_at = now()
+       where id = v_existing_id;
+    else
+      insert into public.notifications(user_id,kind,title,body)
+      values(auth.uid(),'info',v_title,v_body);
+    end if;
+  end if;
+
+  return v_due_trips + v_due_fees;
 end $$;
 
-
--- Server-side dispatcher: reminders continue even when the courier portal is closed.
+-- Server-side dispatcher: reminders run during working hours (10:00–22:00 Cairo) and aggregate into 1 notification per courier.
 create or replace function public.courier_dispatch_pending_reminders()
 returns integer language plpgsql security definer set search_path=public as $$
 declare
   v_c record;
-  v_today date := (now() at time zone 'Africa/Cairo')::date;
+  v_now_cairo timestamp := (now() at time zone 'Africa/Cairo');
+  v_today date := v_now_cairo::date;
+  v_hour integer := extract(hour from v_now_cairo);
   v_last timestamptz;
   v_count integer := 0;
+  v_courier_due integer := 0;
+  v_existing_id bigint;
+  v_body text;
   r record;
 begin
+  if v_hour < 10 or v_hour > 22 then
+    return 0;
+  end if;
+
   for v_c in
-    select c.user_id,c.name from public.couriers c
+    select c.user_id, c.name from public.couriers c
      where c.active=true and c.user_id is not null
   loop
+    v_courier_due := 0;
     for r in
-      select t.id,t.transaction_id,t.kind,t.trip_day from public.courier_trips t
+      select t.id, t.transaction_id, t.kind, t.trip_day from public.courier_trips t
        where public.norm_ar(t.courier)=public.norm_ar(v_c.name)
          and t.courier_confirmed_at is null and t.trip_day between v_today-62 and v_today
     loop
@@ -552,20 +597,15 @@ begin
         insert into public.courier_pending_reminder_state values('trip',r.id,v_c.user_id,now()) on conflict do nothing;
         continue;
       end if;
-      if v_last<=now()-interval '6 hours' then
+      if v_last <= now() - interval '12 hours' then
         update public.courier_pending_reminder_state set last_reminded_at=now()
          where source_type='trip' and source_id=r.id and courier_user_id=v_c.user_id;
-        insert into public.notifications(user_id,kind,title,body)
-        values(v_c.user_id,'info','تذكير: عندك مشوار غير مؤكد',
-          'المعاملة '||coalesce(r.transaction_id,'—')||' · '||
-          case r.kind when 'pickup' then 'استلام' when 'delivery' then 'تسليم' else r.kind end||
-          ' · يوم '||r.trip_day::text||' — برجاء مراجعة التأكيد');
-        v_count:=v_count+1;
+        v_courier_due := v_courier_due + 1;
       end if;
     end loop;
 
     for r in
-      select l.id,l.transaction_id,l.received_at::date as trip_day from public.request_lines l
+      select l.id, l.transaction_id, l.received_at::date as trip_day from public.request_lines l
        where l.deleted_at is null and public.norm_ar(l.service) like 'رسوم توصيل%'
          and public.norm_ar(l.executor)=public.norm_ar(v_c.name)
          and l.received_at::date between v_today-62 and v_today
@@ -573,7 +613,7 @@ begin
            select 1 from public.courier_fee_confirms fc
             where fc.line_id=l.id and public.norm_ar(fc.courier)=public.norm_ar(v_c.name)
               and fc.amount=coalesce(nullif(l.exec_total,0),coalesce(l.qty,0)*coalesce(l.exec_unit_cost,0))
-              and fc.trip_day=l.received_at::date
+              and coalesce(fc.trip_day,l.received_at::date)=l.received_at::date
          )
     loop
       select s.last_reminded_at into v_last from public.courier_pending_reminder_state s
@@ -582,31 +622,52 @@ begin
         insert into public.courier_pending_reminder_state values('fee',r.id,v_c.user_id,now()) on conflict do nothing;
         continue;
       end if;
-      if v_last<=now()-interval '6 hours' then
+      if v_last <= now() - interval '12 hours' then
         update public.courier_pending_reminder_state set last_reminded_at=now()
          where source_type='fee' and source_id=r.id and courier_user_id=v_c.user_id;
-        insert into public.notifications(user_id,kind,title,body)
-        values(v_c.user_id,'info','تذكير: عندك رسوم توصيل غير مؤكدة',
-          'المعاملة '||coalesce(r.transaction_id,'—')||' · يوم '||r.trip_day::text||
-          ' — برجاء مراجعة تأكيد رسوم التوصيل');
-        v_count:=v_count+1;
+        v_courier_due := v_courier_due + 1;
       end if;
     end loop;
+
+    if v_courier_due > 0 then
+      v_body := 'عندك ' || v_courier_due::text || ' مشوار/رسوم توصيل غير مؤكدة — افتح بوابة المندوب لمراجعتها وتأكيدها.';
+      select id into v_existing_id
+        from public.notifications
+       where user_id = v_c.user_id
+         and read = false
+         and title in ('تذكير: عندك مشوار غير مؤكد','تذكير: عندك رسوم توصيل غير مؤكدة')
+       order by created_at desc
+       limit 1;
+      if v_existing_id is not null then
+        update public.notifications
+           set body = v_body, created_at = now()
+         where id = v_existing_id;
+      else
+        insert into public.notifications(user_id,kind,title,body)
+        values(v_c.user_id,'info','تذكير: عندك مشوار غير مؤكد',v_body);
+      end if;
+      v_count := v_count + v_courier_due;
+    end if;
   end loop;
   return v_count;
 end $$;
 revoke all on function public.courier_dispatch_pending_reminders() from public,anon,authenticated;
 
--- Supabase Cron runs independently of an open browser session.
-create extension if not exists pg_cron with schema pg_catalog;
-grant usage on schema cron to postgres;
-grant all privileges on all tables in schema cron to postgres;
-select cron.unschedule(jobid) from cron.job where jobname='courier-pending-reminders';
-select cron.schedule(
-  'courier-pending-reminders',
-  '*/30 * * * *',
-  'select public.courier_dispatch_pending_reminders();'
-);
+-- Safe pg_cron registration (will not fail migration if pg_cron is disabled or in another schema).
+do $cron$
+begin
+  create extension if not exists pg_cron with schema pg_catalog;
+  grant usage on schema cron to postgres;
+  grant all privileges on all tables in schema cron to postgres;
+  perform cron.unschedule(jobid) from cron.job where jobname = 'courier-pending-reminders';
+  perform cron.schedule(
+    'courier-pending-reminders',
+    '*/30 * * * *',
+    'select public.courier_dispatch_pending_reminders();'
+  );
+exception when others then
+  raise notice 'pg_cron setup skipped: %', sqlerrm;
+end $cron$;
 
 revoke all on function public.courier_pending_reminders() from public,anon;
 grant execute on function public.courier_pending_reminders() to authenticated;
@@ -818,6 +879,7 @@ begin
   end if;
 
   -- Upsert one delivery trip per selected transaction, in the same DB transaction.
+  -- Preserve already-closed or already-confirmed trips for the same courier so confirmation is not accidentally wiped.
   if v_courier is not null then
     for v_tx in
       select distinct l.transaction_id
@@ -834,9 +896,32 @@ begin
       on conflict (transaction_id, kind) do update
         set courier = excluded.courier,
             fee = excluded.fee,
-            trip_day = excluded.trip_day,
-            created_by = excluded.created_by;
+            trip_day = case
+              when public.norm_ar(public.courier_trips.courier) = public.norm_ar(excluded.courier)
+                   and public.courier_trips.courier_confirmed_at is not null
+              then public.courier_trips.trip_day
+              else excluded.trip_day
+            end,
+            created_by = excluded.created_by
+      where not exists (
+        select 1 from public.courier_closing_items ci
+         where ci.source_type = 'delivery'
+           and ci.source_id = public.courier_trips.id
+           and ci.released_at is null
+      );
     end loop;
+  else
+    -- إذا استلم العميل بنفسه من المكتب (بدون مندوب)، نحذف أي مشوار تسليم غير مؤكد وغير مقفل مسجل بالخطأ.
+    delete from public.courier_trips t
+     where t.kind = 'delivery'
+       and t.courier_confirmed_at is null
+       and t.transaction_id = any(coalesce(p_trip_transactions, '{}'::text[]))
+       and not exists (
+         select 1 from public.courier_closing_items ci
+          where ci.source_type = 'delivery'
+            and ci.source_id = t.id
+            and ci.released_at is null
+       );
   end if;
 
   return jsonb_build_object(
@@ -860,3 +945,19 @@ revoke all on function public.courier_apply_delivery(bigint[],text[],text,date)
   from public, anon;
 grant execute on function public.courier_apply_delivery(bigint[],text[],text,date)
   to authenticated;
+
+
+-- تطبيق سياسة courier_block المقيدة على أي جداول جديدة في public
+do $$
+declare t record;
+begin
+  for t in
+    select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind in ('r','p') and c.relrowsecurity
+  loop
+    execute format('drop policy if exists courier_block on public.%I', t.relname);
+    execute format(
+      'create policy courier_block on public.%I as restrictive for all to authenticated using (not (select public.is_courier())) with check (not (select public.is_courier()))',
+      t.relname);
+  end loop;
+end $$;
