@@ -46,11 +46,13 @@
   };
 
   async function putTrip(tx, kind, courier, day) {
-    if (!sbClient) return;
+    if (!sbClient) return false;
     const c = cName(courier) || (courier && courier.trim() && courier.trim() !== '—' ? courier.trim() : null);
-    if (kind === 'pickup' && !c) return;
-    const r = await sbClient.from('courier_trips').upsert({ transaction_id: tx, kind: kind, courier: c || '—', fee: c ? FEE : 0, trip_day: day || today(), created_by: uname() }, { onConflict: 'transaction_id,kind' });
-    if (r.error) { if (miss(r.error)) sqlHint(); else showError('تعذّر تسجيل مشوار المندوب', r.error); }
+    // لا ننشئ مشوارًا وهميًا باسم «—» أو بعمولة صفر عندما يستلم العميل بنفسه.
+    if (!c) return true;
+    const r = await sbClient.from('courier_trips').upsert({ transaction_id: tx, kind: kind, courier: c, fee: FEE, trip_day: day || today(), created_by: uname() }, { onConflict: 'transaction_id,kind' });
+    if (r.error) { if (miss(r.error)) sqlHint(); else showError('تعذّر تسجيل مشوار المندوب', r.error); return false; }
+    return true;
   }
   const txExists = async tx => { const r = await sbClient.from('request_lines').select('id').eq('transaction_id', tx).limit(1); return !!(r.data && r.data.length); };
 
@@ -157,18 +159,25 @@
         pick = prePickedCourier;
       } else {
         const r = await sbClient.from('courier_trips').select('transaction_id,courier').eq('kind', 'delivery').in('transaction_id', txs);
-        if (r.error) { if (miss(r.error)) sqlHint(); }
-        else {
-          const have = new Set((r.data || []).filter(x => x.courier && x.courier !== '—').map(x => x.transaction_id));
-          need = txs.filter(t => !have.has(t));
-          if (!need.length) need = txs.slice();
-          pick = await ask(need.length);
-          if (pick === null) return false;
+        if (r.error) {
+          if (miss(r.error)) sqlHint();
+          else showError('تعذّر التحقق من مشاوير التسليم السابقة؛ لم يتم تغيير الحالة', r.error);
+          return false;
         }
+        const have = new Set((r.data || []).filter(x => x.courier && x.courier !== '—').map(x => x.transaction_id));
+        need = txs.filter(t => !have.has(t));
+        if (!need.length) need = txs.slice();
+        pick = await ask(need.length);
+        if (pick === null) return false;
       }
     }
     const ok = await _as(ids, status);
-    if (ok) for (const t of need) await putTrip(t, 'delivery', pick, today());
+    if (ok && pick) {
+      for (const t of need) {
+        const saved = await putTrip(t, 'delivery', pick, today());
+        if (!saved) showToast('تم تحديث حالة المعاملة، لكن تعذّر تسجيل مشوار المندوب. راجع سجل المناديب قبل المتابعة.', 'error', 10000);
+      }
+    }
     return ok;
   };
 
