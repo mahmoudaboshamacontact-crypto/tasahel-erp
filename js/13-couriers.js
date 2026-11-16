@@ -152,7 +152,12 @@
   const _as = window.applyStatus;
   window.applyStatus = async function (ids, status) {
     if (status !== 'Delivered' || !sbClient) return _as(ids, status);
-    const txs = [...new Set(ids.map(id => { const l = allRequestLines.find(x => String(x.id) === String(id)); return l && l.transaction_id; }).filter(Boolean))];
+    const selectedLines = ids.map(id => allRequestLines.find(x => String(x.id) === String(id)));
+    if (!selectedLines.length || selectedLines.some(l => !l || !l.transaction_id)) {
+      showToast('تعذّر تحديد المعاملات المرتبطة بالخدمات المختارة؛ لم يتم تغيير الحالة', 'error', 9000);
+      return false;
+    }
+    const txs = [...new Set(selectedLines.map(l => String(l.transaction_id)))];
     let need = txs.slice(), pick = '';
     if (txs.length) {
       if (prePickedCourier !== undefined) {
