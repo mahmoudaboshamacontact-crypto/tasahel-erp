@@ -25,9 +25,11 @@
     leaderboard: [], lbsig: '', lbLoaded: false,
     notesMap: {}, nsig: '',
     contacts: [], csig: '', chat: null, msgs: [], msig: '', draft: '',
-    theme: 'dark', timer: null, tick: 0,
+    theme: 'dark', timer: null, tick: 0, pendingReminderCheck: 0,
     busy: false, offline: false, unreadSeen: 0, loaded: false, itemsLoading: null, refreshing: false, lastSync: null,
-    guides: {}
+    guides: {},
+    routeTxIds: [], activeTx: '', pins: {}, bagHanded: {}, myPos: null,
+    ledgerOpen: false, ledgerLoading: false, ledgerFrom: '', ledgerTo: '', ledgerRows: []
   };
 
   /* ---------- تطبيع الأسماء العربية (مثل normName / norm_ar) ---------- */
@@ -87,6 +89,469 @@
   function initGuides() {
     try { st.guides = JSON.parse(localStorage.getItem('ts_cp_guides') || '{}') || {}; } catch (e) { st.guides = {}; }
   }
+
+  /* ---------- حفظ واسترجاع خط السير الذكي واللوكيشن والشنطة ---------- */
+  function initSmartFeatures() {
+    try { st.routeTxIds = JSON.parse(localStorage.getItem('ts_cp_route_txs') || '[]') || []; } catch (e) { st.routeTxIds = []; }
+    try { st.activeTx = localStorage.getItem('ts_cp_active_tx') || ''; } catch (e) { st.activeTx = ''; }
+    try { st.pins = JSON.parse(localStorage.getItem('ts_cp_pins') || '{}') || {}; } catch (e) { st.pins = {}; }
+    try { st.bagHanded = JSON.parse(localStorage.getItem('ts_cp_bag_' + today()) || '{}') || {}; } catch (e) { st.bagHanded = {}; }
+    if (!st.ledgerFrom) st.ledgerFrom = addDays(today(), -30);
+    if (!st.ledgerTo) st.ledgerTo = today();
+  }
+  function saveRouteState() {
+    try { localStorage.setItem('ts_cp_route_txs', JSON.stringify(st.routeTxIds)); } catch (e) {}
+    try { localStorage.setItem('ts_cp_active_tx', st.activeTx || ''); } catch (e) {}
+  }
+  function savePinsState() {
+    try { localStorage.setItem('ts_cp_pins', JSON.stringify(st.pins)); } catch (e) {}
+  }
+  function saveBagState() {
+    try { localStorage.setItem('ts_cp_bag_' + today(), JSON.stringify(st.bagHanded)); } catch (e) {}
+  }
+
+  /* قاموس إحداثيات مناطق القاهرة الكبرى والجيزة للترتيب التلقائي الذكي (الأقرب فالأقرب) بصفر تكلفة */
+  const CAIRO_ZONES = [
+    ['ترعه عبد العال', 'فيصل', 30.0012, 31.1765],
+    ['اولاد الرفاعي', 'فيصل', 30.0015, 31.1770],
+    ['العشرين', 'فيصل', 30.0045, 31.1820],
+    ['الطالبيه', 'فيصل/الهرم', 29.9960, 31.1860],
+    ['المريوطيه', 'الهرم', 29.9880, 31.1520],
+    ['حدائق الاهرام', 'الهرم', 29.9720, 31.1120],
+    ['فيصل', 'فيصل', 30.0020, 31.1850],
+    ['الهرم', 'الهرم', 29.9940, 31.1680],
+    ['العمرانيه', 'الجيزة', 30.0050, 31.2020],
+    ['المنيب', 'الجيزة', 29.9880, 31.2130],
+    ['الجيزه', 'الجيزة', 30.0131, 31.2089],
+    ['الدقي', 'الدقي', 30.0385, 31.2122],
+    ['المهندسين', 'المهندسين', 30.0511, 31.2001],
+    ['العجوزه', 'العجوزة', 30.0560, 31.2140],
+    ['امبابه', 'إمبابة', 30.0770, 31.2070],
+    ['الوراق', 'الوراق', 30.0980, 31.2160],
+    ['بولاق', 'بولاق', 30.0360, 31.1920],
+    ['الزمالك', 'الزمالك', 30.0609, 31.2197],
+    ['وسط البلد', 'وسط البلد', 30.0444, 31.2357],
+    ['التحرير', 'وسط البلد', 30.0444, 31.2357],
+    ['رمسيس', 'رمسيس', 30.0618, 31.2466],
+    ['شبرا', 'شبرا', 30.0790, 31.2450],
+    ['العباسيه', 'العباسية', 30.0720, 31.2830],
+    ['مدينه نصر', 'مدينة نصر', 30.0561, 31.3301],
+    ['مكرم عبيد', 'مدينة نصر', 30.0620, 31.3450],
+    ['عباس العقاد', 'مدينة نصر', 30.0630, 31.3360],
+    ['مصر الجديده', 'مصر الجديدة', 30.0909, 31.3228],
+    ['النزهه', 'مصر الجديدة', 30.1120, 31.3450],
+    ['شيراتون', 'مصر الجديدة', 30.1050, 31.3680],
+    ['عين شمس', 'عين شمس', 30.1310, 31.3190],
+    ['المطريه', 'المطرية', 30.1250, 31.3100],
+    ['الزيتون', 'الزيتون', 30.1060, 31.3010],
+    ['حدائق القبه', 'حدائق القبة', 30.0880, 31.2820],
+    ['المقطم', 'المقطم', 30.0120, 31.3020],
+    ['دار السلام', 'دار السلام', 29.9820, 31.2420],
+    ['المعادي', 'المعادي', 29.9602, 31.2569],
+    ['زهراء المعادي', 'المعادي', 29.9550, 31.3000],
+    ['المعصره', 'حلوان/المعصرة', 29.9060, 31.2820],
+    ['حلوان', 'حلوان', 29.8414, 31.3008],
+    ['التجمع', 'التجمع', 30.0074, 31.4913],
+    ['القاهره الجديده', 'القاهرة الجديدة', 30.0150, 31.4700],
+    ['الرحاب', 'الرحاب', 30.0580, 31.4910],
+    ['مدينتي', 'مدينتي', 30.0830, 31.6300],
+    ['الشروق', 'الشروق', 30.1440, 31.6080],
+    ['العبور', 'العبور', 30.2280, 31.4790],
+    ['اكتوبر', '6 أكتوبر', 29.9723, 30.9401],
+    ['الشيخ زايد', 'الشيخ زايد', 30.0440, 30.9760],
+    ['الحوامديه', 'الحوامدية', 29.8970, 31.2580],
+    ['البدرشين', 'البدرشين', 29.8450, 31.2700]
+  ];
+
+  function detectZoneAndCoords(it) {
+    if (!it) return { zone: 'غير محدد', lat: 30.0200, lng: 31.2100, exact: false };
+    const tx = String(it.transaction_id || '');
+    const saved = st.pins[tx];
+    if (saved && saved.lat && saved.lng) {
+      return { zone: saved.zone || 'لوكيشن مثبت 📍', lat: Number(saved.lat), lng: Number(saved.lng), exact: true };
+    }
+    if (it.client_lat && it.client_lng) {
+      return { zone: 'لوكيشن مثبت 📍', lat: Number(it.client_lat), lng: Number(it.client_lng), exact: true };
+    }
+    const addr = normAr(it.address || '');
+    for (let i = 0; i < CAIRO_ZONES.length; i++) {
+      if (addr.includes(CAIRO_ZONES[i][0])) {
+        return { zone: CAIRO_ZONES[i][1], lat: CAIRO_ZONES[i][2], lng: CAIRO_ZONES[i][3], exact: false };
+      }
+    }
+    return { zone: addr ? 'القاهرة/الجيزة' : 'بدون عنوان', lat: 30.0250, lng: 31.2150, exact: false };
+  }
+
+  function haversineKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function isTxInRoute(tx) {
+    return st.routeTxIds.includes(String(tx));
+  }
+  function routeIndexOf(tx) {
+    return st.routeTxIds.indexOf(String(tx));
+  }
+  function sortRouteSelectionNearestFirst(startLat, startLng) {
+    const validTxs = st.routeTxIds.filter(tx => byTx(tx));
+    if (validTxs.length < 2) return validTxs;
+    const pool = validTxs.map(tx => {
+      const item = byTx(tx);
+      const z = detectZoneAndCoords(item);
+      return { tx: tx, item: item, lat: z.lat, lng: z.lng, zone: z.zone };
+    });
+    const sorted = [];
+    let curLat = startLat || 30.0012, curLng = startLng || 31.1765;
+    while (pool.length > 0) {
+      let bestIdx = 0, bestDist = Infinity;
+      for (let i = 0; i < pool.length; i++) {
+        const d = haversineKm(curLat, curLng, pool[i].lat, pool[i].lng);
+        if (d < bestDist) { bestDist = d; bestIdx = i; }
+      }
+      const picked = pool.splice(bestIdx, 1)[0];
+      sorted.push(picked);
+      curLat = picked.lat;
+      curLng = picked.lng;
+    }
+    st.routeTxIds = sorted.map(x => x.tx);
+    const tripIds = sorted.map(s => s.item && s.item.type !== 'fee' && s.item.id ? Number(s.item.id) : null).filter(Boolean);
+    if (tripIds.length > 1) {
+      sbClient.rpc('courier_ops_reorder', { p_trip_ids: tripIds }).catch(() => null);
+    }
+    return st.routeTxIds;
+  }
+
+  function toggleRouteTx(tx) {
+    tx = String(tx || '');
+    if (!tx) return;
+    const idx = st.routeTxIds.indexOf(tx);
+    if (idx === -1) {
+      st.routeTxIds.push(tx);
+      const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
+      sortRouteSelectionNearestFirst(pos.lat, pos.lng);
+      toast('اتضاف واترتب في خط سيرك تلقائياً ✓');
+    } else {
+      st.routeTxIds.splice(idx, 1);
+      const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
+      sortRouteSelectionNearestFirst(pos.lat, pos.lng);
+      toast('اتشال من خط السير');
+    }
+    saveRouteState();
+    renderTab(false);
+  }
+  function clearRoute() {
+    st.routeTxIds = [];
+    st.activeTx = '';
+    saveRouteState();
+    toast('تم مسح خط السير');
+    renderTab(false);
+  }
+
+  function autoOptimizeRoute(openMapAfter) {
+    const validTxs = st.routeTxIds.filter(tx => byTx(tx));
+    if (!validTxs.length) {
+      toast('اضغط «➕ ضيف لخط السير» على العملاء اللي نازلهم الأول', true);
+      return;
+    }
+    const finish = (lat, lng, hasGps) => {
+      sortRouteSelectionNearestFirst(lat, lng);
+      saveRouteState();
+      renderTab(false);
+      if (openMapAfter) {
+        const itemsList = st.routeTxIds.map(tx => byTx(tx)).filter(Boolean);
+        const url = buildMultiStopMapsUrl(itemsList, hasGps ? { lat: lat, lng: lng } : null);
+        if (url) window.open(url, '_blank', 'noopener');
+      } else {
+        toast('تم ترتيب خط السير تلقائياً من الأقرب لمكانك ✓');
+      }
+    };
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          st.myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          finish(pos.coords.latitude, pos.coords.longitude, true);
+        },
+        () => finish(30.0012, 31.1765, false),
+        { enableHighAccuracy: false, timeout: 3000, maximumAge: 180000 }
+      );
+    } else {
+      finish(30.0012, 31.1765, false);
+    }
+  }
+
+  function stopDestinationQuery(it) {
+    if (!it) return '';
+    const tx = String(it.transaction_id || '');
+    const pin = st.pins[tx];
+    if (pin && pin.lat && pin.lng) return pin.lat + ',' + pin.lng;
+    if (it.client_lat && it.client_lng) return it.client_lat + ',' + it.client_lng;
+    return String(it.address || '').trim();
+  }
+
+  function smartMapsUrl(it) {
+    const q = stopDestinationQuery(it);
+    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q || (it && it.address) || '');
+  }
+
+  function buildMultiStopMapsUrl(itemsList, startPos) {
+    const stops = (itemsList || []).map(stopDestinationQuery).filter(Boolean);
+    if (!stops.length) return '';
+    if (stops.length === 1 && !startPos) {
+      return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(stops[0]);
+    }
+    const origin = startPos ? (startPos.lat + ',' + startPos.lng) : stops[0];
+    const dest = stops[stops.length - 1];
+    const mid = startPos ? stops.slice(0, -1) : stops.slice(1, -1);
+    return 'https://www.google.com/maps/dir/?api=1&origin=' + encodeURIComponent(origin) +
+      '&destination=' + encodeURIComponent(dest) +
+      (mid.length ? '&waypoints=' + encodeURIComponent(mid.slice(0, 9).join('|')) : '') +
+      '&travelmode=driving';
+  }
+
+  /* حفظ اللوكيشن الفعلي للعميل من موبايل المندوب (GPS Pin) */
+  function saveClientPin(tx) {
+    tx = String(tx || '');
+    const it = byTx(tx);
+    if (!navigator.geolocation) {
+      toast('جهازك مش بيدعم تحديد الموقع GPS', true);
+      return;
+    }
+    toast('جاري تحديد موقع العميل الحالي بـ GPS…');
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const lat = Number(pos.coords.latitude.toFixed(6));
+        const lng = Number(pos.coords.longitude.toFixed(6));
+        const z = detectZoneAndCoords(it);
+        st.pins[tx] = { lat: lat, lng: lng, zone: z.zone, at: new Date().toISOString() };
+        savePinsState();
+        if (it && it.id && it.type !== 'fee') {
+          try { await sbClient.rpc('courier_save_pin', { p_trip_id: Number(it.id), p_lat: lat, p_lng: lng }); } catch (e) {}
+        }
+        toast('📍 تم حفظ وتثبيت لوكيشن العميل بنجاح ✓');
+        renderTab(false);
+      },
+      () => toast('فعل صلاحية الموقع (GPS) في المتصفح عشان تحفظ لوكيشن العميل', true),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }
+
+  /* زرار «🛵 في طريقي للعميل» بضغطة واحدة */
+  function startOnMyWay(tx) {
+    tx = String(tx || '');
+    const it = byTx(tx);
+    if (!it) return;
+    st.activeTx = tx;
+    if (!st.routeTxIds.includes(tx)) st.routeTxIds.unshift(tx);
+    saveRouteState();
+    if (it.id && it.type !== 'fee') {
+      sbClient.rpc('courier_ops_update', { p_trip_id: Number(it.id), p_status: 'on_the_way', p_priority: null, p_route_order: null, p_note: null }).catch(() => null);
+    }
+    renderTab(false);
+    if (it.phone) {
+      const msg = 'أهلاً بحضرتك أ/ ' + (it.client_name || '') + '، معاك ' + ((st.me && st.me.name) || 'مندوب') + ' من شركة تساهيل، أنا في طريقي لحضرتك دلوقتي بخصوص معاملة رقم ' + tx;
+      window.open('https://wa.me/' + waNum(it.phone) + '?text=' + encodeURIComponent(msg), '_blank', 'noopener');
+    } else {
+      toast('🛵 تم تفعيل وضع «في طريقي للعميل» وتثبيت الكارت في الأعلى ✓');
+    }
+  }
+
+  /* لوحة خط السير المبسطة والواضحة جداً للمندوب (تترتب أوتوماتيك بمجرد الاختيار) */
+  function renderSmartRoutePanel() {
+    const activeItems = st.routeTxIds.map(tx => byTx(tx)).filter(it => it && !it.confirmed);
+    if (!activeItems.length) {
+      return '<div class="cp-card" style="border:1px dashed var(--gd-bd);background:var(--gd-bg);padding:10px 12px">' +
+        '<div style="font-size:12px"><b>🗺️ إزاي تعمل خط سيرك؟</b> دوس على زرار <b>«➕ ضيف لخط السير»</b> تحت أي عميل ناوي تروحله دلوقتي، والسيستم هيرتبهملك أوتوماتيك من الأقرب للأبعد ويفتحلك الخريطة!</div>' +
+      '</div>';
+    }
+
+    const stepsChain = activeItems.map((it, idx) => {
+      const z = detectZoneAndCoords(it);
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;background:var(--fld);border-radius:10px;margin-top:6px">' +
+        '<div style="min-width:0;flex:1">' +
+          '<span class="cp-tag ok" style="margin-inline-end:6px">' + num(idx + 1) + '</span>' +
+          '<b style="font-size:13px">' + eh(it.client_name || 'عميل') + '</b> ' +
+          '<small style="color:#10b981;font-weight:700">(' + eh(z.zone) + ')</small>' +
+          (it.address ? '<div style="font-size:11px;color:var(--mu);margin-top:2px">' + eh(it.address) + '</div>' : '') +
+        '</div>' +
+        '<div style="display:flex;gap:4px;shrink:0">' +
+          '<button type="button" class="cp-a cp-sm" data-act="on-my-way" data-tx="' + eh(it.transaction_id) + '">🛵 في طريقي</button>' +
+          '<button type="button" class="cp-a cp-sm" data-act="route-toggle" data-tx="' + eh(it.transaction_id) + '" title="إزالة">✕</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    return '<section class="cp-card" style="border:2px solid #10b981">' +
+      '<div class="cp-row" style="align-items:center">' +
+        '<div>' +
+          '<b style="font-size:14.5px;color:#10b981">🗺️ خط سيرك الجاهز (' + num(activeItems.length) + ' محطات مرتبة تلقائياً للأقرب)</b>' +
+        '</div>' +
+        '<button type="button" class="cp-a cp-sm" data-act="route-clear">مسح الكل</button>' +
+      '</div>' +
+      '<div>' + stepsChain + '</div>' +
+      '<button type="button" class="cp-big" data-act="route-autosort"><i class="fa-solid fa-location-arrow"></i> ابدأ التحرك وافتح خط السير على الخريطة</button>' +
+    '</section>';
+  }
+
+  /* كارت «شنطتك آخر اليوم — أوراق مطلوب تسليمها للمكتب» */
+  function renderOfficeBagCard() {
+    const t = today();
+    const bagItems = itemsOf(t).filter(it => (it.type === 'pickup' && it.confirmed) || (it.type === 'delivery' && !it.confirmed));
+    if (!bagItems.length) return '';
+    const remaining = bagItems.filter(it => !st.bagHanded[String(it.transaction_id)]);
+    return '<section class="cp-card" style="border-color:rgba(56,189,248,.4);margin-top:12px">' +
+      '<div class="cp-row">' +
+        '<div>' +
+          '<b>🏢 شنطتك آخر اليوم — أوراق مطلوب تسليمها للمكتب</b>' +
+          '<div class="cp-sub">عشان متنساش أصل ورقة في الشنطة: علّم على كل معاملة لما تسلّم ورقها للموظف في المكتب</div>' +
+        '</div>' +
+        '<span class="cp-tag ' + (remaining.length ? 'wt' : 'ok') + '">' + (remaining.length ? 'باقي ' + num(remaining.length) + ' معاملة' : '✓ سلّمت كله') + '</span>' +
+      '</div>' +
+      '<div class="cp-txlist">' +
+        bagItems.map(it => {
+          const handed = !!st.bagHanded[String(it.transaction_id)];
+          const reason = it.type === 'pickup' ? '📥 استلمتها من العميل النهاردة' : '📤 تسليم مؤجل (الورق لسه معاك)';
+          return '<div class="cp-txitem" style="opacity:' + (handed ? '.65' : '1') + '">' +
+            '<div style="min-width:0;flex:1">' +
+              '<b>' + eh(it.client_name || 'عميل') + '</b> <span dir="ltr" style="font-size:11px;color:var(--mu)">(' + eh(it.transaction_id) + ')</span>' +
+              '<div style="font-size:11px;color:var(--mu)">' + reason + (it.employee ? ' · سلّمها لـ: <b>' + eh(it.employee) + '</b>' : '') + '</div>' +
+            '</div>' +
+            '<button type="button" class="cp-a cp-sm ' + (handed ? '' : 'pri') + '" data-act="bag-toggle" data-tx="' + eh(it.transaction_id) + '">' + (handed ? '✓ اتسلمت للمكتب' : 'تسليم للمكتب') + '</button>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</section>';
+  }
+
+  /* ماسح الـ QR المدمج في هيدر المندوب */
+  let qrStream = null;
+  function stopQrCamera() {
+    if (qrStream) {
+      try { qrStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+      qrStream = null;
+    }
+  }
+  function extractTxFromScan(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    const mUrl = s.match(/[?&](?:tx|id|code)=([^&#\s]+)/i);
+    if (mUrl && mUrl[1]) return decodeURIComponent(mUrl[1]).trim();
+    const mTx = s.match(/(TX-\d{4}-\d+|[A-Za-z0-9_-]{6,24})/);
+    return mTx ? mTx[1] : s;
+  }
+  async function openQrScannerModal() {
+    stopQrCamera();
+    modal(
+      '<h3>📷 مسح كود QR المعاملة</h3>' +
+      '<p>وجّه الكاميرا على كود الـ QR المطبوع على الإيصال أو حافظة المستندات لفتح المعاملة وتأكيدها فوراً:</p>' +
+      '<div id="cp-qr-box" style="position:relative;width:100%;height:220px;background:#000;border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:10px">' +
+        '<video id="cp-qr-vid" playsinline muted style="width:100%;height:100%;object-fit:cover"></video>' +
+        '<div id="cp-qr-msg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;background:rgba(0,0,0,.45);padding:12px;text-align:center">جاري تشغيل الكاميرا…</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px">' +
+        '<input id="cp-qr-manual" type="text" dir="ltr" class="cp-field" placeholder="أو اكتب رقم المعاملة هنا (مثال: TX-2026-...)">' +
+        '<button type="button" class="cp-btn cp-go" data-act="qr-go">فتح</button>' +
+      '</div>' +
+      '<div class="cp-btns"><button type="button" class="cp-btn" data-act="qr-close">إغلاق</button></div>'
+    );
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no camera');
+      qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const vid = $('cp-qr-vid'), msg = $('cp-qr-msg');
+      if (!vid) { stopQrCamera(); return; }
+      vid.srcObject = qrStream;
+      await vid.play();
+      if (msg) msg.style.display = 'none';
+      if ('BarcodeDetector' in window) {
+        const det = new window.BarcodeDetector({ formats: ['qr_code'] });
+        const scanLoop = async () => {
+          if (!qrStream || !$('cp-qr-vid')) return;
+          try {
+            const codes = await det.detect(vid);
+            if (codes && codes.length && codes[0].rawValue) {
+              const tx = extractTxFromScan(codes[0].rawValue);
+              stopQrCamera();
+              if (tx) { openClientDetail(tx); return; }
+            }
+          } catch (e) {}
+          requestAnimationFrame(scanLoop);
+        };
+        requestAnimationFrame(scanLoop);
+      } else if (msg) {
+        msg.style.display = 'flex';
+        msg.textContent = 'اكتب رقم المعاملة بالأسفل للفتح السريع';
+      }
+    } catch (e) {
+      const msg = $('cp-qr-msg');
+      if (msg) msg.textContent = 'تعذر فتح الكاميرا — اكتب رقم المعاملة بالأسفل مباشرة';
+    }
+  }
+
+  /* تحميل وعرض كشف الحساب التفصيلي وحالة التقفيل والصرف داخل تابة «حسابي» */
+  async function loadCourierLedger() {
+    if (st.ledgerLoading) return;
+    st.ledgerLoading = true;
+    renderTab(false);
+    try {
+      const r = await sbClient.rpc('courier_ops_ledger', { p_from: st.ledgerFrom, p_to: st.ledgerTo });
+      if (!r.error && Array.isArray(r.data)) {
+        st.ledgerRows = r.data.filter(x => x && (Number(x.lines) > 0 || x.type === 'fee' || (x.client_name && x.client_name !== 'بدون اسم')));
+      }
+    } catch (e) {}
+    st.ledgerLoading = false;
+    renderTab(false);
+  }
+
+  function renderIntegratedLedgerSection() {
+    if (!st.ledgerOpen) {
+      return '<div class="cp-card" style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">' +
+        '<div><b>📋 كشف الحساب التفصيلي وحالة الصرف</b><div class="cp-sub">شوف إيه اللي دخل التقفيل وإيه اللي اتسجل صرفه من الإدارة بأي فترة تاريخية</div></div>' +
+        '<button type="button" class="cp-btn cp-go cp-sm" data-act="ledger-toggle">فتح كشف الحساب</button>' +
+      '</div>';
+    }
+    const confirmedRows = st.ledgerRows.filter(x => x.confirmed);
+    const total = confirmedRows.reduce((a, x) => a + Number(x.amount || 0), 0);
+    const closed = confirmedRows.filter(x => x.included_in_closing).reduce((a, x) => a + Number(x.amount || 0), 0);
+    const paid = confirmedRows.filter(x => x.included_in_closing && x.paid_at).reduce((a, x) => a + Number(x.amount || 0), 0);
+    const unpaid = Math.max(0, closed - paid);
+    const typeAr = { pickup: 'استلام', delivery: 'تسليم', fee: 'رسوم توصيل' };
+    const rowsHtml = st.ledgerRows.map(x => {
+      const closeState = x.included_in_closing ? (x.paid_at ? '✓ تم الصرف' : '🔒 دخل التقفيل') : (x.released_at ? 'أُعيد فتحه' : 'لم يُقفل بعد');
+      return '<tr style="border-bottom:1px solid var(--bd)">' +
+        '<td style="padding:6px">' + eh(x.day) + '</td>' +
+        '<td style="padding:6px" dir="ltr">' + eh(x.transaction_id) + '</td>' +
+        '<td style="padding:6px">' + eh(x.client_name || '—') + '</td>' +
+        '<td style="padding:6px">' + eh(typeAr[x.type] || x.type) + '</td>' +
+        '<td style="padding:6px;font-weight:700">' + money(x.amount) + '</td>' +
+        '<td style="padding:6px">' + (x.confirmed ? '<span class="cp-tag ok">مؤكد</span>' : '<span class="cp-tag wt">معلق</span>') + '</td>' +
+        '<td style="padding:6px">' + eh(closeState) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    return '<section class="cp-card" style="margin-top:12px">' +
+      '<div class="cp-row" style="margin-bottom:8px"><b>📋 كشف الحساب التفصيلي وحالة التقفيل والصرف</b><button type="button" class="cp-btn cp-sm" data-act="ledger-toggle">إخفاء الكشف</button></div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">' +
+        '<label class="cp-sub" style="flex:1;min-width:120px">من تاريخ<input id="cp-ldg-from" type="date" class="cp-field" style="padding:7px" value="' + eh(st.ledgerFrom) + '"></label>' +
+        '<label class="cp-sub" style="flex:1;min-width:120px">إلى تاريخ<input id="cp-ldg-to" type="date" class="cp-field" style="padding:7px" value="' + eh(st.ledgerTo) + '"></label>' +
+        '<button type="button" class="cp-btn cp-go cp-sm" data-act="ledger-run">عرض الفترة</button>' +
+      '</div>' +
+      '<div class="cp-grid">' +
+        '<div class="cp-kpi"><small>إجمالي المؤكد</small><b>' + money(total) + '</b></div>' +
+        '<div class="cp-kpi"><small>دخل التقفيل</small><b>' + money(closed) + '</b></div>' +
+        '<div class="cp-kpi"><small>تم تسجيل صرفه</small><b>' + money(paid) + '</b></div>' +
+        '<div class="cp-kpi"><small>مؤكد لم يدخل التقفيل</small><b>' + money(total - closed) + '</b>' + (unpaid ? '<div class="p">مقفل بانتظار الصرف: ' + money(unpaid) + '</div>' : '') + '</div>' +
+      '</div>' +
+      (st.ledgerLoading ? '<div class="cp-empty">جاري تحميل كشف الحساب…</div>' :
+        (rowsHtml ? '<div style="overflow-x:auto"><table style="width:100%;font-size:11.5px;border-collapse:collapse;text-align:right"><thead><tr style="border-bottom:2px solid var(--bd);color:var(--mu)"><th style="padding:6px">التاريخ</th><th style="padding:6px">المعاملة</th><th style="padding:6px">العميل</th><th style="padding:6px">النوع</th><th style="padding:6px">العمولة</th><th style="padding:6px">التأكيد</th><th style="padding:6px">التقفيل/الصرف</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>'
+          : '<div class="cp-empty">لا توجد حركات في هذه الفترة.</div>')) +
+    '</section>';
+  }
+
   function isGuideOpen(tab) { return st.guides[tab] === true; }
   function toggleGuide(tab) {
     st.guides[tab] = !isGuideOpen(tab);
@@ -188,8 +653,8 @@
     s.textContent = [
       'body.is-courier-mode #app,body.is-courier-mode #login{display:none}',
       '#courier-app.hidden,.cp-modal.hidden{display:none}',
-      '#courier-app{--bg:#0a1424;--card:#10223d;--tx:#e8eef8;--mu:#8fa1ba;--bd:rgba(255,255,255,.1);--fld:rgba(255,255,255,.07);--hd:#0b1b33;--hdtx:#fff;--hdbt:rgba(255,255,255,.1);--chip:rgba(255,255,255,.07);--sh:none;--gd-bg:rgba(16,185,129,.09);--gd-bd:rgba(16,185,129,.28)}',
-      '#courier-app[data-theme=light]{--bg:#eef2f7;--card:#fff;--tx:#0f172a;--mu:#64748b;--bd:#e2e8f0;--fld:#f1f5f9;--hd:#fff;--hdtx:#0f172a;--hdbt:#eef2f7;--chip:#eef2f7;--sh:0 1px 3px rgba(15,23,42,.08);--gd-bg:#ecfdf5;--gd-bd:#a7f3d0}',
+      '#courier-app,#courier-ops-modal{--bg:#0a1424;--card:#10223d;--tx:#e8eef8;--mu:#8fa1ba;--bd:rgba(255,255,255,.1);--fld:rgba(255,255,255,.07);--hd:#0b1b33;--hdtx:#fff;--hdbt:rgba(255,255,255,.1);--chip:rgba(255,255,255,.07);--sh:none;--gd-bg:rgba(16,185,129,.09);--gd-bd:rgba(16,185,129,.28)}',
+      '#courier-app[data-theme=light],#courier-ops-modal[data-theme=light]{--bg:#eef2f7;--card:#fff;--tx:#0f172a;--mu:#64748b;--bd:#e2e8f0;--fld:#f1f5f9;--hd:#fff;--hdtx:#0f172a;--hdbt:#eef2f7;--chip:#eef2f7;--sh:0 1px 3px rgba(15,23,42,.08);--gd-bg:#ecfdf5;--gd-bd:#a7f3d0}',
       '#courier-app{position:fixed;inset:0;z-index:99980;display:flex;flex-direction:column;background:var(--bg);color:var(--tx);font-family:inherit;overflow-x:hidden}',
       '#courier-app *{box-sizing:border-box}',
       '.cp-head{flex:0 0 auto;background:var(--hd);color:var(--hdtx);border-bottom:1px solid var(--bd);padding:8px 10px;display:flex;align-items:center;gap:6px;box-shadow:var(--sh);flex-wrap:wrap}',
@@ -312,6 +777,7 @@
     ].join('\n');
     document.head.appendChild(s);
   }
+  window.__ensureCourierPortalCss = addCss;
 
   /* ---------- مساعدات ---------- */
   function toast(msg, bad) {
@@ -362,7 +828,8 @@
   const kindLabel = it => it.type === 'fee' ? (it.fee_kind === 'round' ? 'رسوم توصيل · ذهاب وعودة' : 'رسوم توصيل · ذهاب فقط') : KIND[it.type].label;
 
   /* مرجع التأكيد الفردي (للبند B.1) */
-  const itemRef = it => it.type === 'fee' ? String(it.id) : String(it.transaction_id);
+  // التأكيد الفردي لازم يشير إلى سجل المشوار نفسه، لا إلى رقم المعاملة الذي قد يحتوي أكثر من مشوار.
+  const itemRef = it => (it.type === 'fee' ? 'fee:' : 'trip:') + String(it.id);
 
   /* علامة 📨 أبلغت الموظف (البند B.3) */
   function noteBadgeHtml(it) {
@@ -454,7 +921,7 @@
       '<header class="cp-head"><img src="logo-transparent.png" alt="" style="height:28px" onerror="this.style.display=\'none\'">' +
         '<div class="cp-who" id="cp-who-box" data-act="profile" title="ملفي الشخصي" style="display:flex;align-items:center;gap:8px">' + myAvHtml(34) + '<div style="min-width:0"><small>ملفي ←</small><b>' + eh(st.me && st.me.name) + '</b></div></div>' +
         '<div class="cp-clock"><b id="cp-time"></b><small id="cp-date"></small></div>' +
-        '<button type="button" class="cp-hbtn" data-act="refresh" title="تحديث البيانات" aria-label="تحديث البيانات"><i class="fa-solid fa-rotate"></i></button>' +
+        '<button type="button" class="cp-hbtn" data-act="qr-scan" title="مسح QR المعاملة"><i class="fa-solid fa-qrcode"></i> QR</button><button type="button" class="cp-hbtn" data-act="refresh" title="تحديث البيانات" aria-label="تحديث البيانات"><i class="fa-solid fa-rotate"></i></button>' +
         '<button type="button" class="cp-hbtn" id="cp-theme" data-act="theme"></button>' + logoutBtn + '</header>' +
       '<div class="cp-off" id="cp-off">مفيش اتصال بالإنترنت… بحاول تاني</div>' +
       '<main class="cp-body" id="cp-body"></main>' +
@@ -552,7 +1019,7 @@
       '<button type="button" class="cp-btn" data-tab="review"><i class="fa-solid fa-clipboard-check"></i> مراجعة وتأكيد</button>' +
       '<button type="button" class="cp-btn" data-tab="account"><i class="fa-solid fa-wallet"></i> حسابي وعمولاتي</button>' +
       '</div>';
-    return greeting + kpis + overdueBox + pendingSection + confirmedSection + quickLinks;
+    return greeting + kpis + renderSmartRoutePanel() + overdueBox + pendingSection + confirmedSection + renderOfficeBagCard() + quickLinks;
   }
 
   function viewHome() {
@@ -576,7 +1043,7 @@
       (s.fee.pamt ? '<div class="p">+ ' + money(s.fee.pamt) + ' في الانتظار</div>' : '') + '<div class="s">ذهاب فقط: ' + num(s.one) + ' مشوار · ذهاب وعودة: ' + num(s.round) + ' مشوار</div></div></div>';
     const recent = st.items.slice(0, 6).map(it => '<div class="cp-card" style="padding:10px" data-act="detail" data-tx="' + eh(it.transaction_id) + '"><div class="cp-row"><div><div class="cp-name" style="font-size:14px">' + eh(it.client_name || 'بدون اسم') + '</div><div class="cp-sub">' + eh(kindLabel(it)) + ' · ' + eh(dayLabel(it.day)) + '</div></div><div style="text-align:end"><b>' + money(it.amount) + '</b><div><span class="cp-tag ' + (it.confirmed ? 'ok' : 'wt') + '">' + (it.confirmed ? 'مؤكد' : 'بانتظارك') + '</span></div></div></div></div>').join('');
     const load = !st.loaded ? '<div class="cp-empty">جاري التحميل…</div>' : '';
-    return renderGuideBanner('home') + seg + monthsBar + hero + rankTeaser + grid + '<div class="cp-h"><span>آخر مشاويرك (اضغط على العميل للتفاصيل)</span><button type="button" class="cp-a cp-sm" data-tab="trips">كل المشاوير</button></div>' + (recent || load || '<div class="cp-empty">لسه مفيش مشاوير متسجلة باسمك</div>');
+    return renderGuideBanner('home') + seg + monthsBar + hero + rankTeaser + grid + renderIntegratedLedgerSection() + '<div class="cp-h"><span>آخر مشاويرك (اضغط على العميل للتفاصيل)</span><button type="button" class="cp-a cp-sm" data-tab="trips">كل المشاوير</button></div>' + (recent || load || '<div class="cp-empty">لسه مفيش مشاوير متسجلة باسمك</div>');
   }
 
   /* ---------- 2) مشاويري (تجميع ريكوستات نفس العميل + تفاصيل بالضغط) ---------- */
@@ -615,7 +1082,7 @@
     });
 
     const groups = groupItemsByClient(rows);
-    return renderGuideBanner('trips') + dayNav() + searchBar + tabs + stTabs + (groups.length ? groups.map(tripGroupCard).join('') : '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مطابقة في اليوم ده' : 'جاري التحميل…') + '</div>');
+    return renderGuideBanner('trips') + dayNav() + renderSmartRoutePanel() + searchBar + tabs + stTabs + (groups.length ? groups.map(tripGroupCard).join('') : '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مطابقة في اليوم ده' : 'جاري التحميل…') + '</div>');
   }
 
   function tripGroupCard(g) {
@@ -628,7 +1095,11 @@
 
     const links = [];
     if (g.phone) links.push(callBtns(g.phone));
-    if (g.address) links.push('<a class="cp-a" target="_blank" rel="noopener" href="' + eh(mapsUrl(g.address)) + '"><i class="fa-solid fa-location-dot"></i><span>' + eh(g.address) + '</span></a>');
+    if (g.address || st.pins[firstTx]) links.push('<a class="cp-a" target="_blank" rel="noopener" href="' + eh(smartMapsUrl(g.items[0])) + '"><i class="fa-solid fa-location-dot"></i><span>' + eh(g.address || 'فتح اللوكيشن المثبت') + '</span></a>');
+    const inRouteIdx = routeIndexOf(firstTx);
+    links.push('<button type="button" class="cp-a' + (inRouteIdx !== -1 ? ' pri' : '') + '" data-act="route-toggle" data-tx="' + eh(firstTx) + '"><i class="fa-solid ' + (inRouteIdx !== -1 ? 'fa-check' : 'fa-plus') + '"></i><span>' + (inRouteIdx !== -1 ? 'في خط السير (محطة ' + num(inRouteIdx + 1) + ')' : 'ضيف لخط السير') + '</span></button>');
+    if (!allConfirmed) links.push('<button type="button" class="cp-a" data-act="on-my-way" data-tx="' + eh(firstTx) + '">🛵 في طريقي</button>');
+    links.push('<button type="button" class="cp-a" data-act="save-pin" data-tx="' + eh(firstTx) + '">' + (st.pins[firstTx] ? '📍 لوكيشن مثبت ✓' : '📍 حفظ اللوكيشن') + '</button>');
 
     const emp = g.employee ? '<div class="cp-emp"><span>الموظف المسؤول: <b>' + eh(g.employee) + '</b></span>' +
       (g.employee_phone ? '<a class="cp-a tel" href="' + eh(telHref(g.employee_phone)) + '"><i class="fa-solid fa-phone"></i><span>اتصال بالموظف</span></a>' : '') +
@@ -684,7 +1155,11 @@
     const nBadge = noteBadgeHtml(it);
     const links = [];
     if (it.phone) links.push(callBtns(it.phone));
-    if (it.address) links.push('<a class="cp-a" target="_blank" rel="noopener" href="' + eh(mapsUrl(it.address)) + '"><i class="fa-solid fa-location-dot"></i><span>' + eh(it.address) + '</span></a>');
+    if (it.address || st.pins[it.transaction_id]) links.push('<a class="cp-a" target="_blank" rel="noopener" href="' + eh(smartMapsUrl(it)) + '"><i class="fa-solid fa-location-dot"></i><span>' + eh(it.address || 'فتح اللوكيشن المثبت') + '</span></a>');
+    const inRouteIdx = routeIndexOf(it.transaction_id);
+    links.push('<button type="button" class="cp-a' + (inRouteIdx !== -1 ? ' pri' : '') + '" data-act="route-toggle" data-tx="' + eh(it.transaction_id) + '"><i class="fa-solid ' + (inRouteIdx !== -1 ? 'fa-check' : 'fa-plus') + '"></i><span>' + (inRouteIdx !== -1 ? 'في خط السير (محطة ' + num(inRouteIdx + 1) + ')' : 'ضيف لخط السير') + '</span></button>');
+    if (!it.confirmed) links.push('<button type="button" class="cp-a" data-act="on-my-way" data-tx="' + eh(it.transaction_id) + '">🛵 في طريقي</button>');
+    links.push('<button type="button" class="cp-a" data-act="save-pin" data-tx="' + eh(it.transaction_id) + '">' + (st.pins[it.transaction_id] ? '📍 لوكيشن مثبت ✓' : '📍 حفظ اللوكيشن') + '</button>');
     const emp = it.employee ? '<div class="cp-emp"><span>الموظف المسؤول: <b>' + eh(it.employee) + '</b></span>' +
       (it.employee_phone ? '<a class="cp-a tel" href="' + eh(telHref(it.employee_phone)) + '"><i class="fa-solid fa-phone"></i><span>اتصال بالموظف</span></a>' : '') +
       (it.employee_id ? '<button type="button" class="cp-a" data-act="chat-emp" data-uid="' + eh(it.employee_id) + '" data-tx="' + eh(it.transaction_id) + '"><i class="fa-solid fa-comment"></i><span>رسالة للموظف</span></button>' : '') + '</div>' : '';
@@ -946,7 +1421,7 @@
         const t = today(), r = await sbClient.rpc('courier_items', { p_from: addDays(t, -62), p_to: t });
         if (r.error) throw r.error;
         setOffline(false);
-        const data = Array.isArray(r.data) ? r.data : [], sig = JSON.stringify(data);
+        const rawData = Array.isArray(r.data) ? r.data : []; const data = rawData.filter(x => x && (x.type === 'fee' || Number(x.lines) > 0 || (x.client_name && String(x.client_name).trim() && String(x.client_name).trim() !== 'بدون اسم'))); const sig = JSON.stringify(data);
         st.loaded = true;
         st.lastSync = Date.now();
         if (sig !== st.sig) { st.sig = sig; st.items = data; renderNav(); if (st.tab !== 'chat') renderTab(false); }
@@ -1024,6 +1499,30 @@
       }
     } catch (e) { if (!silent) toast(errMsg(e), true); }
   }
+  async function checkPendingReminders(force) {
+    if (!st.me || (!force && Date.now() - st.pendingReminderCheck < 15 * 60 * 1000)) return;
+    st.pendingReminderCheck = Date.now();
+    try {
+      /* يطلق فحص التذكير داخل الجلسة عبر دالة SECURITY DEFINER متوافقة مع سياسة courier_block */
+      let newCount = 0;
+      try {
+        const pr = await sbClient.rpc('courier_pending_reminders');
+        if (!pr.error && typeof pr.data === 'number') newCount = pr.data;
+      } catch (e) { /* optional until migration is applied */ }
+
+      const q = await sbClient.rpc('courier_ops_notifications', { p_limit: 20 });
+      if (q.error) {
+        if (newCount > 0) toast('عندك ' + num(newCount) + ' مشوار أو رسوم توصيل محتاجة تأكيد');
+        return;
+      }
+      const list = Array.isArray(q.data) ? q.data : [];
+      const pending = list.filter(x => !x.read && (x.title === 'تذكير: عندك مشوار غير مؤكد' || x.title === 'تذكير: عندك رسوم توصيل غير مؤكدة'));
+      if (pending.length) {
+        toast(pending[0].body || ('عندك ' + num(pending.length) + ' تذكير لمشاوير أو رسوم توصيل محتاجة تأكيد'));
+        await Promise.all(pending.map(x => sbClient.rpc('courier_ops_notification_read', { p_notification_id: Number(x.id) }).catch(() => null)));
+      }
+    } catch (e) { /* لا نعطل البوابة إذا لم تُشغّل migration بعد */ }
+  }
   function tick() {
     st.tick++; tickClock();
     if (document.hidden || !st.me) return;
@@ -1031,6 +1530,7 @@
     if (st.tick % 30 === 0) { loadItems(true); loadMyNotes(); loadContacts(true); }
     if (st.tick % 90 === 0) loadLeaderboard(true);
     if (st.tick % 60 === 0) sbClient.rpc('touch_last_seen');
+    if (st.tick % 900 === 0) checkPendingReminders(false);
   }
 
   /* ---------- مودالات: تفاصيل العميل (A.2) + التأكيد الفردي (B.1) + الملاحظة (B.3/B.4) + ملفي الشخصي ---------- */
@@ -1393,6 +1893,37 @@
         return;
       }
       case 'nsend': return sendNote(tx, el);
+      case 'route-toggle': return toggleRouteTx(tx);
+      case 'route-autosort': return autoOptimizeRoute(true);
+      case 'route-clear': return clearRoute();
+      case 'on-my-way': return startOnMyWay(tx);
+      case 'save-pin': return saveClientPin(tx);
+      case 'bag-toggle': {
+        const k = String(tx || '');
+        if (k) { st.bagHanded[k] = !st.bagHanded[k]; saveBagState(); renderTab(false); }
+        return;
+      }
+      case 'qr-scan': return openQrScannerModal();
+      case 'qr-close': stopQrCamera(); return closeModal();
+      case 'qr-go': {
+        const inp = $('cp-qr-manual');
+        const code = extractTxFromScan(inp ? inp.value : '');
+        stopQrCamera();
+        if (!code) return toast('اكتب رقم المعاملة الأول', true);
+        return openClientDetail(code);
+      }
+      case 'ledger-toggle': {
+        st.ledgerOpen = !st.ledgerOpen;
+        if (st.ledgerOpen && !st.ledgerRows.length) return loadCourierLedger();
+        return renderTab(false);
+      }
+      case 'ledger-run': {
+        const f = $('cp-ldg-from'), t = $('cp-ldg-to');
+        if (f && f.value) st.ledgerFrom = f.value;
+        if (t && t.value) st.ledgerTo = t.value;
+        if (st.ledgerFrom > st.ledgerTo) return toast('تاريخ البداية لازم يكون قبل تاريخ النهاية', true);
+        return loadCourierLedger();
+      }
       case 'ask-one': return askConfirmOne(el.dataset.type, el.dataset.ref, el.dataset.tx, el.dataset.amt);
       case 'do-confirm-one': return doConfirmOne(el.dataset.type, el.dataset.ref, el);
       case 'ask': return askConfirm(el.dataset.kind, el.dataset.n, el.dataset.amt);
@@ -1406,15 +1937,16 @@
   }
 
   async function showCourier() {
-    initTheme(); initGuides(); st.day = today(); st.month = st.day.slice(0, 7);
+    initTheme(); initGuides(); initSmartFeatures(); st.day = today(); st.month = st.day.slice(0, 7);
     overlay('<div class="cp-empty" style="margin:auto">جاري التحميل…</div>');
     try { const r = await sbClient.rpc('courier_me'); if (r.error) throw r.error; st.me = r.data; }
     catch (e) { overlay('<header class="cp-head"><div class="cp-who"><b>بوابة المندوب</b></div>' + logoutBtn + '</header><div class="cp-empty" style="margin:auto">' + eh(errMsg(e)) + '</div>'); return; }
     shell(); loadMyAvatar(); sbClient.rpc('touch_last_seen');
     await Promise.all([loadItems(false), loadMyNotes(), loadLeaderboard(true), loadContacts(true)]);
+    await checkPendingReminders(true);
     clearInterval(st.timer); st.timer = setInterval(tick, 1000);
   }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && st.me && $('courier-app')) { loadItems(true); loadMyNotes(); loadLeaderboard(true); loadContacts(true); if (st.chat) pollMsgs(false); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && st.me && $('courier-app')) { loadItems(true); loadMyNotes(); loadLeaderboard(true); loadContacts(true); checkPendingReminders(false); if (st.chat) pollMsgs(false); } });
   window.addEventListener('online', () => { if (st.me) { loadItems(true); loadMyNotes(); loadLeaderboard(true); loadContacts(true); } });
 
   /* ---------- نقطة الدخول ---------- */

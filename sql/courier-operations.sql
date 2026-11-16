@@ -1,0 +1,955 @@
+-- =====================================================================
+-- Courier Operations v1 — route order, operational states, issue tracking,
+-- detailed commission ledger and payout marking.
+-- Run AFTER courier-portal.sql and courier-confirmed-commission-close.sql.
+-- This file is intentionally incremental; it does not rewrite historical trips.
+-- =====================================================================
+
+create table if not exists public.courier_trip_ops (
+  trip_id bigint primary key references public.courier_trips(id) on delete cascade,
+  operational_status text not null default 'new'
+    check (operational_status in ('new','collecting','collected','on_the_way','delivered')),
+  priority smallint not null default 3 check (priority between 1 and 5),
+  route_order integer not null default 0,
+  operational_note text,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null
+);
+alter table public.courier_trip_ops
+  add column if not exists client_lat double precision,
+  add column if not exists client_lng double precision;
+
+create index if not exists courier_trip_ops_route_idx
+  on public.courier_trip_ops (route_order, priority, trip_id);
+alter table public.courier_trip_ops enable row level security;
+revoke all on public.courier_trip_ops from public, anon, authenticated;
+
+create table if not exists public.courier_trip_issues (
+  id bigserial primary key,
+  trip_id bigint not null references public.courier_trips(id) on delete restrict,
+  reporter_id uuid not null references auth.users(id),
+  issue_type text not null check (issue_type in
+    ('customer_unavailable','wrong_address','incorrect_fee','pickup_problem','other')),
+  details text not null check (char_length(btrim(details)) between 3 and 1000),
+  status text not null default 'open' check (status in ('open','in_progress','resolved')),
+  resolution text,
+  assigned_to uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  resolved_at timestamptz
+);
+-- Keep issue history: trips with reports cannot be hard-deleted.
+alter table public.courier_trip_issues
+  drop constraint if exists courier_trip_issues_trip_id_fkey;
+alter table public.courier_trip_issues
+  add constraint courier_trip_issues_trip_id_fkey
+  foreign key (trip_id) references public.courier_trips(id) on delete restrict;
+
+create index if not exists courier_trip_issues_trip_idx
+  on public.courier_trip_issues (trip_id, created_at desc);
+create index if not exists courier_trip_issues_status_idx
+  on public.courier_trip_issues (status, created_at desc);
+alter table public.courier_trip_issues enable row level security;
+revoke all on public.courier_trip_issues from public, anon, authenticated;
+
+-- Existing closing means included in the administrative closing, not necessarily paid.
+alter table public.courier_closings
+  add column if not exists paid_at timestamptz,
+  add column if not exists paid_by text,
+  add column if not exists paid_method text,
+  add column if not exists paid_reference text,
+  add column if not exists paid_note text;
+
+create or replace function public.courier_ops_items(p_from date default null, p_to date default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_c public.couriers; v_manager boolean := public.is_manager() or public.is_staff();
+begin
+  if not public.is_courier() and not v_manager then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if public.is_courier() then
+    select * into v_c from public.couriers where user_id = auth.uid() and active;
+    if v_c.id is null then raise exception 'courier account not linked' using errcode = '42501'; end if;
+  end if;
+  return coalesce((
+    select jsonb_agg(to_jsonb(x) order by x.trip_day desc, case when x.route_order=0 then 2147483647 else x.route_order end, x.priority, x.id desc)
+    from (
+      select t.id, t.transaction_id, t.kind, t.courier, t.trip_day,
+             t.fee, t.courier_confirmed_at,
+             coalesce(o.operational_status,'new') as operational_status,
+             coalesce(o.priority,3) as priority,
+             coalesce(o.route_order,0) as route_order,
+             o.operational_note, o.client_lat, o.client_lng, o.updated_at,
+             max(l.client_name) as client_name, max(l.phone) as phone,
+             max(l.address) as address,
+             string_agg(distinct l.service,'، ') as services
+        from public.courier_trips t
+        left join public.courier_trip_ops o on o.trip_id=t.id
+        join public.request_lines l on l.transaction_id=t.transaction_id and l.deleted_at is null
+       where t.trip_day between coalesce(p_from,(now() at time zone 'Africa/Cairo')::date-30)
+                            and coalesce(p_to,(now() at time zone 'Africa/Cairo')::date)
+         and exists (select 1 from public.couriers active_c where active_c.active=true and (v_manager or active_c.user_id is not null) and public.norm_ar(active_c.name)=public.norm_ar(t.courier))
+         and (v_manager or public.norm_ar(t.courier)=public.norm_ar(v_c.name))
+       group by t.id,o.operational_status,o.priority,o.route_order,o.operational_note,o.client_lat,o.client_lng,o.updated_at
+    ) x
+  ),'[]'::jsonb);
+end $$;
+
+create or replace function public.courier_ops_update(
+  p_trip_id bigint, p_status text default null, p_priority smallint default null,
+  p_route_order integer default null, p_note text default null
+) returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_t public.courier_trips; v_c public.couriers; v_manager boolean := public.is_manager() or public.is_staff();
+begin
+  if not public.is_courier() and not v_manager then raise exception 'not allowed' using errcode='42501'; end if;
+  select * into v_t from public.courier_trips where id=p_trip_id for update;
+  if v_t.id is null then raise exception 'trip not found' using errcode='P0002'; end if;
+  if public.is_courier() then
+    select * into v_c from public.couriers where user_id=auth.uid() and active;
+    if v_c.id is null or public.norm_ar(v_t.courier)<>public.norm_ar(v_c.name) then
+      raise exception 'not your trip' using errcode='42501';
+    end if;
+  end if;
+  if p_status is not null and p_status not in ('new','collecting','collected','on_the_way','delivered') then
+    raise exception 'invalid operational status' using errcode='22023';
+  end if;
+  if p_priority is not null and p_priority not between 1 and 5 then raise exception 'invalid priority' using errcode='22023'; end if;
+  insert into public.courier_trip_ops(trip_id,operational_status,priority,route_order,operational_note,updated_by)
+  values(p_trip_id,coalesce(p_status,'new'),coalesce(p_priority,3),coalesce(p_route_order,0),nullif(btrim(p_note),''),auth.uid())
+  on conflict(trip_id) do update set
+    operational_status=coalesce(p_status,courier_trip_ops.operational_status),
+    priority=coalesce(p_priority,courier_trip_ops.priority),
+    route_order=coalesce(p_route_order,courier_trip_ops.route_order),
+    operational_note=case when p_note is null then courier_trip_ops.operational_note else nullif(btrim(p_note),'') end,
+    updated_at=now(),updated_by=auth.uid();
+  return jsonb_build_object('ok',true,'trip_id',p_trip_id);
+end $$;
+
+create or replace function public.courier_ops_report(p_trip_id bigint,p_issue_type text,p_details text)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare v_t public.courier_trips; v_c public.couriers; v_id bigint; v_manager boolean := public.is_manager() or public.is_staff();
+begin
+  if not public.is_courier() and not v_manager then raise exception 'not allowed' using errcode='42501'; end if;
+  select * into v_t from public.courier_trips where id=p_trip_id;
+  if v_t.id is null then raise exception 'trip not found' using errcode='P0002'; end if;
+  if public.is_courier() then
+    select * into v_c from public.couriers where user_id=auth.uid() and active;
+    if v_c.id is null or public.norm_ar(v_t.courier)<>public.norm_ar(v_c.name) then raise exception 'not your trip' using errcode='42501'; end if;
+  end if;
+  if p_issue_type not in ('customer_unavailable','wrong_address','incorrect_fee','pickup_problem','other')
+     or char_length(btrim(coalesce(p_details,''))) not between 3 and 1000 then
+    raise exception 'invalid issue details' using errcode='22023';
+  end if;
+  insert into public.courier_trip_issues(trip_id,reporter_id,issue_type,details)
+  values(p_trip_id,auth.uid(),p_issue_type,btrim(p_details)) returning id into v_id;
+  insert into public.notifications(user_id,kind,title,body)
+  select distinct ur.user_id,'info','بلاغ مشكلة من المندوب '||v_t.courier||' — مشوار '||v_t.transaction_id,
+         p_issue_type||' — '||left(btrim(p_details),700)
+    from public.user_roles ur where ur.role in ('manager','staff') and ur.user_id<>auth.uid();
+  return jsonb_build_object('ok',true,'issue_id',v_id);
+end $$;
+
+create or replace function public.courier_ops_issues(p_status text default null)
+returns jsonb language plpgsql stable security definer set search_path=public as $$
+declare v_c public.couriers; v_manager boolean := public.is_manager() or public.is_staff();
+begin
+  if not public.is_courier() and not v_manager then raise exception 'not allowed' using errcode='42501'; end if;
+  if public.is_courier() then
+    select * into v_c from public.couriers where user_id=auth.uid() and active;
+    if v_c.id is null then raise exception 'courier account not linked' using errcode='42501'; end if;
+  end if;
+  return coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc) from (
+    select i.*,t.courier,t.transaction_id,t.trip_day,t.kind,
+           (select p.full_name from public.profiles p where p.id=i.reporter_id) as reporter_name,
+           (select p.full_name from public.profiles p where p.id=i.assigned_to) as assignee_name
+      from public.courier_trip_issues i join public.courier_trips t on t.id=i.trip_id
+     where (v_manager or i.reporter_id=auth.uid())
+       and (p_status is null or i.status=p_status)
+  ) x),'[]'::jsonb);
+end $$;
+
+create or replace function public.courier_ops_issue_update(p_issue_id bigint,p_status text,p_resolution text default null)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare v_i public.courier_trip_issues; v_t public.courier_trips;
+begin
+  if not (public.is_manager() or public.is_staff()) then raise exception 'staff only' using errcode='42501'; end if;
+  if p_status not in ('open','in_progress','resolved') then raise exception 'invalid status' using errcode='22023'; end if;
+  update public.courier_trip_issues set status=p_status,
+    resolution=case when p_resolution is null then resolution else nullif(btrim(p_resolution),'') end,
+    assigned_to=coalesce(assigned_to,auth.uid()),updated_at=now(),
+    resolved_at=case when p_status='resolved' then now() else null end
+   where id=p_issue_id returning * into v_i;
+  if v_i.id is null then raise exception 'issue not found' using errcode='P0002'; end if;
+  select * into v_t from public.courier_trips where id=v_i.trip_id;
+  insert into public.notifications(user_id,kind,title,body)
+  select c.user_id,'info','تحديث على بلاغك — مشوار '||v_t.transaction_id,
+         case p_status when 'resolved' then 'تم حل البلاغ: '||coalesce(v_i.resolution,'') when 'in_progress' then 'جاري متابعة البلاغ' else 'تم تحديث حالة البلاغ' end
+    from public.couriers c where public.norm_ar(c.name)=public.norm_ar(v_t.courier) and c.user_id is not null;
+  return jsonb_build_object('ok',true,'issue_id',p_issue_id);
+end $$;
+
+create or replace function public.courier_ops_ledger(p_from date default null,p_to date default null)
+returns jsonb language plpgsql stable security definer set search_path=public as $$
+declare v_c public.couriers; v_items jsonb;
+begin
+  if not public.is_courier() then raise exception 'courier only' using errcode='42501'; end if;
+  delete from public.courier_pending_reminder_state where last_reminded_at < now() - interval '65 days';
+  select * into v_c from public.couriers where user_id=auth.uid() and active;
+  if v_c.id is null then raise exception 'courier account not linked' using errcode='42501'; end if;
+  select coalesce(jsonb_agg(
+    e.value || jsonb_build_object(
+      'closing_id',ci.closing_id,'closed_at',cl.created_at,
+      'paid_at',cl.paid_at,'paid_by',cl.paid_by,
+      'included_in_closing',ci.id is not null and ci.released_at is null,
+      'released_at',ci.released_at
+    ) order by (e.value->>'day')::date desc
+  ),'[]'::jsonb) into v_items
+  from jsonb_array_elements(public.courier_items(p_from,p_to)) e(value)
+  left join lateral (
+    select z.* from public.courier_closing_items z
+     where z.source_type=e.value->>'type' and z.source_id=(e.value->>'id')::bigint
+     order by z.created_at desc,z.id desc limit 1
+  ) ci on true
+  left join public.courier_closings cl on cl.id=ci.closing_id;
+  return coalesce(v_items,'[]'::jsonb);
+end $$;
+
+create or replace function public.courier_ops_closings(p_from date default null,p_to date default null)
+returns jsonb language plpgsql stable security definer set search_path=public as $$
+begin
+  if not (public.is_manager() or public.is_staff()) then raise exception 'staff only' using errcode='42501'; end if;
+  return coalesce((select jsonb_agg(to_jsonb(c) order by c.created_at desc) from public.courier_closings c
+    where (p_from is null or c.period_end>=p_from) and (p_to is null or c.period_start<=p_to)
+  ),'[]'::jsonb);
+end $$;
+
+drop function if exists public.courier_ops_mark_paid(bigint);
+create or replace function public.courier_ops_mark_paid(
+  p_closing_id bigint, p_method text default null,
+  p_reference text default null, p_note text default null
+)
+returns jsonb language plpgsql security definer set search_path=public as $$
+begin
+  if not public.is_manager() then raise exception 'manager only' using errcode='42501'; end if;
+  if p_method is not null and p_method not in ('cash','bank_transfer','wallet','other') then
+    raise exception 'invalid payment method' using errcode='22023';
+  end if;
+  if char_length(coalesce(p_reference,'')) > 160 or char_length(coalesce(p_note,'')) > 1000 then
+    raise exception 'payment details too long' using errcode='22023';
+  end if;
+  update public.courier_closings set paid_at=coalesce(paid_at,now()),
+    paid_by=coalesce(paid_by,auth.jwt()->>'email','manager'),
+    paid_method=coalesce(nullif(p_method,''),paid_method),
+    paid_reference=coalesce(nullif(btrim(p_reference),''),paid_reference),
+    paid_note=coalesce(nullif(btrim(p_note),''),paid_note)
+   where id=p_closing_id and reopened_at is null;
+  if not found then raise exception 'active closing not found' using errcode='P0002'; end if;
+  return jsonb_build_object('ok',true,'closing_id',p_closing_id);
+end $$;
+
+
+-- Push in-app notifications for newly assigned or materially changed trips.
+create or replace function public.trg_courier_ops_trip_notice()
+returns trigger language plpgsql security definer set search_path=public as $func$
+declare v_uid uuid; v_title text; v_body text;
+begin
+  if tg_op='UPDATE' and new.courier is not distinct from old.courier
+     and new.fee is not distinct from old.fee
+     and new.trip_day is not distinct from old.trip_day
+     and new.transaction_id is not distinct from old.transaction_id
+     and new.kind is not distinct from old.kind then return new; end if;
+  select c.user_id into v_uid from public.couriers c
+   where c.active and c.user_id is not null and public.norm_ar(c.name)=public.norm_ar(new.courier) limit 1;
+  if v_uid is not null then
+    v_title:=case when tg_op='INSERT' then 'مشوار جديد اتسجل باسمك' else 'تم تعديل أحد مشاويرك' end;
+    v_body:='المعاملة '||coalesce(new.transaction_id,'—')||' · '||
+      case new.kind when 'pickup' then 'استلام' when 'delivery' then 'تسليم' else new.kind end||
+      ' · '||coalesce(new.trip_day::text,'');
+    insert into public.notifications(user_id,kind,title,body) values(v_uid,'info',v_title,v_body);
+  end if;
+  return new;
+end $func$;
+drop trigger if exists courier_ops_trip_notice on public.courier_trips;
+create trigger courier_ops_trip_notice after insert or update of courier,fee,trip_day,transaction_id,kind
+on public.courier_trips for each row execute function public.trg_courier_ops_trip_notice();
+
+create or replace function public.trg_courier_ops_fee_notice()
+returns trigger language plpgsql security definer set search_path=public as $func$
+declare v_uid uuid; v_executor text; v_tx text; v_service text;
+begin
+  if tg_op='UPDATE' and new.executor is not distinct from old.executor
+     and new.exec_total is not distinct from old.exec_total
+     and new.exec_unit_cost is not distinct from old.exec_unit_cost
+     and new.qty is not distinct from old.qty
+     and new.received_at is not distinct from old.received_at
+     and new.service is not distinct from old.service then return new; end if;
+  if new.deleted_at is not null or public.norm_ar(new.service) not like 'رسوم توصيل%' then return new; end if;
+  select c.user_id into v_uid from public.couriers c
+   where c.active and c.user_id is not null and public.norm_ar(c.name)=public.norm_ar(new.executor) limit 1;
+  if v_uid is not null then
+    insert into public.notifications(user_id,kind,title,body)
+    values(v_uid, 'info',
+      case when tg_op='INSERT' then 'رسوم توصيل جديدة مسجلة باسمك' else 'تم تعديل بند رسوم توصيل باسمك' end,
+      'المعاملة '||coalesce(new.transaction_id,'—')||' · '||coalesce(new.received_at::date::text,''));
+  end if;
+  return new;
+end $func$;
+drop trigger if exists courier_ops_fee_notice on public.request_lines;
+create trigger courier_ops_fee_notice after insert or update of executor,exec_total,exec_unit_cost,qty,received_at,service,deleted_at
+on public.request_lines for each row execute function public.trg_courier_ops_fee_notice();
+
+
+-- Deliver public employee comments to the assigned courier and notify them.
+-- Private internal comments remain private and do not generate courier alerts.
+create or replace function public.courier_tx_notes(p_tx text)
+returns jsonb language plpgsql stable security definer set search_path=public as $$
+declare v_c public.couriers;
+begin
+  if not public.is_courier() then raise exception 'courier only' using errcode='42501'; end if;
+  delete from public.courier_pending_reminder_state where last_reminded_at < now() - interval '65 days';
+  select * into v_c from public.couriers where user_id=auth.uid() and active;
+  if v_c.id is null then raise exception 'courier account not linked' using errcode='42501'; end if;
+  if not (
+    exists (select 1 from public.courier_trips t
+             where t.transaction_id=btrim(p_tx)
+               and public.norm_ar(t.courier)=public.norm_ar(v_c.name))
+    or exists (select 1 from public.request_lines l
+                where l.transaction_id=btrim(p_tx) and l.deleted_at is null
+                  and public.norm_ar(l.service) like 'رسوم توصيل%'
+                  and public.norm_ar(l.executor)=public.norm_ar(v_c.name))
+  ) then raise exception 'not your transaction' using errcode='42501'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('id',c.id,'body',c.body,'at',c.created_at,'author_name',c.author_name)
+                     order by c.created_at desc)
+      from public.tx_comments c
+     where c.transaction_id=btrim(p_tx) and c.deleted_at is null
+       and (c.author_id=auth.uid() or c.is_public=true)
+  ),'[]'::jsonb);
+end $$;
+
+create or replace function public.trg_courier_ops_staff_note_notice()
+returns trigger language plpgsql security definer set search_path=public as $func$
+begin
+  if new.deleted_at is not null or coalesce(new.is_public,false) is not true
+     or not (public.is_manager() or public.is_staff()) then return new; end if;
+  insert into public.notifications(user_id,kind,title,body)
+  select distinct c.user_id,'info',
+         'ملاحظة جديدة من الموظف على مشوارك — '||new.transaction_id,
+         left(coalesce(new.body,''),700)
+    from public.courier_trips t
+    join public.couriers c
+      on c.active and c.user_id is not null
+     and public.norm_ar(c.name)=public.norm_ar(t.courier)
+   where t.transaction_id=new.transaction_id;
+  return new;
+end $func$;
+drop trigger if exists courier_ops_staff_note_notice on public.tx_comments;
+create trigger courier_ops_staff_note_notice
+after insert on public.tx_comments for each row
+execute function public.trg_courier_ops_staff_note_notice();
+revoke all on function public.trg_courier_ops_staff_note_notice() from public,anon,authenticated;
+revoke all on function public.courier_tx_notes(text) from public,anon;
+grant execute on function public.courier_tx_notes(text) to authenticated;
+
+
+-- (دالة courier_items محدّثة بالفعل في ملف courier-confirmed-commission-close.sql لدعم كل الفترات التاريخية بدون حد 120 يوم)
+
+-- Periodic in-app reminders while the courier portal is active (12-hour cooldown, aggregated into 1 unread notification per courier).
+create table if not exists public.courier_pending_reminder_state (
+  source_type text not null check (source_type in ('trip','fee')),
+  source_id bigint not null,
+  courier_user_id uuid not null references auth.users(id) on delete cascade,
+  last_reminded_at timestamptz not null default now(),
+  primary key (source_type,source_id,courier_user_id)
+);
+alter table public.courier_pending_reminder_state enable row level security;
+revoke all on public.courier_pending_reminder_state from public,anon,authenticated;
+
+create or replace function public.courier_pending_reminders()
+returns integer language plpgsql security definer set search_path=public as $$
+declare
+  v_c public.couriers;
+  v_today date := (now() at time zone 'Africa/Cairo')::date;
+  v_last timestamptz;
+  v_due_trips integer := 0;
+  v_due_fees integer := 0;
+  v_existing_id bigint;
+  v_title text := 'تذكير: عندك مشوار غير مؤكد';
+  v_body text;
+  r record;
+begin
+  if not public.is_courier() then raise exception 'courier only' using errcode='42501'; end if;
+  delete from public.courier_pending_reminder_state where last_reminded_at < now() - interval '65 days';
+  select * into v_c from public.couriers where user_id=auth.uid() and active;
+  if v_c.id is null then raise exception 'courier account not linked' using errcode='42501'; end if;
+
+  for r in
+    select t.id, t.transaction_id, t.kind, t.trip_day
+      from public.courier_trips t
+     where public.norm_ar(t.courier)=public.norm_ar(v_c.name)
+       and t.courier_confirmed_at is null
+       and t.trip_day between v_today-62 and v_today
+       and exists (select 1 from public.request_lines l where l.transaction_id=t.transaction_id and l.deleted_at is null)
+  loop
+    select s.last_reminded_at into v_last
+      from public.courier_pending_reminder_state s
+     where s.source_type='trip' and s.source_id=r.id and s.courier_user_id=auth.uid()
+       for update;
+    if not found then
+      insert into public.courier_pending_reminder_state values('trip',r.id,auth.uid(),now()) on conflict do nothing;
+      continue;
+    end if;
+    if v_last <= now() - interval '12 hours' then
+      update public.courier_pending_reminder_state set last_reminded_at=now()
+       where source_type='trip' and source_id=r.id and courier_user_id=auth.uid();
+      v_due_trips := v_due_trips + 1;
+    end if;
+  end loop;
+
+  for r in
+    select l.id, l.transaction_id, l.received_at::date as trip_day
+      from public.request_lines l
+     where l.deleted_at is null
+       and public.norm_ar(l.service) like 'رسوم توصيل%'
+       and public.norm_ar(l.executor)=public.norm_ar(v_c.name)
+       and l.received_at::date between v_today-62 and v_today
+       and not exists (
+         select 1 from public.courier_fee_confirms fc
+          where fc.line_id=l.id
+            and public.norm_ar(fc.courier)=public.norm_ar(v_c.name)
+            and fc.amount=coalesce(nullif(l.exec_total,0),coalesce(l.qty,0)*coalesce(l.exec_unit_cost,0))
+            and coalesce(fc.trip_day,l.received_at::date)=l.received_at::date
+       )
+  loop
+    select s.last_reminded_at into v_last
+      from public.courier_pending_reminder_state s
+     where s.source_type='fee' and s.source_id=r.id and s.courier_user_id=auth.uid()
+       for update;
+    if not found then
+      insert into public.courier_pending_reminder_state values('fee',r.id,auth.uid(),now()) on conflict do nothing;
+      continue;
+    end if;
+    if v_last <= now() - interval '12 hours' then
+      update public.courier_pending_reminder_state set last_reminded_at=now()
+       where source_type='fee' and source_id=r.id and courier_user_id=auth.uid();
+      v_due_fees := v_due_fees + 1;
+    end if;
+  end loop;
+
+  if (v_due_trips + v_due_fees) > 0 then
+    v_body := 'عندك ' || (v_due_trips + v_due_fees)::text || ' مشوار/رسوم توصيل بانتظار تأكيدك في بوابة المندوب.';
+    select id into v_existing_id
+      from public.notifications
+     where user_id = auth.uid()
+       and read = false
+       and title in ('تذكير: عندك مشوار غير مؤكد','تذكير: عندك رسوم توصيل غير مؤكدة')
+     order by created_at desc
+     limit 1;
+    if v_existing_id is not null then
+      update public.notifications
+         set body = v_body, created_at = now()
+       where id = v_existing_id;
+    else
+      insert into public.notifications(user_id,kind,title,body)
+      values(auth.uid(),'info',v_title,v_body);
+    end if;
+  end if;
+
+  return v_due_trips + v_due_fees;
+end $$;
+
+-- Server-side dispatcher: reminders run during working hours (10:00–22:00 Cairo) and aggregate into 1 notification per courier.
+create or replace function public.courier_dispatch_pending_reminders()
+returns integer language plpgsql security definer set search_path=public as $$
+declare
+  v_c record;
+  v_now_cairo timestamp := (now() at time zone 'Africa/Cairo');
+  v_today date := v_now_cairo::date;
+  v_hour integer := extract(hour from v_now_cairo);
+  v_last timestamptz;
+  v_count integer := 0;
+  v_courier_due integer := 0;
+  v_existing_id bigint;
+  v_body text;
+  r record;
+begin
+  if v_hour < 10 or v_hour > 22 then
+    return 0;
+  end if;
+  delete from public.courier_pending_reminder_state where last_reminded_at < now() - interval '65 days';
+
+  for v_c in
+    select c.user_id, c.name from public.couriers c
+     where c.active=true and c.user_id is not null
+  loop
+    v_courier_due := 0;
+    for r in
+      select t.id, t.transaction_id, t.kind, t.trip_day from public.courier_trips t
+       where public.norm_ar(t.courier)=public.norm_ar(v_c.name)
+         and t.courier_confirmed_at is null and t.trip_day between v_today-62 and v_today and exists (select 1 from public.request_lines l where l.transaction_id=t.transaction_id and l.deleted_at is null)
+    loop
+      select s.last_reminded_at into v_last from public.courier_pending_reminder_state s
+       where s.source_type='trip' and s.source_id=r.id and s.courier_user_id=v_c.user_id for update;
+      if not found then
+        insert into public.courier_pending_reminder_state values('trip',r.id,v_c.user_id,now()) on conflict do nothing;
+        continue;
+      end if;
+      if v_last <= now() - interval '12 hours' then
+        update public.courier_pending_reminder_state set last_reminded_at=now()
+         where source_type='trip' and source_id=r.id and courier_user_id=v_c.user_id;
+        v_courier_due := v_courier_due + 1;
+      end if;
+    end loop;
+
+    for r in
+      select l.id, l.transaction_id, l.received_at::date as trip_day from public.request_lines l
+       where l.deleted_at is null and public.norm_ar(l.service) like 'رسوم توصيل%'
+         and public.norm_ar(l.executor)=public.norm_ar(v_c.name)
+         and l.received_at::date between v_today-62 and v_today
+         and not exists (
+           select 1 from public.courier_fee_confirms fc
+            where fc.line_id=l.id and public.norm_ar(fc.courier)=public.norm_ar(v_c.name)
+              and fc.amount=coalesce(nullif(l.exec_total,0),coalesce(l.qty,0)*coalesce(l.exec_unit_cost,0))
+              and coalesce(fc.trip_day,l.received_at::date)=l.received_at::date
+         )
+    loop
+      select s.last_reminded_at into v_last from public.courier_pending_reminder_state s
+       where s.source_type='fee' and s.source_id=r.id and s.courier_user_id=v_c.user_id for update;
+      if not found then
+        insert into public.courier_pending_reminder_state values('fee',r.id,v_c.user_id,now()) on conflict do nothing;
+        continue;
+      end if;
+      if v_last <= now() - interval '12 hours' then
+        update public.courier_pending_reminder_state set last_reminded_at=now()
+         where source_type='fee' and source_id=r.id and courier_user_id=v_c.user_id;
+        v_courier_due := v_courier_due + 1;
+      end if;
+    end loop;
+
+    if v_courier_due > 0 then
+      v_body := 'عندك ' || v_courier_due::text || ' مشوار/رسوم توصيل غير مؤكدة — افتح بوابة المندوب لمراجعتها وتأكيدها.';
+      select id into v_existing_id
+        from public.notifications
+       where user_id = v_c.user_id
+         and read = false
+         and title in ('تذكير: عندك مشوار غير مؤكد','تذكير: عندك رسوم توصيل غير مؤكدة')
+       order by created_at desc
+       limit 1;
+      if v_existing_id is not null then
+        update public.notifications
+           set body = v_body, created_at = now()
+         where id = v_existing_id;
+      else
+        insert into public.notifications(user_id,kind,title,body)
+        values(v_c.user_id,'info','تذكير: عندك مشوار غير مؤكد',v_body);
+      end if;
+      v_count := v_count + v_courier_due;
+    end if;
+  end loop;
+  return v_count;
+end $$;
+revoke all on function public.courier_dispatch_pending_reminders() from public,anon,authenticated;
+
+-- Safe pg_cron registration (will not fail migration if pg_cron is disabled or in another schema).
+do $cron$
+begin
+  create extension if not exists pg_cron with schema pg_catalog;
+  perform cron.unschedule(jobid) from cron.job where jobname = 'courier-pending-reminders';
+  perform cron.schedule(
+    'courier-pending-reminders',
+    '*/30 * * * *',
+    'select public.courier_dispatch_pending_reminders();'
+  );
+exception when others then
+  raise notice 'pg_cron setup skipped: %', sqlerrm;
+end $cron$;
+
+revoke all on function public.courier_pending_reminders() from public,anon;
+grant execute on function public.courier_pending_reminders() to authenticated;
+revoke all on function public.courier_ops_items(date,date),
+ public.courier_ops_update(bigint,text,smallint,integer,text),
+ public.courier_ops_report(bigint,text,text),public.courier_ops_issues(text),
+ public.courier_ops_issue_update(bigint,text,text),public.courier_ops_ledger(date,date),
+ public.courier_ops_closings(date,date),public.courier_ops_mark_paid(bigint,text,text,text)
+ from public,anon;
+grant execute on function public.courier_ops_items(date,date),
+ public.courier_ops_update(bigint,text,smallint,integer,text),
+ public.courier_ops_report(bigint,text,text),public.courier_ops_issues(text),
+ public.courier_ops_issue_update(bigint,text,text),public.courier_ops_ledger(date,date),
+ public.courier_ops_closings(date,date),public.courier_ops_mark_paid(bigint,text,text,text)
+ to authenticated;
+
+
+-- Audit trail for every operational state / priority / route change.
+create table if not exists public.courier_trip_ops_history (
+  id bigserial primary key,
+  trip_id bigint not null references public.courier_trips(id) on delete restrict,
+  action text not null check (action in ('created','updated')),
+  old_values jsonb,
+  new_values jsonb not null,
+  actor_id uuid references auth.users(id) on delete set null,
+  changed_at timestamptz not null default now()
+);
+create index if not exists courier_trip_ops_history_trip_idx
+  on public.courier_trip_ops_history(trip_id, changed_at desc);
+alter table public.courier_trip_ops_history enable row level security;
+revoke all on public.courier_trip_ops_history from public, anon, authenticated;
+
+create or replace function public.trg_courier_trip_ops_history()
+returns trigger language plpgsql security definer set search_path=public as $$
+begin
+  if TG_OP='INSERT' then
+    insert into public.courier_trip_ops_history(trip_id,action,new_values,actor_id)
+    values(NEW.trip_id,'created',to_jsonb(NEW),coalesce(NEW.updated_by,auth.uid()));
+    return NEW;
+  end if;
+  if row(OLD.operational_status,OLD.priority,OLD.route_order,OLD.operational_note)
+     is distinct from row(NEW.operational_status,NEW.priority,NEW.route_order,NEW.operational_note) then
+    insert into public.courier_trip_ops_history(trip_id,action,old_values,new_values,actor_id)
+    values(NEW.trip_id,'updated',to_jsonb(OLD),to_jsonb(NEW),coalesce(NEW.updated_by,auth.uid()));
+  end if;
+  return NEW;
+end $$;
+drop trigger if exists courier_trip_ops_history_log on public.courier_trip_ops;
+create trigger courier_trip_ops_history_log
+after insert or update on public.courier_trip_ops
+for each row execute function public.trg_courier_trip_ops_history();
+revoke all on function public.trg_courier_trip_ops_history() from public,anon,authenticated;
+
+create or replace function public.courier_ops_staff_users()
+returns jsonb language plpgsql stable security definer set search_path=public as $$
+begin
+  if not (public.is_manager() or public.is_staff()) then raise exception 'staff only' using errcode='42501'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'full_name',p.full_name) order by p.full_name)
+    from public.profiles p join public.user_roles ur on ur.user_id=p.id
+    where ur.role in ('manager','staff')),'[]'::jsonb);
+end $$;
+
+create or replace function public.courier_ops_issue_assign(p_issue_id bigint,p_assigned_to uuid)
+returns jsonb language plpgsql security definer set search_path=public as $$
+declare v_i public.courier_trip_issues; v_name text;
+begin
+  if not (public.is_manager() or public.is_staff()) then raise exception 'staff only' using errcode='42501'; end if;
+  if p_assigned_to is not null and not exists (
+    select 1 from public.user_roles where user_id=p_assigned_to and role in ('manager','staff')
+  ) then raise exception 'assignee must be a manager or staff member' using errcode='22023'; end if;
+  update public.courier_trip_issues set assigned_to=p_assigned_to,updated_at=now()
+   where id=p_issue_id returning * into v_i;
+  if v_i.id is null then raise exception 'issue not found' using errcode='P0002'; end if;
+  select full_name into v_name from public.profiles where id=p_assigned_to;
+  return jsonb_build_object('ok',true,'issue_id',p_issue_id,'assigned_to',p_assigned_to,'assignee_name',v_name);
+end $$;
+
+create or replace function public.courier_ops_notifications(p_limit integer default 50)
+returns jsonb language plpgsql stable security definer set search_path=public as $$
+begin
+  if auth.uid() is null then raise exception 'authentication required' using errcode='42501'; end if;
+  return coalesce((select jsonb_agg(to_jsonb(n) order by n.created_at desc) from (
+    select id,kind,title,body,read,created_at from public.notifications
+     where user_id=auth.uid() order by created_at desc
+     limit greatest(1,least(coalesce(p_limit,50),100))
+  ) n),'[]'::jsonb);
+end $$;
+
+create or replace function public.courier_ops_notification_read(p_notification_id bigint)
+returns jsonb language plpgsql security definer set search_path=public as $$
+begin
+  if auth.uid() is null then raise exception 'authentication required' using errcode='42501'; end if;
+  update public.notifications set read=true where id=p_notification_id and user_id=auth.uid();
+  if not found then raise exception 'notification not found or not owned by user' using errcode='P0002'; end if;
+  return jsonb_build_object('ok',true,'id',p_notification_id);
+end $$;
+
+create or replace function public.courier_ops_trip_history(p_trip_id bigint)
+returns jsonb language plpgsql stable security definer set search_path=public as $$
+declare v_t public.courier_trips; v_c public.couriers;
+begin
+  select * into v_t from public.courier_trips where id=p_trip_id;
+  if v_t.id is null then raise exception 'trip not found' using errcode='P0002'; end if;
+  if public.is_courier() then
+    select * into v_c from public.couriers where user_id=auth.uid() and active;
+    if v_c.id is null or public.norm_ar(v_t.courier)<>public.norm_ar(v_c.name) then raise exception 'not your trip' using errcode='42501'; end if;
+  elsif not (public.is_manager() or public.is_staff()) then
+    raise exception 'not allowed' using errcode='42501';
+  end if;
+  return coalesce((select jsonb_agg(to_jsonb(x) order by x.changed_at desc) from (
+    select h.id,h.action,h.old_values,h.new_values,h.changed_at,
+           (select p.full_name from public.profiles p where p.id=h.actor_id) as actor_name
+      from public.courier_trip_ops_history h where h.trip_id=p_trip_id
+  ) x),'[]'::jsonb);
+end $$;
+
+revoke all on function public.courier_ops_staff_users(),
+ public.courier_ops_issue_assign(bigint,uuid),
+ public.courier_ops_notifications(integer),
+ public.courier_ops_notification_read(bigint),
+ public.courier_ops_trip_history(bigint)
+from public,anon;
+grant execute on function public.courier_ops_staff_users(),
+ public.courier_ops_issue_assign(bigint,uuid),
+ public.courier_ops_notifications(integer),
+ public.courier_ops_notification_read(bigint),
+ public.courier_ops_trip_history(bigint)
+to authenticated;
+
+
+-- Atomic delivery status + courier trip registration.
+-- A delivery cannot be marked Delivered by this flow unless the same transaction
+-- also records the selected courier trip (or explicitly records customer self-pickup).
+create or replace function public.courier_apply_delivery(
+  p_line_ids bigint[],
+  p_trip_transactions text[] default '{}'::text[],
+  p_courier text default null,
+  p_trip_day date default null
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_courier text;
+  v_day date := coalesce(p_trip_day, (now() at time zone 'Africa/Cairo')::date);
+  v_input_count integer;
+  v_updated_count integer;
+  v_tx text;
+  v_actor text := coalesce(auth.jwt()->>'email', 'system');
+begin
+  if not (public.is_manager() or public.is_staff()) then
+    raise exception 'staff only' using errcode = '42501';
+  end if;
+  if coalesce(cardinality(p_line_ids), 0) = 0 then
+    raise exception 'no request lines supplied' using errcode = '22023';
+  end if;
+
+  select count(distinct x) into v_input_count
+    from unnest(p_line_ids) as x;
+  if v_input_count = 0 then
+    raise exception 'no request lines supplied' using errcode = '22023';
+  end if;
+
+  if nullif(btrim(coalesce(p_courier, '')), '') is not null then
+    select c.name into v_courier
+      from public.couriers c
+     where c.active = true
+       and public.norm_ar(c.name) = public.norm_ar(p_courier)
+     order by c.id
+     limit 1;
+    if v_courier is null then
+      raise exception 'active courier not found' using errcode = 'P0002';
+    end if;
+  end if;
+
+  -- Validate the complete selection before changing any row.
+  select count(*) into v_updated_count
+    from public.request_lines l
+   where l.id = any(p_line_ids)
+     and l.deleted_at is null;
+  if v_updated_count <> v_input_count then
+    raise exception 'some request lines are missing or deleted' using errcode = 'P0002';
+  end if;
+
+  -- Keep compatibility with installations where delivered_date is not present.
+  begin
+    update public.request_lines
+       set status = 'Delivered',
+           delivered = true,
+           complete = true,
+           under_review = false,
+           delivered_date = v_day
+     where id = any(p_line_ids)
+       and deleted_at is null;
+  exception when undefined_column then
+    update public.request_lines
+       set status = 'Delivered',
+           delivered = true,
+           complete = true,
+           under_review = false
+     where id = any(p_line_ids)
+       and deleted_at is null;
+  end;
+  get diagnostics v_updated_count = row_count;
+  if v_updated_count <> v_input_count then
+    raise exception 'delivery status update was incomplete' using errcode = '40001';
+  end if;
+
+  -- Upsert one delivery trip per selected transaction, in the same DB transaction.
+  -- Preserve already-closed or already-confirmed trips for the same courier so confirmation is not accidentally wiped.
+  if v_courier is not null then
+    for v_tx in
+      select distinct l.transaction_id
+        from public.request_lines l
+       where l.id = any(p_line_ids)
+         and l.deleted_at is null
+         and l.transaction_id = any(coalesce(p_trip_transactions, '{}'::text[]))
+         and l.transaction_id is not null
+    loop
+      insert into public.courier_trips
+        (transaction_id, kind, courier, fee, trip_day, created_by)
+      values
+        (v_tx, 'delivery', v_courier, 40, v_day, v_actor)
+      on conflict (transaction_id, kind) do update
+        set courier = excluded.courier,
+            fee = excluded.fee,
+            trip_day = case
+              when public.norm_ar(public.courier_trips.courier) = public.norm_ar(excluded.courier)
+                   and public.courier_trips.courier_confirmed_at is not null
+              then public.courier_trips.trip_day
+              else excluded.trip_day
+            end,
+            created_by = excluded.created_by
+      where not exists (
+        select 1 from public.courier_closing_items ci
+         where ci.source_type = 'delivery'
+           and ci.source_id = public.courier_trips.id
+           and ci.released_at is null
+      );
+    end loop;
+  else
+    -- إذا استلم العميل بنفسه من المكتب (بدون مندوب)، نحذف أي مشوار تسليم غير مؤكد وغير مقفل مسجل بالخطأ.
+    delete from public.courier_trips t
+     where t.kind = 'delivery'
+       and t.courier_confirmed_at is null
+       and t.transaction_id = any(coalesce(p_trip_transactions, '{}'::text[]))
+       and not exists (
+         select 1 from public.courier_closing_items ci
+          where ci.source_type = 'delivery'
+            and ci.source_id = t.id
+            and ci.released_at is null
+       );
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'updated_lines', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id,
+        'status', l.status,
+        'delivered', l.delivered,
+        'complete', l.complete,
+        'under_review', l.under_review
+      ))
+        from public.request_lines l
+       where l.id = any(p_line_ids)
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+revoke all on function public.courier_apply_delivery(bigint[],text[],text,date)
+  from public, anon;
+grant execute on function public.courier_apply_delivery(bigint[],text[],text,date)
+  to authenticated;
+
+
+-- تطبيق سياسة courier_block المقيدة على أي جداول جديدة في public
+do $$
+declare t record;
+begin
+  for t in
+    select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind in ('r','p') and c.relrowsecurity
+  loop
+    execute format('drop policy if exists courier_block on public.%I', t.relname);
+    execute format(
+      'create policy courier_block on public.%I as restrictive for all to authenticated using (not (select public.is_courier())) with check (not (select public.is_courier()))',
+      t.relname);
+  end loop;
+end $$;
+
+-- حفظ اللوكيشن الفعلي للعميل (GPS Pin) من موبايل المندوب
+create or replace function public.courier_save_pin(
+  p_trip_id bigint,
+  p_lat double precision,
+  p_lng double precision
+)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_t public.courier_trips;
+  v_c public.couriers;
+  v_manager boolean := public.is_manager() or public.is_staff();
+begin
+  if not public.is_courier() and not v_manager then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if p_lat is null or p_lng is null or p_lat not between -90 and 90 or p_lng not between -180 and 180 then
+    raise exception 'invalid coordinates' using errcode = '22023';
+  end if;
+  select * into v_t from public.courier_trips where id = p_trip_id;
+  if v_t.id is null then
+    raise exception 'trip not found' using errcode = 'P0002';
+  end if;
+  if public.is_courier() then
+    select * into v_c from public.couriers where user_id = auth.uid() and active;
+    if v_c.id is null or public.norm_ar(v_t.courier) <> public.norm_ar(v_c.name) then
+      raise exception 'not your trip' using errcode = '42501';
+    end if;
+  end if;
+
+  insert into public.courier_trip_ops (trip_id, client_lat, client_lng, updated_at, updated_by)
+  values (p_trip_id, p_lat, p_lng, now(), auth.uid())
+  on conflict (trip_id) do update
+    set client_lat = excluded.client_lat,
+        client_lng = excluded.client_lng,
+        updated_at = now(),
+        updated_by = auth.uid();
+
+  return jsonb_build_object('ok', true, 'trip_id', p_trip_id, 'lat', p_lat, 'lng', p_lng);
+end $$;
+revoke all on function public.courier_save_pin(bigint, double precision, double precision) from public, anon;
+grant execute on function public.courier_save_pin(bigint, double precision, double precision) to authenticated;
+
+-- ترتيب ذري لخط السير في طلب RPC واحد بدلاً من إرسال N طلبات منفصلة
+create or replace function public.courier_ops_reorder(p_trip_ids bigint[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_c public.couriers;
+  v_manager boolean := public.is_manager() or public.is_staff();
+  v_count integer := 0;
+begin
+  if not public.is_courier() and not v_manager then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if coalesce(cardinality(p_trip_ids), 0) = 0 then
+    return jsonb_build_object('ok', true, 'updated', 0);
+  end if;
+  if public.is_courier() then
+    select * into v_c from public.couriers where user_id = auth.uid() and active;
+    if v_c.id is null then
+      raise exception 'courier account not linked' using errcode = '42501';
+    end if;
+    if exists (
+      select 1 from public.courier_trips t
+       where t.id = any(p_trip_ids)
+         and public.norm_ar(t.courier) <> public.norm_ar(v_c.name)
+    ) then
+      raise exception 'not your trip' using errcode = '42501';
+    end if;
+  end if;
+
+  with ord as (
+    select x.trip_id, x.ord::integer as route_order
+      from unnest(p_trip_ids) with ordinality as x(trip_id, ord)
+      join public.courier_trips t on t.id = x.trip_id
+  ),
+  up as (
+    insert into public.courier_trip_ops (trip_id, route_order, updated_at, updated_by)
+    select o.trip_id, o.route_order, now(), auth.uid()
+      from ord o
+    on conflict (trip_id) do update
+      set route_order = excluded.route_order,
+          updated_at = now(),
+          updated_by = auth.uid()
+    where public.courier_trip_ops.route_order is distinct from excluded.route_order
+    returning trip_id
+  )
+  select count(*) into v_count from up;
+
+  return jsonb_build_object('ok', true, 'updated', v_count);
+end $$;
+revoke all on function public.courier_ops_reorder(bigint[]) from public, anon;
+grant execute on function public.courier_ops_reorder(bigint[]) to authenticated;

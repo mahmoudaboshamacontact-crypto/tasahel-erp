@@ -46,11 +46,13 @@
   };
 
   async function putTrip(tx, kind, courier, day) {
-    if (!sbClient) return;
+    if (!sbClient) return false;
     const c = cName(courier) || (courier && courier.trim() && courier.trim() !== '—' ? courier.trim() : null);
-    if (kind === 'pickup' && !c) return;
-    const r = await sbClient.from('courier_trips').upsert({ transaction_id: tx, kind: kind, courier: c || '—', fee: c ? FEE : 0, trip_day: day || today(), created_by: uname() }, { onConflict: 'transaction_id,kind' });
-    if (r.error) { if (miss(r.error)) sqlHint(); else showError('تعذّر تسجيل مشوار المندوب', r.error); }
+    // لا ننشئ مشوارًا وهميًا باسم «—» أو بعمولة صفر عندما يستلم العميل بنفسه.
+    if (!c) return true;
+    const r = await sbClient.from('courier_trips').upsert({ transaction_id: tx, kind: kind, courier: c, fee: FEE, trip_day: day || today(), created_by: uname() }, { onConflict: 'transaction_id,kind' });
+    if (r.error) { if (miss(r.error)) sqlHint(); else showError('تعذّر تسجيل مشوار المندوب', r.error); return false; }
+    return true;
   }
   const txExists = async tx => { const r = await sbClient.from('request_lines').select('id').eq('transaction_id', tx).limit(1); return !!(r.data && r.data.length); };
 
@@ -131,6 +133,45 @@
   }
 
   let prePickedCourier = undefined;
+
+  function syncDeliveredCourierInModal(tx, courierName) {
+    try {
+      const grid = document.querySelector('#tx-modal-body .ts-dtl-grid');
+      if (!grid) return;
+      let c = grid.querySelector('[data-ts-delivered]');
+      const labelTxt = (!courierName || courierName === '—') ? 'العميل استلم بنفسه من المكتب' : courierName;
+      if (!c) {
+        c = document.createElement('div');
+        c.className = 'ts-dtl-card';
+        c.setAttribute('data-ts-delivered', '1');
+        grid.insertBefore(c, grid.querySelector('.ts-dtl-card-wide') || null);
+      }
+      c.innerHTML = '<div class="ts-dtl-label"><i class="fa-solid fa-truck-fast text-emerald-500"></i><span>مندوب التسليم</span></div><div class="ts-dtl-val">' + eh(labelTxt) + '</div>' +
+        '<div class="ts-deliv-by" dir="ltr" style="text-align:start">' + eh(today()) + '</div>';
+    } catch (e) {}
+  }
+
+  /* حقن زرار واضح وسريع «🚚 تم التسليم وتحديد المندوب» في نافذة المعاملة (مفيد جداً بعد مسح QR الإيصال) */
+  const _otmCourier = window.openTxModal;
+  if (typeof _otmCourier === 'function') {
+    window.openTxModal = function (tx) {
+      const res = _otmCourier.apply(this, arguments);
+      try {
+        const actLeft = $('tx-modal-actions-left');
+        if (actLeft && !$('tx-quick-deliver-btn')) {
+          const btn = document.createElement('button');
+          btn.id = 'tx-quick-deliver-btn';
+          btn.type = 'button';
+          btn.className = 'px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs';
+          btn.innerHTML = '<i class="fa-solid fa-truck-fast"></i><span>تم التسليم (تحديد المندوب)</span>';
+          btn.onclick = () => window.stageTxStatus('Delivered');
+          actLeft.insertBefore(btn, actLeft.firstChild);
+        }
+      } catch (e) {}
+      return res;
+    };
+  }
+
   const _stg = window.stageTxStatus;
   if (typeof _stg === 'function') {
     window.stageTxStatus = async function (s) {
@@ -139,7 +180,21 @@
         if (pick === null) return;
         prePickedCourier = pick;
         _stg(s);
-        if (typeof window.saveTxChanges === 'function') await window.saveTxChanges();
+        const curTx = typeof openTxCurrent !== 'undefined' ? openTxCurrent : null;
+        const allIds = curTx
+          ? (window.allRequestLines || []).filter(l => String(l.transaction_id) === String(curTx)).map(l => String(l.id))
+          : [];
+        const anyDirty = Array.from(document.querySelectorAll('#tx-modal-body .st-sel')).some(el => el.value !== el.dataset.orig);
+        if (anyDirty && typeof window.saveTxChanges === 'function') {
+          await window.saveTxChanges();
+        } else if (allIds.length) {
+          /* لو المعاملة كانت Delivered أصلاً والموظف بيحدد أو يغير اسم المندوب */
+          if (await window.applyStatus(allIds, 'Delivered')) {
+            showToast('تم تسجيل التسليم ومندوب التسليم ✓');
+            if (typeof afterStatusChange === 'function') afterStatusChange();
+          }
+        }
+        if (curTx) syncDeliveredCourierInModal(curTx, pick);
         prePickedCourier = undefined;
       } else {
         _stg(s);
@@ -150,26 +205,65 @@
   const _as = window.applyStatus;
   window.applyStatus = async function (ids, status) {
     if (status !== 'Delivered' || !sbClient) return _as(ids, status);
-    const txs = [...new Set(ids.map(id => { const l = allRequestLines.find(x => String(x.id) === String(id)); return l && l.transaction_id; }).filter(Boolean))];
+    const selectedLines = ids.map(id => allRequestLines.find(x => String(x.id) === String(id)));
+    if (!selectedLines.length || selectedLines.some(l => !l || !l.transaction_id)) {
+      showToast('تعذّر تحديد المعاملات المرتبطة بالخدمات المختارة؛ لم يتم تغيير الحالة', 'error', 9000);
+      return false;
+    }
+    const txs = [...new Set(selectedLines.map(l => String(l.transaction_id)))];
     let need = txs.slice(), pick = '';
     if (txs.length) {
       if (prePickedCourier !== undefined) {
         pick = prePickedCourier;
       } else {
         const r = await sbClient.from('courier_trips').select('transaction_id,courier').eq('kind', 'delivery').in('transaction_id', txs);
-        if (r.error) { if (miss(r.error)) sqlHint(); }
-        else {
-          const have = new Set((r.data || []).filter(x => x.courier && x.courier !== '—').map(x => x.transaction_id));
-          need = txs.filter(t => !have.has(t));
-          if (!need.length) need = txs.slice();
-          pick = await ask(need.length);
-          if (pick === null) return false;
+        if (r.error) {
+          if (miss(r.error)) sqlHint();
+          else showError('تعذّر التحقق من مشاوير التسليم السابقة؛ لم يتم تغيير الحالة', r.error);
+          return false;
         }
+        const have = new Set((r.data || []).filter(x => x.courier && x.courier !== '—').map(x => x.transaction_id));
+        need = txs.filter(t => !have.has(t));
+        if (!need.length) need = txs.slice();
+        pick = await ask(need.length);
+        if (pick === null) return false;
       }
     }
-    const ok = await _as(ids, status);
-    if (ok) for (const t of need) await putTrip(t, 'delivery', pick, today());
-    return ok;
+    const day = today();
+    const r = await sbClient.rpc('courier_apply_delivery', {
+      p_line_ids: ids.map(id => Number(id)),
+      p_trip_transactions: need,
+      p_courier: pick || null,
+      p_trip_day: day
+    });
+    if (r.error) {
+      const errStr = ((r.error && r.error.message) || '') + ' ' + ((r.error && r.error.code) || '');
+      /* توافق آمن: لو دالة courier_apply_delivery لسه متشغلتش في Supabase ننفذ بالطريقة الأساسية فوراً عشان الشغل مايوقفش */
+      if (/42883|PGRST202|Could not find the function|courier_apply_delivery/i.test(errStr)) {
+        const ok = await _as(ids, status);
+        if (!ok) return false;
+        for (const t of need) {
+          if (pick) {
+            const saved = await putTrip(t, 'delivery', pick, day);
+            if (!saved) return false;
+          } else {
+            await sbClient.from('courier_trips').delete().eq('transaction_id', t).eq('kind', 'delivery').is('courier_confirmed_at', null);
+          }
+          syncDeliveredCourierInModal(t, pick);
+        }
+        return true;
+      }
+      if (miss(r.error)) sqlHint();
+      else showError('تعذّر حفظ التسليم ومشوار المندوب معًا؛ لم يتم اعتماد التغيير', r.error);
+      return false;
+    }
+    const updated = r.data && Array.isArray(r.data.updated_lines) ? r.data.updated_lines : [];
+    updated.forEach(row => {
+      const line = allRequestLines.find(x => String(x.id) === String(row.id));
+      if (line) Object.assign(line, row, { delivered_date: day });
+    });
+    txs.forEach(t => syncDeliveredCourierInModal(t, pick));
+    return updated.length === new Set(ids.map(String)).size;
   };
 
   /* ---------- 5) تاب المناديب + فلاتر متقدمة + كروت مناديب احترافية بالسهم ---------- */
@@ -304,10 +398,20 @@
   /* بناء قائمة مشاوير المندوب المفلترة حسب نوع المشوار والبحث */
   /* خدمة التوصيل باسمها الفعلي «رسوم توصيل» + نوعها حسب التكليف */
   function feeTypeLabel(svc) { return 'رسوم توصيل — ' + (/عودة|عوده|رجوع|ذهاب\s*[+&و]\s*ع/.test(String(svc || '')) ? 'ذهاب وعودة' : 'ذهاب فقط'); }
-  function buildCourierItems(courierName, trips, far, txMap) {
+  function isFeeLineConfirmed(l, feeConfirms) {
+    const fc = feeConfirms && feeConfirms.get(String(l.id));
+    if (!fc) return false;
+    const amount = Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0);
+    const lDay = String(l.received_at || '').slice(0, 10);
+    const fcDay = fc.trip_day ? String(fc.trip_day).slice(0, 10) : lDay;
+    return nn(fc.courier) === nn(l.executor) && fcDay === lDay && Number(fc.amount) === amount;
+  }
+
+  function buildCourierItems(courierName, trips, far, txMap, feeConfirms, closedItemKeys) {
     const includePickup = filterKind === 'all' || filterKind === 'pickup' || filterKind === 'both';
     const includeDelivery = filterKind === 'all' || filterKind === 'delivery' || filterKind === 'both';
     const includeFar = filterKind === 'all';
+    const closedSet = closedItemKeys || new Set();
 
     const myTrips = trips.filter(t => nn(t.courier) === nn(courierName) && Number(t.fee) > 0 && ((t.kind === 'pickup' && includePickup) || (t.kind === 'delivery' && includeDelivery)));
     const myFar = includeFar ? far.filter(l => nn(l.executor) === nn(courierName)) : [];
@@ -315,6 +419,7 @@
     let items = [
       ...myTrips.map(t => {
         const info = getTxInfo(t.transaction_id, txMap);
+        const isClosedItem = closedSet.has(t.kind + ':' + String(t.id));
         return {
           id: t.id,
           rawKind: t.kind,
@@ -328,13 +433,17 @@
           typeIcon: t.kind === 'pickup' ? 'fa-box-open' : 'fa-truck-fast',
           typeCls: t.kind === 'pickup' ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 border border-sky-200 dark:border-sky-800' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800',
           fee: Number(t.fee) || 0,
-          canDel: true
+          confirmed: !!t.courier_confirmed_at,
+          confirmedAt: t.courier_confirmed_at || null,
+          closedItem: isClosedItem,
+          canDel: !isClosedItem
         };
       }),
       ...myFar.map(l => {
         const info = getTxInfo(l.transaction_id, txMap);
+        const isClosedItem = closedSet.has('fee:' + String(l.id));
         return {
-          id: null,
+          id: l.id,
           rawKind: 'far',
           day: String(l.received_at || '').slice(0, 10),
           tx: l.transaction_id,
@@ -346,6 +455,9 @@
           typeIcon: 'fa-map-location-dot',
           typeCls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800',
           fee: Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0),
+          confirmed: isFeeLineConfirmed(l, feeConfirms),
+          confirmedAt: (feeConfirms && feeConfirms.get(String(l.id)) || {}).confirmed_at || null,
+          closedItem: isClosedItem,
           canDel: false
         };
       })
@@ -432,13 +544,16 @@
   }
 
   function renderSummaryKpis(filteredCourierData) {
-    let totTrips = 0, totPk = 0, totDl = 0, totFar = 0, totMoney = 0;
+    let totTrips = 0, totPk = 0, totDl = 0, totFar = 0, totMoney = 0, totClosedMoney = 0, totPending = 0, pendingCount = 0;
     filteredCourierData.forEach(d => {
       totTrips += d.items.length;
       totPk += d.pkCount;
       totDl += d.dlCount;
       totFar += d.farCount;
       totMoney += d.totalFee;
+      totClosedMoney += (d.closedFee || 0);
+      totPending += d.pendingFee;
+      pendingCount += d.pendingCount;
     });
     return '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3">' +
       '<div class="card p-4 flex items-center gap-3.5">' +
@@ -455,7 +570,9 @@
       '</div>' +
       '<div class="card p-4 flex items-center gap-3.5">' +
         '<div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 text-lg"><i class="fa-solid fa-sack-dollar"></i></div>' +
-        '<div><div class="text-[11px] text-slate-500">إجمالي المستحق للمناديب</div><div class="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">' + formatCurrency(totMoney) + '</div></div>' +
+        '<div><div class="text-[11px] text-slate-500">المستحق المؤكد (القابل للتقفيل)</div><div class="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">' + formatCurrency(totMoney) + '</div>' +
+        (totClosedMoney > 0 ? '<div class="mt-0.5 text-[10px] font-semibold text-teal-600">مُقفَّل سابقاً في الفترة: ' + formatCurrency(totClosedMoney) + '</div>' : '') +
+        (pendingCount ? '<div class="mt-0.5 text-[10px] font-semibold text-amber-600">معلق مستبعد: ' + pendingCount + ' · ' + formatCurrency(totPending) + '</div>' : '') + '</div>' +
       '</div>' +
     '</div>';
   }
@@ -476,6 +593,12 @@
           '<span class="inline-block rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:text-slate-200">' + eh(s) + '</span>'
         ).join(' ');
 
+        const confirmBadge = it.closedItem
+          ? '<span class="rounded-full px-2.5 py-1 text-[10px] font-bold bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300"><i class="fa-solid fa-lock ms-1"></i>مُقفَّل</span>'
+          : (it.confirmed
+              ? '<span class="rounded-full px-2 py-1 text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">مؤكد</span>'
+              : '<span class="rounded-full px-2 py-1 text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">بانتظار التأكيد</span>');
+
         return '<tr class="hover:bg-slate-50/90 dark:hover:bg-slate-800/50 align-middle">' +
           '<td class="px-3 py-3 text-slate-400 font-semibold text-center w-10">' + (idx + 1) + '</td>' +
           '<td class="px-3 py-3 whitespace-nowrap font-semibold text-slate-700 dark:text-slate-200">' + eh(formatDateOnly(it.day)) + '</td>' +
@@ -493,13 +616,15 @@
           '<td class="px-3 py-3 whitespace-nowrap">' +
             '<span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ' + it.typeCls + '"><i class="fa-solid ' + it.typeIcon + '"></i><span>' + eh(it.typeLabel) + '</span></span>' +
           '</td>' +
+          '<td class="px-3 py-3 whitespace-nowrap">' + confirmBadge + '</td>' +
           '<td class="px-3 py-3 font-bold text-ink dark:text-white whitespace-nowrap text-sm">' + formatCurrency(it.fee) + '</td>' +
           '<td class="px-3 py-3 text-center whitespace-nowrap">' +
-            (it.canDel && isMgr() && !r.closed ? '<button type="button" onclick="courierDelTrip(' + it.id + ')" class="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition" title="حذف المشوار"><i class="fa-solid fa-trash-can"></i></button>' : '') +
+            (it.canDel && isMgr() && !r.closed && !it.closedItem ? '<button type="button" onclick="courierDelTrip(' + it.id + ')" class="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition" title="حذف المشوار"><i class="fa-solid fa-trash-can"></i></button>' : '') +
           '</td>' +
         '</tr>';
-      }).join('') : '<tr><td colspan="8" class="p-8 text-center text-slate-400 text-xs">لا توجد مشاوير مسجلة لهذا المندوب تطابق الفلتر الحالي</td></tr>';
+      }).join('') : '<tr><td colspan="9" class="p-8 text-center text-slate-400 text-xs">لا توجد مشاوير مسجلة لهذا المندوب تطابق الفلتر الحالي</td></tr>';
 
+      const reopenTarget = r.closed || r.latestActiveClosing;
       return '<div class="card overflow-hidden border border-slate-200/90 dark:border-slate-800 transition-all shadow-xs hover:shadow-md">' +
         /* الهيدر الرئيسي لكارت المندوب */
         '<div class="p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-slate-900">' +
@@ -511,15 +636,19 @@
               '<div class="flex flex-wrap items-center gap-2">' +
                 '<h3 class="text-base sm:text-lg font-bold text-ink dark:text-white">' + eh(r.c) + '</h3>' +
                 (r.closed
-                  ? '<span class="rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 text-[11px] font-bold"><i class="fa-solid fa-check-double ms-1"></i>مُقفَّل</span>'
-                  : '<span class="rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 text-[11px] font-semibold">نشط</span>') +
+                  ? '<span class="rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 text-[11px] font-bold"><i class="fa-solid fa-check-double ms-1"></i>مُقفَّل بالكامل</span>'
+                  : (d.closedCount > 0
+                      ? '<span class="rounded-full bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 px-2.5 py-0.5 text-[11px] font-bold"><i class="fa-solid fa-lock ms-1"></i>تقفيل جزئي (' + d.closedCount + ')</span>'
+                      : '<span class="rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 text-[11px] font-semibold">نشط</span>')) +
               '</div>' +
               '<div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">' +
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 px-2.5 py-1 font-bold text-slate-700 dark:text-slate-200"><i class="fa-solid fa-list-ol text-slate-400"></i>الإجمالي: ' + allItems.length + ' مشوار</span>' +
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-sky-50 dark:bg-sky-950/60 px-2.5 py-1 font-bold text-sky-700 dark:text-sky-300"><i class="fa-solid fa-box-open"></i>استلام: ' + d.pkCount + '</span>' +
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 font-bold text-emerald-700 dark:text-emerald-300"><i class="fa-solid fa-truck-fast"></i>تسليم: ' + d.dlCount + '</span>' +
                 '<span class="inline-flex items-center gap-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 px-2.5 py-1 font-bold text-amber-700 dark:text-amber-300"><i class="fa-solid fa-motorcycle"></i>رسوم توصيل: ' + d.farCount + '</span>' +
-                '<span class="inline-flex items-center gap-1 rounded-lg bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 px-2.5 py-1 font-bold text-teal-800 dark:text-teal-200"><i class="fa-solid fa-coins"></i>المستحق: ' + formatCurrency(d.totalFee) + '</span>' +
+                '<span class="inline-flex items-center gap-1 rounded-lg bg-teal-50 dark:bg-teal-950/70 border border-teal-200 dark:border-teal-800 px-2.5 py-1 font-bold text-teal-800 dark:text-teal-200"><i class="fa-solid fa-coins"></i>مؤكد قابل للتقفيل: ' + formatCurrency(d.totalFee) + '</span>' +
+                (d.closedFee > 0 ? '<span class="inline-flex items-center gap-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 font-bold text-emerald-700 dark:text-emerald-300"><i class="fa-solid fa-lock"></i>مُقفَّل: ' + d.closedCount + ' · ' + formatCurrency(d.closedFee) + '</span>' : '') +
+                (d.pendingCount ? '<span class="inline-flex items-center gap-1 rounded-lg bg-amber-50 dark:bg-amber-950/60 px-2.5 py-1 font-bold text-amber-700 dark:text-amber-300">معلق: ' + d.pendingCount + ' · ' + formatCurrency(d.pendingFee) + '</span>' : '') +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -535,9 +664,12 @@
             '<button type="button" onclick="courierExportCsv(\'' + eh(r.c) + '\')" class="rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-300 px-3 py-2 text-xs font-bold flex items-center gap-1" title="تصدير Excel للمندوب">' +
               '<i class="fa-solid fa-file-excel"></i><span>Excel</span>' +
             '</button>' +
-            (isMgr() ? (r.closed
-              ? '<button type="button" onclick="courierReopen(' + r.closed.id + ')" class="rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 px-3 py-2 text-xs font-bold">فتح التقفيل</button>'
-              : '<button type="button" onclick="courierClose(\'' + eh(r.c) + '\')" class="rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-3 py-2 text-xs font-bold">تقفيل الحساب</button>'
+            (isMgr() ? (
+              (r.closed
+                ? '<button type="button" onclick="courierReopen(' + r.closed.id + ')" class="rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 px-3 py-2 text-xs font-bold">فتح التقفيل</button>'
+                : '<button type="button" onclick="courierClose(\'' + eh(r.c) + '\')" class="rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 px-3 py-2 text-xs font-bold">تقفيل الحساب</button>' +
+                  (reopenTarget ? '<button type="button" onclick="courierReopen(' + reopenTarget.id + ')" class="rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 px-3 py-2 text-xs font-bold" title="فتح آخر تقفيل جزئي في هذه الفترة">فتح آخر تقفيل</button>' : '')
+              )
             ) : '') +
             '<button type="button" onclick="courierToggleCard(\'' + eh(r.c) + '\')" class="rounded-xl bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/60 dark:hover:bg-brand-900/70 border border-brand-200 dark:border-brand-800 text-brand-700 dark:text-brand-300 px-3.5 py-2 text-xs font-bold flex items-center gap-2 transition">' +
               '<span data-cr-btn-lbl="' + eh(r.c) + '">' + (isOpen ? 'إخفاء الطلبات' : 'عرض الطلبات') + '</span>' +
@@ -558,6 +690,7 @@
                   '<th class="px-3 py-2.5">العميل والتليفون والعنوان</th>' +
                   '<th class="px-3 py-2.5">الخدمات</th>' +
                   '<th class="px-3 py-2.5">نوع المشوار</th>' +
+                  '<th class="px-3 py-2.5">حالة التأكيد</th>' +
                   '<th class="px-3 py-2.5">الأجر</th>' +
                   '<th class="px-3 py-2.5 text-center">إجراء</th>' +
                 '</tr>' +
@@ -580,18 +713,26 @@
     const activeRows = filterCourier === 'all' ? last.rows : last.rows.filter(r => r.c === filterCourier);
 
     const filteredCourierData = activeRows.map(r => {
-      const items = buildCourierItems(r.c, last.trips, last.far, last.txMap);
+      const items = buildCourierItems(r.c, last.trips, last.far, last.txMap, last.feeConfirms, last.closedItemKeys);
       const pkCount = items.filter(i => i.rawKind === 'pickup').length;
       const dlCount = items.filter(i => i.rawKind === 'delivery').length;
       const farCount = items.filter(i => i.rawKind === 'far').length;
-      const totalFee = items.reduce((s, i) => s + (Number(i.fee) || 0), 0);
+      const totalFee = items.filter(i => i.confirmed && !i.closedItem).reduce((s, i) => s + (Number(i.fee) || 0), 0);
+      const closedCount = items.filter(i => i.confirmed && i.closedItem).length;
+      const closedFee = items.filter(i => i.confirmed && i.closedItem).reduce((s, i) => s + (Number(i.fee) || 0), 0);
+      const pendingCount = items.filter(i => !i.confirmed).length;
+      const pendingFee = items.filter(i => !i.confirmed).reduce((s, i) => s + (Number(i.fee) || 0), 0);
       return {
         row: r,
         items: items,
         pkCount: pkCount,
         dlCount: dlCount,
         farCount: farCount,
-        totalFee: totalFee
+        totalFee: totalFee,
+        closedCount: closedCount,
+        closedFee: closedFee,
+        pendingCount: pendingCount,
+        pendingFee: pendingFee
       };
     });
 
@@ -600,11 +741,15 @@
     const activeElId = document.activeElement && document.activeElement.id;
     const selStart = activeElId === 'cr-f-q' ? document.activeElement.selectionStart : null;
 
+    const topBar = $('cp-couriers-top-bar');
+    const opsPanel = $('cop-manager-panel');
     let h = renderFilterControlPanel(allNames);
     h += renderSummaryKpis(filteredCourierData);
     h += renderCourierAccordionCards(filteredCourierData);
     h += manageCard();
     root.innerHTML = h;
+    if (topBar) root.insertBefore(topBar, root.firstChild);
+    if (opsPanel) root.appendChild(opsPanel);
 
     if (activeElId === 'cr-f-q' && $('cr-f-q')) {
       const inp = $('cr-f-q');
@@ -626,16 +771,21 @@
     const q = await Promise.all([
       sbClient.from('courier_trips').select('*').gte('trip_day', s).lte('trip_day', e).order('trip_day').limit(5000),
       sbClient.from('request_lines').select('id,transaction_id,client_name,phone,address,service,executor,qty,exec_unit_cost,exec_total,received_at').ilike('service', 'رسوم توصيل%').gte('received_at', (s + 'T00:00:00' > DATA_FROM_TS ? s + 'T00:00:00' : DATA_FROM_TS)).lt('received_at', e1 + 'T00:00:00').limit(5000),
-      sbClient.from('courier_closings').select('*').eq('period_start', s).eq('period_end', e)
+      sbClient.from('courier_closings').select('*').lte('period_start', e).gte('period_end', s),
+      sbClient.from('courier_fee_confirms').select('*'),
+      sbClient.from('courier_closing_items').select('closing_id,source_type,source_id,amount,released_at').is('released_at', null).then(r => r.error ? { data: [] } : r, () => ({ data: [] }))
     ]);
     if (my !== seq) return;
     const tr = q[0], fr = q[1], cl = q[2];
-    if (tr.error || cl.error) {
-      const er = tr.error || cl.error;
+    if (tr.error || fr.error || cl.error || q[3].error) {
+      const er = tr.error || fr.error || cl.error || q[3].error;
       root.innerHTML = renderFilterControlPanel(COURIERS) + '<div class="card p-6 text-center text-xs text-slate-500">' + (miss(er) ? 'لازم تشغّل ملف <b class="font-mono">phase11-couriers.sql</b> في Supabase الأول.' : 'تعذّر تحميل البيانات') + '</div>';
       return;
     }
-    const trips = tr.data || [], far = fr.data || [];
+    let trips = tr.data || [], far = fr.data || [];
+    const activeClosings = (cl.data || []).filter(x => !x.reopened_at);
+    const feeConfirms = new Map((q[3].data || []).map(x => [String(x.line_id), x]));
+    const closedItemKeys = new Set(((q[4] && q[4].data) || []).filter(x => !x.released_at).map(x => String(x.source_type) + ':' + String(x.source_id)));
 
     /* بناء خريطة أسماء العملاء لكل المعاملات الخاصة بالمناديب */
     const txMap = new Map();
@@ -660,10 +810,24 @@
       } catch (err) {}
     }
 
+    /* استبعاد المشاوير اليتيمة المرتبطة بمعاملات محذوفة من request_lines (التي كانت تظهر بدون اسم) */
+    trips = trips.filter(t => t && t.transaction_id && txMap.has(String(t.transaction_id)));
     const names = ALLC.filter(x => x.active || trips.some(t => nn(t.courier) === nn(x.name)) || far.some(l => nn(l.executor) === nn(x.name)) ).map(x => x.name);
     const rows = names.map(c => {
       const t = trips.filter(x => nn(x.courier) === nn(c)), fl = far.filter(l => nn(l.executor) === nn(c));
-      const fa = fl.reduce((a, l) => a + (Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0)), 0), ta = t.reduce((a, x) => a + Number(x.fee || 0), 0);
+      const confirmedTrips = t.filter(x => !!x.courier_confirmed_at), confirmedFees = fl.filter(l => isFeeLineConfirmed(l, feeConfirms));
+      const unclosedConfirmedTrips = confirmedTrips.filter(x => !closedItemKeys.has(x.kind + ':' + String(x.id)));
+      const unclosedConfirmedFees = confirmedFees.filter(l => !closedItemKeys.has('fee:' + String(l.id)));
+      const closedTrips = confirmedTrips.filter(x => closedItemKeys.has(x.kind + ':' + String(x.id)));
+      const closedFees = confirmedFees.filter(l => closedItemKeys.has('fee:' + String(l.id)));
+
+      const ta = t.reduce((a, x) => a + Number(x.fee || 0), 0), fa = fl.reduce((a, l) => a + (Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0)), 0);
+      const confirmedTa = unclosedConfirmedTrips.reduce((a, x) => a + Number(x.fee || 0), 0), confirmedFa = unclosedConfirmedFees.reduce((a, l) => a + (Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0)), 0);
+      const closedTa = closedTrips.reduce((a, x) => a + Number(x.fee || 0), 0), closedFa = closedFees.reduce((a, l) => a + (Number(l.exec_total) || (Number(l.qty) || 0) * (Number(l.exec_unit_cost) || 0)), 0);
+      const exactClosed = activeClosings.find(x => nn(x.courier) === nn(c) && x.period_start === s && x.period_end === e);
+      const latestActiveClosing = activeClosings
+        .filter(x => nn(x.courier) === nn(c))
+        .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0] || null;
       return {
         c: c,
         pk: t.filter(x => x.kind === 'pickup').length,
@@ -672,11 +836,20 @@
         fa: fa,
         ta: ta,
         tot: ta + fa,
-        closed: (cl.data || []).find(x => nn(x.courier) === nn(c))
+        confirmedPk: unclosedConfirmedTrips.filter(x => x.kind === 'pickup').length,
+        confirmedDl: unclosedConfirmedTrips.filter(x => x.kind === 'delivery').length,
+        confirmedFar: unclosedConfirmedFees.length,
+        confirmedTot: confirmedTa + confirmedFa,
+        closedCount: closedTrips.length + closedFees.length,
+        closedAmount: closedTa + closedFa,
+        pendingCount: (t.length + fl.length) - confirmedTrips.length - confirmedFees.length,
+        pendingAmount: (ta + fa) - (confirmedTa + confirmedFa + closedTa + closedFa),
+        closed: exactClosed || ((confirmedTrips.length + confirmedFees.length > 0) && (unclosedConfirmedTrips.length + unclosedConfirmedFees.length === 0) ? latestActiveClosing : null),
+        latestActiveClosing: latestActiveClosing
       };
     });
 
-    last = { s: s, e: e, rows: rows, trips: trips, far: far, txMap: txMap, filteredCourierData: [] };
+    last = { s: s, e: e, rows: rows, trips: trips, far: far, feeConfirms: feeConfirms, closedItemKeys: closedItemKeys, txMap: txMap, filteredCourierData: [] };
     paintFromLast();
   }
 
@@ -716,13 +889,15 @@
 
     const flatRows = [];
     const csvRows = [];
-    let totPk = 0, totDl = 0, totFar = 0, totMoney = 0;
+    let totPk = 0, totDl = 0, totFar = 0, totMoney = 0, totPending = 0, pendingCount = 0;
 
     targetData.forEach(d => {
       totPk += d.pkCount;
       totDl += d.dlCount;
       totFar += d.farCount;
       totMoney += d.totalFee;
+      totPending += d.pendingFee;
+      pendingCount += d.pendingCount;
       d.items.forEach(it => {
         flatRows.push([
           flatRows.length + 1,
@@ -732,6 +907,7 @@
           it.client + (it.phone ? ' (' + it.phone + ')' : ''),
           it.services || '—',
           it.typeLabel,
+          it.confirmed ? 'مؤكد' : 'بانتظار التأكيد',
           formatCurrency(it.fee)
         ]);
         csvRows.push([
@@ -743,6 +919,7 @@
           it.address || '',
           it.services || '',
           it.typeLabel,
+          it.confirmed ? 'مؤكد' : 'بانتظار التأكيد',
           it.fee
         ]);
       });
@@ -761,11 +938,12 @@
         ['إجمالي المشاوير', flatRows.length + ' مشوار'],
         ['استلام / تسليم', 'استلام: ' + totPk + ' | تسليم: ' + totDl],
         ['رسوم توصيل', totFar + ' مشوار'],
-        ['الإجمالي المستحق', formatCurrency(totMoney)]
+        ['المستحق المؤكد', formatCurrency(totMoney)],
+        ['معلق مستبعد من التقفيل', pendingCount + ' مشوار · ' + formatCurrency(totPending)]
       ],
-      headers: ['#', 'المندوب', 'التاريخ', 'رقم المعاملة', 'العميل والهاتف', 'الخدمة', 'نوع المشوار', 'الأجر'],
+      headers: ['#', 'المندوب', 'التاريخ', 'رقم المعاملة', 'العميل والهاتف', 'الخدمة', 'نوع المشوار', 'حالة التأكيد', 'الأجر'],
       rows: flatRows,
-      csvHeaders: ['المندوب', 'التاريخ', 'رقم المعاملة', 'اسم العميل', 'الهاتف', 'العنوان', 'الخدمات', 'نوع المشوار', 'الأجر'],
+      csvHeaders: ['المندوب', 'التاريخ', 'رقم المعاملة', 'اسم العميل', 'الهاتف', 'العنوان', 'الخدمات', 'نوع المشوار', 'حالة التأكيد', 'الأجر'],
       csvRows: csvRows,
       filename: (courierNameOpt ? 'شيت_المندوب_' + courierNameOpt.replace(/\s+/g, '_') : 'شيت_المناديب') + '_' + last.s + '_' + last.e
     };
@@ -836,14 +1014,19 @@
 
   window.courierClose = async function (c) {
     const x = last && last.rows.find(r => r.c === c); if (!x || !isMgr()) return;
-    if (!confirm('تقفيل ' + c + ' عن الفترة من ' + last.s + ' إلى ' + last.e + '؟\nالإجمالي: ' + formatCurrency(x.tot))) return;
-    const r = await sbClient.from('courier_closings').insert({ courier: c, period_type: filterPreset || 'custom', period_start: last.s, period_end: last.e, trips_count: x.pk + x.dl, trips_amount: x.ta, far_amount: x.fa, total: x.tot, closed_by: uname() });
-    if (r.error) return showError('تعذّر التقفيل', r.error); showToast('تم تقفيل ' + c); render();
+    if (x.confirmedTot <= 0) return showToast('لا توجد مشاوير مؤكدة غير مقفلة لهذا المندوب في الفترة المحددة', 'info');
+    const msg = 'تقفيل ' + c + ' عن الفترة من ' + last.s + ' إلى ' + last.e + '؟\n' +
+      'المستحق المؤكد القابل للتقفيل الآن: ' + formatCurrency(x.confirmedTot) +
+      (x.closedCount ? '\nمُقفَّل سابقاً داخل الفترة: ' + x.closedCount + ' مشوار (' + formatCurrency(x.closedAmount) + ')' : '') +
+      '\nالمشاوير المعلقة المستبعدة: ' + x.pendingCount + ' (' + formatCurrency(x.pendingAmount) + ')';
+    if (!confirm(msg)) return;
+    const r = await sbClient.rpc('courier_close_account', { p_courier: c, p_period_type: filterPreset || 'custom', p_period_start: last.s, p_period_end: last.e });
+    if (r.error) return showError('تعذّر التقفيل', r.error); showToast('تم تقفيل ' + c + ' على المشاوير المؤكدة غير المقفلة فقط'); render();
   };
 
   window.courierReopen = async function (id) {
     if (!isMgr() || !confirm('فتح التقفيل؟')) return;
-    const r = await sbClient.from('courier_closings').delete().eq('id', id); if (r.error) return showError('تعذّر فتح التقفيل', r.error); render();
+    const r = await sbClient.rpc('courier_reopen_account', { p_closing_id: id }); if (r.error) return showError('تعذّر فتح التقفيل', r.error); showToast('تم فتح التقفيل مع الاحتفاظ بسجل التسوية'); render();
   };
 
   window.courierDelTrip = async function (id) {
