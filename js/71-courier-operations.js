@@ -8,13 +8,39 @@
   const labels = {new:'جديد',collecting:'جاري الاستلام',collected:'تم الاستلام',on_the_way:'في الطريق',delivered:'تم التسليم'};
   const typeLabels = {pickup:'استلام',delivery:'تسليم',fee:'رسوم توصيل'};
   const issueLabels = {customer_unavailable:'العميل غير متاح',wrong_address:'عنوان خطأ',incorrect_fee:'رسوم غير صحيحة',pickup_problem:'مشكلة في الاستلام',other:'مشكلة أخرى'};
-  const state = {items:[],issues:[],ledger:[],closings:[],notifications:[],staffUsers:[],ledgerFrom:'',ledgerTo:'',tab:'route',busy:false,managerBusy:false,managerLoadedAt:0,managerHtml:'',resolvingIssueId:null};
+  const MIN_REFRESH_MS = 60000; /* حد أدنى 60 ثانية بين أي تحديثين تلقائيين لمنع أي حمل على قاعدة البيانات */
+  const MGR_EMAILS = ['mahmoud.aboshama@tasahel.com.eg', 'mahmoud.aboshama.contact@gmail.com'];
+  const state = {
+    items:[],issues:[],ledger:[],closings:[],notifications:[],staffUsers:[],
+    ledgerFrom:'',ledgerTo:'',tab:'route',busy:false,
+    managerBusy:false,managerLoadedAt:0,managerHtml:'',managerFailed:false,
+    radarBusy:false,radarLoadedAt:0,radarFailed:false,radarTimer:0,
+    resolvingIssueId:null,pingTo:0
+  };
+  let panelBox = null, radarBox = null, contentBox = null;
+  let couriersObs = null, observedRoot = null, isMounting = false;
+
   const statusOptions = Object.keys(labels).map(k=>'<option value="'+k+'">'+labels[k]+'</option>').join('');
   function rpc(name,args) { return sbClient.rpc(name,args || {}); }
   function toast(s,bad) { if (typeof showToast==='function') showToast(s,bad?'error':'success'); else alert(s); }
-  function isManager() { return window.__role === 'manager'; }
-  function isStaff() { return isManager() || window.__role === 'staff'; }
+  function getCurUser() { return (typeof currentUser !== 'undefined' && currentUser) ? currentUser : window.currentUser; }
+  function isManager() {
+    if (window.__role === 'manager') return true;
+    const u = getCurUser();
+    const em = String((u && u.email) || '').toLowerCase().trim();
+    return MGR_EMAILS.includes(em);
+  }
+  function isStaff() {
+    if (isManager() || window.__role === 'staff') return true;
+    if (window.__role === 'partner' || window.__role === 'courier') return false;
+    if (document.body && (document.body.classList.contains('is-partner-mode') || document.body.classList.contains('is-courier-mode'))) return false;
+    return !!getCurUser();
+  }
   function isCourier() { return window.__role === 'courier'; }
+  function isCouriersTabVisible() {
+    const root = $('tab-couriers');
+    return !!(root && !root.classList.contains('hidden'));
+  }
 
   function shell() {
     if (typeof window.__ensureCourierPortalCss === 'function') window.__ensureCourierPortalCss();
@@ -101,13 +127,14 @@
     const c=$('cop-content'); if(!c)return; tabButtons(); c.innerHTML='<div class="cp-empty">جاري تحميل البيانات…</div>';
     try {
       if(state.tab==='route'){await loadRoute();c.innerHTML=routeView();}
-      else if(state.tab==='issues'){await loadIssues();if(isStaff()){const u=await rpc('courier_ops_staff_users');if(u.error)throw u.error;state.staffUsers=Array.isArray(u.data)?u.data:[];}c.innerHTML=issuesView();}
+      else if(state.tab==='issues'){await loadIssues();if(isStaff()){const u=await rpc('courier_ops_staff_users');if(u.error)throw u.error;state.staffUsers=Array.isArray(u.data)?rData(u):[];}c.innerHTML=issuesView();}
       else if(state.tab==='notifications'){await loadNotifications();c.innerHTML=notificationsView();}
       else if(isCourier()){await loadLedger();c.innerHTML=ledgerView();}
       else {state.tab='route';await loadRoute();c.innerHTML=routeView();}
     } catch(e) { c.innerHTML='<div class="cp-empty">تعذر تحميل البيانات. تأكد من تشغيل sql/courier-operations.sql بعد ملفات بوابة المندوب والتقفيل.</div>'; }
     tabButtons();
   }
+  function rData(u){ return Array.isArray(u && u.data) ? u.data : []; }
   function reportForm(id) {
     const c=$('cop-content'); if(!c)return;
     c.innerHTML='<h3>إبلاغ عن مشكلة في المشوار</h3><form id="cop-report-form" data-id="'+id+'" class="cp-card"><label>نوع المشكلة<select name="type" class="cp-field"><option value="customer_unavailable">العميل غير متاح</option><option value="wrong_address">عنوان خطأ</option><option value="incorrect_fee">رسوم غير صحيحة</option><option value="pickup_problem">مشكلة في الاستلام</option><option value="other">أخرى</option></select></label><label style="display:block;margin-top:10px">التفاصيل<textarea name="details" class="cp-field" required minlength="3" maxlength="1000"></textarea></label><div class="cp-btns"><button class="cp-btn cp-go">إرسال البلاغ</button><button type="button" class="cp-btn" data-cop="tab" data-tab="route">رجوع</button></div></form>';
@@ -204,22 +231,96 @@
     const f=e.target,r=await rpc('courier_ops_report',{p_trip_id:Number(f.dataset.id),p_issue_type:f.elements.type.value,p_details:f.elements.details.value.trim()});
     if(r.error)return toast(r.error.message,true);toast('تم إرسال البلاغ للإدارة');state.tab='issues';return render();
   }
-  function injectManagerPanel() {
-    if(!isStaff())return;const root=$('tab-couriers');if(!root||root.classList.contains('hidden'))return;
-    if($('cop-manager-panel'))return;
-    const box=document.createElement('section');box.id='cop-manager-panel';box.className='card p-4 space-y-3';
-    box.innerHTML='<div class="flex items-center justify-between gap-2"><b>متابعة تشغيل المناديب والبلاغات</b><div class="flex gap-2"><button type="button" class="rounded-lg bg-slate-600 text-white px-3 py-2 text-xs font-bold" id="cop-manager-notifications">الإشعارات</button><button type="button" class="rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold" id="cop-manager-refresh">تحديث</button></div></div><div id="cop-manager-content" class="text-xs text-slate-500">'+(state.managerHtml||'جاري تحميل البلاغات والتقفيلات…')+'</div>';
-    const rd=document.createElement('div');rd.id='cop-radar';box.prepend(rd);
-    root.insertBefore(box, root.firstChild); /* الرادار في أول التبويب مش في آخره */
-    startRadar(rd);
-    $('cop-manager-refresh').onclick=()=>loadManagerPanel(true);
-    $('cop-manager-notifications').onclick=async()=>{shell();state.tab='notifications';await render();};
-    if(!state.managerLoadedAt || (Date.now()-state.managerLoadedAt > 60000)) loadManagerPanel(false);
+
+  /* ---------- إنشاء عنصر اللوحة والرادار مرة واحدة في الذاكرة ---------- */
+  function ensurePanelDom() {
+    if (panelBox && radarBox && contentBox) return;
+    if (typeof window.__ensureCourierPortalCss === 'function') window.__ensureCourierPortalCss();
+    panelBox = document.createElement('section');
+    panelBox.id = 'cop-manager-panel';
+    panelBox.className = 'card p-4 space-y-3';
+    panelBox.innerHTML =
+      '<div id="cop-radar"></div>' +
+      '<div class="flex items-center justify-between gap-2">' +
+        '<b>متابعة تشغيل المناديب والبلاغات</b>' +
+        '<div class="flex gap-2">' +
+          '<button type="button" class="rounded-lg bg-slate-600 text-white px-3 py-2 text-xs font-bold" id="cop-manager-notifications">الإشعارات</button>' +
+          '<button type="button" class="rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold" id="cop-manager-refresh">تحديث</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="cop-manager-content" class="text-xs text-slate-500">' + (state.managerHtml || 'جاري تحميل البلاغات والتقفيلات…') + '</div>';
+    radarBox = panelBox.querySelector('#cop-radar');
+    contentBox = panelBox.querySelector('#cop-manager-content');
+    const refreshBtn = panelBox.querySelector('#cop-manager-refresh');
+    const notifBtn = panelBox.querySelector('#cop-manager-notifications');
+    if (refreshBtn) refreshBtn.onclick = () => { loadV12OfficeRadar(radarBox, true); loadManagerPanel(true); };
+    if (notifBtn) notifBtn.onclick = async () => { shell(); state.tab = 'notifications'; await render(); };
+    if (radarBox) radarBox.onclick = radarClick;
   }
+
+  /* تثبيت اللوحة في أول تاب المناديب بدون أي استدعاء لقاعدة البيانات وبدون حلقة مفرغة */
+  function syncPanelPosition() {
+    if (isMounting || !isStaff()) return false;
+    const root = $('tab-couriers');
+    if (!root || root.classList.contains('hidden')) return false;
+    ensurePanelDom();
+    const topBar = $('cp-couriers-top-bar');
+    const desiredNext = (topBar && topBar.parentNode === root) ? topBar.nextSibling : root.firstChild;
+    if (panelBox.parentNode === root && panelBox === desiredNext) return true;
+    isMounting = true;
+    try {
+      root.insertBefore(panelBox, desiredNext);
+    } finally {
+      isMounting = false;
+    }
+    return true;
+  }
+
+  function bindCouriersObserver(root) {
+    if (!root || !window.MutationObserver || observedRoot === root) return;
+    if (couriersObs) { try { couriersObs.disconnect(); } catch (e) {} }
+    observedRoot = root;
+    try {
+      couriersObs = new MutationObserver(() => {
+        if (isMounting) return;
+        syncPanelPosition();
+      });
+      couriersObs.observe(root, { childList: true });
+    } catch (e) {}
+  }
+
+  function injectManagerPanel(forceLoad) {
+    if (!isStaff()) return;
+    const root = $('tab-couriers');
+    if (!root) return;
+    bindCouriersObserver(root);
+    if (root.classList.contains('hidden')) {
+      stopRadarTimer();
+      return;
+    }
+    syncPanelPosition();
+    startRadarTimer();
+    const now = Date.now();
+    if (forceLoad || !state.radarLoadedAt || (!state.radarFailed && (now - state.radarLoadedAt >= MIN_REFRESH_MS))) {
+      loadV12OfficeRadar(radarBox, !!forceLoad);
+    }
+    if (forceLoad || !state.managerLoadedAt || (!state.managerFailed && (now - state.managerLoadedAt >= MIN_REFRESH_MS))) {
+      loadManagerPanel(!!forceLoad);
+    }
+  }
+
   async function loadManagerPanel(force) {
-    const c=$('cop-manager-content');if(!c||state.managerBusy)return;
-    if(!force && state.managerHtml && (Date.now()-state.managerLoadedAt < 60000)){c.innerHTML=state.managerHtml;return;}
-    state.managerBusy=true;c.textContent='جاري التحميل…';
+    ensurePanelDom();
+    const c = contentBox || $('cop-manager-content');
+    if (!c || state.managerBusy) return;
+    const now = Date.now();
+    if (!force && state.managerLoadedAt && (now - state.managerLoadedAt < MIN_REFRESH_MS)) {
+      if (state.managerHtml) c.innerHTML = state.managerHtml;
+      return;
+    }
+    state.managerBusy = true;
+    state.managerLoadedAt = now;
+    if (!state.managerHtml) c.textContent = 'جاري التحميل…';
     try{
       const [ir,cr,tr]=await Promise.all([rpc('courier_ops_issues',{p_status:null}),rpc('courier_ops_closings',{p_from:null,p_to:null}),rpc('courier_ops_items',{p_from:null,p_to:null})]);
       if(ir.error)throw ir.error;if(cr.error)throw cr.error;if(tr.error)throw tr.error;
@@ -227,19 +328,27 @@
       state.items=(tr.data||[]).filter(x=>x&&x.client_name&&String(x.client_name).trim()&&String(x.client_name).trim()!=='بدون اسم');
       const html='<b>حالات المشاوير التشغيلية</b>'+state.items.slice(0,12).map(x=>'<div class="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.transaction_id)+' · '+esc(x.client_name||'بدون اسم')+'</span><div class="flex items-center gap-2"><button type="button" class="text-emerald-600 font-bold" data-cop="history" data-id="'+x.id+'">السجل</button><select class="field !w-auto !py-1 text-xs" data-cop-status="'+x.id+'">'+Object.keys(labels).map(k=>'<option value="'+k+'" '+(x.operational_status===k?'selected':'')+'>'+labels[k]+'</option>').join('')+'</select></div></div>').join('')+'<hr><b>البلاغات المفتوحة: '+state.issues.filter(x=>x.status!=='resolved').length+'</b>'+state.issues.slice(0,8).map(x=>'<div class="border-b border-slate-200 dark:border-slate-700 py-2"><b>'+esc(issueLabels[x.issue_type]||x.issue_type)+'</b> · '+esc(x.courier)+' · '+esc(x.transaction_id)+'<div>'+esc(x.details)+'</div><span>'+({open:'مفتوح',in_progress:'جاري الحل',resolved:'تم الحل'}[x.status])+'</span><button type="button" class="text-emerald-600 font-bold mr-2" data-cop="ask-resolve" data-id="'+x.id+'">حل البلاغ</button></div>').join('')+'<hr><b>التقفيلات الأخيرة</b>'+state.closings.slice(0,8).map(x=>'<div class="flex justify-between gap-2 py-2 border-b border-slate-200 dark:border-slate-700"><span>'+esc(x.courier)+' · '+esc(x.period_start)+' → '+esc(x.period_end)+' · '+money(x.total)+' · '+(x.paid_at?'تم الصرف':'لم يُسجل الصرف')+'</span>'+(x.paid_method?'<small> · '+esc(({cash:'نقدي',bank_transfer:'تحويل بنكي',wallet:'محفظة إلكترونية',other:'أخرى'}[x.paid_method]||x.paid_method))+'</small>':'')+(x.paid_reference?'<small> · مرجع: '+esc(x.paid_reference)+'</small>':'')+(x.paid_note?'<small> · '+esc(x.paid_note)+'</small>':'')+(isManager()?'<button type="button" class="text-emerald-600 font-bold" data-cop="paid" data-id="'+x.id+'" '+(x.paid_at?'disabled':'')+'>تسجيل الصرف</button>':'')+'</div>').join('');
       state.managerHtml=html;
+      state.managerFailed=false;
       state.managerLoadedAt=Date.now();
-      const target=$('cop-manager-content');
-      if(target)target.innerHTML=html;
-    }catch(e){c.textContent='تعذر تحميل متابعة التشغيل. '+(e.message||'');}
+      c.innerHTML=html;
+    }catch(e){
+      state.managerFailed=true;
+      state.managerLoadedAt=Date.now();
+      c.textContent='تعذر تحميل متابعة التشغيل. '+(e.message||'');
+    }
     finally{state.managerBusy=false;}
   }
 
   /* ---------- رادار المكتب الحي والموافقات الفورية (v12) ---------- */
-  async function loadV12OfficeRadar(container) {
-    if (!container || state.radarBusy) return;
+  async function loadV12OfficeRadar(container, force) {
+    const target = container || radarBox || $('cop-radar');
+    if (!target || state.radarBusy) return;
+    const now = Date.now();
+    if (!force && state.radarLoadedAt && (now - state.radarLoadedAt < MIN_REFRESH_MS)) return;
     const act = document.activeElement;
-    if (act && container.contains(act) && act.tagName === 'INPUT') return; /* المدير بيكتب — ما نقطعوش */
+    if (!force && act && target.contains(act) && act.tagName === 'INPUT') return; /* المدير بيكتب — ما نقطعوش */
     state.radarBusy = true;
+    state.radarLoadedAt = now;
     try {
       if (typeof window.__ensureCourierPortalCss === 'function') window.__ensureCourierPortalCss();
       const r = await sbClient.rpc('courier_v12_office_radar');
@@ -264,7 +373,7 @@
       const onWay = couriers.filter(c => c.last_event && c.last_event.type === 'on_the_way');
       const stTag = t => t === 'on_the_way' ? ['ac', 'في الطريق'] : t === 'waiting' ? ['wn', 'وصل عند العميل'] : t === 'break' ? ['mu', 'في استراحة'] : ['ok', 'متاح'];
       const head = '<div class="cpo-row" style="gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><div style="font-size:26px;font-weight:700">رادار المكتب</div>' +
-        '<div class="cpo-row" style="gap:7px;font-size:13px;color:var(--mu)"><span style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></span>مباشر · بيتحدّث كل 20 ثانية · آخر تحديث <span class="cpo-num">' + new Date().toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit', second: '2-digit' }) + '</span></div></div>' +
+        '<div class="cpo-row" style="gap:7px;font-size:13px;color:var(--mu)"><span style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></span>مباشر · بيتحدّث كل دقيقة عند فتح التاب · آخر تحديث <span class="cpo-num">' + new Date().toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit', second: '2-digit' }) + '</span></div></div>' +
         '<button type="button" class="cpo-btn g" data-radar-retry="1" style="min-height:44px">' + svg('refresh', 18) + 'تحديث</button>' +
         '<button type="button" class="cpo-btn g" data-radar-notif="1" style="min-height:44px">' + svg('bell', 18) + 'إشعارات</button></div>';
       const pulse = '<div class="cpo-pulse">' +
@@ -305,27 +414,31 @@
           '<div class="cpo-row" style="gap:6px"><div style="flex:1;height:6px;border-radius:6px;background:var(--ac)"></div><div style="flex:1;height:6px;border-radius:6px;background:var(--ac)"></div><div style="flex:1;height:6px;border-radius:6px;background:var(--bg)"></div></div>'
           : '<div class="cpo-lbl">مفيش مندوب في الطريق دلوقتي — لما يضغط «في طريقي» هتشوف هنا اللي العميل هيشوفه.</div>') + '</div>' +
         '<div class="cpo-lbl" style="margin-top:10px;line-height:1.5">الاسم الأول بس، من غير رقم أو مكان.</div></div>';
-      container.innerHTML = '<div class="cpo-wrap">' + head + pulse + '<div class="cpo-cols"><div class="cpo-main">' + couriersCard + apCard + '</div><div class="cpo-side">' + feed + ready + cust + '</div></div></div>';
-      container.onclick = radarClick;
+      state.radarFailed = false;
+      state.radarLoadedAt = Date.now();
+      target.innerHTML = '<div class="cpo-wrap">' + head + pulse + '<div class="cpo-cols"><div class="cpo-main">' + couriersCard + apCard + '</div><div class="cpo-side">' + feed + ready + cust + '</div></div></div>';
+      target.onclick = radarClick;
     } catch (e) {
-      container.innerHTML = '<div role="alert" style="padding:12px;border-radius:14px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08);font-size:12.5px;line-height:1.6">' +
+      state.radarFailed = true;
+      state.radarLoadedAt = Date.now();
+      target.innerHTML = '<div role="alert" style="padding:12px;border-radius:14px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08);font-size:12.5px;line-height:1.6">' +
         '<b>الرادار مش قادر يحمّل.</b><br>' + esc((e && e.message) || '') +
         '<br><span style="color:var(--mu)">لو الرسالة فيها "function" أو "does not exist" شغّل ملفي SQL: courier-v12-modern.sql ثم courier-link-v13.sql.</span><br>' +
         '<button type="button" class="cp-btn cp-sm" data-radar-retry="1" style="margin-top:8px">إعادة المحاولة</button></div>';
-      container.onclick = radarClick;
+      target.onclick = radarClick;
     } finally { state.radarBusy = false; }
   }
   async function radarClick(ev) {
     const t = ev.target.closest && ev.target.closest('button'); if (!t) return;
-    const el = $('cop-radar');
-    if (t.dataset.radarRetry) return loadV12OfficeRadar(el);
+    const el = radarBox || $('cop-radar');
+    if (t.dataset.radarRetry) return loadV12OfficeRadar(el, true);
     if (t.dataset.radarNotif) { shell(); state.tab = 'notifications'; return render(); }
     if (t.dataset.v12res) {
       t.disabled = true;
       const r = await rpc('courier_v12_resolve_event', { p_event_id: Number(t.dataset.v12res), p_decision: t.dataset.dec });
       if (r.error) { t.disabled = false; return toast(r.error.message, true); }
       toast(t.dataset.dec === 'approved' ? 'تمت الموافقة' : 'تم الرفض');
-      return loadV12OfficeRadar(el);
+      return loadV12OfficeRadar(el, true);
     }
     if (t.dataset.v12ping) {
       state.pingTo = Number(t.dataset.v12ping);
@@ -354,14 +467,23 @@
       return toast('اتسجلت الجاهزية للمندوب');
     }
   }
-  function radarTick() {
-    const el = $('cop-radar');
-    if (!el || !document.body.contains(el)) { clearInterval(state.radarTimer); state.radarTimer = 0; return; }
-    if (!document.hidden) loadV12OfficeRadar(el);
+  function stopRadarTimer() {
+    if (state.radarTimer) {
+      clearInterval(state.radarTimer);
+      state.radarTimer = 0;
+    }
   }
-  function startRadar(el) {
-    loadV12OfficeRadar(el);
-    if (!state.radarTimer) state.radarTimer = setInterval(radarTick, 20000);
+  function radarTick() {
+    if (document.hidden || !isCouriersTabVisible() || state.radarFailed) {
+      if (!isCouriersTabVisible()) stopRadarTimer();
+      return;
+    }
+    const el = radarBox || $('cop-radar');
+    if (!el || !document.body.contains(el)) return;
+    loadV12OfficeRadar(el, false);
+  }
+  function startRadarTimer() {
+    if (!state.radarTimer) state.radarTimer = setInterval(radarTick, MIN_REFRESH_MS);
   }
 
   function paymentForm(id) {
@@ -373,12 +495,17 @@
   document.addEventListener('change',onChange);
   document.addEventListener('submit',onSubmit);
 
-  /* ربط نظيف بتبديل التبويبات وتحميل البيانات بدون MutationObserver على document.body */
+  /* ربط نظيف بتبديل التبويبات وتحميل البيانات */
   const _st = window.switchTab;
   if (typeof _st === 'function' && !_st.__copWrapped) {
     const wrappedSwitch = function (id) {
       const r = _st.apply(this, arguments);
-      if (id === 'couriers') setTimeout(injectManagerPanel, 60);
+      if (id === 'couriers') {
+        injectManagerPanel(false);
+        setTimeout(() => injectManagerPanel(false), 80);
+      } else {
+        stopRadarTimer();
+      }
       return r;
     };
     wrappedSwitch.__copWrapped = true;
@@ -388,11 +515,11 @@
   if (typeof _li === 'function' && !_li.__copWrapped) {
     const wrappedLoad = async function () {
       const r = await _li.apply(this, arguments);
-      setTimeout(injectManagerPanel, 120);
+      setTimeout(() => injectManagerPanel(false), 120);
       return r;
     };
     wrappedLoad.__copWrapped = true;
     window.loadInitialData = wrappedLoad;
   }
-  injectManagerPanel();
+  injectManagerPanel(false);
 })();
