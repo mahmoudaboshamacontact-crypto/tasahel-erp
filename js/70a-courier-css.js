@@ -241,6 +241,15 @@
   '#courier-app .cpn-lb .a{width:40px;height:40px;margin:0 auto 4px;border-radius:50%;background:var(--fld);display:flex;align-items:center;justify-content:center;font-weight:700}',
   '#courier-app .cpn-lb .me .a{width:48px;height:48px;background:var(--acsoft);border:2px solid var(--ac);color:var(--ac)}',
   '#courier-app .cpn-qr{display:flex;gap:8px;overflow-x:auto;padding:8px 0 0;scrollbar-width:none}',
+  '#courier-app .cpn-sheet{padding:0;align-items:stretch;justify-content:stretch;background:var(--bg)}',
+  '#courier-app .cpn-sheetbox{width:100%;max-width:560px;margin:0 auto;height:100%;overflow-y:auto;padding-bottom:110px;background:var(--bg);color:var(--tx)}',
+  '#courier-app .cpn-slidebar{position:fixed;inset-inline:16px;bottom:16px;max-width:528px;margin:0 auto;z-index:3}',
+  '#courier-app .cpn-slidebar{padding-top:10px;background:linear-gradient(transparent,var(--bg) 14px)}#courier-app .cpn-slidebar .cpn-slide{background:color-mix(in srgb,var(--ac) 16%,var(--bg));margin-top:0}',
+  '#courier-app .cpn-slide span{flex:1}#courier-app .cpn-slide .kn{flex:none}',
+  '#courier-app .cp-v12-card{background:var(--card);border:1px solid var(--bd);border-radius:24px;padding:14px;margin:0}',
+  '#courier-app .cp-v12-ibtn{width:42px;height:42px;border-radius:14px;background:var(--fld);border:1px solid var(--bd);color:var(--ac)}',
+  '#courier-app .cp-v12-ibtn.wa,#courier-app .cp-v12-ibtn.tel{background:var(--oksoft);color:var(--ok);border-color:transparent}',
+  '#courier-app .cp-v12-card .cp-tag{border-radius:999px;height:22px;display:inline-flex;align-items:center;font-size:11px;font-weight:700}',
   '#courier-app .cp-comp .cp-btn.cp-go{width:48px;height:48px;border-radius:16px;padding:0;display:flex;align-items:center;justify-content:center}'
   ];
   window.__CP_CSS = BASE.concat(SKIN, SCR);

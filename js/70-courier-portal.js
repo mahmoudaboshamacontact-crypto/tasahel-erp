@@ -114,8 +114,29 @@
     send: '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>',
     trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/>',
     cloud: '<path d="M6.5 19a4.5 4.5 0 0 1-.4-9A6 6 0 0 1 17.7 8 4.5 4.5 0 0 1 17.5 19z"/>',
-    warn: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>'
+    warn: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',
+    flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
+    id: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h3M6 16c.5-1.5 1.5-2 3-2s2.5.5 3 2"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/>',
+    swap: '<path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
+    pen: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'
   };
+  const FA2IC = { 'phone': 'phone', 'whatsapp': 'chat', 'location-arrow': 'nav', 'location-dot': 'pin', 'trophy': 'trophy', 'id-card': 'id', 'comment': 'chat', 'comments': 'chat', 'power-off': 'power', 'motorcycle': 'route', 'route': 'route', 'magnifying-glass': 'search', 'link': 'link', 'flag': 'flag', 'circle-info': 'info', 'box-archive': 'box', 'truck-fast': 'truck', 'circle-check': 'check', 'clipboard-check': 'check', 'check': 'check', 'house': 'ring', 'sun': 'sun', 'moon': 'moon', 'rotate': 'refresh', 'map': 'nav', 'wallet': 'wallet', 'plus': 'plus', 'xmark': 'x', 'microphone': 'mic', 'qrcode': 'qr', 'pause': 'pause', 'pen': 'pen', 'clock': 'clock', 'calendar': 'cal', 'right-left': 'swap' };
+  /* يحوّل أي أيقونة FontAwesome متبقية لأيقونة SVG من نفس طقم التصميم */
+  function swapFa(root) {
+    if (!root) return;
+    root.querySelectorAll('i[class*="fa-"]').forEach(el => {
+      const m = (el.className.match(/fa-([a-z0-9-]+)/g) || []).map(x => x.slice(3)).filter(x => x !== 'solid' && x !== 'brands' && x !== 'regular');
+      const key = m.map(x => FA2IC[x]).find(Boolean); if (!key) return;
+      const w = document.createElement('span'); w.innerHTML = ic(key, 18);
+      const svg = w.firstChild; if (el.getAttribute('style')) svg.setAttribute('style', (svg.getAttribute('style') || '') + ';' + el.getAttribute('style'));
+      el.replaceWith(svg);
+    });
+  }
   const ic = (n, sz) => '<svg class="cpn-i" viewBox="0 0 24 24" aria-hidden="true"' + (sz ? ' style="width:' + sz + 'px;height:' + sz + 'px"' : '') + '>' + (IC[n] || '') + '</svg>';
 
   /* ---------- حفظ واسترجاع حالة بطاقات التعريف ---------- */
@@ -467,7 +488,7 @@
           (it.address ? '<div style="font-size:11px;color:var(--mu);margin-top:2px">' + eh(it.address) + '</div>' : '') +
         '</div>' +
         '<div style="display:flex;gap:4px;shrink:0">' +
-          '<button type="button" class="cp-a cp-sm" data-act="on-my-way" data-tx="' + eh(it.transaction_id) + '">🛵 في طريقي</button>' +
+          '<button type="button" class="cp-a cp-sm" data-act="on-my-way" data-tx="' + eh(it.transaction_id) + '">في طريقي</button>' +
           '<button type="button" class="cp-a cp-sm" data-act="route-toggle" data-tx="' + eh(it.transaction_id) + '" title="إزالة">✕</button>' +
         '</div>' +
       '</div>';
@@ -1015,6 +1036,7 @@
     else if (st.tab === 'review') b.innerHTML = viewReview();
     else viewChat();
 
+    swapFa(b); swapFa($('cp-v12-top-banners'));
     b.scrollTop = top ? 0 : y;
     if (activeId === 'cp-trip-q' && $('cp-trip-q')) {
       const inp = $('cp-trip-q'); inp.focus();
@@ -1250,7 +1272,7 @@
     if (g.address || st.pins[firstTx]) links.push('<a class="cp-a" target="_blank" rel="noopener" href="' + eh(smartMapsUrl(g.items[0])) + '"><i class="fa-solid fa-location-dot"></i><span>' + eh(g.address || 'فتح اللوكيشن المثبت') + '</span></a>');
     const inRouteIdx = routeIndexOf(firstTx);
     links.push('<button type="button" class="cp-a' + (inRouteIdx !== -1 ? ' pri' : '') + '" data-act="route-toggle" data-tx="' + eh(firstTx) + '"><i class="fa-solid ' + (inRouteIdx !== -1 ? 'fa-check' : 'fa-plus') + '"></i><span>' + (inRouteIdx !== -1 ? 'في خط السير (محطة ' + num(inRouteIdx + 1) + ')' : 'ضيف لخط السير') + '</span></button>');
-    if (!allConfirmed) links.push('<button type="button" class="cp-a" data-act="on-my-way" data-tx="' + eh(firstTx) + '">🛵 في طريقي</button>');
+    if (!allConfirmed) links.push('<button type="button" class="cp-a" data-act="on-my-way" data-tx="' + eh(firstTx) + '">في طريقي</button>');
     links.push('<button type="button" class="cp-a" data-act="save-pin" data-tx="' + eh(firstTx) + '">' + (st.pins[firstTx] ? '📍 لوكيشن مثبت ✓' : '📍 حفظ اللوكيشن') + '</button>');
 
     const emp = g.employee ? '<div class="cp-emp"><span>الموظف المسؤول: <b>' + eh(g.employee) + '</b></span>' +
@@ -1314,18 +1336,18 @@
     }
     const codAmt = Number(it.cod_remaining || 0);
     const codBadge = codAmt > 0
-      ? '<span class="cp-tag wt">💵 تحصيل: ' + money(codAmt) + '</span>'
-      : '<span class="cp-tag ok">✅ خالص الدفع</span>';
+      ? '<span class="cp-tag wt">تحصيل ' + money(codAmt) + '</span>'
+      : '<span class="cp-tag ok">خالص الدفع</span>';
 
     return '<div class="cp-v12-card ' + eh(it.type) + (isHero && !it.confirmed ? ' hero' : '') + '">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
         '<div style="min-width:0;flex:1" data-act="detail" data-tx="' + eh(tx) + '">' +
           '<div style="font-size:15.5px;font-weight:900;display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
             '<span>' + eh(it.client_name || 'بدون اسم') + '</span>' +
-            (it.live_state === 'on_the_way' ? '<span class="cp-tag ok">🛵 في الطريق</span>' : '') +
+            (it.live_state === 'on_the_way' ? '<span class="cp-tag ok">في الطريق</span>' : '') +
           '</div>' +
           '<div style="font-size:11.5px;color:var(--mu);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-            '<span>📍 ' + eh(z.zone) + '</span>' +
+            '<span>' + eh(z.zone) + '</span>' +
             (distTxt ? '<span>· ' + eh(distTxt) + '</span>' : '') +
             '<span dir="ltr">· ' + eh(tx) + '</span>' +
           '</div>' +
@@ -1337,10 +1359,10 @@
       '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">' +
         '<span class="cp-tag ' + k.cls + '"><i class="fa-solid ' + k.icon + '"></i> ' + eh(k.label) + '</span>' +
         codBadge +
-        (it.office_ready ? '<span class="cp-tag ok">📦 جاهز بالمكتب</span>' : '') +
-        (it.client_confirmed ? '<span class="cp-tag ok">✅ الميعاد مأكد</span>' : '') +
-        (it.has_signature ? '<span class="cp-tag ok">✍️ موقّع</span>' : '') +
-        (Number(it.call_attempts) > 0 ? '<span class="cp-tag k-pk">📞 اتصلت ' + num(it.call_attempts) + '</span>' : '') +
+        (it.office_ready ? '<span class="cp-tag ok">جاهز بالمكتب</span>' : '') +
+        (it.client_confirmed ? '<span class="cp-tag ok">الميعاد مأكد</span>' : '') +
+        (it.has_signature ? '<span class="cp-tag ok">موقّع</span>' : '') +
+        (Number(it.call_attempts) > 0 ? '<span class="cp-tag k-pk">اتصلت ' + num(it.call_attempts) + '</span>' : '') +
       '</div>' +
       (it.landmark_note ? '<div style="margin-top:6px;font-size:11.5px;color:#38bdf8;background:rgba(56,189,248,.1);padding:4px 8px;border-radius:8px">💡 ' + eh(it.landmark_note) + '</div>' : '') +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap">' +
@@ -1352,11 +1374,11 @@
         '</div>' +
         '<div style="display:flex;align-items:center;gap:6px">' +
           '<button type="button" class="cp-a cp-sm' + (inRouteIdx !== -1 ? ' pri' : '') + '" data-act="route-toggle" data-tx="' + eh(tx) + '">' + (inRouteIdx !== -1 ? '✓ محطة ' + num(inRouteIdx + 1) : '+ خط السير') + '</button>' +
-          (!it.confirmed ? '<button type="button" class="cp-a cp-sm" data-act="on-my-way" data-tx="' + eh(tx) + '">🛵 في طريقي</button>' : '') +
+          (!it.confirmed ? '<button type="button" class="cp-a cp-sm" data-act="on-my-way" data-tx="' + eh(tx) + '">في طريقي</button>' : '') +
         '</div>' +
       '</div>' +
       (!it.confirmed
-        ? '<div class="cp-v12-slide" data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"><b>اسحب / اضغط لتأكيد المشوار ←</b></div>'
+        ? '<div class="cpn-slide" data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"><div class="kn">' + ic('back') + '</div><span>اسحب / اضغط لتأكيد ' + eh(k.sec) + '</span></div>'
         : '<div style="margin-top:8px;font-size:11.5px;color:#10b981;font-weight:800">✓ تم تأكيد المشوار ' + eh(timeOf(it.confirmed_at)) + '</div>') +
     '</div>';
   }
@@ -1703,7 +1725,7 @@
   }
 
   /* ---------- مودالات: تفاصيل العميل (A.2) + التأكيد الفردي (B.1) + الملاحظة (B.3/B.4) + ملفي الشخصي ---------- */
-  function modal(html) { const r = $('cp-modal-root'); if (!r) return; r.innerHTML = '<div class="cp-modal" data-act="mclose"><div class="cp-box">' + html + '</div></div>'; const f = r.querySelector('textarea,input'); if (f) setTimeout(() => f.focus(), 60); }
+  function modal(html, sheet) { const r = $('cp-modal-root'); if (!r) return; r.innerHTML = '<div class="cp-modal' + (sheet ? ' cpn-sheet' : '') + '" data-act="mclose"><div class="' + (sheet ? 'cpn-sheetbox' : 'cp-box') + '">' + html + '</div></div>'; swapFa(r); const f = r.querySelector('textarea,input'); if (f) setTimeout(() => f.focus(), 60); }
   const closeModal = () => { const r = $('cp-modal-root'); if (r) r.innerHTML = ''; };
   const byTx = tx => st.items.find(o => String(o.transaction_id) === String(tx));
 
@@ -1789,32 +1811,58 @@
 
     const unconfirmedItems = st.items.filter(x => String(x.transaction_id) === String(tx) && !x.confirmed);
 
+    const first = unconfirmedItems[0];
+    const trk = (c, l, tm) => '<div class="cpn-row" style="font-size:12.5px;gap:10px;padding:3px 0"><span style="width:8px;height:8px;border-radius:50%;background:' + c + '"></span><span style="flex:1">' + l + '</span><span class="cpn-num cpn-lbl">' + tm + '</span></div>';
+    const logRows = [];
+    if (fallbackItem && fallbackItem.live_state === 'on_the_way') logRows.push(trk('var(--ac)', 'ضغطت «في الطريق»', ''));
+    if (fallbackItem && fallbackItem.office_ready) logRows.push(trk('var(--ok)', 'المكتب علّم «جاهز بالمكتب»', ''));
+    trips.forEach(t => { if (t.confirmed) logRows.push(trk('var(--ok)', 'اتأكد المشوار', eh(timeOf(t.courier_confirmed_at)))); });
+    const dtile = (act, cls, icn, label, extra) => '<button type="button" class="cpn-tile" data-act="' + act + '" data-tx="' + eh(tx) + '"' + (extra || '') + '><span class="ti ' + cls + '">' + ic(icn) + '</span>' + label + '</button>';
+    const waitSince = st.waitingMap[String(tx)];
+    const dist = fallbackItem ? distTxtOf(fallbackItem) : '';
+    const kindTxt = fallbackItem ? KIND[fallbackItem.type].label : '';
+    const stChip = fallbackItem && fallbackItem.live_state === 'on_the_way' ? '<span class="cpn-chip" style="background:var(--wnsoft);color:var(--wn)">في الطريق</span>'
+      : (unconfirmedItems.length ? '<span class="cpn-chip" style="background:var(--wnsoft);color:var(--wn)">بانتظار</span>' : '<span class="cpn-chip" style="background:var(--oksoft);color:var(--ok)">مؤكد</span>');
+    const cod = fallbackItem ? Number(fallbackItem.cod_remaining || 0) : 0;
+    const navUrl = fallbackItem ? smartMapsUrl(fallbackItem) : (address ? mapsUrl(address) : '');
+    const slideHtml = first
+      ? '<div class="cpn-slide cpn-slide-fix" data-act="v12-slide-confirm" data-type="' + eh(first.type) + '" data-ref="' + eh(itemRef(first)) + '" data-tx="' + eh(first.transaction_id) + '" data-amt="' + eh(first.amount) + '"><div class="kn">' + ic('back') + '</div><span>اسحب / اضغط لتأكيد ' + eh(KIND[first.type].sec) + ' · ' + money(first.amount) + '</span></div>'
+      : '';
+    const moreConfirm = unconfirmedItems.slice(1).map(u => '<button type="button" class="cpn-btn p" style="width:100%;margin-top:8px" data-act="ask-one" data-type="' + eh(u.type) + '" data-ref="' + eh(itemRef(u)) + '" data-tx="' + eh(u.transaction_id) + '" data-amt="' + eh(u.amount) + '">' + ic('check') + 'أكّد ' + eh(KIND[u.type].label) + ' (' + money(u.amount) + ')</button>').join('');
+
     modal(
-      '<h3>' + eh(clientName) + '</h3>' +
-      '<p>رقم المعاملة: <b dir="ltr">' + eh(tx) + '</b></p>' +
-      switcherHtml +
-      (notClosed ? '<div class="cp-warn-box">⏳ الموظف لسه ما قفلش المعاملة بالكامل على السيستم. لو سلّمتها فعلاً للعميل تقدر تبعت ملاحظة للموظف أو تأكد مشوارك.</div>' : '') +
-      '<div class="cp-info-box">💡 الريكوست بيفضل ظاهر في قائمتك لحد ما الموظف يقفله أو أنت تأكده.</div>' +
-      (contactLinks.length ? '<div class="cp-info" style="margin-bottom:10px">' + contactLinks.join('') + '</div>' : '') +
-      '<div class="cp-dtl-sec"><b class="hd">الخدمات وحالتها (بدون أسعار العميل):</b>' + linesHtml + '</div>' +
-      '<div class="cp-dtl-sec"><b class="hd">تواريخ استلامك وتسليمك على المعاملة:</b>' + tripsHtml + '</div>' +
-      empHtml +
-      notesHtml +
-      '<div class="cp-dtl-sec"><b class="hd">أدوات الميدان السريعة:</b><div style="display:flex;gap:6px;flex-wrap:wrap">' +
-        '<button type="button" class="cp-a cp-sm pri" data-act="v12-sign" data-tx="' + eh(tx) + '" data-client="' + eh(clientName) + '">✍️ توقيع العميل</button>' +
-        '<button type="button" class="cp-a cp-sm" data-act="save-pin" data-tx="' + eh(tx) + '">📍 حفظ اللوكيشن</button>' +
-        '<button type="button" class="cp-a cp-sm" data-act="v12-landmark" data-tx="' + eh(tx) + '">💡 علامة المكان</button>' +
-        '<button type="button" class="cp-a cp-sm" data-act="v12-wait" data-tx="' + eh(tx) + '">⏳ وصلت/انتظار</button>' +
-        '<button type="button" class="cp-a cp-sm" data-act="v12-expense" data-tx="' + eh(tx) + '">💵 مصروف طريق</button>' +
-        '<button type="button" class="cp-a cp-sm" data-act="v12-handoff" data-tx="' + eh(tx) + '">🔄 تحويل لمندوب</button>' +
-        '<button type="button" class="cp-a cp-sm" data-act="v12-reschedule" data-tx="' + eh(tx) + '">📅 تأجيل لبكرة</button>' +
-        (phone ? '<button type="button" class="cp-a cp-sm" data-act="v12-receipt-wa" data-tx="' + eh(tx) + '">📩 إيصال واتساب</button>' : '') +
-      '</div></div>' +
-      '<div class="cp-btns">' +
-        unconfirmedItems.map(u => '<button type="button" class="cp-btn cp-go" data-act="ask-one" data-type="' + eh(u.type) + '" data-ref="' + eh(itemRef(u)) + '" data-tx="' + eh(u.transaction_id) + '" data-amt="' + eh(u.amount) + '">✓ أكّد المشوار (' + money(u.amount) + ')</button>').join('') +
-        '<button type="button" class="cp-btn" data-act="note" data-tx="' + eh(tx) + '"><i class="fa-solid fa-flag"></i> ملاحظة للموظف</button>' +
-        '<button type="button" class="cp-btn" data-act="mclose-btn">إغلاق</button>' +
-      '</div>'
+      '<div class="cpn-row" style="padding:14px 16px 10px;gap:10px"><button type="button" class="cpn-ib" data-act="mclose-btn" aria-label="رجوع">' + ic('fwd') + '</button>' +
+        '<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:17px">' + eh(clientName) + '</div><div class="cpn-num" dir="ltr" style="font-size:12px;color:var(--mu);text-align:start">' + eh(tx) + (kindTxt ? ' · ' + eh(kindTxt) : '') + '</div></div>' + stChip + '</div>' +
+      '<div style="margin:0 16px;height:150px;border-radius:24px;overflow:hidden;position:relative;background:var(--card);border:1px solid var(--bd)">' +
+        '<svg viewBox="0 0 358 150" width="100%" height="150" preserveAspectRatio="none" aria-hidden="true" style="display:block"><defs><pattern id="cpg" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="var(--bd)" stroke-width="1"/></pattern></defs><rect width="358" height="150" fill="url(#cpg)"/>' +
+        '<path d="M30 124 C90 124 100 80 160 80 S250 54 308 32" fill="none" stroke="var(--ac)" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 10"/><circle cx="30" cy="124" r="7" fill="var(--tx)"/><circle cx="30" cy="124" r="14" fill="none" stroke="var(--tx)" stroke-opacity=".3"/>' +
+        '<path d="M308 16c-9 0-15 7-15 15 0 11 15 24 15 24s15-13 15-24c0-8-6-15-15-15z" fill="var(--ac)"/><circle cx="308" cy="31" r="5" fill="var(--acink)"/></svg>' +
+        (dist ? '<div style="position:absolute;inset-inline-start:10px;bottom:10px"><span class="cpn-chip cpn-num" style="background:var(--bg)">' + eh(dist) + '</span></div>' : '') +
+        (navUrl ? '<a target="_blank" rel="noopener" href="' + eh(navUrl) + '" class="cpn-btn p" style="position:absolute;inset-inline-end:10px;bottom:10px;min-height:36px;border-radius:12px;font-size:12px;padding:0 12px">' + ic('nav', 16) + 'افتح الملاحة</a>' : '') + '</div>' +
+      '<div class="cpn-card" style="margin:12px 16px 0;display:flex;flex-direction:column;gap:10px;padding:14px">' +
+        (address ? '<div class="cpn-row" style="align-items:flex-start"><span style="color:var(--ac);margin-top:2px">' + ic('pin') + '</span><div style="flex:1;font-size:14px;line-height:1.5">' + eh(address) + '</div></div>' : '') +
+        (fallbackItem && fallbackItem.landmark_note ? '<div style="padding:9px 11px;border-radius:14px;background:var(--acsoft);font-size:12.5px;line-height:1.5"><span class="cpn-lbl" style="color:var(--ac)">ذاكرة المكان</span><br>' + eh(fallbackItem.landmark_note) + '</div>' : '') +
+        '<div class="cpn-row" style="flex-wrap:wrap;gap:6px">' + (cod > 0 ? '<span class="cpn-chip" style="background:var(--wnsoft);color:var(--wn)">تحصيل ' + money(cod) + '</span>' : '') +
+          (fallbackItem && fallbackItem.services ? '<span class="cpn-chip">الخدمات: ' + eh(fallbackItem.services) + '</span>' : '') +
+          (fallbackItem && fallbackItem.client_confirmed ? '<span class="cpn-chip" style="background:var(--oksoft);color:var(--ok)">الميعاد مأكد</span>' : '') +
+          (fallbackItem && fallbackItem.office_ready ? '<span class="cpn-chip">جاهز بالمكتب</span>' : '') + '</div></div>' +
+      '<div class="cpn-tiles" style="margin:12px 16px 0">' +
+        (phone ? '<a class="cpn-tile" data-act="v12-call-log" data-tx="' + eh(tx) + '" href="' + eh(telHref(phone)) + '"><span class="ti ok">' + ic('phone') + '</span>اتصال</a>' : '') +
+        (phone ? dtile('v12-wa-tpl', 'ok', 'chat', 'واتساب') : '') +
+        dtile('v12-sign', '', 'pen', 'توقيع', ' data-client="' + eh(clientName) + '"') +
+        dtile('v12-wait', '', 'clock', waitSince ? 'انتظار' : 'وصلت/انتظار') +
+        dtile('v12-expense', 'wn', 'wallet', 'مصروف') + dtile('v12-handoff', 'wn', 'swap', 'تحويل') + dtile('v12-reschedule', 'wn', 'cal', 'تأجيل لبكرة') +
+        '<button type="button" class="cpn-tile" data-act="note" data-tx="' + eh(tx) + '"><span class="ti" style="background:var(--ersoft);color:var(--er)">' + ic('flag') + '</span>بلاغ</button>' +
+      '</div>' +
+      '<div class="cpn-row" style="margin:10px 16px 0;gap:6px;flex-wrap:wrap">' +
+        '<button type="button" class="cpn-chip" data-act="save-pin" data-tx="' + eh(tx) + '">' + ic('pin', 14) + 'حفظ اللوكيشن</button>' +
+        '<button type="button" class="cpn-chip" data-act="v12-landmark" data-tx="' + eh(tx) + '">' + ic('info', 14) + 'علامة المكان</button>' +
+        (phone ? '<button type="button" class="cpn-chip" data-act="v12-receipt-wa" data-tx="' + eh(tx) + '">' + ic('send', 14) + 'إيصال واتساب</button>' : '') + '</div>' +
+      (logRows.length ? '<div class="cpn-card" style="margin:12px 16px 0;padding:12px 14px"><div class="cpn-lbl" style="margin-bottom:8px">سجل المشوار</div>' + logRows.join('') + '</div>' : '') +
+      '<div style="margin:12px 16px 0">' + switcherHtml + (notClosed ? '<div class="cp-warn-box">⏳ الموظف لسه ما قفلش المعاملة بالكامل على السيستم. لو سلّمتها فعلاً للعميل تقدر تبعت ملاحظة للموظف أو تأكد مشوارك.</div>' : '') +
+        '<div class="cp-dtl-sec"><b class="hd">الخدمات وحالتها (بدون أسعار العميل):</b>' + linesHtml + '</div>' +
+        '<div class="cp-dtl-sec"><b class="hd">تواريخ استلامك وتسليمك على المعاملة:</b>' + tripsHtml + '</div>' + empHtml + notesHtml + '</div>' +
+      '<div class="cpn-slidebar">' + slideHtml + moreConfirm + '</div>', true
     );
   }
 
@@ -2215,6 +2263,7 @@
         return;
       }
       case 'v12-slide-confirm': {
+        closeModal();
         const cType = el.dataset.type, cRef = el.dataset.ref, cAmt = el.dataset.amt;
         if (window.CourierV12) window.CourierV12.haptic(true);
         st.undoData = { tx: tx, type: cType, ref: cRef };
