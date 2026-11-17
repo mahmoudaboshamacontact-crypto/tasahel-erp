@@ -193,6 +193,12 @@ textarea{border-radius:14px;background:#f8fafc;border-color:#e2e8f0}
             <div id="svcs"></div>
           </div>
 
+          <div class="card" id="courier-live" hidden style="display:flex;align-items:center;gap:12px">
+            <div style="width:42px;height:42px;border-radius:14px;background:#fff7ed;color:#c2410c;display:flex;align-items:center;justify-content:center;flex:none" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h12v10H2zM14 9h4l4 3.5V16h-8z"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+            </div>
+            <div><b id="cl-title" style="font-size:15px"></b><div id="cl-sub" style="font-size:12px;color:var(--mut)"></div></div>
+          </div>
           <div class="card eta" id="eta" hidden>
             <h3>موعد التسليم المتوقع</h3>
             <p id="etatext"></p>
@@ -403,6 +409,18 @@ textarea{border-radius:14px;background:#f8fafc;border-color:#e2e8f0}
     loaded = true;
   }
 
+
+  function loadCourierLive() {
+    var box = $('courier-live'); if (!box) return;
+    rpc('public_courier_live_status_by_token', { p_token: token }).then(function (r) {
+      if (r && r.on_the_way) {
+        $('cl-title').textContent = r.state === 'waiting' ? (r.courier_name + ' وصل عندك' ) : (r.courier_name + ' في الطريق إليك');
+        $('cl-sub').textContent = r.state === 'waiting' ? 'المندوب في انتظارك، برجاء الرد على تليفونه.' : 'مندوب تساهيل بيوصّل طلبك دلوقتي.';
+        box.hidden = false;
+      } else { box.hidden = true; }
+    }).catch(function () { box.hidden = true; });
+  }
+
   function load(manual) {
     if (busy) return;
     if (!validShape) { show('invalid'); return; }
@@ -412,6 +430,7 @@ textarea{border-radius:14px;background:#f8fafc;border-color:#e2e8f0}
       busy = false; $('rf').disabled = false;
       if (!d) { show('invalid'); return; }
       render(d); $('stale').hidden = true; show('content');
+      loadCourierLive();
     }).catch(function () {
       busy = false; $('rf').disabled = false;
       if (loaded) $('stale').hidden = false; else show('neterr');

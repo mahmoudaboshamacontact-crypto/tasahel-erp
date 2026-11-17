@@ -209,7 +209,9 @@
     if($('cop-manager-panel'))return;
     const box=document.createElement('section');box.id='cop-manager-panel';box.className='card p-4 space-y-3';
     box.innerHTML='<div class="flex items-center justify-between gap-2"><b>متابعة تشغيل المناديب والبلاغات</b><div class="flex gap-2"><button type="button" class="rounded-lg bg-slate-600 text-white px-3 py-2 text-xs font-bold" id="cop-manager-notifications">الإشعارات</button><button type="button" class="rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold" id="cop-manager-refresh">تحديث</button></div></div><div id="cop-manager-content" class="text-xs text-slate-500">'+(state.managerHtml||'جاري تحميل البلاغات والتقفيلات…')+'</div>';
+    const rd=document.createElement('div');rd.id='cop-radar';box.prepend(rd);
     root.appendChild(box);
+    startRadar(rd);
     $('cop-manager-refresh').onclick=()=>loadManagerPanel(true);
     $('cop-manager-notifications').onclick=async()=>{shell();state.tab='notifications';await render();};
     if(!state.managerLoadedAt || (Date.now()-state.managerLoadedAt > 60000)) loadManagerPanel(false);
@@ -228,68 +230,112 @@
       state.managerLoadedAt=Date.now();
       const target=$('cop-manager-content');
       if(target)target.innerHTML=html;
-      loadV12OfficeRadar(c);
     }catch(e){c.textContent='تعذر تحميل متابعة التشغيل. '+(e.message||'');}
     finally{state.managerBusy=false;}
   }
 
   /* ---------- رادار المكتب الحي والموافقات الفورية (v12) ---------- */
   async function loadV12OfficeRadar(container) {
+    if (!container || state.radarBusy) return;
+    const act = document.activeElement;
+    if (act && container.contains(act) && act.tagName === 'INPUT') return; /* المدير بيكتب — ما نقطعوش */
+    state.radarBusy = true;
     try {
+      if (typeof window.__ensureCourierPortalCss === 'function') window.__ensureCourierPortalCss();
       const r = await sbClient.rpc('courier_v12_office_radar');
-      if (!r || r.error || !r.data) return;
+      if (!r || r.error || !r.data) throw new Error((r && r.error && r.error.message) || 'مفيش بيانات راجعة من السيرفر');
       const d = r.data;
       const couriers = Array.isArray(d.couriers) ? d.couriers : [];
       const pending = Array.isArray(d.pending_requests) ? d.pending_requests : [];
       const totalToday = couriers.reduce((s, c) => s + Number(c.total_today || 0), 0);
       const confToday = couriers.reduce((s, c) => s + Number(c.confirmed_today || 0), 0);
       const evLabels = {
-        on_the_way: '🛵 في الطريق', waiting: '⏳ وصل عند العميل', break: '⏸ في استراحة',
-        resume: '🟢 متاح', near_office: '🏢 قرب من المكتب', handoff_req: '🔄 طلب تحويل',
-        reschedule_req: '📅 طلب تأجيل لبكرة', expense: '💵 مصروف طريق', swap_req: '🔁 تبديل', cash_settle: '💰 تسوية كاش'
+        on_the_way: 'في الطريق', waiting: 'وصل عند العميل', break: 'في استراحة',
+        resume: 'متاح', near_office: 'قرب من المكتب', handoff_req: 'طلب تحويل',
+        reschedule_req: 'طلب تأجيل لبكرة', expense: 'مصروف طريق', swap_req: 'تبديل', cash_settle: 'تسوية كاش'
       };
-      const pulseHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;padding:8px 10px;border-radius:10px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);font-size:12px;font-weight:800">' +
-        '<span>📡 نبض اليوم:</span>' +
-        '<span>إجمالي: ' + totalToday + '</span>' +
-        '<span style="color:#10b981">مؤكد: ' + confToday + '</span>' +
-        '<span style="color:#f59e0b">طلبات معلقة: ' + pending.length + '</span>' +
-      '</div>';
+      const head = '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px"><b style="font-size:14px">رادار المكتب</b>' +
+        '<span style="font-size:11px;color:var(--mu)">مباشر · بيتحدّث كل 20 ثانية · ' + new Date().toLocaleTimeString('ar-EG') + '</span></div>';
+      const pulseHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px;padding:8px 10px;border-radius:12px;background:rgba(255,122,61,.10);border:1px solid rgba(255,122,61,.3);font-size:12px;font-weight:800">' +
+        '<span>إجمالي: ' + totalToday + '</span><span style="color:#10b981">مؤكد: ' + confToday + '</span><span style="color:#f59e0b">طلبات معلقة: ' + pending.length + '</span></div>';
       const couriersHtml = couriers.length ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-bottom:10px">' + couriers.map(c => {
         const le = c.last_event || {};
         const lbl = evLabels[le.type] || 'متصل';
-        return '<div style="padding:8px 10px;border-radius:10px;border:1px solid var(--bd);background:var(--fld);font-size:12px">' +
+        return '<div style="padding:10px 12px;border-radius:14px;border:1px solid var(--bd);background:var(--fld);font-size:12px">' +
           '<div style="display:flex;justify-content:space-between;align-items:center"><b>' + esc(c.name) + '</b><span>' + Number(c.confirmed_today || 0) + '/' + Number(c.total_today || 0) + '</span></div>' +
-          '<div style="color:var(--mu);margin:4px 0">' + lbl + (le.tx ? ' · <span dir="ltr">' + esc(le.tx) + '</span>' : '') + '</div>' +
-          '<button type="button" class="cp-btn cp-sm" data-v12ping="' + Number(c.id) + '" data-cname="' + esc(c.name) + '">🚨 تنبيه عاجل</button>' +
+          '<div style="color:var(--mu);margin:4px 0 8px">' + esc(lbl) + (le.tx ? ' · <span dir="ltr">' + esc(le.tx) + '</span>' : '') + '</div>' +
+          '<button type="button" class="cp-btn cp-sm" data-v12ping="' + Number(c.id) + '" data-cname="' + esc(c.name) + '">تنبيه عاجل</button>' +
         '</div>';
       }).join('') + '</div>' : '';
-      const reqsHtml = pending.length ? '<div style="margin-top:8px"><b style="font-size:12.5px">طلبات بانتظار موافقة المكتب (' + pending.length + '):</b>' + pending.map(p =>
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 9px;margin-top:5px;border-radius:10px;border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.08);font-size:12px">' +
-          '<div><b>' + esc(p.courier_name) + '</b> · ' + (evLabels[p.event_type] || esc(p.event_type)) + (p.transaction_id ? ' (<span dir="ltr">' + esc(p.transaction_id) + '</span>)' : '') +
+      const composer = '<div id="cop-ping-box" style="display:none;margin:0 0 10px;padding:10px;border-radius:14px;background:rgba(255,122,61,.10);gap:8px;align-items:center;flex-wrap:wrap">' +
+        '<span id="cop-ping-to" style="font-size:12px;font-weight:700"></span>' +
+        '<input id="cop-ping-msg" type="text" maxlength="200" placeholder="اكتب رسالة التنبيه العاجل" aria-label="رسالة التنبيه" style="flex:1;min-width:160px;height:44px;border-radius:12px;border:1px solid var(--bd);padding:0 12px;font:inherit">' +
+        '<button type="button" class="cp-btn cp-go cp-sm" data-ping-send="1">إرسال</button><button type="button" class="cp-btn cp-sm" data-ping-cancel="1">إلغاء</button></div>';
+      const reqsHtml = pending.length ? '<div style="margin:8px 0"><b style="font-size:12.5px">طلبات بانتظار موافقة المكتب (' + pending.length + '):</b>' + pending.map(p =>
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;margin-top:6px;border-radius:12px;border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.08);font-size:12px">' +
+          '<div><b>' + esc(p.courier_name) + '</b> · ' + esc(evLabels[p.event_type] || p.event_type) + (p.transaction_id ? ' (<span dir="ltr">' + esc(p.transaction_id) + '</span>)' : '') +
           (p.payload && (p.payload.reason || p.payload.note) ? ' — ' + esc(p.payload.reason || p.payload.note) : '') + '</div>' +
-          '<div style="display:flex;gap:5px"><button type="button" class="cp-btn cp-go cp-sm" data-v12res="' + Number(p.id) + '" data-dec="approved">✓ موافقة</button><button type="button" class="cp-btn cp-sm" data-v12res="' + Number(p.id) + '" data-dec="rejected">✕ رفض</button></div>' +
+          '<div style="display:flex;gap:5px"><button type="button" class="cp-btn cp-go cp-sm" data-v12res="' + Number(p.id) + '" data-dec="approved">موافقة</button><button type="button" class="cp-btn cp-sm" data-v12res="' + Number(p.id) + '" data-dec="rejected">رفض</button></div>' +
         '</div>'
       ).join('') + '</div>' : '';
-      const box = document.createElement('div');
-      box.innerHTML = pulseHtml + couriersHtml + reqsHtml;
-      container.prepend(box);
-      box.querySelectorAll('[data-v12res]').forEach(btn => {
-        btn.onclick = async () => {
-          btn.disabled = true;
-          await sbClient.rpc('courier_v12_resolve_event', { p_event_id: Number(btn.dataset.v12res), p_decision: btn.dataset.dec });
-          toast(btn.dataset.dec === 'approved' ? '✓ تمت الموافقة' : 'تم الرفض');
-          loadManagerPanel();
-        };
-      });
-      box.querySelectorAll('[data-v12ping]').forEach(btn => {
-        btn.onclick = async () => {
-          const msg = window.prompt('اكتب رسالة التنبيه العاجل للمندوب ' + (btn.dataset.cname || '') + ':');
-          if (!msg || !msg.trim()) return;
-          await sbClient.rpc('courier_v12_urgent_ping', { p_courier_id: Number(btn.dataset.v12ping), p_tx: null, p_message: msg.trim() });
-          toast('🚨 تم إرسال التنبيه العاجل لشاشة المندوب فوراً ✓');
-        };
-      });
-    } catch (e) {}
+      const readyHtml = '<div style="margin-top:10px;padding:10px;border-radius:14px;border:1px solid var(--bd);display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px">' +
+        '<b>جاهزية معاملة:</b><input id="cop-ready-tx" type="text" dir="ltr" placeholder="TX-2026-0412" aria-label="رقم المعاملة" style="width:150px;height:44px;border-radius:12px;border:1px solid var(--bd);padding:0 12px;font:inherit">' +
+        '<button type="button" class="cp-btn cp-sm" data-ready="ready_flag">جاهز بالمكتب</button><button type="button" class="cp-btn cp-sm" data-ready="client_confirmed">الميعاد متأكد</button>' +
+        '<span style="color:var(--mu)">بتظهر للمندوب على كارت المشوار</span></div>';
+      container.innerHTML = head + pulseHtml + couriersHtml + composer + reqsHtml + readyHtml;
+      container.onclick = radarClick;
+    } catch (e) {
+      container.innerHTML = '<div role="alert" style="padding:12px;border-radius:14px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08);font-size:12.5px;line-height:1.6">' +
+        '<b>الرادار مش قادر يحمّل.</b><br>' + esc((e && e.message) || '') +
+        '<br><span style="color:var(--mu)">لو الرسالة فيها "function" أو "does not exist" شغّل ملفي SQL: courier-v12-modern.sql ثم courier-link-v13.sql.</span><br>' +
+        '<button type="button" class="cp-btn cp-sm" data-radar-retry="1" style="margin-top:8px">إعادة المحاولة</button></div>';
+      container.onclick = radarClick;
+    } finally { state.radarBusy = false; }
+  }
+  async function radarClick(ev) {
+    const t = ev.target.closest && ev.target.closest('button'); if (!t) return;
+    const el = $('cop-radar');
+    if (t.dataset.radarRetry) return loadV12OfficeRadar(el);
+    if (t.dataset.v12res) {
+      t.disabled = true;
+      const r = await rpc('courier_v12_resolve_event', { p_event_id: Number(t.dataset.v12res), p_decision: t.dataset.dec });
+      if (r.error) { t.disabled = false; return toast(r.error.message, true); }
+      toast(t.dataset.dec === 'approved' ? 'تمت الموافقة' : 'تم الرفض');
+      return loadV12OfficeRadar(el);
+    }
+    if (t.dataset.v12ping) {
+      state.pingTo = Number(t.dataset.v12ping);
+      const b = $('cop-ping-box'); if (!b) return;
+      $('cop-ping-to').textContent = 'تنبيه لـ ' + (t.dataset.cname || '');
+      b.style.display = 'flex'; $('cop-ping-msg').focus(); return;
+    }
+    if (t.dataset.pingCancel) { const b = $('cop-ping-box'); if (b) b.style.display = 'none'; return; }
+    if (t.dataset.pingSend) {
+      const m = ($('cop-ping-msg').value || '').trim(); if (!m) return toast('اكتب الرسالة الأول', true);
+      t.disabled = true;
+      const r = await rpc('courier_v12_urgent_ping', { p_courier_id: state.pingTo, p_tx: null, p_message: m });
+      t.disabled = false;
+      if (r.error) return toast(r.error.message, true);
+      $('cop-ping-msg').value = ''; $('cop-ping-box').style.display = 'none';
+      return toast('وصل التنبيه العاجل لشاشة المندوب');
+    }
+    if (t.dataset.ready) {
+      const tx = ($('cop-ready-tx').value || '').trim(); if (!tx) return toast('اكتب رقم المعاملة', true);
+      t.disabled = true;
+      const r = await rpc('courier_v12_mark_ready', { p_tx: tx, p_flag: t.dataset.ready, p_val: true });
+      t.disabled = false;
+      if (r.error) return toast(r.error.message, true);
+      return toast('اتسجلت الجاهزية للمندوب');
+    }
+  }
+  function radarTick() {
+    const el = $('cop-radar');
+    if (!el || !document.body.contains(el)) { clearInterval(state.radarTimer); state.radarTimer = 0; return; }
+    if (!document.hidden) loadV12OfficeRadar(el);
+  }
+  function startRadar(el) {
+    loadV12OfficeRadar(el);
+    if (!state.radarTimer) state.radarTimer = setInterval(radarTick, 20000);
   }
 
   function paymentForm(id) {

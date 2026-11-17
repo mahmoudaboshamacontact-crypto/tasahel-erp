@@ -45,42 +45,52 @@
   function writeQueue(q) {
     try { localStorage.setItem(OFFLINE_KEY, JSON.stringify((q || []).slice(0, 60))); } catch (e) {}
   }
+  async function myUid() {
+    try { const r = await sbClient.auth.getSession(); return (r && r.data && r.data.session && r.data.session.user && r.data.session.user.id) || null; } catch (e) { return null; }
+  }
+  /* الطابور مربوط بحساب المندوب (uid) عشان موبايل مشترك ما يبعتش شغل واحد باسم التاني */
+  async function enqueue(rpcName, args) {
+    const q = readQueue();
+    q.push({ rpc: rpcName, args: args, at: Date.now(), uid: await myUid() });
+    writeQueue(q);
+    return { queued: true };
+  }
   async function queueOrRun(rpcName, args) {
-    if (!navigator.onLine) {
-      const q = readQueue();
-      q.push({ rpc: rpcName, args: args, at: Date.now() });
-      writeQueue(q);
-      return { queued: true };
-    }
+    if (!navigator.onLine) return enqueue(rpcName, args);
     try {
       const r = await sbClient.rpc(rpcName, args);
       if (r && r.error) throw r.error;
       return r;
     } catch (e) {
-      if (!navigator.onLine || /fetch|network|failed/i.test(String(e && e.message || ''))) {
-        const q = readQueue();
-        q.push({ rpc: rpcName, args: args, at: Date.now() });
-        writeQueue(q);
-        return { queued: true };
-      }
+      if (!navigator.onLine || /fetch|network|failed/i.test(String(e && e.message || ''))) return enqueue(rpcName, args);
       throw e;
     }
   }
+  let flushing = false;
   async function flushOfflineQueue() {
-    if (!navigator.onLine) return 0;
+    if (!navigator.onLine || flushing) return 0;
     const q = readQueue();
     if (!q.length) return 0;
+    flushing = true;
+    const me = await myUid();
     const left = [];
-    let synced = 0;
-    for (const job of q) {
-      try {
-        const r = await sbClient.rpc(job.rpc, job.args);
-        if (r && r.error) left.push(job);
-        else synced++;
-      } catch (e) { left.push(job); }
-    }
-    writeQueue(left);
+    let synced = 0, dropped = 0;
+    try {
+      for (const job of q) {
+        if (!job.uid || Date.now() - Number(job.at || 0) > 48 * 3600 * 1000) { dropped++; continue; } /* قديم/بدون صاحب: نشيله */
+        if (job.uid !== me) { left.push(job); continue; } /* بتاع مندوب تاني: ما نلمسوش */
+        try {
+          const r = await sbClient.rpc(job.rpc, job.args);
+          if (r && r.error) {
+            if (/^(42501|22023|23)/.test(String(r.error.code || '')) || /not your|forbidden|invalid/i.test(String(r.error.message || ''))) dropped++; /* رفض نهائي */
+            else left.push(job);
+          } else synced++;
+        } catch (e) { left.push(job); }
+      }
+      writeQueue(left);
+    } finally { flushing = false; }
     if (synced && typeof showToast === 'function') showToast('تمت مزامنة ' + synced + ' عمليات كانت محفوظة أوفلاين ✓');
+    if (dropped && typeof showToast === 'function') showToast(dropped + ' عملية قديمة أو مرفوضة اتشالت من الطابور', 'error');
     return synced;
   }
   window.addEventListener('online', () => { flushOfflineQueue(); });
