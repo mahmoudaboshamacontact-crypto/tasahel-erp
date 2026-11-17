@@ -254,35 +254,58 @@
         resume: 'متاح', near_office: 'قرب من المكتب', handoff_req: 'طلب تحويل',
         reschedule_req: 'طلب تأجيل لبكرة', expense: 'مصروف طريق', swap_req: 'تبديل', cash_settle: 'تسوية كاش'
       };
-      const head = '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px"><b style="font-size:14px">رادار المكتب</b>' +
-        '<span style="font-size:11px;color:var(--mu)">مباشر · بيتحدّث كل 20 ثانية · ' + new Date().toLocaleTimeString('ar-EG') + '</span></div>';
-      const pulseHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px;padding:8px 10px;border-radius:12px;background:rgba(255,122,61,.10);border:1px solid rgba(255,122,61,.3);font-size:12px;font-weight:800">' +
-        '<span>إجمالي: ' + totalToday + '</span><span style="color:#10b981">مؤكد: ' + confToday + '</span><span style="color:#f59e0b">طلبات معلقة: ' + pending.length + '</span></div>';
-      const couriersHtml = couriers.length ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-bottom:10px">' + couriers.map(c => {
-        const le = c.last_event || {};
-        const lbl = evLabels[le.type] || 'متصل';
-        return '<div style="padding:10px 12px;border-radius:14px;border:1px solid var(--bd);background:var(--fld);font-size:12px">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center"><b>' + esc(c.name) + '</b><span>' + Number(c.confirmed_today || 0) + '/' + Number(c.total_today || 0) + '</span></div>' +
-          '<div style="color:var(--mu);margin:4px 0 8px">' + esc(lbl) + (le.tx ? ' · <span dir="ltr">' + esc(le.tx) + '</span>' : '') + '</div>' +
-          '<button type="button" class="cp-btn cp-sm" data-v12ping="' + Number(c.id) + '" data-cname="' + esc(c.name) + '">تنبيه عاجل</button>' +
-        '</div>';
-      }).join('') + '</div>' : '';
-      const composer = '<div id="cop-ping-box" style="display:none;margin:0 0 10px;padding:10px;border-radius:14px;background:rgba(255,122,61,.10);gap:8px;align-items:center;flex-wrap:wrap">' +
-        '<span id="cop-ping-to" style="font-size:12px;font-weight:700"></span>' +
-        '<input id="cop-ping-msg" type="text" maxlength="200" placeholder="اكتب رسالة التنبيه العاجل" aria-label="رسالة التنبيه" style="flex:1;min-width:160px;height:44px;border-radius:12px;border:1px solid var(--bd);padding:0 12px;font:inherit">' +
-        '<button type="button" class="cp-btn cp-go cp-sm" data-ping-send="1">إرسال</button><button type="button" class="cp-btn cp-sm" data-ping-cancel="1">إلغاء</button></div>';
-      const reqsHtml = pending.length ? '<div style="margin:8px 0"><b style="font-size:12.5px">طلبات بانتظار موافقة المكتب (' + pending.length + '):</b>' + pending.map(p =>
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;margin-top:6px;border-radius:12px;border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.08);font-size:12px">' +
-          '<div><b>' + esc(p.courier_name) + '</b> · ' + esc(evLabels[p.event_type] || p.event_type) + (p.transaction_id ? ' (<span dir="ltr">' + esc(p.transaction_id) + '</span>)' : '') +
-          (p.payload && (p.payload.reason || p.payload.note) ? ' — ' + esc(p.payload.reason || p.payload.note) : '') + '</div>' +
-          '<div style="display:flex;gap:5px"><button type="button" class="cp-btn cp-go cp-sm" data-v12res="' + Number(p.id) + '" data-dec="approved">موافقة</button><button type="button" class="cp-btn cp-sm" data-v12res="' + Number(p.id) + '" data-dec="rejected">رفض</button></div>' +
-        '</div>'
-      ).join('') + '</div>' : '';
-      const readyHtml = '<div style="margin-top:10px;padding:10px;border-radius:14px;border:1px solid var(--bd);display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px">' +
-        '<b>جاهزية معاملة:</b><input id="cop-ready-tx" type="text" dir="ltr" placeholder="TX-2026-0412" aria-label="رقم المعاملة" style="width:150px;height:44px;border-radius:12px;border:1px solid var(--bd);padding:0 12px;font:inherit">' +
-        '<button type="button" class="cp-btn cp-sm" data-ready="ready_flag">جاهز بالمكتب</button><button type="button" class="cp-btn cp-sm" data-ready="client_confirmed">الميعاد متأكد</button>' +
-        '<span style="color:var(--mu)">بتظهر للمندوب على كارت المشوار</span></div>';
-      container.innerHTML = head + pulseHtml + couriersHtml + composer + reqsHtml + readyHtml;
+      const I = {
+        refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>', bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0"/>',
+        warn: '<path d="M12 3l10 18H2zM12 10v5M12 18h.01"/>', truck: '<path d="M2 6h12v10H2zM14 9h4l4 3.5V16h-8z"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>'
+      };
+      const svg = (n, z) => '<svg class="cpo-i" viewBox="0 0 24 24" style="width:' + (z || 16) + 'px;height:' + (z || 16) + 'px" aria-hidden="true">' + I[n] + '</svg>';
+      const tm = at => { if (!at) return ''; const d = new Date(at); return isNaN(d) ? '' : d.toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' }); };
+      const ago = at => { if (!at) return 'دلوقتي'; const m = Math.round((Date.now() - new Date(at).getTime()) / 60000); return m < 1 ? 'دلوقتي' : m < 60 ? 'من ' + m + ' د' : 'من ' + Math.round(m / 60) + ' س'; };
+      const onWay = couriers.filter(c => c.last_event && c.last_event.type === 'on_the_way');
+      const stTag = t => t === 'on_the_way' ? ['ac', 'في الطريق'] : t === 'waiting' ? ['wn', 'وصل عند العميل'] : t === 'break' ? ['mu', 'في استراحة'] : ['ok', 'متاح'];
+      const head = '<div class="cpo-row" style="gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><div style="font-size:26px;font-weight:700">رادار المكتب</div>' +
+        '<div class="cpo-row" style="gap:7px;font-size:13px;color:var(--mu)"><span style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></span>مباشر · بيتحدّث كل 20 ثانية · آخر تحديث <span class="cpo-num">' + new Date().toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit', second: '2-digit' }) + '</span></div></div>' +
+        '<button type="button" class="cpo-btn g" data-radar-retry="1" style="min-height:44px">' + svg('refresh', 18) + 'تحديث</button>' +
+        '<button type="button" class="cpo-btn g" data-radar-notif="1" style="min-height:44px">' + svg('bell', 18) + 'إشعارات</button></div>';
+      const pulse = '<div class="cpo-pulse">' +
+        '<div class="cpo-card"><div class="cpo-lbl">مشاوير اليوم</div><div class="cpo-big cpo-num">' + totalToday + '</div></div>' +
+        '<div class="cpo-card"><div class="cpo-lbl">اتأكدت من المناديب</div><div class="cpo-big cpo-num" style="color:var(--ok)">' + confToday + '</div></div>' +
+        '<div class="cpo-card" style="background:var(--wnsoft)"><div class="cpo-lbl" style="color:var(--wn)">طلبات بانتظار موافقتك</div><div class="cpo-big cpo-num" style="color:var(--wn)">' + pending.length + '</div></div>' +
+        '<div class="cpo-card"><div class="cpo-lbl">مناديب في الطريق</div><div class="cpo-big cpo-num" style="color:var(--ac)">' + onWay.length + '<span style="font-size:16px;color:var(--mu)"> / ' + couriers.length + '</span></div></div></div>';
+      const cc = c => {
+        const le = c.last_event || {}, t = stTag(le.type), tot = Number(c.total_today || 0), cf = Number(c.confirmed_today || 0);
+        const sub = le.tx ? '<span dir="ltr" class="cpo-num">' + esc(le.tx) + (le.at ? ' · من ' + esc(tm(le.at)) : '') + '</span>' : (le.type === 'near_office' ? 'قرب من المكتب' + (le.at ? ' · ' + esc(tm(le.at)) : '') : (le.at ? 'من ' + esc(tm(le.at)) : '&nbsp;'));
+        return '<div class="cpo-cc"><div class="cpo-row" style="justify-content:space-between"><b>' + esc(c.name) + '</b><span class="cpo-tag ' + t[0] + '">' + t[1] + '</span></div>' +
+          '<div style="font-size:12.5px;color:var(--mu)">' + sub + '</div>' +
+          '<div class="cpo-row"><div class="cpo-bar" style="flex:1"><span style="width:' + (tot ? Math.round(cf / tot * 100) : 0) + '%"></span></div><span class="cpo-num cpo-lbl">' + cf + '/' + tot + '</span></div>' +
+          '<button type="button" class="cpo-btn g" style="align-self:flex-start" data-v12ping="' + Number(c.id) + '" data-cname="' + esc(c.name) + '">' + svg('warn') + 'تنبيه عاجل</button></div>';
+      };
+      const composer = '<div id="cop-ping-box" class="cpo-ping" style="display:none"><span id="cop-ping-to" class="cpo-lbl"></span>' +
+        '<input id="cop-ping-msg" type="text" maxlength="200" placeholder="اكتب رسالة التنبيه العاجل" aria-label="رسالة التنبيه"><button type="button" class="cpo-btn p" style="min-height:44px" data-ping-send="1">أرسل</button><button type="button" class="cpo-btn g" style="min-height:44px" data-ping-cancel="1">إلغاء</button></div>';
+      const couriersCard = '<div class="cpo-card"><div class="cpo-row" style="justify-content:space-between;margin-bottom:12px"><b style="font-size:16px">المناديب الآن</b><span class="cpo-lbl">اضغط على المندوب لإرسال تنبيه</span></div>' +
+        (couriers.length ? '<div class="cpo-grid2">' + couriers.map(cc).join('') + '</div>' : '<div class="cpo-lbl">مفيش مناديب نشطين دلوقتي</div>') + composer + '</div>';
+      const apr = pending.length
+        ? pending.map(q => '<div class="cpo-ap"><div style="flex:1;min-width:0"><b>' + esc(q.courier_name) + '</b> · ' + esc(evLabels[q.event_type] || q.event_type) +
+            '<div class="cpo-lbl cpo-num">' + (q.transaction_id ? '<span dir="ltr">' + esc(q.transaction_id) + '</span>' : '') + (q.payload && (q.payload.reason || q.payload.note) ? ' — ' + esc(q.payload.reason || q.payload.note) : '') + '</div></div>' +
+            '<button type="button" class="cpo-btn p" data-v12res="' + Number(q.id) + '" data-dec="approved">موافقة</button><button type="button" class="cpo-btn g" data-v12res="' + Number(q.id) + '" data-dec="rejected">رفض</button></div>').join('')
+        : '<div class="cpo-lbl" style="padding:14px 0">مفيش طلبات معلقة دلوقتي</div>';
+      const apCard = '<div class="cpo-card"><div class="cpo-row" style="justify-content:space-between;margin-bottom:4px"><b style="font-size:16px">بانتظار موافقتك</b><span class="cpo-tag wn cpo-num">' + pending.length + '</span></div>' + apr + '</div>';
+      const feedItems = pending.slice(0, 5).map(q => ({ c: 'ac', t: esc(q.courier_name) + ' ' + esc(evLabels[q.event_type] || q.event_type), at: q.created_at || q.at }))
+        .concat(couriers.filter(c => c.last_event && c.last_event.type && c.last_event.at).slice(0, 3).map(c => ({ c: c.last_event.type === 'break' ? 'er' : 'ok', t: esc(c.name) + ': ' + esc(evLabels[c.last_event.type] || c.last_event.type), at: c.last_event.at })));
+      const feed = '<div class="cpo-card"><b style="font-size:16px">اللي بيوصل للإدارة فورًا</b><div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.45">' +
+        (feedItems.length ? feedItems.map(f => '<div class="cpo-row" style="align-items:flex-start"><span style="width:8px;height:8px;border-radius:50%;background:var(--' + f.c + ');margin-top:6px;flex:none"></span><span>' + f.t + ' · <span class="cpo-lbl cpo-num">' + ago(f.at) + '</span></span></div>').join('') : '<span class="cpo-lbl">مفيش حاجة جديدة</span>') + '</div></div>';
+      const ready = '<div class="cpo-card"><b style="font-size:16px">علّم جاهزية المعاملة</b>' +
+        '<input id="cop-ready-tx" type="text" dir="ltr" class="cpo-tx" placeholder="TX-2026-0412" aria-label="رقم المعاملة">' +
+        '<div class="cpo-row" style="justify-content:space-between;padding:8px 0"><span style="font-size:14px">جاهز بالمكتب</span><button type="button" role="switch" aria-label="جاهز بالمكتب" class="cpo-sw" data-ready="ready_flag"><i></i></button></div>' +
+        '<div class="cpo-row" style="justify-content:space-between;padding:8px 0"><span style="font-size:14px">الميعاد متأكد مع العميل</span><button type="button" role="switch" aria-label="الميعاد متأكد" class="cpo-sw" data-ready="client_confirmed"><i></i></button></div>' +
+        '<div class="cpo-lbl" style="margin-top:6px">بتظهر للمندوب كعلامة على كارت المشوار</div></div>';
+      const w = onWay[0], wle = w && w.last_event;
+      const cust = '<div class="cpo-card" style="flex:1"><b style="font-size:16px">اللي العميل بيشوفه</b><div class="cpo-cc" style="margin-top:10px;padding:14px;border-radius:18px">' +
+        (w ? '<div class="cpo-lbl">تتبع طلبك · <span class="cpo-num" dir="ltr">' + esc(wle.tx || '') + '</span></div><div class="cpo-row" style="gap:12px"><div class="cpo-ico">' + svg('truck', 20) + '</div><div><b>' + esc(String(w.name || '').split(' ')[0]) + ' في الطريق ليك</b><div class="cpo-lbl">المندوب في طريقه إليك دلوقتي</div></div></div>' +
+          '<div class="cpo-row" style="gap:6px"><div style="flex:1;height:6px;border-radius:6px;background:var(--ac)"></div><div style="flex:1;height:6px;border-radius:6px;background:var(--ac)"></div><div style="flex:1;height:6px;border-radius:6px;background:var(--bg)"></div></div>'
+          : '<div class="cpo-lbl">مفيش مندوب في الطريق دلوقتي — لما يضغط «في طريقي» هتشوف هنا اللي العميل هيشوفه.</div>') + '</div>' +
+        '<div class="cpo-lbl" style="margin-top:10px;line-height:1.5">الاسم الأول بس، من غير رقم أو مكان.</div></div>';
+      container.innerHTML = '<div class="cpo-wrap">' + head + pulse + '<div class="cpo-cols"><div class="cpo-main">' + couriersCard + apCard + '</div><div class="cpo-side">' + feed + ready + cust + '</div></div></div>';
       container.onclick = radarClick;
     } catch (e) {
       container.innerHTML = '<div role="alert" style="padding:12px;border-radius:14px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.08);font-size:12.5px;line-height:1.6">' +
@@ -296,6 +319,7 @@
     const t = ev.target.closest && ev.target.closest('button'); if (!t) return;
     const el = $('cop-radar');
     if (t.dataset.radarRetry) return loadV12OfficeRadar(el);
+    if (t.dataset.radarNotif) { shell(); state.tab = 'notifications'; return render(); }
     if (t.dataset.v12res) {
       t.disabled = true;
       const r = await rpc('courier_v12_resolve_event', { p_event_id: Number(t.dataset.v12res), p_decision: t.dataset.dec });
@@ -322,9 +346,11 @@
     if (t.dataset.ready) {
       const tx = ($('cop-ready-tx').value || '').trim(); if (!tx) return toast('اكتب رقم المعاملة', true);
       t.disabled = true;
-      const r = await rpc('courier_v12_mark_ready', { p_tx: tx, p_flag: t.dataset.ready, p_val: true });
+      const nv = !t.classList.contains('on');
+      const r = await rpc('courier_v12_mark_ready', { p_tx: tx, p_flag: t.dataset.ready, p_val: nv });
       t.disabled = false;
       if (r.error) return toast(r.error.message, true);
+      t.classList.toggle('on', nv); t.setAttribute('aria-checked', nv ? 'true' : 'false');
       return toast('اتسجلت الجاهزية للمندوب');
     }
   }
