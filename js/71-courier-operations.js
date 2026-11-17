@@ -210,7 +210,7 @@
     const box=document.createElement('section');box.id='cop-manager-panel';box.className='card p-4 space-y-3';
     box.innerHTML='<div class="flex items-center justify-between gap-2"><b>متابعة تشغيل المناديب والبلاغات</b><div class="flex gap-2"><button type="button" class="rounded-lg bg-slate-600 text-white px-3 py-2 text-xs font-bold" id="cop-manager-notifications">الإشعارات</button><button type="button" class="rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold" id="cop-manager-refresh">تحديث</button></div></div><div id="cop-manager-content" class="text-xs text-slate-500">'+(state.managerHtml||'جاري تحميل البلاغات والتقفيلات…')+'</div>';
     const rd=document.createElement('div');rd.id='cop-radar';box.prepend(rd);
-    root.appendChild(box);
+    root.insertBefore(box, root.firstChild); /* الرادار في أول التبويب مش في آخره */
     startRadar(rd);
     $('cop-manager-refresh').onclick=()=>loadManagerPanel(true);
     $('cop-manager-notifications').onclick=async()=>{shell();state.tab='notifications';await render();};
