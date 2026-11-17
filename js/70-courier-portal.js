@@ -84,8 +84,39 @@
     }
     return [monthStart(t), t];
   };
-  const money = n => Number(n || 0).toLocaleString('ar-EG') + ' ج';
-  const num = n => Number(n || 0).toLocaleString('ar-EG');
+  const money = n => Number(n || 0).toLocaleString('en-US') + ' ج';
+  const num = n => Number(n || 0).toLocaleString('en-US');
+
+  /* أيقونات SVG (نفس أيقونات التصميم) */
+  const IC = {
+    ring: '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>',
+    route: '<circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    chat: '<path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l1.9-5.4A8.4 8.4 0 1 1 21 11.5z"/>',
+    wallet: '<path d="M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 7l2-3h12M16 14h2"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+    refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>',
+    power: '<path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    qr: '<path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14v7M14 20h3"/>',
+    mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+    pin: '<path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+    pause: '<path d="M8 5v14M16 5v14"/>',
+    phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+    nav: '<path d="M3 11l18-8-8 18-2-8-8-2z"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+    back: '<path d="M15 6l-6 6 6 6"/>',
+    fwd: '<path d="M9 6l6 6-6 6"/>',
+    truck: '<path d="M2 6h12v10H2zM14 9h4l4 3.5V16h-8z"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>',
+    box: '<path d="M21 8l-9-5-9 5v8l9 5 9-5zM3.3 7.5l8.7 5 8.7-5M12 22V12.5"/>',
+    send: '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>',
+    trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/>',
+    cloud: '<path d="M6.5 19a4.5 4.5 0 0 1-.4-9A6 6 0 0 1 17.7 8 4.5 4.5 0 0 1 17.5 19z"/>',
+    warn: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>'
+  };
+  const ic = (n, sz) => '<svg class="cpn-i" viewBox="0 0 24 24" aria-hidden="true"' + (sz ? ' style="width:' + sz + 'px;height:' + sz + 'px"' : '') + '>' + (IC[n] || '') + '</svg>';
 
   /* ---------- حفظ واسترجاع حالة بطاقات التعريف ---------- */
   function initGuides() {
@@ -726,7 +757,7 @@
   }
   function applyTheme() {
     const o = $('courier-app'); if (o) o.setAttribute('data-theme', st.theme);
-    const b = $('cp-theme'); if (b) b.innerHTML = st.theme === 'dark' ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+    const b = $('cp-theme'); if (b) b.innerHTML = st.theme === 'dark' ? ic('sun') : ic('moon');
   }
   function toggleTheme() { st.theme = st.theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('ts_cp_theme', st.theme); } catch (e) { /* */ } applyTheme(); }
 
@@ -875,35 +906,32 @@
   function todayEarnedAmt() {
     return st.items.filter(i => i.day === today() && i.confirmed).reduce((s, x) => s + (Number(x.amount) || 0), 0);
   }
+  function myAvTile() {
+    const url = st.avPendingUrl || st.avUrl;
+    if (url && !st.avRemoved) return '<img class="cpn-av" src="' + eh(url) + '" alt="">';
+    const ch = String((st.me && st.me.name) || 'م').trim().charAt(0) || 'م';
+    return '<div class="cpn-av">' + eh(ch) + '</div>';
+  }
   function updateHeaderWho() {
     const w = $('cp-who-box'); if (!w) return;
-    const dotCol = st.onBreak ? '#f59e0b' : '#10b981';
-    w.innerHTML = '<div style="position:relative">' + myAvHtml(34) + '<span style="position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;background:' + dotCol + ';border:2px solid var(--hd)"></span></div>' +
-      '<div style="min-width:0"><b>' + eh(st.me && st.me.name) + '</b></div>';
+    w.innerHTML = myAvTile() +
+      '<div class="cpn-wt"><b>' + eh(st.me && st.me.name) + '</b>' +
+      '<div class="cpn-st"><i style="background:' + (st.onBreak ? 'var(--wn)' : 'var(--ok)') + '"></i>' + (st.onBreak ? 'في استراحة' : 'متاح') + ' · <span class="cpn-num" id="cp-time" dir="ltr"></span></div></div>';
+    tickClock();
   }
   function shell() {
     overlay(
-      '<header class="cp-head" style="justify-content:space-between">' +
-        '<div style="display:flex;align-items:center;gap:8px;min-width:0">' +
-          '<img src="logo-transparent.png" alt="" style="height:24px" onerror="this.style.display=\'none\'">' +
-          '<div class="cp-who" id="cp-who-box" data-act="profile" title="الحساب الشخصي" style="display:flex;align-items:center;gap:8px;cursor:pointer"></div>' +
-          '<button type="button" class="cp-v12-earn" id="cp-v12-earn" data-tab="account">' + money(todayEarnedAmt()) + '</button>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:5px">' +
-          '<span id="cp-time" style="font-size:12px;font-weight:800;color:var(--mu);margin-inline-end:2px" dir="ltr"></span>' +
-          '<button type="button" class="cp-v12-hicon" data-act="gsearch-toggle" title="بحث شامل في كل الأيام"><i class="fa-solid fa-magnifying-glass"></i></button>' +
-          '<button type="button" class="cp-v12-hicon" data-act="qr-scan" title="مسح QR"><i class="fa-solid fa-qrcode"></i></button>' +
-          '<button type="button" class="cp-v12-hicon" data-act="voice-cmd" title="أمر صوتي"><i class="fa-solid fa-microphone"></i></button>' +
-          '<button type="button" class="cp-v12-hicon" id="cp-break-btn" data-act="break-toggle" title="استراحة"><i class="fa-solid fa-pause"></i></button>' +
-          '<button type="button" class="cp-v12-hicon" id="cp-theme" data-act="theme" title="تغيير المظهر"></button>' +
-          '<button type="button" class="cp-v12-hicon" data-act="refresh" title="تحديث"><i class="fa-solid fa-rotate"></i></button>' +
-          logoutBtn +
-        '</div>' +
+      '<header class="cpn-head">' +
+        '<div class="cpn-who" id="cp-who-box" data-act="profile" title="الحساب الشخصي"></div>' +
+        '<button type="button" class="cpn-ib" data-tab="account" aria-label="حسابي وعمولاتي" title="حسابي وعمولاتي">' + ic('wallet') + '</button>' +
+        '<button type="button" class="cpn-ib" id="cp-theme" data-act="theme" aria-label="تغيير المظهر"></button>' +
+        '<button type="button" class="cpn-ib" data-act="refresh" aria-label="تحديث">' + ic('refresh') + '</button>' +
+        '<button type="button" class="cpn-ib pwr" data-act="logout" aria-label="تسجيل الخروج">' + ic('power') + '</button>' +
       '</header>' +
       '<div id="cp-v12-top-banners"></div>' +
       '<div class="cp-off" id="cp-off">مفيش اتصال بالإنترنت… الحفظ شغال أوفلاين</div>' +
       '<main class="cp-body" id="cp-body"></main>' +
-      '<nav class="cp-nav" id="cp-nav"></nav><div id="cp-modal-root"></div>');
+      '<nav class="cp-nav" id="cp-nav" aria-label="التنقل"></nav><div id="cp-modal-root"></div>');
     updateHeaderWho(); applyTheme(); tickClock(); renderNav(); renderTab(); refreshMyPosQuiet();
   }
   function tickClock() {
@@ -919,14 +947,12 @@
     const n = $('cp-nav'); if (!n) return;
     const u = unreadTotal(), pend = st.items.filter(i => !i.confirmed).length;
     const T = [
-      ['today', 'fa-house', 'اليوم', st.items.filter(i => i.day === today() && !i.confirmed).length],
-      ['trips', 'fa-motorcycle', 'مشاويري', 0],
-      ['review', 'fa-clipboard-check', 'المراجعة', pend],
-      ['chat', 'fa-comments', 'التواصل', u],
-      ['account', 'fa-wallet', 'حسابي', 0]
+      ['today', 'ring', 'الآن', st.items.filter(i => i.day === today() && !i.confirmed).length],
+      ['trips', 'route', 'مشاويري', 0],
+      ['review', 'check', 'المراجعة', pend],
+      ['chat', 'chat', 'التواصل', u]
     ];
-    const activeTab = st.tab === 'rank' ? 'account' : st.tab;
-    const html = T.map(t => '<button type="button" data-tab="' + t[0] + '" class="' + (activeTab === t[0] ? 'on' : '') + '"><i class="fa-solid ' + t[1] + '"></i>' + t[2] + (t[3] ? '<em class="cp-bdg">' + num(t[3]) + '</em>' : '') + '</button>').join('');
+    const html = T.map(t => '<button type="button" data-tab="' + t[0] + '" class="' + (st.tab === t[0] ? 'on' : '') + '">' + ic(t[1]) + t[2] + (t[3] ? '<em class="cp-bdg">' + num(t[3]) + '</em>' : '') + '</button>').join('');
     if (n.dataset.h !== html) { n.dataset.h = html; n.innerHTML = html; }
   }
   function setTab(t) {
@@ -1003,38 +1029,98 @@
     st.items.forEach(i => { if (i.day && i.day.length >= 7) set.add(i.day.slice(0, 7)); });
     return Array.from(set).sort().reverse().slice(0, 6);
   }
-  /* ---------- شاشة اليوم: الأولويات التشغيلية للمندوب ---------- */
+  function distTxtOf(it) {
+    if (!st.myPos || !window.CourierV12) return '';
+    const z = detectZoneAndCoords(it);
+    const km = window.CourierV12.haversineKm(st.myPos.lat, st.myPos.lng, z.lat, z.lng);
+    return km < 1 ? (Math.round(km * 1000) + ' م') : (km.toFixed(1) + ' كم');
+  }
+  const doneLabel = it => it.type === 'pickup' ? 'تم الاستلام' : it.type === 'fee' ? 'تم التحصيل' : 'تم التسليم';
+  function pickHero(pending) {
+    const a = st.activeTx && pending.find(i => String(i.transaction_id) === String(st.activeTx));
+    if (a) return a;
+    for (const tx of st.routeTxIds) { const it = pending.find(i => String(i.transaction_id) === String(tx)); if (it) return it; }
+    return pending[0] || null;
+  }
+  function heroCard(it, pending) {
+    const tx = String(it.transaction_id), z = detectZoneAndCoords(it), k = KIND[it.type];
+    const onway = it.live_state === 'on_the_way', waiting = !!st.waitingMap[tx];
+    const stage = waiting ? 2 : (onway ? 1 : 0);
+    const cod = Number(it.cod_remaining || 0), dist = distTxtOf(it);
+    const mates = pending.filter(x => x !== it && normAr(x.client_name || '') === normAr(it.client_name || '') && x.type === it.type).length;
+    const primary = stage === 0
+      ? '<button type="button" class="cpn-btn p" style="width:100%;min-height:54px;font-size:16px" data-act="on-my-way" data-tx="' + eh(tx) + '">' + ic('nav') + 'في طريقي للعميل</button>'
+      : stage === 1
+        ? '<button type="button" class="cpn-btn p" style="width:100%;min-height:54px;font-size:16px" data-act="v12-wait" data-tx="' + eh(tx) + '">' + ic('pin') + 'وصلت عند العميل</button>'
+        : '';
+    const slideAttrs = ' data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"';
+    const slide = stage === 2
+      ? '<div class="cpn-slide"' + slideAttrs + '><div class="kn">' + ic('back') + '</div><span>اسحب / اضغط لتأكيد ' + eh(k.sec === 'الاستلام' ? 'الاستلام' : k.sec === 'التسليم' ? 'التسليم' : 'الرسوم') + '</span></div>'
+      : '<button type="button" class="cpn-skip"' + slideAttrs + '>تأكيد المشوار مباشرة بدون خطوات</button>';
+    const tiles = '<div class="cpn-tiles">' +
+      (it.phone ? '<a class="cpn-tile" data-act="v12-call-log" data-tx="' + eh(tx) + '" href="' + eh(telHref(it.phone)) + '"><span class="ti ok">' + ic('phone') + '</span>اتصال</a>' : '') +
+      (it.phone ? '<button type="button" class="cpn-tile" data-act="v12-wa-tpl" data-tx="' + eh(tx) + '"><span class="ti ok">' + ic('chat') + '</span>واتساب</button>' : '') +
+      '<button type="button" class="cpn-tile" data-act="v12-map-opts" data-tx="' + eh(tx) + '"><span class="ti">' + ic('nav') + '</span>الخريطة</button>' +
+      '<button type="button" class="cpn-tile" data-act="detail" data-tx="' + eh(tx) + '"><span class="ti">' + ic('arrow') + '</span>تفاصيل</button>' +
+    '</div>';
+    return '<section class="cpn-hero">' +
+      '<div class="cpn-row" style="justify-content:space-between"><span class="cpn-lbl">المشوار الحالي · ' + eh(k.label) + '</span>' +
+        (dist ? '<span class="cpn-chip" style="background:var(--card)">' + ic('nav', 14) + '<span class="cpn-num">' + eh(dist) + '</span></span>' : '') + '</div>' +
+      '<div style="font-size:21px;font-weight:700;margin-top:6px" data-act="detail" data-tx="' + eh(tx) + '">' + eh(it.client_name || 'بدون اسم') + '</div>' +
+      '<div style="font-size:13px;color:var(--mu);margin-top:2px">' + eh(it.address || z.zone) + '</div>' +
+      (it.landmark_note ? '<div style="margin-top:8px;padding:8px 10px;border-radius:14px;background:var(--acsoft);font-size:12.5px;line-height:1.5"><span class="cpn-lbl" style="color:var(--ac)">ذاكرة المكان</span><br>' + eh(it.landmark_note) + '</div>' : '') +
+      '<div class="cpn-row" style="margin-top:12px;gap:6px;flex-wrap:wrap">' +
+        (cod > 0 ? '<span class="cpn-chip" style="background:var(--wnsoft);color:var(--wn)">تحصيل ' + money(cod) + '</span>' : '<span class="cpn-chip" style="background:var(--oksoft);color:var(--ok)">خالص الدفع</span>') +
+        '<span class="cpn-chip cpn-num" dir="ltr">' + eh(tx) + '</span>' +
+        (mates ? '<span class="cpn-chip">+' + num(mates) + ' طلب لنفس العميل</span>' : '') +
+        (it.office_ready ? '<span class="cpn-chip" style="background:var(--oksoft);color:var(--ok)">جاهز بالمكتب</span>' : '') +
+      '</div>' +
+      '<div class="cpn-steps"><i class="' + (stage >= 1 ? 'on' : '') + '"></i><i class="' + (stage >= 2 ? 'on' : '') + '"></i><i></i></div>' +
+      '<div class="cpn-stl"><span class="' + (stage >= 1 ? 'on' : '') + '">في الطريق</span><span class="' + (stage >= 2 ? 'on' : '') + '">وصلت</span><span>' + eh(doneLabel(it)) + '</span></div>' +
+      primary + slide + tiles +
+    '</section>';
+  }
+  /* ---------- شاشة الآن (حلقة اليوم + المشوار الحالي + التالي في خط السير) ---------- */
   function viewToday() {
     const t = today();
     const todayItems = itemsOf(t);
     const pending = todayItems.filter(i => !i.confirmed);
     const overdue = st.items.filter(i => !i.confirmed && i.day < t);
     const confirmed = todayItems.filter(i => i.confirmed);
-    const groups = groupItemsByClient(pending);
-    const greeting = '<section class="cp-card" style="padding:16px;margin-bottom:12px">' +
-      '<small style="color:var(--mu);font-weight:700">' + eh(dayLabel(t)) + '</small>' +
-      '<h2 style="font-size:21px;font-weight:900;margin:5px 0 3px">أهلاً ' + eh((st.me && st.me.name) || 'بك') + ' 👋</h2>' +
-      '<div style="color:var(--mu);font-size:12px">دي متابعة شغلك النهارده — ابدأ بالمشاوير اللي لسه محتاجة تأكيد</div>' +
-      '</section>';
-    const kpis = '<div class="cp-grid">' +
-      '<div class="cp-kpi"><small><i class="fa-solid fa-route"></i>مشاوير اليوم</small><b>' + num(todayItems.length) + '</b><div class="m">إجمالي المشاوير</div></div>' +
-      '<div class="cp-kpi"><small><i class="fa-solid fa-hourglass-half"></i>بانتظار تأكيدك</small><b>' + num(pending.length) + '</b><div class="p">مطلوب مراجعتها</div></div>' +
-      '<div class="cp-kpi wide"><small><i class="fa-solid fa-circle-check"></i>تم تأكيدها اليوم</small><b>' + num(confirmed.length) + '</b><div class="m">مشوار مؤكد</div></div>' +
-      '</div>';
+    const total = todayItems.length, cn = confirmed.length;
+    const off = (251.3 * (1 - (total ? cn / total : 0))).toFixed(1);
+    const cnt = k => todayItems.filter(i => i.type === k).length;
+    const ring = '<section class="cpn-card cpn-sum" data-tab="account">' +
+      '<div class="cpn-ring"><svg viewBox="0 0 96 96" width="96" height="96" aria-hidden="true"><circle cx="48" cy="48" r="40" fill="none" stroke="var(--fld)" stroke-width="10"/>' +
+      '<circle cx="48" cy="48" r="40" fill="none" stroke="var(--ac)" stroke-width="10" stroke-linecap="round" stroke-dasharray="251.3" stroke-dashoffset="' + off + '" transform="rotate(-90 48 48)"/></svg>' +
+      '<div><b class="cpn-num" style="font-size:24px;line-height:1">' + num(cn) + '<span style="font-size:14px;color:var(--mu)">/' + num(total) + '</span></b><span class="cpn-lbl">مؤكد</span></div></div>' +
+      '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px"><div><div class="cpn-lbl">عمولة اليوم</div>' +
+      '<div class="cpn-num" style="font-size:28px;font-weight:700;line-height:1.1">' + num(todayEarnedAmt()) + ' <span style="font-size:14px;color:var(--mu);font-weight:500">ج</span></div></div>' +
+      '<div class="cpn-row" style="flex-wrap:wrap;gap:6px"><span class="cpn-chip">استلام ' + num(cnt('pickup')) + '</span><span class="cpn-chip">تسليم ' + num(cnt('delivery')) + '</span><span class="cpn-chip">رسوم ' + num(cnt('fee')) + '</span></div></div>' +
+    '</section>';
     const overdueBox = overdue.length
       ? '<section class="cp-card" style="border-color:#f59e0b;margin-bottom:12px"><div class="cp-row"><b>⚠ مشاوير من أيام سابقة</b><span class="cp-tag wt">' + num(overdue.length) + ' غير مؤكدة</span></div><p class="cp-sub">راجع المشاوير القديمة حتى لا تظل معلّقة في حسابك.</p><button type="button" class="cp-btn cp-sm" data-tab="review">فتح المراجعة</button></section>'
       : '';
-    const pendingSection = '<div class="cp-h"><span>المشاوير المطلوب تأكيدها اليوم</span><button type="button" class="cp-a cp-sm" data-tab="trips">كل مشاويري</button></div>' +
-      (groups.length ? groups.map(tripGroupCard).join('') : '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير محتاجة تأكيد النهارده 🎉' : 'جاري تحميل المشاوير…') + '</div>');
+
+    const cur = pickHero(pending);
+    const hero = cur ? heroCard(cur, pending)
+      : '<section class="cpn-card" style="margin-top:12px;text-align:center;color:var(--mu)">' + (st.loaded ? 'مفيش مشاوير محتاجة تأكيد النهارده 🎉' : 'جاري تحميل المشاوير…') + '</section>';
+    const nextG = groupItemsByClient(pending).filter(g => !cur || !g.items.includes(cur));
+    const next = nextG.length
+      ? '<div class="cpn-sec"><div class="cpn-sech"><span class="cpn-lbl">التالي في خط السير</span><button type="button" class="cpn-lbl" style="background:none;border:0;cursor:pointer;color:var(--ac)" data-tab="trips">كل المشاوير ←</button></div>' +
+        '<div class="cpn-list" style="padding:4px 14px">' + nextG.slice(0, 4).map((g, i) => {
+          const it0 = g.items[0], z = detectZoneAndCoords(it0), d = distTxtOf(it0);
+          return '<div class="cpn-row" style="padding:10px 0;' + (i < Math.min(nextG.length, 4) - 1 ? 'border-bottom:1px solid var(--bd);' : '') + 'cursor:pointer" data-act="detail" data-tx="' + eh(it0.transaction_id) + '">' +
+            '<span class="cpn-chip cpn-num" style="width:28px;justify-content:center;padding:0">' + num(i + 2) + '</span>' +
+            '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">' + eh(g.client_name) + (g.items.length > 1 ? ' · ' + num(g.items.length) + ' طلبات' : '') + '</div><div style="font-size:12px;color:var(--mu)">' + eh(kindLabel(it0)) + ' · ' + eh(z.zone) + '</div></div>' +
+            '<span class="cpn-lbl cpn-num">' + (d ? eh(d) : money(g.items.reduce((a, x) => a + (Number(x.amount) || 0), 0))) + '</span></div>';
+        }).join('') + '</div></div>'
+      : '';
     const confirmedGroups = groupItemsByClient(confirmed);
     const confirmedSection = confirmedGroups.length
-      ? '<div class="cp-h" style="margin-top:14px"><span>المشاوير اللي اتأكدت النهارده</span><span class="cp-tag ok">' + num(confirmed.length) + '</span></div>' + confirmedGroups.map(tripGroupCard).join('')
+      ? '<div class="cpn-sec"><div class="cpn-sech"><span class="cpn-lbl">اتأكدت النهارده</span><span class="cpn-tag ok">' + num(confirmed.length) + '</span></div>' + confirmedGroups.map(tripGroupCard).join('') + '</div>'
       : '';
-    const quickLinks = '<div class="cp-grid" style="margin-top:12px">' +
-      '<button type="button" class="cp-btn" data-tab="review"><i class="fa-solid fa-clipboard-check"></i> مراجعة وتأكيد</button>' +
-      '<button type="button" class="cp-btn" data-tab="account"><i class="fa-solid fa-wallet"></i> حسابي وعمولاتي</button>' +
-      '</div>';
-    return greeting + kpis + renderSmartRoutePanel() + overdueBox + pendingSection + confirmedSection + renderOfficeBagCard() + quickLinks;
+    return ring + overdueBox + hero + next + '<div class="cpn-sec">' + renderSmartRoutePanel() + '</div>' + confirmedSection + renderOfficeBagCard();
   }
 
   function viewHome() {
@@ -1069,20 +1155,42 @@
   }
   const itemsOf = d => st.items.filter(it => it.day === d);
 
+  const KIND_IC = { pickup: ['pk', 'box'], delivery: ['dl', 'truck'], fee: ['fe', 'route'] };
+  function tripRow(g) {
+    const it = g.items[0], k = KIND_IC[g.type] || KIND_IC.pickup;
+    const tot = g.items.reduce((a, x) => a + (Number(x.amount) || 0), 0);
+    const allConf = g.items.every(x => x.confirmed);
+    const open = st.openKey === g.key;
+    return '<div class="cpn-li" data-act="trip-open" data-key="' + eh(g.key) + '"><div class="cpn-ico ' + k[0] + '">' + ic(k[1]) + '</div>' +
+      '<div class="m"><div class="n">' + eh(g.client_name) + (g.items.length > 1 ? ' <span class="cpn-lbl">· ' + num(g.items.length) + ' طلبات</span>' : '') + '</div>' +
+      '<div class="s cpn-num" dir="ltr" style="text-align:start">' + eh(it.transaction_id) + (g.phone ? ' · ' + eh(g.phone) : '') + '</div></div>' +
+      '<div style="text-align:end"><div class="cpn-num" style="font-weight:700">' + money(tot) + '</div><span class="cpn-tag ' + (allConf ? 'ok' : 'wn') + '">' + (allConf ? 'مؤكد' : 'بانتظار') + '</span></div></div>' +
+      (open ? '<div class="cpn-exp">' + tripGroupCard(g) + '</div>' : '');
+  }
+  function tripSections(groups) {
+    const by = {};
+    groups.forEach(g => { const zn = detectZoneAndCoords(g.items[0]).zone; (by[zn] = by[zn] || []).push(g); });
+    return Object.keys(by).map(zn => {
+      const gs = by[zn], n = gs.reduce((a, g) => a + g.items.length, 0);
+      const tot = gs.reduce((a, g) => a + g.items.reduce((b, x) => b + (Number(x.amount) || 0), 0), 0);
+      return '<div class="cpn-sec"><div class="cpn-sech"><span class="cpn-lbl">' + eh(zn) + ' · ' + num(n) + ' مشوار</span><span class="cpn-lbl">مجموع ' + money(tot) + '</span></div>' +
+        '<div class="cpn-list">' + gs.map(tripRow).join('') + '</div></div>';
+    }).join('');
+  }
   function viewTrips() {
     const all = itemsOf(st.day), n = k => all.filter(i => k === 'all' || i.type === k).length;
-    const tabs = '<div class="cp-tabs">' + [['all', 'الكل'], ['pickup', 'استلام'], ['delivery', 'تسليم'], ['fee', 'رسوم توصيل']].map(t => '<button type="button" class="cp-tab' + (st.type === t[0] ? ' on' : '') + '" data-type="' + t[0] + '">' + t[1] + '<i>' + num(n(t[0])) + '</i></button>').join('') + '</div>';
-    const stTabs = '<div class="cp-tabs">' + [
-      ['all', 'كل الحالات (' + num(all.length) + ')'],
-      ['pending', '⏳ بانتظار تأكيدك (' + num(all.filter(i => !i.confirmed).length) + ')'],
-      ['confirmed', '✓ مؤكدة (' + num(all.filter(i => i.confirmed).length) + ')']
-    ].map(s => '<button type="button" class="cp-tab' + (st.statusFilter === s[0] ? ' on' : '') + '" data-sfilter="' + s[0] + '">' + s[1] + '</button>').join('') + '</div>';
+    const chip = (attr, val, on, label, cnt) => '<button type="button" class="cpn-chip' + (on ? ' on' : '') + '" ' + attr + '="' + val + '">' + label + (cnt != null ? ' ' + num(cnt) : '') + '</button>';
+    const chips = '<div class="cpn-chips">' +
+      [['all', 'الكل'], ['pickup', 'استلام'], ['delivery', 'تسليم'], ['fee', 'رسوم']].map(t => chip('data-type', t[0], st.type === t[0], t[1], n(t[0]))).join('') +
+      '</div><div class="cpn-chips" style="padding-top:0">' +
+      [['all', 'كل الحالات', all.length], ['pending', 'غير مؤكد', all.filter(i => !i.confirmed).length], ['confirmed', 'مؤكد', all.filter(i => i.confirmed).length]].map(s2 => chip('data-sfilter', s2[0], st.statusFilter === s2[0], s2[1], s2[2])).join('') + '</div>';
 
-    const searchBar = '<div class="cp-search-bar">' +
-      '<input id="cp-trip-q" type="search" value="' + eh(st.q) + '" placeholder="ابحث باسم العميل، رقم المعاملة، التليفون، العنوان…" aria-label="البحث في المشاوير">' +
-      '<button type="button" class="cp-btn cp-go cp-sm" data-act="qsearch"><i class="fa-solid fa-magnifying-glass"></i> بحث</button>' +
-      (st.q ? '<button type="button" class="cp-btn cp-sm" data-act="qclear">مسح</button>' : '') +
-    '</div>';
+    const head = '<div class="cpn-row" style="padding:6px 0 10px"><div style="flex:1"><div style="font-size:22px;font-weight:700">مشاويري</div><div style="font-size:12px;color:var(--mu)">' + eh(dayLabel(st.day)) + ' · ' + num(all.length) + ' مشوار</div></div>' +
+      '<button type="button" class="cpn-ib" data-act="gsearch-toggle" aria-label="بحث شامل في كل الأيام">' + ic('search') + '</button>' +
+      '<button type="button" class="cpn-ib" data-act="qr-scan" aria-label="مسح إيصال QR">' + ic('qr') + '</button></div>';
+    const searchBar = '<div class="cpn-search">' + ic('search') +
+      '<input id="cp-trip-q" type="text" value="' + eh(st.q) + '" placeholder="ابحث بالاسم أو التليفون أو رقم المعاملة" aria-label="بحث في المشاوير">' +
+      (st.q ? '<button type="button" class="x" data-act="qclear" aria-label="مسح البحث">' + ic('x', 16) + '</button>' : '') + '</div>';
 
     const q = normAr((st.q || '').trim());
     const rows = all.filter(i => {
@@ -1095,9 +1203,8 @@
       }
       return true;
     });
-
     const groups = groupItemsByClient(rows);
-    
+
     const routeStepper = st.routeTxIds.length
       ? '<div class="cp-v12-stepper">' + st.routeTxIds.map((rtx, idx) => {
           const rit = byTx(rtx); if (!rit) return '';
@@ -1105,30 +1212,29 @@
           return '<div class="cp-v12-step' + (idx === 0 ? ' on' : '') + '" data-act="detail" data-tx="' + eh(rtx) + '">' + num(idx + 1) + '. ' + eh(rz.zone) + '</div>';
         }).join('') + '</div>'
       : '';
-
     const zonesMap = {};
     all.filter(x => !x.confirmed).forEach(x => {
       const zn = detectZoneAndCoords(x).zone;
       (zonesMap[zn] = zonesMap[zn] || []).push(x.transaction_id);
     });
     const zoneClusters = Object.keys(zonesMap).length
-      ? '<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:8px;padding:2px 0">' + Object.keys(zonesMap).map(zn =>
-          '<button type="button" class="cp-a cp-sm" data-act="v12-add-zone" data-zone="' + eh(zn) + '">📍 ' + eh(zn) + ' (' + num(zonesMap[zn].length) + ')</button>'
-        ).join('') + '</div>'
+      ? '<div class="cpn-chips" style="padding:0 0 8px">' + Object.keys(zonesMap).map(zn =>
+          '<button type="button" class="cpn-chip" data-act="v12-add-zone" data-zone="' + eh(zn) + '">' + ic('pin', 14) + eh(zn) + ' (' + num(zonesMap[zn].length) + ')</button>').join('') + '</div>'
       : '';
-
-    const mapToggleBar = '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px">' +
-      '<div style="display:flex;gap:5px">' +
-        '<button type="button" class="cp-tab' + (st.shiftFilter === 'all' ? ' on' : '') + '" data-act="v12-shift" data-val="all">اليوم كله</button>' +
-        '<button type="button" class="cp-tab' + (st.shiftFilter === 'am' ? ' on' : '') + '" data-act="v12-shift" data-val="am">☀️ صباحي</button>' +
-        '<button type="button" class="cp-tab' + (st.shiftFilter === 'pm' ? ' on' : '') + '" data-act="v12-shift" data-val="pm">🌙 مسائي</button>' +
-      '</div>' +
-      '<button type="button" class="cp-a cp-sm' + (st.mapMode ? ' pri' : '') + '" data-act="v12-map-toggle"><i class="fa-solid fa-map"></i> ' + (st.mapMode ? 'عرض القائمة' : 'الخريطة الحية') + '</button>' +
-    '</div>';
-
+    const shiftBtn = (v, l) => '<button type="button" class="cpn-chip' + (st.shiftFilter === v ? ' on' : '') + '" data-act="v12-shift" data-val="' + v + '">' + l + '</button>';
+    const mapToggleBar = '<div class="cpn-chips" style="padding:0 0 8px">' + shiftBtn('all', 'اليوم كله') + shiftBtn('am', '☀️ صباحي') + shiftBtn('pm', '🌙 مسائي') +
+      '<button type="button" class="cpn-chip' + (st.mapMode ? ' on' : '') + '" data-act="v12-map-toggle">' + ic('nav', 14) + (st.mapMode ? 'عرض القائمة' : 'الخريطة الحية') + '</button></div>';
     const mapHtml = (st.mapMode && window.CourierV12) ? window.CourierV12.renderEmbeddedMap(rows, st.myPos, detectZoneAndCoords) : '';
-    const v12SearchBar = '<div class="cp-v12-gsearch"><i class="fa-solid fa-magnifying-glass gs-ic"></i><input id="cp-trip-q" type="text" value="' + eh(st.q) + '" placeholder="ابحث بالاسم أو الهاتف أو رقم المعاملة…">' + (st.q ? '<button type="button" class="gs-x" data-act="qclear">✕</button>' : '') + '</div>';
-    return dayNav() + routeStepper + renderSmartRoutePanel() + mapToggleBar + zoneClusters + mapHtml + v12SearchBar + tabs + stTabs + (groups.length ? groups.map(tripGroupCard).join('') : '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مطابقة في اليوم ده' : 'جاري التحميل…') + '</div>');
+
+    const pendRows = rows.filter(x => !x.confirmed);
+    const rc = st.routeTxIds.filter(tx => { const it = byTx(tx); return it && !it.confirmed; }).length;
+    const fab = (rc || pendRows.length)
+      ? '<button type="button" class="cpn-btn p cpn-fab" data-act="' + (rc ? 'route-autosort' : 'route-all') + '">' + ic('route') + 'رتّب خط السير (' + num(rc || pendRows.length) + ')</button>'
+      : '';
+    const foot = (q || st.type !== 'all' || st.statusFilter !== 'all')
+      ? '<div style="font-size:12px;color:var(--mu);text-align:center;padding:10px 0">' + num(rows.length) + ' نتيجة من ' + num(all.length) + ' · البحث الشامل في كل الأيام من زرار العدسة</div>' : '';
+    return head + dayNav() + searchBar + chips + routeStepper + renderSmartRoutePanel() + mapToggleBar + zoneClusters + mapHtml +
+      (groups.length ? tripSections(groups) : '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مطابقة في اليوم ده' : 'جاري التحميل…') + '</div>') + foot + fab;
   }
 
   function tripGroupCard(g) {
@@ -1327,65 +1433,48 @@
     const oldDays = Object.keys(old).sort().reverse().slice(0, 6).filter(d => d !== st.day);
     const oldBox = oldDays.length ? '<div class="cp-old">⚠ عندك أيام قبل كده لسه ما اتأكدتش (اضغط على اليوم لمراجعته):<br>' + oldDays.map(d => '<button type="button" class="cp-a" data-act="dset" data-day="' + d + '">' + eh(dayLabel(d)) + ' (' + num(old[d]) + ' مشوار)</button>').join('') + '</div>' : '';
     const all = itemsOf(st.day);
+    st.sel = st.sel || {};
+    const selKeys = Object.keys(st.sel).filter(k => all.some(i => !i.confirmed && (i.type + '|' + itemRef(i)) === k));
+    const selAmt = selKeys.reduce((a, k) => a + Number(st.sel[k].amt || 0), 0);
+    const sumC = all.filter(i => i.confirmed).reduce((a, i) => a + Number(i.amount || 0), 0);
+    const sumP = all.filter(i => !i.confirmed).reduce((a, i) => a + Number(i.amount || 0), 0);
+    const closed = all.filter(i => !i.confirmed && !isNotClosedByStaff(i)).length;
+    const head = '<div style="padding:6px 0 4px;font-size:22px;font-weight:700">مراجعة اليوم</div>';
+    const summary = '<div class="cpn-card cpn-sum3" style="margin-top:6px;padding:14px"><div><span class="cpn-lbl">مؤكد</span><b style="color:var(--ok)">' + num(sumC) + '</b></div>' +
+      '<div><span class="cpn-lbl">بانتظارك</span><b style="color:var(--wn)">' + num(sumP) + '</b></div><div><span class="cpn-lbl">المقفل</span><b>' + num(closed) + '</b></div></div>';
 
     const renderRevItem = i => {
-      const notClosed = isNotClosedByStaff(i);
-      const nBadge = noteBadgeHtml(i);
-      return '<div class="cp-rev">' +
-        '<div style="min-width:0;flex:1">' +
-          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-            '<b class="cp-name" style="font-size:13.5px" data-act="detail" data-tx="' + eh(i.transaction_id) + '">' + eh(i.client_name || 'بدون اسم') + '</b>' +
-            '<span dir="ltr" style="font-weight:700;font-size:11.5px;color:var(--mu)">' + eh(i.transaction_id) + '</span>' +
-            (i.type === 'fee' ? '<span class="cp-chip">' + (i.fee_kind === 'round' ? 'ذهاب وعودة' : 'ذهاب فقط') + '</span>' : '') +
-          '</div>' +
-          '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">' +
-            (notClosed ? '<span class="cp-tag wt">⏳ الموظف لسه ما قفلش المعاملة</span>' : '') +
-            nBadge +
-          '</div>' +
-        '</div>' +
-        '<div style="text-align:end;display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
-          '<b>' + money(i.amount) + '</b>' +
-          '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">' +
-            '<button type="button" class="cp-a cp-sm" data-act="detail" data-tx="' + eh(i.transaction_id) + '">التفاصيل</button>' +
-            (!i.confirmed
-              ? '<button type="button" class="cp-a cp-sm pri" data-act="ask-one" data-type="' + eh(i.type) + '" data-ref="' + eh(itemRef(i)) + '" data-tx="' + eh(i.transaction_id) + '" data-amt="' + eh(i.amount) + '">أكّد ده بس</button>'
-              : '<span class="cp-tag ok">✓ مؤكد</span>') +
-            '<button type="button" class="cp-a cp-sm" data-act="note" data-tx="' + eh(i.transaction_id) + '"><i class="fa-solid fa-flag"></i><span>ملاحظة</span></button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
+      const notClosed = isNotClosedByStaff(i), key = i.type + '|' + itemRef(i), on = !!st.sel[key];
+      const chk = i.confirmed
+        ? '<span class="cpn-chk dn">' + ic('check', 16) + '</span>'
+        : '<button type="button" class="cpn-chk' + (on ? ' on' : '') + '" data-act="sel-toggle" data-type="' + eh(i.type) + '" data-ref="' + eh(itemRef(i)) + '" data-amt="' + eh(i.amount) + '" aria-label="اختيار">' + (on ? ic('check', 16) : '') + '</button>';
+      return '<div class="cpn-li" style="cursor:default;align-items:flex-start">' + chk +
+        '<div class="m"><div class="n" data-act="detail" data-tx="' + eh(i.transaction_id) + '" style="cursor:pointer">' + eh(i.client_name || 'بدون اسم') + '</div>' +
+        '<div class="s cpn-num" dir="ltr" style="text-align:start">' + eh(i.transaction_id) + '</div>' +
+        '<div class="cpn-row" style="flex-wrap:wrap;gap:5px;margin-top:5px">' +
+          (i.type === 'fee' ? '<span class="cpn-chip" style="height:22px;font-size:11px">' + (i.fee_kind === 'round' ? 'ذهاب وعودة' : 'ذهاب فقط') + '</span>' : '') +
+          (notClosed ? '<span class="cpn-tag wn">الموظف لسه ما قفلش</span>' : '') + noteBadgeHtml(i) +
+          (!i.confirmed ? '<button type="button" class="cpn-chip" style="height:26px;font-size:11px;padding:0 9px" data-act="ask-one" data-type="' + eh(i.type) + '" data-ref="' + eh(itemRef(i)) + '" data-tx="' + eh(i.transaction_id) + '" data-amt="' + eh(i.amount) + '">أكّد ده بس</button>' : '') +
+          '<button type="button" class="cpn-chip" style="height:26px;font-size:11px;padding:0 9px" data-act="note" data-tx="' + eh(i.transaction_id) + '">ملاحظة</button>' +
+        '</div></div><b class="cpn-num">' + money(i.amount) + '</b></div>';
     };
-
     const sec = k => {
       const rows = all.filter(i => i.type === k); if (!rows.length) return '';
-      const pend = rows.filter(i => !i.confirmed), tot = rows.reduce((a, i) => a + Number(i.amount || 0), 0), ptot = pend.reduce((a, i) => a + Number(i.amount || 0), 0);
+      const pend = rows.filter(i => !i.confirmed), ptot = pend.reduce((a, i) => a + Number(i.amount || 0), 0);
       const last = rows.filter(i => i.confirmed_at).map(i => i.confirmed_at).sort().pop();
-      const groups = groupItemsByClient(rows);
-
-      const groupsHtml = groups.map(g => {
+      const groupsHtml = groupItemsByClient(rows).map(g => {
         if (g.items.length === 1) return renderRevItem(g.items[0]);
         const gTot = g.items.reduce((a, x) => a + Number(x.amount || 0), 0);
-        return '<div class="cp-rev-grp">' +
-          '<div class="cp-row" style="margin-bottom:4px">' +
-            '<div class="cp-name" style="font-size:14px" data-act="detail" data-tx="' + eh(g.items[0].transaction_id) + '">' +
-              eh(g.client_name) + ' <span class="cp-tag k-pk">' + num(g.items.length) + ' ريكوستات</span>' +
-            '</div>' +
-            '<b>إجمالي العميل: ' + money(gTot) + '</b>' +
-          '</div>' +
-          g.items.map(renderRevItem).join('') +
-        '</div>';
+        return '<div style="background:var(--bg)"><div class="cpn-row" style="justify-content:space-between;padding:8px 14px 0"><span class="cpn-lbl">' + eh(g.client_name) + ' · ' + num(g.items.length) + ' ريكوستات</span><span class="cpn-lbl">إجمالي العميل ' + money(gTot) + '</span></div></div>' + g.items.map(renderRevItem).join('');
       }).join('');
-
-      return '<div class="cp-card">' +
-        '<div class="cp-row"><b>' + KIND[k].sec + '</b><span class="cp-tag ' + KIND[k].cls + '">' + num(rows.length) + ' مشوار · ' + money(tot) + '</span></div>' +
-        '<div style="margin-top:6px">' + groupsHtml + '</div>' +
-        (pend.length
-          ? '<button type="button" class="cp-big" data-act="ask" data-kind="' + k + '" data-n="' + pend.length + '" data-amt="' + ptot + '">' + KIND[k].btn + ' للكل (' + num(pend.length) + ' مشوار · ' + money(ptot) + ')</button>'
-          : '<div class="cp-done">✓ اتأكد بالكامل' + (last ? ' الساعة ' + eh(timeOf(last)) : '') + '</div>') +
-      '</div>';
+      return '<div class="cpn-sec"><div class="cpn-sech"><span class="cpn-lbl">' + KIND[k].sec + ' · ' + num(rows.length) + '</span>' +
+        (pend.length ? '<button type="button" class="cpn-lbl" style="background:none;border:0;cursor:pointer;color:var(--ac)" data-act="sel-all" data-kind="' + k + '">اختار الكل</button>' : '<span class="cpn-tag ok">اتأكد' + (last ? ' ' + eh(timeOf(last)) : '') + '</span>') + '</div>' +
+        '<div class="cpn-list">' + groupsHtml + '</div>' +
+        (pend.length ? '<button type="button" class="cpn-btn" style="width:100%;margin-top:8px" data-act="ask" data-kind="' + k + '" data-n="' + pend.length + '" data-amt="' + ptot + '">' + eh(KIND[k].btn) + ' للكل (' + num(pend.length) + ' · ' + money(ptot) + ')</button>' : '') + '</div>';
     };
     const body = ['pickup', 'delivery', 'fee'].map(sec).join('');
-    return renderGuideBanner('review') + dayNav() + oldBox + (body || '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مسجلة في اليوم ده' : 'جاري التحميل…') + '</div>');
+    const bar = selKeys.length ? '<div class="cpn-bar"><button type="button" class="cpn-btn p" style="width:100%;min-height:52px" data-act="confirm-sel">' + ic('check') + 'تأكيد ' + num(selKeys.length) + ' مشاوير · ' + money(selAmt) + '</button></div>' : '';
+    return renderGuideBanner('review') + head + dayNav() + oldBox + summary + (body || '<div class="cp-empty">' + (st.loaded ? 'مفيش مشاوير مسجلة في اليوم ده' : 'جاري التحميل…') + '</div>') + bar;
   }
 
   /* ---------- 5) التواصل (مع علامات القراءة: ✓ اتبعتت / ✓✓ اتقرت) ---------- */
@@ -1401,13 +1490,29 @@
         (Number(c.unread) ? '<span class="cp-ub">' + num(c.unread) + '</span>' : '') + '</div>' +
         (c.phone ? '<div class="cp-info">' + callBtns(c.phone, 'اتصال') + '</div>' : '') + '</div>';
     }).join('');
-    b.innerHTML = renderGuideBanner('chat') + (rows || '<div class="cp-empty">' + (st.loaded ? 'مفيش جهات اتصال' : 'جاري التحميل…') + '</div>');
+    let qn = 0;
+    try { const uid = st.me && st.me.user_id; qn = (JSON.parse(localStorage.getItem('cp_v12_offline_queue') || '[]') || []).filter(x => !x.uid || x.uid === uid).length; } catch (e) { /* */ }
+    const officeOn = st.contacts.some(online);
+    const head = '<div style="padding:6px 0 8px"><div style="font-size:22px;font-weight:700">التواصل</div><div class="cpn-st"><i style="background:' + (officeOn ? 'var(--ok)' : 'var(--mu)') + '"></i>' + (officeOn ? 'المكتب متصل' : 'المكتب مش متصل دلوقتي') + ' · شات خاص بينك وبين الإدارة</div></div>';
+    const offBar = qn ? '<div class="cpn-warnbar">' + ic('cloud') + '<span style="flex:1">' + num(qn) + ' عمليات محفوظة وهتتبعت أول ما النت يرجع</span><span class="cpn-lbl">مندوب: ' + eh(((st.me && st.me.name) || '').split(' ')[0]) + '</span></div>' : '';
+    const tool = (act, id, cls, icn, label) => '<button type="button" class="cpn-tool" data-act="' + act + '"' + (id ? ' id="' + id + '"' : '') + '><span class="ti ' + cls + '">' + ic(icn) + '</span>' + label + '</button>';
+    const tools = '<div class="cpn-tools">' + tool('voice-cmd', '', '', 'mic', 'مساعد صوتي') + tool('qr-scan', '', '', 'qr', 'مسح QR') + tool('send-loc', '', 'ok', 'pin', 'ابعت موقعي') + tool('break-toggle', 'cp-break-btn', 'wn', 'pause', st.onBreak ? 'إنهاء الاستراحة' : 'استراحة') + '</div>';
+    const lbAll = (st.leaderboard || []).slice().sort((a, c) => (a.rank || 99) - (c.rank || 99));
+    let lbShow = lbAll.slice(0, 3);
+    const meRow = lbAll.find(r => r.is_me);
+    if (meRow && !lbShow.includes(meRow)) lbShow = lbAll.slice(0, 2).concat([meRow]);
+    const lb = lbShow.length > 1
+      ? '<div class="cpn-card" style="margin-top:12px;padding:12px 14px"><div class="cpn-row" style="justify-content:space-between;margin-bottom:8px"><span class="cpn-lbl">ترتيب المناديب · عدد المشاوير</span><span style="color:var(--wn)">' + ic('trophy', 18) + '</span></div>' +
+        '<div class="cpn-lb" data-tab="rank">' + lbShow.map(r => '<div class="' + (r.is_me ? 'me' : '') + '"><div class="a">' + eh(String(r.name || 'م').trim().charAt(0)) + '</div><div style="' + (r.is_me ? 'font-weight:700' : '') + '">' + (r.is_me ? 'أنت · ' : '') + eh(String(r.name || '').split(' ').slice(0, 2).join(' ')) + '</div><div class="cpn-lbl cpn-num">' + num(r.total_trips) + '</div></div>').join('') + '</div></div>'
+      : '';
+    b.innerHTML = renderGuideBanner('chat') + head + offBar + tools + lb + '<div class="cpn-sec">' + (rows || '<div class="cp-empty">' + (st.loaded ? 'مفيش جهات اتصال' : 'جاري التحميل…') + '</div>') + '</div>';
   }
   function convView() {
     const b = $('cp-body'), c = st.chat; if (!b) return;
     b.innerHTML = '<div class="cp-chat"><div class="cp-chead"><button type="button" class="cp-btn cp-sm" data-act="chat-back">رجوع للقائمة</button><b>' + eh(c.name) + '</b>' + (c.phone ? callBtns(c.phone, '') : '') + '</div>' +
       '<div class="cp-msgs" id="cp-msgs"></div>' + (c.tx ? '<div class="cp-sub" style="margin-top:6px">بخصوص معاملة <b>' + eh(c.tx) + '</b> <button type="button" class="cp-a cp-sm" data-act="chat-notx">إلغاء الإشارة</button></div>' : '') +
-      '<div class="cp-comp"><textarea id="cp-msg" class="cp-field" rows="1" placeholder="اكتب رسالتك هنا…">' + eh(st.draft) + '</textarea><button type="button" class="cp-btn cp-go" data-act="chat-send">إرسال</button></div></div>';
+      '<div class="cpn-qr">' + ['وصلت', 'العميل مش بيرد', 'متأخر 10 دقايق', 'تم التسليم'].map(x => '<button type="button" class="cpn-chip" style="height:34px;border:1px solid var(--bd);cursor:pointer" data-act="qreply" data-t="' + x + '">' + x + '</button>').join('') + '</div>' +
+      '<div class="cp-comp"><textarea id="cp-msg" class="cp-field" rows="1" placeholder="اكتب رسالتك للمكتب…">' + eh(st.draft) + '</textarea><button type="button" class="cp-btn cp-go" data-act="chat-send" aria-label="إرسال">' + ic('send') + '</button></div></div>';
     paintMsgs(true);
     const t = $('cp-msg'); if (t) { t.addEventListener('input', () => { st.draft = t.value; t.style.height = 'auto'; t.style.height = Math.min(110, t.scrollHeight) + 'px'; }); }
   }
@@ -1984,6 +2089,7 @@
         st.onBreak = !st.onBreak;
         updateHeaderWho();
         const bb = $('cp-break-btn'); if (bb) bb.style.color = st.onBreak ? '#f59e0b' : '';
+        if (st.tab === 'chat' && !st.chat) viewChat();
         if (window.CourierV12) window.CourierV12.queueOrRun('courier_v12_dispatch_action', { p_event_type: st.onBreak ? 'break' : 'resume', p_tx: null, p_payload: {} }).catch(() => null);
         toast(st.onBreak ? '⏸ تم تفعيل وضع الاستراحة للمكتب' : '🟢 رجعت متاح للشغل');
         return;
@@ -2078,6 +2184,7 @@
         st.waitingMap[tx] = Date.now();
         if (window.CourierV12) window.CourierV12.queueOrRun('courier_v12_dispatch_action', { p_event_type: 'waiting', p_tx: tx, p_payload: {} }).catch(() => null);
         toast('⏳ تم تسجيل وصولك عند العميل — لو اتأخر 5 دقايق ابعتله تذكير');
+        renderTab(false);
         return;
       }
       case 'v12-expense': {
@@ -2124,6 +2231,59 @@
         if (window.CourierV12) window.CourierV12.haptic(false);
         renderTopBanners();
         toast('↩️ تم التراجع عن التأكيد');
+        return;
+      }
+      case 'trip-open': st.openKey = st.openKey === el.dataset.key ? null : el.dataset.key; return renderTab(false);
+      case 'route-all': {
+        itemsOf(st.day).filter(x => !x.confirmed).forEach(x => { const id = String(x.transaction_id); if (!st.routeTxIds.includes(id)) st.routeTxIds.push(id); });
+        saveRouteState(); return renderTab(false);
+      }
+      case 'sel-toggle': {
+        st.sel = st.sel || {}; const k = el.dataset.type + '|' + el.dataset.ref;
+        if (st.sel[k]) delete st.sel[k]; else st.sel[k] = { type: el.dataset.type, ref: el.dataset.ref, amt: el.dataset.amt };
+        return renderTab(false);
+      }
+      case 'sel-all': {
+        st.sel = st.sel || {};
+        itemsOf(st.day).filter(x => x.type === el.dataset.kind && !x.confirmed).forEach(x => { st.sel[x.type + '|' + itemRef(x)] = { type: x.type, ref: itemRef(x), amt: x.amount }; });
+        return renderTab(false);
+      }
+      case 'confirm-sel': {
+        const ks = Object.keys(st.sel || {}); if (!ks.length) return;
+        const amt = ks.reduce((a, k) => a + Number(st.sel[k].amt || 0), 0);
+        const warn = itemsOf(st.day).filter(x => st.sel[x.type + '|' + itemRef(x)] && isNotClosedByStaff(x)).length;
+        modal('<h3>تأكيد المشاوير المختارة</h3><p>هتأكد <b>' + num(ks.length) + ' مشوار</b> بإجمالي <b>' + money(amt) + '</b> وهيتحسبوا في عمولتك.</p>' +
+          (warn ? '<div class="cp-warn-box">⏳ فيه ' + num(warn) + ' معاملة الموظف لسه ما قفلهاش على السيستم.</div>' : '') +
+          '<div class="cp-btns"><button type="button" class="cp-btn cp-go" data-act="do-confirm-sel">أيوه، أكّد المختار</button><button type="button" class="cp-btn" data-act="mclose-btn">رجوع</button></div>');
+        return;
+      }
+      case 'do-confirm-sel': {
+        if (st.busy) return; st.busy = true; el.disabled = true;
+        (async () => {
+          let ok = 0, bad = 0;
+          for (const k of Object.keys(st.sel || {})) {
+            try { const r = await sbClient.rpc('courier_confirm_one', { p_type: st.sel[k].type, p_ref: String(st.sel[k].ref) }); if (r.error) throw r.error; ok++; delete st.sel[k]; } catch (e) { bad++; }
+          }
+          closeModal(); toast(bad ? 'اتأكد ' + num(ok) + ' وفشل ' + num(bad) + ' — جرّب تاني' : 'اتأكد ' + num(ok) + ' مشوار ✓', !!bad);
+          st.sig = ''; st.busy = false;
+          await Promise.all([loadItems(true), loadLeaderboard(true)]);
+        })();
+        return;
+      }
+      case 'qreply': {
+        const ta = $('cp-msg'); if (!ta) return;
+        ta.value = el.dataset.t; st.draft = el.dataset.t; return sendMsg();
+      }
+      case 'send-loc': {
+        const go = pos => {
+          const mgr = st.contacts.find(c => c.is_manager) || st.contacts[0];
+          if (!mgr) return toast('مفيش جهة اتصال متاحة دلوقتي', true);
+          st.draft = '📍 موقعي الحالي: https://maps.google.com/?q=' + pos.lat.toFixed(6) + ',' + pos.lng.toFixed(6);
+          openChat(mgr.id, null);
+        };
+        if (!navigator.geolocation) return toast('الموقع غير متاح على الجهاز ده', true);
+        navigator.geolocation.getCurrentPosition(p => { st.myPos = { lat: p.coords.latitude, lng: p.coords.longitude }; go(st.myPos); },
+          () => { if (st.myPos) go(st.myPos); else toast('مقدرتش أجيب موقعك — فعّل الـ GPS', true); }, { enableHighAccuracy: true, timeout: 8000 });
         return;
       }
       case 'qr-scan': return openQrScannerModal();
