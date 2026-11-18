@@ -1,9 +1,10 @@
 /* =====================================================================
-   js/74-abbasiya-hub-radar.js — المرحلة 2: رادار تسليم جوازات العباسية الفوري
+   js/74-abbasiya-hub-radar.js — تابة «الرادار والعمليات» المستقلة + رادار العباسية
    - معزول تماماً في IIFE بدون لمس js/03 أو js/13 أو js/14 أو js/45 أو js/70 أو js/73.
-   - قراءة فقط من request_lines عبر RPC؛ جميع التعديلات والاعتمادات عبر دوال السيرفر.
-   - يحتفظ بعقدة panelBox في الذاكرة ويعيد تركيبها فوراً عبر MutationObserver (childList + class)
-     إذا أعاد js/13-couriers.js رسم #tab-couriers عبر innerHTML.
+   - يضيف تابة مستقلة «الرادار والعمليات» في قسم «الشغل اليومي» (daily) وجواها تنقل سريع بين:
+     (1) رادار جوازات العباسية  (2) رادار المناديب المباشر  (3) تيكتات الاستلام
+   - يعرض حالة كل جواز (جاهز للتسليم / تحت المراجعة / قيد التنفيذ) وتاريخ استلامه وموعد استحقاقه،
+     مع فلترة تلقائية على «اللي عليهم الدور النهارده».
    ===================================================================== */
 (function () {
   'use strict';
@@ -22,7 +23,12 @@
     else alert(msg);
   };
 
+  var BTN_OFF = 'tab-btn';
+  var BTN_ON = 'tab-btn bg-ink text-white dark:bg-brand-600 shadow-sm';
+
   var st = {
+    subView: 'abbasiya', // 'abbasiya' | 'live_radar'
+    passFilter: 'due',   // 'due' | 'complete' | 'all'
     snap: null,
     selectedIds: {},
     selectedCourierId: null,
@@ -31,10 +37,7 @@
     busy: false,
     loadedAt: 0,
     courierHub: null,
-    courierLoadedAt: 0,
-    obs: null,
-    panelBox: null,
-    remountTimer: null
+    courierLoadedAt: 0
   };
 
   function isManager() { return window.__role === 'manager'; }
@@ -53,22 +56,36 @@
     var s = document.createElement('style');
     s.id = 'ah74-style';
     s.textContent = [
-      '.ah-card{background:var(--r-card,#ffffff);border:1px solid var(--r-bd,rgba(234,88,12,.32));border-radius:18px;padding:16px;margin-bottom:14px;color:var(--r-tx,#0f172a)}',
+      '.ah-wrap{display:flex;flex-direction:column;gap:14px}',
+      '.ah-nav-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:var(--r-card,#ffffff);border:1px solid var(--r-bd,rgba(234,88,12,.3));border-radius:18px;padding:12px 16px}',
+      'html.dark .ah-nav-bar{background:var(--r-card,#111827);border-color:rgba(234,88,12,.35)}',
+      '.ah-nav-tabs{display:flex;flex-wrap:wrap;gap:8px}',
+      '.ah-nav-pill{border:1px solid var(--r-bd,rgba(148,163,184,.3));background:transparent;color:var(--r-tx,#0f172a);border-radius:12px;padding:9px 15px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:7px}',
+      'html.dark .ah-nav-pill{color:#f8fafc;border-color:rgba(255,255,255,.14)}',
+      '.ah-nav-pill.active{background:var(--r-acc,#ea580c);color:#ffffff;border-color:var(--r-acc,#ea580c)}',
+      '.ah-card{background:var(--r-card,#ffffff);border:1px solid var(--r-bd,rgba(234,88,12,.32));border-radius:18px;padding:16px;color:var(--r-tx,#0f172a)}',
       'html.dark .ah-card{background:var(--r-card,#111827);border-color:rgba(234,88,12,.35);color:#f8fafc}',
       '.ah-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}',
-      '.ah-title{font-size:15.5px;font-weight:700;margin:0;display:flex;align-items:center;gap:8px}',
+      '.ah-title{font-size:16px;font-weight:700;margin:0;display:flex;align-items:center;gap:8px}',
       '.ah-sub{font-size:12px;color:var(--r-mute,#64748b);margin-top:2px}',
-      '.ah-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}',
+      '.ah-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}',
       '.ah-box{border:1px solid var(--r-bd,rgba(148,163,184,.25));border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}',
-      '.ah-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:11px;border:1px solid var(--r-bd,rgba(148,163,184,.2))}',
-      '.ah-chk-lbl{display:flex;align-items:flex-start;gap:8px;cursor:pointer;flex:1;min-width:190px}',
+      '.ah-filter-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;padding-bottom:6px;border-bottom:1px solid var(--r-bd,rgba(148,163,184,.18))}',
+      '.ah-chip{border:1px solid var(--r-bd,rgba(148,163,184,.3));background:transparent;color:var(--r-tx,#0f172a);border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}',
+      'html.dark .ah-chip{color:#e2e8f0}',
+      '.ah-chip.active{background:rgba(234,88,12,.16);color:#ea580c;border-color:#ea580c}',
+      'html.dark .ah-chip.active{color:#fb923c}',
+      '.ah-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;border-radius:11px;border:1px solid var(--r-bd,rgba(148,163,184,.2))}',
+      '.ah-chk-lbl{display:flex;align-items:flex-start;gap:9px;cursor:pointer;flex:1;min-width:200px}',
       '.ah-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}',
       '.ah-badge-org{background:rgba(234,88,12,.15);color:#ea580c}',
       '.ah-badge-ok{background:rgba(16,185,129,.16);color:#059669}',
       'html.dark .ah-badge-ok{color:#34d399}',
+      '.ah-badge-pur{background:rgba(139,92,246,.18);color:#8b5cf6}',
       '.ah-badge-warn{background:rgba(245,158,11,.18);color:#d97706}',
-      '.ah-input,.ah-select{border:1px solid var(--r-bd,rgba(148,163,184,.3));background:var(--r-bg,#f8fafc);color:var(--r-tx,#0f172a);border-radius:10px;padding:7px 10px;font-size:12.5px;font-family:inherit;outline:none}',
-      'html.dark .ah-input,html.dark .ah-select{background:#0b0f17;color:#f8fafc;border-color:rgba(255,255,255,.15)}',
+      '.ah-badge-mut{background:rgba(148,163,184,.18);color:#94a3b8}',
+      '.ah-input{border:1px solid var(--r-bd,rgba(148,163,184,.3));background:var(--r-bg,#f8fafc);color:var(--r-tx,#0f172a);border-radius:10px;padding:7px 10px;font-size:12.5px;font-family:inherit;outline:none}',
+      'html.dark .ah-input{background:#0b0f17;color:#f8fafc;border-color:rgba(255,255,255,.15)}',
       '.ah-btn{border:0;border-radius:10px;padding:8px 13px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}',
       '.ah-btn-pri{background:var(--r-acc,#ea580c);color:#ffffff}',
       '.ah-btn-ok{background:#059669;color:#ffffff}',
@@ -91,6 +108,30 @@
     var h12 = hh % 12;
     if (h12 === 0) h12 = 12;
     return h12 + ':' + (mm < 10 ? '0' : '') + mm + ' ' + ampm;
+  }
+
+  function fmtDateAr(isoOrDate) {
+    if (!isoOrDate) return '—';
+    var d = new Date(isoOrDate);
+    if (isNaN(d.getTime())) return String(isoOrDate).slice(0, 10);
+    try {
+      return d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch (e) {
+      return String(isoOrDate).slice(0, 10);
+    }
+  }
+
+  function statusBadgeHtml(l) {
+    if (l.complete || l.status === 'Complete') {
+      return '<span class="ah-badge ah-badge-ok">مكتمل — جاهز للتسليم ✓</span>';
+    }
+    if (l.under_review || l.status === 'Under Review') {
+      return '<span class="ah-badge ah-badge-pur">تحت المراجعة</span>';
+    }
+    if (l.is_due) {
+      return '<span class="ah-badge ah-badge-warn">قيد التنفيذ (مستحق اليوم)</span>';
+    }
+    return '<span class="ah-badge ah-badge-mut">قيد التنفيذ (لم يحن موعده)</span>';
   }
 
   function estimateCourierAbbasiya(c) {
@@ -128,40 +169,113 @@
     } catch (e) { /* ignore */ }
   }
 
-  function ensureStaffPanelHost() {
-    var tab = $('tab-couriers');
-    if (!tab) return null;
-    if (!st.panelBox) {
-      var box = document.createElement('div');
-      box.id = 'ah74-panel';
-      box.addEventListener('click', onStaffClick);
-      box.addEventListener('change', onStaffChange);
-      box.addEventListener('input', onStaffInput);
-      st.panelBox = box;
+  function placeMenuBtn(btn) {
+    var menu = $('nav-menu');
+    if (!menu || !btn) return;
+    var dailyBody = menu.querySelector(':scope > section[data-mg="daily"] .mg-body');
+    if (dailyBody) {
+      btn.dataset.mgi = '12';
+      if (btn.parentElement !== dailyBody) dailyBody.appendChild(btn);
+      return;
     }
-    if (st.panelBox.parentElement !== tab) {
-      var radar = $('cop-manager-panel');
-      if (radar && radar.parentElement === tab) {
-        radar.insertAdjacentElement('afterend', st.panelBox);
-      } else {
-        tab.prepend(st.panelBox);
-      }
+    var anchor = $('tab-pickup-btn') || $('tab-couriers-btn') || $('tab-tx-btn');
+    if (anchor && anchor.parentElement && btn.parentElement !== anchor.parentElement) {
+      anchor.insertAdjacentElement('afterend', btn);
+    } else if (!btn.parentElement) {
+      menu.appendChild(btn);
     }
-    return st.panelBox;
   }
 
-  function renderStaffPanel() {
-    if (!isAllowedStaff()) return;
-    var box = ensureStaffPanelHost();
-    if (!box) return;
+  function ensureRadarTabDom() {
+    if (isCourier() || !isAllowedStaff()) return false;
     ensureCss();
+    if (!$('tab-radar')) {
+      var main = document.querySelector('main');
+      if (!main) return false;
+      var pane = document.createElement('div');
+      pane.id = 'tab-radar';
+      pane.className = 'hidden space-y-4';
+      var host = $('tab-pickup') || $('tab-couriers') || $('tab-tx') || main.lastElementChild;
+      if (host) host.insertAdjacentElement('afterend', pane);
+      else main.appendChild(pane);
+      pane.addEventListener('click', onStaffClick);
+      pane.addEventListener('change', onStaffChange);
+      pane.addEventListener('input', onStaffInput);
+    }
+    var b = $('tab-radar-btn');
+    if (!b && $('nav-menu')) {
+      b = document.createElement('button');
+      b.id = 'tab-radar-btn';
+      b.type = 'button';
+      b.setAttribute('data-tab-target', 'radar');
+      b.className = BTN_OFF;
+      b.setAttribute('onclick', "switchTab('radar')");
+      b.innerHTML = '<i class="fa-solid fa-satellite-dish text-orange-500"></i><span>الرادار والعمليات</span>';
+    }
+    if (b) placeMenuBtn(b);
+    return true;
+  }
 
-    if (!st.snap) {
-      box.innerHTML = '<section class="ah-card"><div class="ah-sub">جاري فحص دفعة جوازات العباسية الفوري…</div></section>';
+  /* نقل رادار المكتب الحي (#cop-manager-panel) داخل تابة الرادار عند اختيار «رادار المناديب المباشر» */
+  function mountLiveOfficeRadarIntoSlot() {
+    var slot = $('ah-live-radar-slot');
+    if (!slot) return;
+    var cop = $('cop-manager-panel');
+    if (cop && cop.parentElement !== slot) {
+      slot.appendChild(cop);
+    }
+    var refreshBtn = cop && (cop.querySelector('[data-radar-retry="1"]') || cop.querySelector('#cop-manager-refresh'));
+    if (refreshBtn && !st.liveRadarTriggered) {
+      st.liveRadarTriggered = true;
+      try { refreshBtn.click(); } catch (e) {}
+    }
+  }
+
+  function filterCandidates(cands) {
+    if (st.passFilter === 'complete') {
+      return cands.filter(function (l) { return l.complete || l.status === 'Complete'; });
+    }
+    if (st.passFilter === 'due') {
+      return cands.filter(function (l) { return l.is_due || l.complete || l.status === 'Complete'; });
+    }
+    return cands;
+  }
+
+  function renderRadarTab() {
+    if (!isAllowedStaff()) return;
+    ensureRadarTabDom();
+    var pane = $('tab-radar');
+    if (!pane) return;
+
+    var navHtml =
+      '<div class="ah-nav-bar">' +
+        '<div>' +
+          '<b style="font-size:15px">مركز الرادار والعمليات الميدانية</b>' +
+          '<div class="ah-sub">تنقّل بين رادار جوازات العباسية، رادار المناديب المباشر، وتيكتات الاستلام من مكان واحد.</div>' +
+        '</div>' +
+        '<div class="ah-nav-tabs">' +
+          '<button type="button" class="ah-nav-pill' + (st.subView === 'abbasiya' ? ' active' : '') + '" data-ah-nav="abbasiya">🛂 رادار جوازات العباسية</button>' +
+          '<button type="button" class="ah-nav-pill' + (st.subView === 'live_radar' ? ' active' : '') + '" data-ah-nav="live_radar">📡 رادار المناديب المباشر</button>' +
+          '<button type="button" class="ah-nav-pill" data-ah-nav="pickup_tab">🎫 تيكتات الاستلام</button>' +
+        '</div>' +
+      '</div>';
+
+    if (st.subView === 'live_radar') {
+      pane.innerHTML = '<div class="ah-wrap">' + navHtml + '<div id="ah-live-radar-slot"></div></div>';
+      mountLiveOfficeRadarIntoSlot();
       return;
     }
 
-    var cands = Array.isArray(st.snap.candidates) ? st.snap.candidates : [];
+    if (!st.snap) {
+      pane.innerHTML = '<div class="ah-wrap">' + navHtml + '<section class="ah-card"><div class="ah-sub">جاري تحميل بيانات رادار جوازات العباسية…</div></section></div>';
+      return;
+    }
+
+    var allCands = Array.isArray(st.snap.candidates) ? st.snap.candidates : [];
+    var dueCount = allCands.filter(function (l) { return l.is_due || l.complete || l.status === 'Complete'; }).length;
+    var compCount = allCands.filter(function (l) { return l.complete || l.status === 'Complete'; }).length;
+    var cands = filterCandidates(allCands);
+
     var couriers = (Array.isArray(st.snap.couriers) ? st.snap.couriers : []).map(function (c) {
       return Object.assign({}, c, { eta: estimateCourierAbbasiya(c) });
     }).sort(function (a, b) { return a.eta.arriveMins - b.eta.arriveMins; });
@@ -178,20 +292,43 @@
     var batch = st.snap.batch;
     var batchItems = Array.isArray(st.snap.items) ? st.snap.items : [];
 
+    var filterBarHtml =
+      '<div class="ah-filter-bar">' +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+          '<button type="button" class="ah-chip' + (st.passFilter === 'due' ? ' active' : '') + '" data-ah-flt="due">اللي عليهم الدور اليوم (' + dueCount + ')</button>' +
+          '<button type="button" class="ah-chip' + (st.passFilter === 'complete' ? ' active' : '') + '" data-ah-flt="complete">مكتمل وجاهز فقط (' + compCount + ')</button>' +
+          '<button type="button" class="ah-chip' + (st.passFilter === 'all' ? ' active' : '') + '" data-ah-flt="all">كل المفتوح (' + allCands.length + ')</button>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px">' +
+          '<button type="button" class="ah-chip" data-ah-sel="all">تحديد المعروض</button>' +
+          '<button type="button" class="ah-chip" data-ah-sel="none">إلغاء التحديد</button>' +
+        '</div>' +
+      '</div>';
+
     var candsHtml = cands.length
       ? cands.map(function (l) {
           var checked = !!st.selectedIds[l.line_id];
           return '<div class="ah-row">' +
             '<label class="ah-chk-lbl">' +
               '<input type="checkbox" class="ah-cand-chk" value="' + Number(l.line_id) + '"' + (checked ? ' checked' : '') + '>' +
-              '<div>' +
-                '<div><b>' + eh(l.client_name) + '</b> <span class="ah-badge ah-badge-org" dir="ltr">' + eh(l.transaction_id) + '</span></div>' +
-                '<div class="ah-sub">' + eh(l.service) + (l.executor ? ' · المنفذ: ' + eh(l.executor) : '') + (l.phone ? ' · <span dir="ltr">' + eh(l.phone) + '</span>' : '') + '</div>' +
+              '<div style="flex:1">' +
+                '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">' +
+                  '<b>' + eh(l.client_name) + '</b>' +
+                  '<span class="ah-badge ah-badge-org" dir="ltr">' + eh(l.transaction_id) + '</span>' +
+                  statusBadgeHtml(l) +
+                '</div>' +
+                '<div class="ah-sub" style="margin-top:4px">' +
+                  eh(l.service) +
+                  ' · <b>تاريخ الاستلام: ' + eh(fmtDateAr(l.received_date || l.received_at)) + '</b>' +
+                  (l.due_date ? ' · الاستحقاق: ' + eh(fmtDateAr(l.due_date)) : '') +
+                  (l.executor ? ' · المنفذ: ' + eh(l.executor) : '') +
+                  (l.phone ? ' · <span dir="ltr">' + eh(l.phone) + '</span>' : '') +
+                '</div>' +
               '</div>' +
             '</label>' +
           '</div>';
         }).join('')
-      : '<div class="ah-sub">لا توجد جوازات فوري قيد التسليم حالياً.</div>';
+      : '<div class="ah-sub" style="padding:12px 0">مفيش جوازات مطابقة للفلتر ده حالياً — اضغط «كل المفتوح» لو عايز تعرض الجوازات اللي لسه قيد التنفيذ.</div>';
 
     var couriersHtml = couriers.length
       ? couriers.map(function (c, idx) {
@@ -204,7 +341,7 @@
             '<div style="text-align:left"><span class="ah-badge ah-badge-org">' + eh(c.eta.winStart) + ' – ' + eh(c.eta.winEnd) + '</span></div>' +
           '</div>';
         }).join('')
-      : '<div class="ah-sub">مفيش مناديب نشطين حالياً.</div>';
+      : '<div class="ah-sub">لا يوجد مناديب مفعّلين ومربوطين بحساب دخول في قاعدة البيانات حالياً.</div>';
 
     var callItemsHtml = batch && batchItems.length
       ? '<div class="ah-box" style="margin-top:12px">' +
@@ -224,39 +361,48 @@
         '</div>'
       : '';
 
-    box.innerHTML =
-      '<section class="ah-card">' +
-        '<div class="ah-head">' +
-          '<div>' +
-            '<h3 class="ah-title">رادار تسليم جوازات العباسية الفوري <span class="ah-badge ah-badge-org">' + cands.length + ' مفتوح</span></h3>' +
-            '<div class="ah-sub">علّم على الجوازات اللي خلصت من المنفذ، وقارن أوقات المناديب من خط السير ثم اعتمد الميعاد (للمدير فقط).</div>' +
-          '</div>' +
-          '<button type="button" class="ah-btn ah-btn-sec" id="ah-refresh-btn">تحديث الرادار</button>' +
-        '</div>' +
-        '<div class="ah-grid">' +
-          '<div class="ah-box"><b>1) الجوازات الجاهزة للتسليم النهارده</b>' + candsHtml + '</div>' +
-          '<div class="ah-box"><b>2) ترشيح المندوب وحسبة ميعاد العباسية</b>' + couriersHtml +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">' +
-              '<input id="ah-win-start" class="ah-input" placeholder="من الساعة (مثال: 5:20 م)" value="' + eh(st.winStart) + '">' +
-              '<input id="ah-win-end" class="ah-input" placeholder="إلى الساعة (مثال: 5:50 م)" value="' + eh(st.winEnd) + '">' +
+    pane.innerHTML =
+      '<div class="ah-wrap">' +
+        navHtml +
+        '<section class="ah-card">' +
+          '<div class="ah-head">' +
+            '<div>' +
+              '<h3 class="ah-title">رادار تسليم جوازات العباسية الفوري <span class="ah-badge ah-badge-ok">' + dueCount + ' مستحق اليوم</span> <span class="ah-badge ah-badge-mut">إجمالي المفتوح: ' + allCands.length + '</span></h3>' +
+              '<div class="ah-sub">بيعرض حالة كل جواز وتاريخ استلامه، ويرشّح فقط المناديب الفعليين المفعّلين بحساب دخول في قاعدة البيانات.</div>' +
             '</div>' +
-            (isManager()
-              ? '<button type="button" id="ah-approve-btn" class="ah-btn ah-btn-pri" style="width:100%;justify-content:center">اعتماد المندوب والميعاد وإرسال للمندوب</button>'
-              : '<div class="ah-sub">اعتماد الميعاد وإرساله للمندوب متاح للمدير فقط.</div>') +
+            '<button type="button" class="ah-btn ah-btn-sec" id="ah-refresh-btn">تحديث الرادار</button>' +
           '</div>' +
-        '</div>' +
-        callItemsHtml +
-      '</section>';
+          '<div class="ah-grid">' +
+            '<div class="ah-box">' +
+              '<b>1) فرز الجوازات حسب الحالة وتاريخ الاستلام</b>' +
+              filterBarHtml +
+              candsHtml +
+            '</div>' +
+            '<div class="ah-box">' +
+              '<b>2) ترشيح المناديب المفعّلين وحسبة ميعاد العباسية</b>' +
+              couriersHtml +
+              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">' +
+                '<input id="ah-win-start" class="ah-input" placeholder="من الساعة (مثال: 5:20 م)" value="' + eh(st.winStart) + '">' +
+                '<input id="ah-win-end" class="ah-input" placeholder="إلى الساعة (مثال: 5:50 م)" value="' + eh(st.winEnd) + '">' +
+              '</div>' +
+              (isManager()
+                ? '<button type="button" id="ah-approve-btn" class="ah-btn ah-btn-pri" style="width:100%;justify-content:center">اعتماد المندوب والميعاد وإرسال للمندوب</button>'
+                : '<div class="ah-sub">اعتماد الميعاد وإرساله للمندوب متاح للمدير فقط.</div>') +
+            '</div>' +
+          '</div>' +
+          callItemsHtml +
+        '</section>' +
+      '</div>';
   }
 
   async function loadStaffSnap(force) {
     if (!sbClient || !isAllowedStaff()) return;
     if (!force && st.loadedAt && (Date.now() - st.loadedAt < 8000) && st.snap) {
-      ensureStaffPanelHost();
+      renderRadarTab();
       return;
     }
     st.loadedAt = Date.now();
-    renderStaffPanel();
+    renderRadarTab();
     var r = await sbClient.rpc('abbasiya_hub_snapshot');
     if (r.error) throw r.error;
     st.snap = r.data || null;
@@ -264,41 +410,14 @@
       st.selectedIds = {};
       st.snap.items.forEach(function (it) { st.selectedIds[it.line_id] = true; });
     } else if (st.snap && Array.isArray(st.snap.candidates)) {
+      /* نعلّم افتراضياً فقط على الجوازات المكتملة (Complete) عشان المدير ما يضطرش يلغي 19 جواز بإيده */
       st.snap.candidates.forEach(function (c) {
-        if (st.selectedIds[c.line_id] === undefined) st.selectedIds[c.line_id] = true;
+        if (st.selectedIds[c.line_id] === undefined) {
+          st.selectedIds[c.line_id] = !!(c.complete || c.status === 'Complete');
+        }
       });
     }
-    renderStaffPanel();
-  }
-
-  function triggerStaffIfVisible(force) {
-    if (!isAllowedStaff()) return;
-    var tab = $('tab-couriers');
-    if (!tab || tab.classList.contains('hidden')) return;
-    ensureStaffPanelHost();
-    loadStaffSnap(force).catch(function (err) {
-      var box = ensureStaffPanelHost();
-      if (box) box.innerHTML = '<section class="ah-card"><div class="ah-sub">تأكد من تشغيل ملف sql/abbasiya-hub-radar.sql في Supabase. (' + eh(err && err.message) + ')</div></section>';
-    });
-  }
-
-  function observeCouriersTab() {
-    if (st.obs) return;
-    var tab = $('tab-couriers');
-    if (!tab || typeof MutationObserver === 'undefined') return;
-    st.obs = new MutationObserver(function () {
-      if (tab.classList.contains('hidden') || !isAllowedStaff()) return;
-      if (!st.panelBox || st.panelBox.parentElement !== tab) {
-        clearTimeout(st.remountTimer);
-        st.remountTimer = setTimeout(function () {
-          ensureStaffPanelHost();
-          if (!st.snap) triggerStaffIfVisible(false);
-        }, 40);
-      } else if (!st.snap) {
-        triggerStaffIfVisible(false);
-      }
-    });
-    st.obs.observe(tab, { attributes: true, attributeFilter: ['class'], childList: true });
+    renderRadarTab();
   }
 
   async function loadAndRenderCourierHub() {
@@ -342,6 +461,37 @@
   async function onStaffClick(e) {
     var t = e.target;
     if (!t) return;
+
+    var navBtn = t.closest ? t.closest('[data-ah-nav]') : null;
+    if (navBtn) {
+      var targetView = navBtn.dataset.ahNav;
+      if (targetView === 'pickup_tab') {
+        if (typeof window.switchTab === 'function') window.switchTab('pickup');
+        return;
+      }
+      st.subView = targetView;
+      renderRadarTab();
+      return;
+    }
+
+    var fltBtn = t.closest ? t.closest('[data-ah-flt]') : null;
+    if (fltBtn) {
+      st.passFilter = fltBtn.dataset.ahFlt;
+      renderRadarTab();
+      return;
+    }
+
+    var selBtn = t.closest ? t.closest('[data-ah-sel]') : null;
+    if (selBtn && st.snap && Array.isArray(st.snap.candidates)) {
+      var mode = selBtn.dataset.ahSel;
+      var visibleList = filterCandidates(st.snap.candidates);
+      visibleList.forEach(function (l) {
+        st.selectedIds[l.line_id] = (mode === 'all');
+      });
+      renderRadarTab();
+      return;
+    }
+
     if (t.id === 'ah-refresh-btn') {
       try { await loadStaffSnap(true); toast('تم تحديث رادار العباسية ✓'); } catch (err) { toast(err.message || 'تعذر التحديث', 'error'); }
       return;
@@ -355,7 +505,7 @@
         st.winStart = eta.winStart;
         st.winEnd = eta.winEnd;
       }
-      renderStaffPanel();
+      renderRadarTab();
       return;
     }
     if (t.id === 'ah-approve-btn') {
@@ -420,8 +570,27 @@
     var orig = window.switchTab;
     if (typeof orig === 'function' && !orig['__ah74Wrapped']) {
       var w = function (id) {
+        if (id === 'radar' && !isAllowedStaff()) {
+          toast('الصفحة دي متاحة للموظفين والإدارة فقط', 'error');
+          return;
+        }
         var res = orig.apply(this, arguments);
-        if (id === 'couriers') setTimeout(function () { triggerStaffIfVisible(false); }, 80);
+        try {
+          ensureRadarTabDom();
+          var on = id === 'radar' && isAllowedStaff();
+          var pane = $('tab-radar'), btn = $('tab-radar-btn');
+          if (pane) pane.classList.toggle('hidden', !on);
+          if (btn) btn.className = on ? BTN_ON : BTN_OFF;
+          if (on) {
+            var sec = btn && btn.closest('.mg');
+            if (sec && !sec.classList.contains('open')) sec.classList.add('open');
+            loadStaffSnap(false).catch(function (err) {
+              renderRadarTab();
+              var p = $('tab-radar');
+              if (p) p.insertAdjacentHTML('beforeend', '<section class="ah-card"><div class="ah-sub">تأكد من تشغيل النسخة الجديدة من sql/abbasiya-hub-radar.sql في Supabase. (' + eh(err && err.message) + ')</div></section>');
+            });
+          }
+        } catch (e) { /* */ }
         return res;
       };
       w['__ah74Wrapped'] = true;
@@ -438,18 +607,18 @@
     }
   }
 
+  ensureRadarTabDom();
   wrapSwitchTab();
-  observeCouriersTab();
 
   wrap('loadInitialData', function (orig) {
     return async function () {
       var r = await orig.apply(this, arguments);
+      ensureRadarTabDom();
       wrapSwitchTab();
-      observeCouriersTab();
       setTimeout(function () {
+        ensureRadarTabDom();
         wrapSwitchTab();
         if (isCourier()) loadAndRenderCourierHub();
-        else triggerStaffIfVisible(false);
       }, 250);
       return r;
     };
@@ -458,13 +627,17 @@
   wrap('handleLogout', function (orig) {
     return function () {
       st.snap = null; st.courierHub = null; st.courierLoadedAt = 0; st.loadedAt = 0; st.selectedIds = {};
-      if (st.panelBox && st.panelBox.parentElement) st.panelBox.remove();
-      var b2 = $('ah74-courier-hub');
+      var b1 = $('tab-radar-btn'), p1 = $('tab-radar'), b2 = $('ah74-courier-hub');
+      if (b1) b1.remove();
+      if (p1) p1.remove();
       if (b2) b2.remove();
       return orig.apply(this, arguments);
     };
   });
 
-  if (isCourier()) setTimeout(loadAndRenderCourierHub, 250);
-  else setTimeout(triggerStaffIfVisible, 300);
+  setTimeout(function () {
+    ensureRadarTabDom();
+    wrapSwitchTab();
+    if (isCourier()) loadAndRenderCourierHub();
+  }, 200);
 })();

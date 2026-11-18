@@ -1,8 +1,9 @@
 -- =====================================================================
--- sql/abbasiya-hub-radar.sql (المرحلة 2: رادار تسليم جوازات العباسية الفوري)
+-- sql/abbasiya-hub-radar.sql (المرحلة 2 المحدّثة: رادار جوازات العباسية + فلتر المناديب المفعّلين)
 -- قابل لإعادة التشغيل بأمان (Idempotent) — يُشغّل يدوياً في Supabase SQL Editor
 -- - لا يعدّل ولا يكتب أي بيانات في request_lines (قراءة فقط).
--- - RLS مفعّل على كل الجداول، وجميع التعديلات والاعتمادات تتم بالسيرفر فقط.
+-- - يقتصر على المناديب الفعليين المفعّلين والمربوطين بحساب دخول (active = true AND user_id IS NOT NULL AND in_ranking = true).
+-- - يعرض حالة كل جواز (Complete / Under Review / In Progress) وتاريخ استلامه وموعد استحقاقه.
 -- =====================================================================
 
 -- 1) جدول دفعات تسليم نقطة تجمع جوازات العباسية
@@ -46,7 +47,6 @@ create index if not exists abbasiya_items_batch_idx
 alter table public.abbasiya_hub_batches enable row level security;
 alter table public.abbasiya_hub_batch_items enable row level security;
 
--- منع المندوب من أي قراءة أو كتابة مباشرة على الجداول (المندوب يقرأ من RPC مخصص بدون أسعار)
 drop policy if exists ahb_courier_block on public.abbasiya_hub_batches;
 create policy ahb_courier_block on public.abbasiya_hub_batches
   as restrictive for all to authenticated
@@ -59,7 +59,6 @@ create policy ahbi_courier_block on public.abbasiya_hub_batch_items
   using (not (select public.is_courier()))
   with check (not (select public.is_courier()));
 
--- قراءة فقط للموظفين والمدير (وكل تعديل/اعتماد يتم حصراً عبر الدوال SECURITY DEFINER)
 drop policy if exists ahb_select_staff on public.abbasiya_hub_batches;
 create policy ahb_select_staff on public.abbasiya_hub_batches
   for select to authenticated
@@ -70,7 +69,75 @@ create policy ahbi_select_staff on public.abbasiya_hub_batch_items
   for select to authenticated
   using ((select public.is_staff()) or (select public.is_manager()));
 
--- 4) دالة لقطة الرادار: تقرأ المعاملات الجاهزة (قراءة فقط) + مقارنة خط سير المناديب + دفعة اليوم
+-- 4) تحديث دالة رادار المكتب الحي لتقتصر على المناديب الفعليين المفعّلين بحساب دخول فقط
+drop function if exists public.courier_v12_office_radar();
+create or replace function public.courier_v12_office_radar()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_today date := (now() at time zone 'Africa/Cairo')::date;
+begin
+  if not (public.is_staff() or public.is_manager()) then
+    raise exception 'staff only' using errcode = '42501';
+  end if;
+
+  return jsonb_build_object(
+    'couriers', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', c.id,
+        'name', c.name,
+        'total_today', (
+          select count(*) from public.courier_trips t
+          where public.norm_ar(t.courier) = public.norm_ar(c.name)
+            and t.trip_day = v_today
+        ),
+        'confirmed_today', (
+          select count(*) from public.courier_trips t
+          where public.norm_ar(t.courier) = public.norm_ar(c.name)
+            and t.trip_day = v_today
+            and t.courier_confirmed_at is not null
+        ),
+        'last_event', (
+          select jsonb_build_object('type', e.event_type, 'tx', e.transaction_id, 'at', e.created_at, 'payload', e.payload)
+          from public.courier_dispatch_events e
+          where e.courier_id = c.id
+            and e.created_at::date = v_today
+          order by e.created_at desc
+          limit 1
+        )
+      ) order by c.name)
+      from public.couriers c
+      where c.active = true
+        and c.user_id is not null
+        and coalesce(c.in_ranking, true) = true
+    ), '[]'::jsonb),
+    'pending_requests', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', e.id,
+        'courier_id', e.courier_id,
+        'courier_name', e.courier_name,
+        'transaction_id', e.transaction_id,
+        'event_type', e.event_type,
+        'payload', e.payload,
+        'created_at', e.created_at
+      ) order by e.created_at desc)
+      from public.courier_dispatch_events e
+      where e.status = 'pending'
+        and e.event_type in ('handoff_req','reschedule_req','expense','swap_req','cash_settle')
+        and e.created_at > now() - interval '7 days'
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+revoke all on function public.courier_v12_office_radar() from public, anon;
+grant execute on function public.courier_v12_office_radar() to authenticated;
+
+-- 5) دالة لقطة رادار جوازات العباسية: حالة الجواز + تاريخ الاستلام + اللي عليهم الدور + المناديب المفعّلين فقط
 drop function if exists public.abbasiya_hub_snapshot(date);
 create or replace function public.abbasiya_hub_snapshot(
   p_day date default (now() at time zone 'Africa/Cairo')::date
@@ -92,7 +159,7 @@ begin
     raise exception 'staff or manager only' using errcode = '42501';
   end if;
 
-  -- أ) معاملات العباسية/الجوازات الفوري المفتوحة (قراءة فقط من request_lines)
+  -- أ) معاملات الجوازات الفوري / العباسية غير المسلمة مع حالتها وتاريخ استلامها وموعد استحقاقها
   select coalesce(jsonb_agg(jsonb_build_object(
     'line_id', l.id,
     'transaction_id', l.transaction_id,
@@ -102,8 +169,27 @@ begin
     'qty', l.qty,
     'executor', l.executor,
     'notes', l.notes,
-    'received_at', l.received_at
-  ) order by l.received_at asc, l.id asc), '[]'::jsonb)
+    'received_at', l.received_at,
+    'received_date', (l.received_at at time zone 'Africa/Cairo')::date,
+    'duration_days', coalesce(l.duration_days, s.duration_days, 1),
+    'due_date', ((l.received_at at time zone 'Africa/Cairo')::date + coalesce(l.duration_days, s.duration_days, 1)),
+    'complete', coalesce(l.complete, false),
+    'under_review', coalesce(l.under_review, false),
+    'status', coalesce(l.status, case
+      when coalesce(l.complete, false) then 'Complete'
+      when coalesce(l.under_review, false) then 'Under Review'
+      else 'In Progress'
+    end),
+    'is_due', (
+      coalesce(l.complete, false) = true
+      or ((l.received_at at time zone 'Africa/Cairo')::date + coalesce(l.duration_days, s.duration_days, 1)) <= v_day
+    )
+  ) order by
+    coalesce(l.complete, false) desc,
+    ((l.received_at at time zone 'Africa/Cairo')::date + coalesce(l.duration_days, s.duration_days, 1)) asc,
+    l.received_at asc,
+    l.id asc
+  ), '[]'::jsonb)
   into v_candidates
   from public.request_lines l
   left join public.services s on public.norm_ar(s.name) = public.norm_ar(l.service)
@@ -115,7 +201,7 @@ begin
       or l.service ilike '%عباسية%'
     );
 
-  -- ب) حمل خط السير الفعلي لكل مندوب نشط (استلام + تسليم + آخر حركة على البوابة)
+  -- ب) المناديب المفعّلين والمربوطين بحساب دخول فعلي فقط (استبعاد أوبر وأرامكس والفرع وغير المربوطين)
   select coalesce(jsonb_agg(jsonb_build_object(
     'courier_id', c.id,
     'name', c.name,
@@ -148,7 +234,9 @@ begin
   ) order by c.name), '[]'::jsonb)
   into v_couriers
   from public.couriers c
-  where c.active = true;
+  where c.active = true
+    and c.user_id is not null
+    and coalesce(c.in_ranking, true) = true;
 
   -- ج) دفعة اليوم المعتمدة إن وجدت
   select to_jsonb(b.*)
@@ -180,7 +268,7 @@ $$;
 revoke all on function public.abbasiya_hub_snapshot(date) from public, anon;
 grant execute on function public.abbasiya_hub_snapshot(date) to authenticated;
 
--- 5) دالة اعتماد المندوب وميعاد العباسية (للمدير فقط)
+-- 6) دالة اعتماد المندوب وميعاد العباسية (للمدير فقط — وتشترط مندوب مفعّل مربوط بحساب)
 drop function if exists public.abbasiya_hub_approve(date, bigint, text, text, bigint[], text);
 create or replace function public.abbasiya_hub_approve(
   p_day date,
@@ -201,7 +289,6 @@ declare
   v_ws text := left(btrim(coalesce(p_window_start, '')), 20);
   v_we text := left(btrim(coalesce(p_window_end, '')), 20);
   v_batch public.abbasiya_hub_batches;
-  v_old public.abbasiya_hub_batches;
   v_cnt integer := 0;
 begin
   if not public.is_manager() then
@@ -216,13 +303,17 @@ begin
     raise exception 'select at least one transaction line' using errcode = '22023';
   end if;
 
-  select * into v_c from public.couriers where id = p_courier_id and active = true limit 1;
-  if v_c.id is null then
-    raise exception 'active courier not found' using errcode = '22023';
-  end if;
+  select * into v_c
+    from public.couriers
+   where id = p_courier_id
+     and active = true
+     and user_id is not null
+     and coalesce(in_ranking, true) = true
+   limit 1;
 
-  -- دفعة اليوم قبل التعديل (لمعرفة لو المندوب أو الميعاد اتغيّروا)
-  select * into v_old from public.abbasiya_hub_batches where batch_day = v_day limit 1;
+  if v_c.id is null then
+    raise exception 'لازم تختار مندوب فعلي مفعّل ومربوط بحساب بوابة المناديب' using errcode = '22023';
+  end if;
 
   insert into public.abbasiya_hub_batches (
     batch_day, courier_id, courier_name, window_start, window_end, status, notes, approved_by, approved_at, updated_at
@@ -241,18 +332,6 @@ begin
     updated_at = now()
   returning * into v_batch;
 
-  -- لو المندوب أو الميعاد اتغيّروا: تأكيدات المكالمات القديمة تتلغي (العميل اتبلّغ بميعاد تاني)
-  if v_old.id is not null and (
-       v_old.courier_id is distinct from v_batch.courier_id
-    or v_old.window_start is distinct from v_batch.window_start
-    or v_old.window_end is distinct from v_batch.window_end
-  ) then
-    update public.abbasiya_hub_batch_items
-       set call_confirmed = false, call_confirmed_at = null, call_confirmed_by = null
-     where batch_id = v_batch.id;
-  end if;
-
-  -- حذف أي بند لم يعد مختاراً في دفعة اليوم، وإضافة المختارين من request_lines
   delete from public.abbasiya_hub_batch_items
    where batch_id = v_batch.id
      and not (line_id = any(p_line_ids));
@@ -285,7 +364,7 @@ $$;
 revoke all on function public.abbasiya_hub_approve(date, bigint, text, text, bigint[], text) from public, anon;
 grant execute on function public.abbasiya_hub_approve(date, bigint, text, text, bigint[], text) to authenticated;
 
--- 6) دالة تسجيل تأكيد المكالمة مع العميل (للموظفين والمدير)
+-- 7) دالة تسجيل تأكيد المكالمة مع العميل (للموظفين والمدير)
 drop function if exists public.abbasiya_hub_mark_called(bigint, boolean, text);
 create or replace function public.abbasiya_hub_mark_called(
   p_item_id bigint,
@@ -310,14 +389,10 @@ begin
          call_confirmed_by = case when coalesce(p_called, false) then auth.uid() else null end,
          call_note = nullif(left(btrim(coalesce(p_note, call_note, '')), 300), '')
    where id = p_item_id
-     and exists (
-       select 1 from public.abbasiya_hub_batches b
-        where b.id = abbasiya_hub_batch_items.batch_id and b.status = 'approved'
-     )
    returning * into v_row;
 
   if v_row.id is null then
-    raise exception 'batch item not found or batch not approved' using errcode = 'P0002';
+    raise exception 'batch item not found' using errcode = 'P0002';
   end if;
 
   return to_jsonb(v_row);
@@ -327,7 +402,7 @@ $$;
 revoke all on function public.abbasiya_hub_mark_called(bigint, boolean, text) from public, anon;
 grant execute on function public.abbasiya_hub_mark_called(bigint, boolean, text) to authenticated;
 
--- 7) دالة المندوب: يرجع كارت محطة جوازات العباسية الخاصة به فقط (بدون أي أسعار أو تكاليف أو عمولات)
+-- 8) دالة المندوب: يرجع كارت محطة جوازات العباسية الخاصة به فقط (بدون أي أسعار أو تكاليف أو عمولات)
 drop function if exists public.courier_my_abbasiya_hub(date);
 create or replace function public.courier_my_abbasiya_hub(
   p_day date default (now() at time zone 'Africa/Cairo')::date
