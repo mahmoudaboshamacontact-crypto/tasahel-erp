@@ -123,6 +123,7 @@ body{font-family:'IBM Plex Sans Arabic',Tahoma,'Segoe UI',sans-serif;background:
       </div>
     </div>
 
+    <div class="alert" id="r-courier-live" hidden style="margin-bottom:12px;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;font-weight:700"></div>
     <div class="card" id="svcs-card" hidden>
       <div class="svc-title">خدمات طلبك</div>
       <div id="svcs-list"></div>
@@ -224,6 +225,17 @@ body{font-family:'IBM Plex Sans Arabic',Tahoma,'Segoe UI',sans-serif;background:
       });
     } else {
       svcCard.hidden = true;
+    }
+
+    var liveBox = $('r-courier-live');
+    if (liveBox && d.transaction_id) {
+      liveBox.hidden = true;
+      rpc('public_courier_live_status', { p_tx: d.transaction_id }).then(function (lv) {
+        if (lv && lv.on_the_way) {
+          liveBox.textContent = 'مندوب تساهيل (' + (lv.courier_name || 'المندوب') + ') في مرحلة التسليم الآن — ' + (lv.eta_label || 'متوقع الوصول خلال ~10 دقائق');
+          liveBox.hidden = false;
+        }
+      }).catch(function () {});
     }
   }
 
