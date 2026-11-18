@@ -326,7 +326,12 @@
     var alertsHtml =
       '<div class="ah-box">' +
         '<b>⏳ رادار المتأخرات وتنبيهات الأمان</b>' +
-        (dups.length ? '<div class="rp3-alert-box" style="margin-bottom:4px"><b>⚠️ تحذير تشابه أسماء في التسليمات الجاهزة:</b> ' + dups.map(function (x) { return eh((x.names || []).join(' / ')); }).join(' — ') + '</div>' : '') +
+        (dups.length
+          ? '<details class="rp3-alert-box" style="margin-bottom:4px"><summary style="cursor:pointer;font-weight:700">⚠️ أسماء متقاربة في التسليمات الجاهزة (' + dups.length + ') — راجع الاسم والموبايل قبل التسليم</summary>' +
+            '<div style="margin-top:6px">' + dups.map(function (x) {
+              return '<div class="ah-sub">• ' + eh((x.names || []).join(' ، ')) + '</div>';
+            }).join('') + '</div></details>'
+          : '') +
         '<div class="ah-sub"><b>معاملات مكتملة مركونة +24 ساعة (' + stale24.length + '):</b> ' + (stale24.length ? stale24.slice(0, 6).map(function (x) { return eh(x.client_name) + ' (' + eh(x.transaction_id) + ')'; }).join('، ') : 'لا يوجد ✓') + '</div>' +
         '<div class="ah-sub"><b>تيكتات استلام معلقة +72 ساعة (' + stale72.length + '):</b> ' + (stale72.length ? stale72.slice(0, 6).map(function (x) { return eh(x.client_name) + ' (' + eh(x.sd_request_id) + ')'; }).join('، ') : 'لا يوجد ✓') + '</div>' +
         '<div style="border-top:1px dashed rgba(148,163,184,.3);padding-top:8px;margin-top:4px">' +
