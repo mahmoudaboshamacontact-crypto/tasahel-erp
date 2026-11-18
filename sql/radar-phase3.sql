@@ -265,26 +265,35 @@ begin
     limit 40
   ) pt;
 
-  -- ز) تنبيه تشابه الأسماء في المعاملات النشطة غير المسلمة
+  -- ز) تنبيه تشابه الأسماء: عملاء مختلفين (موبايل مختلف) بنفس أول 3 كلمات من الاسم في التسليمات الجاهزة
+  --    (مش أول كلمة بس، عشان محمد/احمد ما يجمعوش مئات الأسماء)
   select coalesce(jsonb_agg(jsonb_build_object(
-    'first_word', fw,
+    'key', k,
     'cnt', cnt,
     'names', names
   )), '[]'::jsonb)
   into v_dup_names
   from (
     select
-      split_part(public.norm_ar(client_name), ' ', 1) as fw,
-      count(distinct client_name) as cnt,
-      array_agg(distinct client_name) as names
-    from public.request_lines
-    where deleted_at is null
-      and coalesce(delivered, false) = false
-      and coalesce(complete, false) = true
-      and btrim(coalesce(client_name, '')) <> ''
-    group by split_part(public.norm_ar(client_name), ' ', 1)
-    having count(distinct client_name) > 1
-    limit 10
+      k,
+      count(distinct pk) as cnt,
+      (array_agg(distinct client_name))[1:6] as names
+    from (
+      select
+        substring(public.norm_ar(client_name) from '^(\S+(?:\s+\S+){0,2})') as k,
+        coalesce(nullif(btrim(phone), ''), public.norm_ar(client_name)) as pk,
+        client_name
+      from public.request_lines
+      where deleted_at is null
+        and coalesce(delivered, false) = false
+        and coalesce(complete, false) = true
+        and btrim(coalesce(client_name, '')) <> ''
+    ) x
+    where k like '% %'
+    group by k
+    having count(distinct pk) > 1
+    order by count(distinct pk) desc, k
+    limit 8
   ) d;
 
   -- ح) آخر 5 نداءات عامة
