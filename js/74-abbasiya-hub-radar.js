@@ -1,10 +1,10 @@
 /* =====================================================================
-   js/74-abbasiya-hub-radar.js — تابة «الرادار والعمليات» المستقلة + رادار العباسية
-   - معزول تماماً في IIFE بدون لمس js/03 أو js/13 أو js/14 أو js/45 أو js/70 أو js/73.
-   - يضيف تابة مستقلة «الرادار والعمليات» في قسم «الشغل اليومي» (daily) وجواها تنقل سريع بين:
-     (1) رادار جوازات العباسية  (2) رادار المناديب المباشر  (3) تيكتات الاستلام
-   - يعرض حالة كل جواز (جاهز للتسليم / تحت المراجعة / قيد التنفيذ) وتاريخ استلامه وموعد استحقاقه،
-     مع فلترة تلقائية على «اللي عليهم الدور النهارده».
+   js/74-abbasiya-hub-radar.js — تابة «الرادار والعمليات» الموحّدة (v6)
+   - معزول تماماً في IIFE بدون لمس js/03 أو js/13 أو js/14 أو js/45 أو js/70 أو js/71 أو js/73.
+   - يوحّد الـ 3 شاشات جوه تابة واحدة «الرادار والعمليات» بدون خروج لتابات منفصلة:
+     (1) رادار جوازات العباسية
+     (2) رادار المناديب المباشر (ينقل #cop-manager-panel جوه التاب ويخفيه تماماً من تاب المناديب)
+     (3) تيكتات الاستلام (ينقل #tab-pickup جوه التاب تحت نفس شريط التنقل ويخفي الزرار المكرر من القائمة)
    ===================================================================== */
 (function () {
   'use strict';
@@ -27,7 +27,7 @@
   var BTN_ON = 'tab-btn bg-ink text-white dark:bg-brand-600 shadow-sm';
 
   var st = {
-    subView: 'abbasiya', // 'abbasiya' | 'live_radar'
+    subView: 'abbasiya', // 'abbasiya' | 'live_radar' | 'pickup'
     passFilter: 'due',   // 'due' | 'complete' | 'all'
     snap: null,
     selectedIds: {},
@@ -37,7 +37,8 @@
     busy: false,
     loadedAt: 0,
     courierHub: null,
-    courierLoadedAt: 0
+    courierLoadedAt: 0,
+    internalSwitch: false
   };
 
   function isManager() { return window.__role === 'manager'; }
@@ -56,6 +57,9 @@
     var s = document.createElement('style');
     s.id = 'ah74-style';
     s.textContent = [
+      /* إخفاء رادار المكتب من تاب المناديب القديم وإخفاء زرار تيكتات الاستلام المكرر من القائمة الجانبية */
+      '#tab-couriers > #cop-manager-panel{display:none!important}',
+      '#nav-menu #tab-pickup-btn{display:none!important}',
       '.ah-wrap{display:flex;flex-direction:column;gap:14px}',
       '.ah-nav-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:var(--r-card,#ffffff);border:1px solid var(--r-bd,rgba(234,88,12,.3));border-radius:18px;padding:12px 16px}',
       'html.dark .ah-nav-bar{background:var(--r-card,#111827);border-color:rgba(234,88,12,.35)}',
@@ -174,11 +178,11 @@
     if (!menu || !btn) return;
     var dailyBody = menu.querySelector(':scope > section[data-mg="daily"] .mg-body');
     if (dailyBody) {
-      btn.dataset.mgi = '12';
+      btn.dataset.mgi = '11';
       if (btn.parentElement !== dailyBody) dailyBody.appendChild(btn);
       return;
     }
-    var anchor = $('tab-pickup-btn') || $('tab-couriers-btn') || $('tab-tx-btn');
+    var anchor = $('tab-couriers-btn') || $('tab-tx-btn');
     if (anchor && anchor.parentElement && btn.parentElement !== anchor.parentElement) {
       anchor.insertAdjacentElement('afterend', btn);
     } else if (!btn.parentElement) {
@@ -186,16 +190,35 @@
     }
   }
 
+  /* بناء هيكل ثابت لتابة الرادار والعمليات بـ 3 حاويات داخلية ثابتة لا تُمسح عند التبديل */
   function ensureRadarTabDom() {
     if (isCourier() || !isAllowedStaff()) return false;
     ensureCss();
-    if (!$('tab-radar')) {
+    var pane = $('tab-radar');
+    if (!pane) {
       var main = document.querySelector('main');
       if (!main) return false;
-      var pane = document.createElement('div');
+      pane = document.createElement('div');
       pane.id = 'tab-radar';
       pane.className = 'hidden space-y-4';
-      var host = $('tab-pickup') || $('tab-couriers') || $('tab-tx') || main.lastElementChild;
+      pane.innerHTML =
+        '<div class="ah-wrap">' +
+          '<div class="ah-nav-bar">' +
+            '<div>' +
+              '<b style="font-size:15px">مركز الرادار والعمليات الميدانية</b>' +
+              '<div class="ah-sub">تنقّل بين رادار جوازات العباسية، رادار المناديب المباشر، وتيكتات الاستلام داخل نفس الشاشة.</div>' +
+            '</div>' +
+            '<div class="ah-nav-tabs" id="ah-nav-tabs">' +
+              '<button type="button" class="ah-nav-pill active" data-ah-nav="abbasiya">🛂 رادار جوازات العباسية</button>' +
+              '<button type="button" class="ah-nav-pill" data-ah-nav="live_radar">📡 رادار المناديب المباشر</button>' +
+              '<button type="button" class="ah-nav-pill" data-ah-nav="pickup">🎫 تيكتات الاستلام</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="ah-pane-abbasiya"></div>' +
+          '<div id="ah-pane-live-radar" class="hidden"></div>' +
+          '<div id="ah-pane-pickup" class="hidden"></div>' +
+        '</div>';
+      var host = $('tab-couriers') || $('tab-tx') || main.lastElementChild;
       if (host) host.insertAdjacentElement('afterend', pane);
       else main.appendChild(pane);
       pane.addEventListener('click', onStaffClick);
@@ -216,18 +239,77 @@
     return true;
   }
 
-  /* نقل رادار المكتب الحي (#cop-manager-panel) داخل تابة الرادار عند اختيار «رادار المناديب المباشر» */
-  function mountLiveOfficeRadarIntoSlot() {
-    var slot = $('ah-live-radar-slot');
+  function updateNavPillsAndPanes() {
+    ensureRadarTabDom();
+    var pills = document.querySelectorAll('#ah-nav-tabs [data-ah-nav]');
+    pills.forEach(function (p) {
+      p.classList.toggle('active', p.dataset.ahNav === st.subView);
+    });
+    var pAbb = $('ah-pane-abbasiya'), pLive = $('ah-pane-live-radar'), pPick = $('ah-pane-pickup');
+    if (pAbb) pAbb.classList.toggle('hidden', st.subView !== 'abbasiya');
+    if (pLive) pLive.classList.toggle('hidden', st.subView !== 'live_radar');
+    if (pPick) pPick.classList.toggle('hidden', st.subView !== 'pickup');
+  }
+
+  /* تفعيل وتركيب رادار المناديب المباشر (#cop-manager-panel) داخل #ah-pane-live-radar */
+  function activateLiveRadarSubView() {
+    var slot = $('ah-pane-live-radar');
     if (!slot) return;
     var cop = $('cop-manager-panel');
-    if (cop && cop.parentElement !== slot) {
-      slot.appendChild(cop);
+    var couriersTab = $('tab-couriers');
+    var radarTab = $('tab-radar');
+
+    if (!cop && couriersTab && typeof window.switchTab === 'function') {
+      /* إجبار js/71 على إنشاء وتحميل #cop-manager-panel في الخلفية بدون إظهار تاب المناديب */
+      st.internalSwitch = true;
+      try {
+        couriersTab.style.display = 'none';
+        window.switchTab('couriers');
+      } finally {
+        couriersTab.classList.add('hidden');
+        couriersTab.style.display = '';
+        if (radarTab) radarTab.classList.remove('hidden');
+        var rBtn = $('tab-radar-btn'), cBtn = $('tab-couriers-btn');
+        if (rBtn) rBtn.className = BTN_ON;
+        if (cBtn) cBtn.className = BTN_OFF;
+        st.internalSwitch = false;
+      }
+      cop = $('cop-manager-panel');
     }
-    var refreshBtn = cop && (cop.querySelector('[data-radar-retry="1"]') || cop.querySelector('#cop-manager-refresh'));
-    if (refreshBtn && !st.liveRadarTriggered) {
-      st.liveRadarTriggered = true;
-      try { refreshBtn.click(); } catch (e) {}
+
+    if (cop) {
+      if (cop.parentElement !== slot) slot.appendChild(cop);
+      cop.style.display = 'block';
+      var rBtn2 = cop.querySelector('[data-radar-retry="1"]') || cop.querySelector('#cop-manager-refresh');
+      var rBox = cop.querySelector('#cop-radar');
+      if (rBtn2 && rBox && !rBox.innerHTML.trim()) {
+        try { rBtn2.click(); } catch (e) {}
+      }
+    } else {
+      slot.innerHTML = '<section class="ah-card"><div class="ah-sub">جاري تجهيز رادار المناديب المباشر…</div></section>';
+    }
+  }
+
+  /* تفعيل وتركيب شاشة تيكتات الاستلام (#tab-pickup) داخل #ah-pane-pickup تحت نفس شريط التنقل */
+  function activatePickupSubView() {
+    var slot = $('ah-pane-pickup');
+    if (!slot) return;
+    var radarTab = $('tab-radar');
+    if (typeof window.switchTab === 'function') {
+      st.internalSwitch = true;
+      try {
+        window.switchTab('pickup');
+      } finally {
+        if (radarTab) radarTab.classList.remove('hidden');
+        var rBtn = $('tab-radar-btn');
+        if (rBtn) rBtn.className = BTN_ON;
+        st.internalSwitch = false;
+      }
+    }
+    var pickPane = $('tab-pickup');
+    if (pickPane) {
+      if (pickPane.parentElement !== slot) slot.appendChild(pickPane);
+      pickPane.classList.remove('hidden');
     }
   }
 
@@ -241,33 +323,14 @@
     return cands;
   }
 
-  function renderRadarTab() {
+  function renderAbbasiyaPane() {
     if (!isAllowedStaff()) return;
     ensureRadarTabDom();
-    var pane = $('tab-radar');
-    if (!pane) return;
-
-    var navHtml =
-      '<div class="ah-nav-bar">' +
-        '<div>' +
-          '<b style="font-size:15px">مركز الرادار والعمليات الميدانية</b>' +
-          '<div class="ah-sub">تنقّل بين رادار جوازات العباسية، رادار المناديب المباشر، وتيكتات الاستلام من مكان واحد.</div>' +
-        '</div>' +
-        '<div class="ah-nav-tabs">' +
-          '<button type="button" class="ah-nav-pill' + (st.subView === 'abbasiya' ? ' active' : '') + '" data-ah-nav="abbasiya">🛂 رادار جوازات العباسية</button>' +
-          '<button type="button" class="ah-nav-pill' + (st.subView === 'live_radar' ? ' active' : '') + '" data-ah-nav="live_radar">📡 رادار المناديب المباشر</button>' +
-          '<button type="button" class="ah-nav-pill" data-ah-nav="pickup_tab">🎫 تيكتات الاستلام</button>' +
-        '</div>' +
-      '</div>';
-
-    if (st.subView === 'live_radar') {
-      pane.innerHTML = '<div class="ah-wrap">' + navHtml + '<div id="ah-live-radar-slot"></div></div>';
-      mountLiveOfficeRadarIntoSlot();
-      return;
-    }
+    var target = $('ah-pane-abbasiya');
+    if (!target) return;
 
     if (!st.snap) {
-      pane.innerHTML = '<div class="ah-wrap">' + navHtml + '<section class="ah-card"><div class="ah-sub">جاري تحميل بيانات رادار جوازات العباسية…</div></section></div>';
+      target.innerHTML = '<section class="ah-card"><div class="ah-sub">جاري تحميل بيانات رادار جوازات العباسية…</div></section>';
       return;
     }
 
@@ -361,38 +424,48 @@
         '</div>'
       : '';
 
-    pane.innerHTML =
-      '<div class="ah-wrap">' +
-        navHtml +
-        '<section class="ah-card">' +
-          '<div class="ah-head">' +
-            '<div>' +
-              '<h3 class="ah-title">رادار تسليم جوازات العباسية الفوري <span class="ah-badge ah-badge-ok">' + dueCount + ' مستحق اليوم</span> <span class="ah-badge ah-badge-mut">إجمالي المفتوح: ' + allCands.length + '</span></h3>' +
-              '<div class="ah-sub">بيعرض حالة كل جواز وتاريخ استلامه، ويرشّح فقط المناديب الفعليين المفعّلين بحساب دخول في قاعدة البيانات.</div>' +
-            '</div>' +
-            '<button type="button" class="ah-btn ah-btn-sec" id="ah-refresh-btn">تحديث الرادار</button>' +
+    target.innerHTML =
+      '<section class="ah-card">' +
+        '<div class="ah-head">' +
+          '<div>' +
+            '<h3 class="ah-title">رادار تسليم جوازات العباسية الفوري <span class="ah-badge ah-badge-ok">' + dueCount + ' مستحق اليوم</span> <span class="ah-badge ah-badge-mut">إجمالي المفتوح: ' + allCands.length + '</span></h3>' +
+            '<div class="ah-sub">بيعرض حالة كل جواز وتاريخ استلامه، ويرشّح فقط المناديب الفعليين المفعّلين بحساب دخول في قاعدة البيانات.</div>' +
           '</div>' +
-          '<div class="ah-grid">' +
-            '<div class="ah-box">' +
-              '<b>1) فرز الجوازات حسب الحالة وتاريخ الاستلام</b>' +
-              filterBarHtml +
-              candsHtml +
-            '</div>' +
-            '<div class="ah-box">' +
-              '<b>2) ترشيح المناديب المفعّلين وحسبة ميعاد العباسية</b>' +
-              couriersHtml +
-              '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">' +
-                '<input id="ah-win-start" class="ah-input" placeholder="من الساعة (مثال: 5:20 م)" value="' + eh(st.winStart) + '">' +
-                '<input id="ah-win-end" class="ah-input" placeholder="إلى الساعة (مثال: 5:50 م)" value="' + eh(st.winEnd) + '">' +
-              '</div>' +
-              (isManager()
-                ? '<button type="button" id="ah-approve-btn" class="ah-btn ah-btn-pri" style="width:100%;justify-content:center">اعتماد المندوب والميعاد وإرسال للمندوب</button>'
-                : '<div class="ah-sub">اعتماد الميعاد وإرساله للمندوب متاح للمدير فقط.</div>') +
-            '</div>' +
+          '<button type="button" class="ah-btn ah-btn-sec" id="ah-refresh-btn">تحديث الرادار</button>' +
+        '</div>' +
+        '<div class="ah-grid">' +
+          '<div class="ah-box">' +
+            '<b>1) فرز الجوازات حسب الحالة وتاريخ الاستلام</b>' +
+            filterBarHtml +
+            candsHtml +
           '</div>' +
-          callItemsHtml +
-        '</section>' +
-      '</div>';
+          '<div class="ah-box">' +
+            '<b>2) ترشيح المناديب المفعّلين وحسبة ميعاد العباسية</b>' +
+            couriersHtml +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">' +
+              '<input id="ah-win-start" class="ah-input" placeholder="من الساعة (مثال: 5:20 م)" value="' + eh(st.winStart) + '">' +
+              '<input id="ah-win-end" class="ah-input" placeholder="إلى الساعة (مثال: 5:50 م)" value="' + eh(st.winEnd) + '">' +
+            '</div>' +
+            (isManager()
+              ? '<button type="button" id="ah-approve-btn" class="ah-btn ah-btn-pri" style="width:100%;justify-content:center">اعتماد المندوب والميعاد وإرسال للمندوب</button>'
+              : '<div class="ah-sub">اعتماد الميعاد وإرساله للمندوب متاح للمدير فقط.</div>') +
+          '</div>' +
+        '</div>' +
+        callItemsHtml +
+      '</section>';
+  }
+
+  function renderRadarTab() {
+    if (!isAllowedStaff()) return;
+    ensureRadarTabDom();
+    updateNavPillsAndPanes();
+    if (st.subView === 'live_radar') {
+      activateLiveRadarSubView();
+    } else if (st.subView === 'pickup') {
+      activatePickupSubView();
+    } else {
+      renderAbbasiyaPane();
+    }
   }
 
   async function loadStaffSnap(force) {
@@ -410,7 +483,6 @@
       st.selectedIds = {};
       st.snap.items.forEach(function (it) { st.selectedIds[it.line_id] = true; });
     } else if (st.snap && Array.isArray(st.snap.candidates)) {
-      /* نعلّم افتراضياً فقط على الجوازات المكتملة (Complete) عشان المدير ما يضطرش يلغي 19 جواز بإيده */
       st.snap.candidates.forEach(function (c) {
         if (st.selectedIds[c.line_id] === undefined) {
           st.selectedIds[c.line_id] = !!(c.complete || c.status === 'Complete');
@@ -464,12 +536,7 @@
 
     var navBtn = t.closest ? t.closest('[data-ah-nav]') : null;
     if (navBtn) {
-      var targetView = navBtn.dataset.ahNav;
-      if (targetView === 'pickup_tab') {
-        if (typeof window.switchTab === 'function') window.switchTab('pickup');
-        return;
-      }
-      st.subView = targetView;
+      st.subView = navBtn.dataset.ahNav;
       renderRadarTab();
       return;
     }
@@ -477,7 +544,7 @@
     var fltBtn = t.closest ? t.closest('[data-ah-flt]') : null;
     if (fltBtn) {
       st.passFilter = fltBtn.dataset.ahFlt;
-      renderRadarTab();
+      renderAbbasiyaPane();
       return;
     }
 
@@ -488,7 +555,7 @@
       visibleList.forEach(function (l) {
         st.selectedIds[l.line_id] = (mode === 'all');
       });
-      renderRadarTab();
+      renderAbbasiyaPane();
       return;
     }
 
@@ -505,7 +572,7 @@
         st.winStart = eta.winStart;
         st.winEnd = eta.winEnd;
       }
-      renderRadarTab();
+      renderAbbasiyaPane();
       return;
     }
     if (t.id === 'ah-approve-btn') {
@@ -570,11 +637,19 @@
     var orig = window.switchTab;
     if (typeof orig === 'function' && !orig['__ah74Wrapped']) {
       var w = function (id) {
+        if (st.internalSwitch) {
+          return orig.apply(this, arguments);
+        }
+        /* لو أي مكان طلب switchTab('pickup')، نفتحها جوه تابة الرادار والعمليات الموحدة */
+        if (id === 'pickup' && isAllowedStaff()) {
+          st.subView = 'pickup';
+          id = 'radar';
+        }
         if (id === 'radar' && !isAllowedStaff()) {
           toast('الصفحة دي متاحة للموظفين والإدارة فقط', 'error');
           return;
         }
-        var res = orig.apply(this, arguments);
+        var res = orig.apply(this, [id]);
         try {
           ensureRadarTabDom();
           var on = id === 'radar' && isAllowedStaff();
@@ -584,10 +659,10 @@
           if (on) {
             var sec = btn && btn.closest('.mg');
             if (sec && !sec.classList.contains('open')) sec.classList.add('open');
+            renderRadarTab();
             loadStaffSnap(false).catch(function (err) {
-              renderRadarTab();
-              var p = $('tab-radar');
-              if (p) p.insertAdjacentHTML('beforeend', '<section class="ah-card"><div class="ah-sub">تأكد من تشغيل النسخة الجديدة من sql/abbasiya-hub-radar.sql في Supabase. (' + eh(err && err.message) + ')</div></section>');
+              var pAbb = $('ah-pane-abbasiya');
+              if (pAbb) pAbb.innerHTML = '<section class="ah-card"><div class="ah-sub">تأكد من تشغيل النسخة الجديدة من sql/abbasiya-hub-radar.sql في Supabase. (' + eh(err && err.message) + ')</div></section>';
             });
           }
         } catch (e) { /* */ }
