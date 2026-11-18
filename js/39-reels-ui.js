@@ -16,10 +16,12 @@
   }
   function boot() {
     var nav = document.getElementById('hdr-shortcuts'); if (!nav) return setTimeout(boot, 300);
-    new MutationObserver(function () { requestAnimationFrame(place); }).observe(nav, { attributes: true, subtree: true, attributeFilter: ['class'] });
+    new MutationObserver(function () { requestAnimationFrame(place); }).observe(nav, { attributes: true, subtree: true, attributeFilter: ['class'], childList: true });
+    if (window.ResizeObserver) { try { new ResizeObserver(function () { requestAnimationFrame(place); }).observe(nav); } catch (e) {} }
     window.addEventListener('resize', place);
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
-    place(); setTimeout(place, 400);
+    window.addEventListener('load', place);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { requestAnimationFrame(place); });
+    place(); setTimeout(place, 250); setTimeout(place, 700); setTimeout(place, 1400);
   }
   boot();
 
@@ -48,8 +50,8 @@
     var h1 = home.querySelector('.hm-hero h1');
     if (h1 && !h1.querySelector('.r-acc')) h1.innerHTML = h1.innerHTML.replace(/^(\s*أهلاً،\s*)(.+)$/, '$1<span class="r-acc">$2</span>');
     if (reduce) return;
-    if (home.__rAt && Date.now() - home.__rAt < 30000) return; /* تحديث تلقائي للبيانات: بلا حركة ولا عدّاد (كان بيعمل اهتزاز) */
-    home.__rAt = Date.now();
+    if (home.__rDone) return; /* أنيميشن الدخول وعدّاد الأرقام مرة واحدة فقط عند فتح الرئيسية لمنع الرمشة */
+    home.__rDone = true;
     home.classList.remove('r-enter'); void home.offsetWidth; home.classList.add('r-enter');
     setTimeout(function () { home.classList.remove('r-enter'); }, 900);
     home.querySelectorAll('.hm-kpi-box > div.text-base').forEach(countUp);

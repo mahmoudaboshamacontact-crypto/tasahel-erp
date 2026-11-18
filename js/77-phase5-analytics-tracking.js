@@ -202,7 +202,7 @@
 
     var heatHtml = zones.length ? zones.map(function (z) {
       var pct = Math.round((Number(z.orders_count || 0) / maxOrders) * 100);
-      return '<div style="margin-bottom:8px">' +
+      return '<div data-p5-zone="' + eh(z.zone_name) + '" style="margin-bottom:8px;cursor:pointer;padding:4px 6px;border-radius:8px" title="اضغط لعرض معاملات المنطقة">' +
         '<div style="display:flex;justify-content:space-between;font-size:12.5px">' +
           '<b>' + eh(z.zone_name) + '</b>' +
           '<span>' + Number(z.orders_count || 0) + ' طلب</span>' +
@@ -215,7 +215,7 @@
       ? '<div style="overflow-x:auto"><table class="p5-tbl">' +
           '<thead><tr><th>المنطقة</th><th>الطلبات</th><th>الإيراد</th><th>تكلفة التوصيل</th><th>نسبة التوصيل</th></tr></thead>' +
           '<tbody>' + zones.map(function (z) {
-            return '<tr>' +
+            return '<tr data-p5-zone="' + eh(z.zone_name) + '" style="cursor:pointer" title="اضغط لعرض التفاصيل">' +
               '<td><b>' + eh(z.zone_name) + '</b></td>' +
               '<td>' + Number(z.orders_count || 0) + '</td>' +
               '<td>' + eh(money(z.revenue)) + '</td>' +
@@ -259,6 +259,44 @@
       '</section>';
   }
 
+
+  async function openZoneDetailsModal(zoneName) {
+    var old = $('p5-zone-modal'); if (old) old.remove();
+    var ov = document.createElement('div');
+    ov.id = 'p5-zone-modal';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100025;background:rgba(12,10,9,.82);display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML = '<div class="ah-card" dir="rtl" style="width:100%;max-width:600px;max-height:82vh;overflow:auto"><div class="ah-head"><b>معاملات: ' + eh(zoneName) + ' (آخر ' + st.days + ' يوم)</b><button type="button" class="ah-btn ah-btn-sec" id="p5-zm-close">إغلاق</button></div><div id="p5-zm-body" class="ah-sub">جاري تحميل المعاملات…</div></div>';
+    ov.addEventListener('click', function (ev) {
+      if (ev.target === ov || ev.target.id === 'p5-zm-close') { ov.remove(); return; }
+      var ob = ev.target.closest && ev.target.closest('[data-p5-opentx]');
+      if (ob) {
+        var txId = ob.getAttribute('data-p5-opentx');
+        ov.remove();
+        if (typeof window.openTxModal === 'function') window.openTxModal(txId);
+      }
+    });
+    document.body.appendChild(ov);
+    try {
+      var r = await sbClient.rpc('radar_p5_zone_details', { p_zone: zoneName, p_days: st.days });
+      if (r.error) throw r.error;
+      var list = Array.isArray(r.data) ? r.data : [];
+      var body = $('p5-zm-body');
+      if (!body) return;
+      body.innerHTML = list.length ? list.map(function (x) {
+        return '<div class="ah-row" style="margin-bottom:6px">' +
+          '<div style="flex:1;min-width:0">' +
+            '<div><b>' + eh(x.client_name || '—') + '</b> <span class="ah-badge ah-badge-org" dir="ltr">' + eh(x.transaction_id) + '</span></div>' +
+            '<div class="ah-sub">العنوان المسجل: <b>' + eh(x.address || 'غير مسجل (بدون عنوان)') + '</b> · الإيراد: ' + eh(money(x.revenue)) + ' · التوصيل: ' + eh(money(x.delivery_cost)) + '</div>' +
+          '</div>' +
+          (typeof window.openTxModal === 'function' ? '<button type="button" class="ah-btn ah-btn-sec" data-p5-opentx="' + eh(x.transaction_id) + '">فتح</button>' : '') +
+        '</div>';
+      }).join('') : '<div class="ah-sub">لا توجد معاملات مسجلة في هذا البند.</div>';
+    } catch (err) {
+      var b2 = $('p5-zm-body');
+      if (b2) b2.textContent = 'تأكد من تشغيل التحديث الجديد لملف sql/phase5-analytics-tracking.sql في Supabase.';
+    }
+  }
+
   function onAnalyticsClick(e) {
     var t = e.target;
     if (!t) return;
@@ -266,6 +304,8 @@
       loadAnalytics(true);
       return;
     }
+    var zRow = t.closest ? t.closest('[data-p5-zone]') : null;
+    if (zRow) { openZoneDetailsModal(zRow.getAttribute('data-p5-zone')); return; }
     var dBtn = t.closest ? t.closest('[data-p5-days]') : null;
     if (dBtn) {
       st.days = Number(dBtn.getAttribute('data-p5-days') || 30);

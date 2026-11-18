@@ -214,7 +214,7 @@
         '<div class="ah-wrap">' +
           '<div class="ah-nav-bar">' +
             '<div>' +
-              '<b style="font-size:15px">مركز الرادار والعمليات الميدانية</b>' +
+              '<b style="font-size:15px">مركز العمليات والرادار</b>' +
               '<div class="ah-sub">متابعة تسليمات العباسية، رادار المناديب المباشر، تيكتات الاستلام، وعمليات اليوم.</div>' +
             '</div>' +
             '<div class="ah-nav-tabs" id="ah-nav-tabs">' +
@@ -242,7 +242,7 @@
       b.setAttribute('data-tab-target', 'radar');
       b.className = BTN_OFF;
       b.setAttribute('onclick', "switchTab('radar')");
-      b.innerHTML = '<i class="fa-solid fa-satellite-dish text-orange-500"></i><span>الرادار والعمليات</span>';
+      b.innerHTML = '<i class="fa-solid fa-satellite-dish text-orange-500"></i><span>العمليات</span>';
     }
     if (b) placeMenuBtn(b);
     return true;
@@ -679,9 +679,10 @@
         try {
           ensureRadarTabDom();
           var on = id === 'radar' && isAllowedStaff();
-          var pane = $('tab-radar'), btn = $('tab-radar-btn');
+          var pane = $('tab-radar'), btn = $('tab-radar-btn'), hbtn = $('tab-radar-hdr-btn');
           if (pane) pane.classList.toggle('hidden', !on);
           if (btn) btn.className = on ? BTN_ON : BTN_OFF;
+          if (hbtn) hbtn.className = on ? BTN_ON : BTN_OFF;
           if (on) {
             var sec = btn && btn.closest('.mg');
             if (sec && !sec.classList.contains('open')) sec.classList.add('open');
