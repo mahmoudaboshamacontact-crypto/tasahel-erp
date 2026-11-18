@@ -1,10 +1,7 @@
 /* =====================================================================
-   js/74-abbasiya-hub-radar.js — تابة «الرادار والعمليات» الموحّدة (v6)
-   - معزول تماماً في IIFE بدون لمس js/03 أو js/13 أو js/14 أو js/45 أو js/70 أو js/71 أو js/73.
-   - يوحّد الـ 3 شاشات جوه تابة واحدة «الرادار والعمليات» بدون خروج لتابات منفصلة:
-     (1) رادار جوازات العباسية
-     (2) رادار المناديب المباشر (ينقل #cop-manager-panel جوه التاب ويخفيه تماماً من تاب المناديب)
-     (3) تيكتات الاستلام (ينقل #tab-pickup جوه التاب تحت نفس شريط التنقل ويخفي الزرار المكرر من القائمة)
+   js/74-abbasiya-hub-radar.js — تابة «الرادار والعمليات» الموحّدة (v7)
+   - متوافقة 100% مع الثيم الدافئ الأصلي للسيستم (--r-bg, --r-card, --r-line) في الوضعين الليلي والنهاري.
+   - بدون إيموجي مبالغ فيها، وبتثبيت مباشر لرادار المناديب المباشر من أول ضغطة بدون اختفاء.
    ===================================================================== */
 (function () {
   'use strict';
@@ -57,48 +54,61 @@
     var s = document.createElement('style');
     s.id = 'ah74-style';
     s.textContent = [
-      /* إخفاء رادار المكتب من تاب المناديب القديم وإخفاء زرار تيكتات الاستلام المكرر من القائمة الجانبية */
       '#tab-couriers > #cop-manager-panel{display:none!important}',
       '#nav-menu #tab-pickup-btn{display:none!important}',
       '.ah-wrap{display:flex;flex-direction:column;gap:14px}',
-      '.ah-nav-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:var(--r-card,#ffffff);border:1px solid var(--r-bd,rgba(234,88,12,.3));border-radius:18px;padding:12px 16px}',
-      'html.dark .ah-nav-bar{background:var(--r-card,#111827);border-color:rgba(234,88,12,.35)}',
+      /* شريط التنقل العلوي بنفس روح رادار المكتب الدافئة */
+      '.ah-nav-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;background:var(--r-card,#ffffff);border:1px solid var(--r-line,rgba(40,25,10,.1));border-radius:20px;padding:14px 18px}',
+      'html.dark .ah-nav-bar{background:#181412;border-color:rgba(255,255,255,.08)}',
       '.ah-nav-tabs{display:flex;flex-wrap:wrap;gap:8px}',
-      '.ah-nav-pill{border:1px solid var(--r-bd,rgba(148,163,184,.3));background:transparent;color:var(--r-tx,#0f172a);border-radius:12px;padding:9px 15px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:7px}',
-      'html.dark .ah-nav-pill{color:#f8fafc;border-color:rgba(255,255,255,.14)}',
-      '.ah-nav-pill.active{background:var(--r-acc,#ea580c);color:#ffffff;border-color:var(--r-acc,#ea580c)}',
-      '.ah-card{background:var(--r-card,#ffffff);border:1px solid var(--r-bd,rgba(234,88,12,.32));border-radius:18px;padding:16px;color:var(--r-tx,#0f172a)}',
-      'html.dark .ah-card{background:var(--r-card,#111827);border-color:rgba(234,88,12,.35);color:#f8fafc}',
-      '.ah-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}',
+      '.ah-nav-pill{border:1px solid var(--r-line,rgba(40,25,10,.12));background:var(--r-card-2,#f4ede5);color:var(--r-text,#231B15);border-radius:12px;padding:8px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:7px;transition:background-color .15s,border-color .15s,color .15s}',
+      'html.dark .ah-nav-pill{background:#221c18;color:#e7dfd8;border-color:rgba(255,255,255,.08)}',
+      '.ah-nav-pill:hover{border-color:var(--r-acc,#e8590c)}',
+      '.ah-nav-pill.active{background:var(--r-acc,#e8590c);color:#ffffff;border-color:var(--r-acc,#e8590c)}',
+      'html.dark .ah-nav-pill.active{background:#ff7a3d;color:#1a0d05;border-color:#ff7a3d}',
+      /* الكروت الرئيسية والداخلية بنفس ستايل رادار المكتب #181412 و #221c18 */
+      '.ah-card{background:var(--r-card,#ffffff);border:1px solid var(--r-line,rgba(40,25,10,.1));border-radius:22px;padding:18px 20px;color:var(--r-text,#231B15)}',
+      'html.dark .ah-card{background:#181412;border-color:rgba(255,255,255,.08);color:#f4eee8}',
+      '.ah-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}',
       '.ah-title{font-size:16px;font-weight:700;margin:0;display:flex;align-items:center;gap:8px}',
-      '.ah-sub{font-size:12px;color:var(--r-mute,#64748b);margin-top:2px}',
+      '.ah-sub{font-size:12px;color:var(--r-mute,#7b6f64);margin-top:2px}',
+      'html.dark .ah-sub{color:#a89c91}',
       '.ah-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}',
-      '.ah-box{border:1px solid var(--r-bd,rgba(148,163,184,.25));border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}',
-      '.ah-filter-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;padding-bottom:6px;border-bottom:1px solid var(--r-bd,rgba(148,163,184,.18))}',
-      '.ah-chip{border:1px solid var(--r-bd,rgba(148,163,184,.3));background:transparent;color:var(--r-tx,#0f172a);border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}',
-      'html.dark .ah-chip{color:#e2e8f0}',
-      '.ah-chip.active{background:rgba(234,88,12,.16);color:#ea580c;border-color:#ea580c}',
-      'html.dark .ah-chip.active{color:#fb923c}',
-      '.ah-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;border-radius:11px;border:1px solid var(--r-bd,rgba(148,163,184,.2))}',
+      '.ah-box{background:var(--r-card-2,#f7f2ec);border:1px solid var(--r-line,rgba(40,25,10,.09));border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:9px}',
+      'html.dark .ah-box{background:#211b17;border-color:rgba(255,255,255,.07)}',
+      '.ah-filter-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;padding-bottom:8px;border-bottom:1px solid var(--r-line,rgba(40,25,10,.08))}',
+      'html.dark .ah-filter-bar{border-bottom-color:rgba(255,255,255,.07)}',
+      '.ah-chip{border:1px solid var(--r-line,rgba(40,25,10,.12));background:var(--r-card,#ffffff);color:var(--r-text,#231B15);border-radius:999px;padding:4px 11px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}',
+      'html.dark .ah-chip{background:#181412;color:#e7dfd8;border-color:rgba(255,255,255,.09)}',
+      '.ah-chip.active{background:rgba(232,89,12,.14);color:var(--r-acc,#e8590c);border-color:var(--r-acc,#e8590c)}',
+      'html.dark .ah-chip.active{background:rgba(255,122,61,.16);color:#ff9d6c;border-color:#ff7a3d}',
+      '.ah-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-radius:12px;background:var(--r-card,#ffffff);border:1px solid var(--r-line,rgba(40,25,10,.08))}',
+      'html.dark .ah-row{background:#181412;border-color:rgba(255,255,255,.06)}',
       '.ah-chk-lbl{display:flex;align-items:flex-start;gap:9px;cursor:pointer;flex:1;min-width:200px}',
-      '.ah-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}',
-      '.ah-badge-org{background:rgba(234,88,12,.15);color:#ea580c}',
-      '.ah-badge-ok{background:rgba(16,185,129,.16);color:#059669}',
-      'html.dark .ah-badge-ok{color:#34d399}',
-      '.ah-badge-pur{background:rgba(139,92,246,.18);color:#8b5cf6}',
-      '.ah-badge-warn{background:rgba(245,158,11,.18);color:#d97706}',
-      '.ah-badge-mut{background:rgba(148,163,184,.18);color:#94a3b8}',
-      '.ah-input{border:1px solid var(--r-bd,rgba(148,163,184,.3));background:var(--r-bg,#f8fafc);color:var(--r-tx,#0f172a);border-radius:10px;padding:7px 10px;font-size:12.5px;font-family:inherit;outline:none}',
-      'html.dark .ah-input{background:#0b0f17;color:#f8fafc;border-color:rgba(255,255,255,.15)}',
-      '.ah-btn{border:0;border-radius:10px;padding:8px 13px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}',
+      '.ah-badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}',
+      '.ah-badge-org{background:rgba(232,89,12,.13);color:#ea580c}',
+      'html.dark .ah-badge-org{background:rgba(255,122,61,.16);color:#ff9d6c}',
+      '.ah-badge-ok{background:rgba(16,185,129,.14);color:#059669}',
+      'html.dark .ah-badge-ok{background:rgba(63,216,192,.14);color:#3fd8c0}',
+      '.ah-badge-pur{background:rgba(139,92,246,.16);color:#8b5cf6}',
+      '.ah-badge-warn{background:rgba(245,158,11,.15);color:#d97706}',
+      'html.dark .ah-badge-warn{background:rgba(255,194,75,.14);color:#ffc24b}',
+      '.ah-badge-mut{background:rgba(148,163,184,.14);color:#64748b}',
+      'html.dark .ah-badge-mut{color:#a89c91}',
+      '.ah-input{border:1px solid var(--r-line,rgba(40,25,10,.14));background:var(--r-card,#ffffff);color:var(--r-text,#231B15);border-radius:10px;padding:7px 11px;font-size:12.5px;font-family:inherit;outline:none}',
+      'html.dark .ah-input{background:#151210;color:#f4eee8;border-color:rgba(255,255,255,.1)}',
+      '.ah-btn{border:1px solid transparent;border-radius:11px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}',
       '.ah-btn-pri{background:var(--r-acc,#ea580c);color:#ffffff}',
-      '.ah-btn-ok{background:#059669;color:#ffffff}',
-      '.ah-btn-sec{background:rgba(148,163,184,.16);color:var(--r-tx,#0f172a)}',
-      'html.dark .ah-btn-sec{background:rgba(255,255,255,.1);color:#f8fafc}',
+      'html.dark .ah-btn-pri{background:#ff7a3d;color:#1a0d05}',
+      '.ah-btn-ok{background:#0d9488;color:#ffffff}',
+      '.ah-btn-sec{background:var(--r-card,#ffffff);border-color:var(--r-line,rgba(40,25,10,.12));color:var(--r-text,#231B15)}',
+      'html.dark .ah-btn-sec{background:#272019;border-color:rgba(255,255,255,.09);color:#f4eee8}',
       '.ah-btn:disabled{opacity:.5;cursor:not-allowed}',
-      '.ah-eta-card{border:1px solid var(--r-bd,rgba(148,163,184,.25));border-radius:12px;padding:9px 11px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px}',
-      '.ah-eta-card.active{border-color:var(--r-acc,#ea580c);background:rgba(234,88,12,.1)}',
-      '.ah-courier-hub{margin:10px 12px 0;padding:13px;border-radius:16px;border:1px solid rgba(16,185,129,.45);background:rgba(16,185,129,.1);color:var(--tx,#f8fafc);font-size:12.5px}',
+      '.ah-eta-card{background:var(--r-card,#ffffff);border:1px solid var(--r-line,rgba(40,25,10,.1));border-radius:12px;padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px}',
+      'html.dark .ah-eta-card{background:#181412;border-color:rgba(255,255,255,.07)}',
+      '.ah-eta-card.active{border-color:var(--r-acc,#ea580c);background:rgba(234,88,12,.08)}',
+      'html.dark .ah-eta-card.active{border-color:#ff7a3d;background:rgba(255,122,61,.12)}',
+      '.ah-courier-hub{margin:10px 12px 0;padding:13px;border-radius:16px;border:1px solid rgba(16,185,129,.35);background:rgba(16,185,129,.08);color:var(--tx,#f8fafc);font-size:12.5px}',
       '@media (max-width:860px){.ah-grid{grid-template-columns:1fr}}'
     ].join('\n');
     document.head.appendChild(s);
@@ -127,7 +137,7 @@
 
   function statusBadgeHtml(l) {
     if (l.complete || l.status === 'Complete') {
-      return '<span class="ah-badge ah-badge-ok">مكتمل — جاهز للتسليم ✓</span>';
+      return '<span class="ah-badge ah-badge-ok">مكتمل — جاهز للتسليم</span>';
     }
     if (l.under_review || l.status === 'Under Review') {
       return '<span class="ah-badge ah-badge-pur">تحت المراجعة</span>';
@@ -135,7 +145,7 @@
     if (l.is_due) {
       return '<span class="ah-badge ah-badge-warn">قيد التنفيذ (مستحق اليوم)</span>';
     }
-    return '<span class="ah-badge ah-badge-mut">قيد التنفيذ (لم يحن موعده)</span>';
+    return '<span class="ah-badge ah-badge-mut">قيد التنفيذ</span>';
   }
 
   function estimateCourierAbbasiya(c) {
@@ -190,7 +200,6 @@
     }
   }
 
-  /* بناء هيكل ثابت لتابة الرادار والعمليات بـ 3 حاويات داخلية ثابتة لا تُمسح عند التبديل */
   function ensureRadarTabDom() {
     if (isCourier() || !isAllowedStaff()) return false;
     ensureCss();
@@ -206,12 +215,12 @@
           '<div class="ah-nav-bar">' +
             '<div>' +
               '<b style="font-size:15px">مركز الرادار والعمليات الميدانية</b>' +
-              '<div class="ah-sub">تنقّل بين رادار جوازات العباسية، رادار المناديب المباشر، وتيكتات الاستلام داخل نفس الشاشة.</div>' +
+              '<div class="ah-sub">متابعة تسليمات العباسية، رادار المناديب المباشر، تيكتات الاستلام، وعمليات اليوم.</div>' +
             '</div>' +
             '<div class="ah-nav-tabs" id="ah-nav-tabs">' +
-              '<button type="button" class="ah-nav-pill active" data-ah-nav="abbasiya">🛂 رادار جوازات العباسية</button>' +
-              '<button type="button" class="ah-nav-pill" data-ah-nav="live_radar">📡 رادار المناديب المباشر</button>' +
-              '<button type="button" class="ah-nav-pill" data-ah-nav="pickup">🎫 تيكتات الاستلام</button>' +
+              '<button type="button" class="ah-nav-pill active" data-ah-nav="abbasiya"><i class="fa-solid fa-passport"></i><span>رادار جوازات العباسية</span></button>' +
+              '<button type="button" class="ah-nav-pill" data-ah-nav="live_radar"><i class="fa-solid fa-satellite-dish"></i><span>رادار المناديب المباشر</span></button>' +
+              '<button type="button" class="ah-nav-pill" data-ah-nav="pickup"><i class="fa-solid fa-ticket"></i><span>تيكتات الاستلام</span></button>' +
             '</div>' +
           '</div>' +
           '<div id="ah-pane-abbasiya"></div>' +
@@ -245,25 +254,47 @@
     pills.forEach(function (p) {
       p.classList.toggle('active', p.dataset.ahNav === st.subView);
     });
+    var rp3Btn = $('rp3-nav-btn');
+    var rp3Pane = $('ah-pane-ops3');
+    if (st.subView !== 'ops3') {
+      if (rp3Btn) rp3Btn.classList.remove('active');
+      if (rp3Pane) rp3Pane.classList.add('hidden');
+    }
     var pAbb = $('ah-pane-abbasiya'), pLive = $('ah-pane-live-radar'), pPick = $('ah-pane-pickup');
     if (pAbb) pAbb.classList.toggle('hidden', st.subView !== 'abbasiya');
     if (pLive) pLive.classList.toggle('hidden', st.subView !== 'live_radar');
     if (pPick) pPick.classList.toggle('hidden', st.subView !== 'pickup');
   }
 
-  /* تفعيل وتركيب رادار المناديب المباشر (#cop-manager-panel) داخل #ah-pane-live-radar */
+  /* تفعيل رادار المناديب المباشر بشكل مضمون من أول ضغطة (ومنع MutationObserver في js/71 من سحبه لتاب المناديب المخفي) */
+  function mountCopPanelIntoLiveRadar() {
+    var slot = $('ah-pane-live-radar');
+    if (!slot) return false;
+    var cop = $('cop-manager-panel');
+    if (!cop) return false;
+    if (cop.parentElement !== slot) {
+      slot.innerHTML = '';
+      slot.appendChild(cop);
+    }
+    cop.classList.remove('hidden');
+    cop.style.display = 'block';
+    var rBtn2 = cop.querySelector('[data-radar-retry="1"]') || cop.querySelector('#cop-manager-refresh');
+    var rBox = cop.querySelector('#cop-radar');
+    if (rBtn2 && rBox && (!rBox.innerHTML.trim() || rBox.textContent.indexOf('مش قادر يحمّل') !== -1)) {
+      try { rBtn2.click(); } catch (e) {}
+    }
+    return true;
+  }
+
   function activateLiveRadarSubView() {
     var slot = $('ah-pane-live-radar');
     if (!slot) return;
-    var cop = $('cop-manager-panel');
     var couriersTab = $('tab-couriers');
     var radarTab = $('tab-radar');
 
-    if (!cop && couriersTab && typeof window.switchTab === 'function') {
-      /* إجبار js/71 على إنشاء وتحميل #cop-manager-panel في الخلفية بدون إظهار تاب المناديب */
+    if (!$('cop-manager-panel') && couriersTab && typeof window.switchTab === 'function') {
       st.internalSwitch = true;
       try {
-        couriersTab.style.display = 'none';
         window.switchTab('couriers');
       } finally {
         couriersTab.classList.add('hidden');
@@ -274,23 +305,16 @@
         if (cBtn) cBtn.className = BTN_OFF;
         st.internalSwitch = false;
       }
-      cop = $('cop-manager-panel');
     }
 
-    if (cop) {
-      if (cop.parentElement !== slot) slot.appendChild(cop);
-      cop.style.display = 'block';
-      var rBtn2 = cop.querySelector('[data-radar-retry="1"]') || cop.querySelector('#cop-manager-refresh');
-      var rBox = cop.querySelector('#cop-radar');
-      if (rBtn2 && rBox && !rBox.innerHTML.trim()) {
-        try { rBtn2.click(); } catch (e) {}
-      }
-    } else {
+    if (!mountCopPanelIntoLiveRadar()) {
       slot.innerHTML = '<section class="ah-card"><div class="ah-sub">جاري تجهيز رادار المناديب المباشر…</div></section>';
     }
+    /* إعادة التثبيت بعد 90ms و 220ms لأن js/71 بيعمل setTimeout(..., 80) يسحب فيه اللوحة لتاب المناديب */
+    setTimeout(mountCopPanelIntoLiveRadar, 95);
+    setTimeout(mountCopPanelIntoLiveRadar, 230);
   }
 
-  /* تفعيل وتركيب شاشة تيكتات الاستلام (#tab-pickup) داخل #ah-pane-pickup تحت نفس شريط التنقل */
   function activatePickupSubView() {
     var slot = $('ah-pane-pickup');
     if (!slot) return;
@@ -358,13 +382,13 @@
     var filterBarHtml =
       '<div class="ah-filter-bar">' +
         '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
-          '<button type="button" class="ah-chip' + (st.passFilter === 'due' ? ' active' : '') + '" data-ah-flt="due">اللي عليهم الدور اليوم (' + dueCount + ')</button>' +
-          '<button type="button" class="ah-chip' + (st.passFilter === 'complete' ? ' active' : '') + '" data-ah-flt="complete">مكتمل وجاهز فقط (' + compCount + ')</button>' +
+          '<button type="button" class="ah-chip' + (st.passFilter === 'due' ? ' active' : '') + '" data-ah-flt="due">المستحق اليوم (' + dueCount + ')</button>' +
+          '<button type="button" class="ah-chip' + (st.passFilter === 'complete' ? ' active' : '') + '" data-ah-flt="complete">مكتمل وجاهز (' + compCount + ')</button>' +
           '<button type="button" class="ah-chip' + (st.passFilter === 'all' ? ' active' : '') + '" data-ah-flt="all">كل المفتوح (' + allCands.length + ')</button>' +
         '</div>' +
         '<div style="display:flex;gap:6px">' +
-          '<button type="button" class="ah-chip" data-ah-sel="all">تحديد المعروض</button>' +
-          '<button type="button" class="ah-chip" data-ah-sel="none">إلغاء التحديد</button>' +
+          '<button type="button" class="ah-chip" data-ah-sel="all">تحديد الكل</button>' +
+          '<button type="button" class="ah-chip" data-ah-sel="none">إلغاء</button>' +
         '</div>' +
       '</div>';
 
@@ -382,43 +406,43 @@
                 '</div>' +
                 '<div class="ah-sub" style="margin-top:4px">' +
                   eh(l.service) +
-                  ' · <b>تاريخ الاستلام: ' + eh(fmtDateAr(l.received_date || l.received_at)) + '</b>' +
-                  (l.due_date ? ' · الاستحقاق: ' + eh(fmtDateAr(l.due_date)) : '') +
-                  (l.executor ? ' · المنفذ: ' + eh(l.executor) : '') +
+                  ' · استلام: <b>' + eh(fmtDateAr(l.received_date || l.received_at)) + '</b>' +
+                  (l.due_date ? ' · استحقاق: ' + eh(fmtDateAr(l.due_date)) : '') +
+                  (l.executor ? ' · ' + eh(l.executor) : '') +
                   (l.phone ? ' · <span dir="ltr">' + eh(l.phone) + '</span>' : '') +
                 '</div>' +
               '</div>' +
             '</label>' +
           '</div>';
         }).join('')
-      : '<div class="ah-sub" style="padding:12px 0">مفيش جوازات مطابقة للفلتر ده حالياً — اضغط «كل المفتوح» لو عايز تعرض الجوازات اللي لسه قيد التنفيذ.</div>';
+      : '<div class="ah-sub" style="padding:12px 0">لا توجد جوازات مطابقة لهذا الفلتر حالياً.</div>';
 
     var couriersHtml = couriers.length
       ? couriers.map(function (c, idx) {
           var act = Number(st.selectedCourierId) === Number(c.courier_id);
           return '<div class="ah-eta-card' + (act ? ' active' : '') + '" data-ah-courier="' + Number(c.courier_id) + '">' +
             '<div>' +
-              '<div><b>' + eh(c.name) + '</b> ' + (idx === 0 ? '<span class="ah-badge ah-badge-ok">الترشيح الأنسب</span>' : '') + '</div>' +
-              '<div class="ah-sub">استلام: ' + Number(c.active_pickups || 0) + ' · تسليم: ' + Number(c.pending_deliveries || 0) + ' · ' + (c.eta.departed ? 'بدأ خط السير' : 'تقديري مبدئي') + '</div>' +
+              '<div><b>' + eh(c.name) + '</b> ' + (idx === 0 ? '<span class="ah-badge ah-badge-ok">الأقرب</span>' : '') + '</div>' +
+              '<div class="ah-sub">استلام: ' + Number(c.active_pickups || 0) + ' · تسليم: ' + Number(c.pending_deliveries || 0) + '</div>' +
             '</div>' +
             '<div style="text-align:left"><span class="ah-badge ah-badge-org">' + eh(c.eta.winStart) + ' – ' + eh(c.eta.winEnd) + '</span></div>' +
           '</div>';
         }).join('')
-      : '<div class="ah-sub">لا يوجد مناديب مفعّلين ومربوطين بحساب دخول في قاعدة البيانات حالياً.</div>';
+      : '<div class="ah-sub">لا يوجد مناديب مفعّلين حالياً.</div>';
 
     var callItemsHtml = batch && batchItems.length
       ? '<div class="ah-box" style="margin-top:12px">' +
           '<div class="ah-head" style="margin-bottom:4px">' +
             '<div><b>تأكيد مكالمات عملاء العباسية (' + batchItems.length + ')</b> — المندوب: <b>' + eh(batch.courier_name) + '</b> (' + eh(batch.window_start) + ' – ' + eh(batch.window_end) + ')</div>' +
-            '<button type="button" class="ah-btn ah-btn-sec" data-ah-act="copymsg">نسخ رسالة الواتساب</button>' +
+            '<button type="button" class="ah-btn ah-btn-sec" data-ah-act="copymsg"><i class="fa-regular fa-copy"></i><span>نسخ رسالة الواتساب</span></button>' +
           '</div>' +
           batchItems.map(function (it) {
             return '<div class="ah-row">' +
               '<div>' +
-                '<div><b>' + eh(it.client_name) + '</b> · <span dir="ltr">' + eh(it.phone || '—') + '</span> · <span class="ah-badge ' + (it.call_confirmed ? 'ah-badge-ok' : 'ah-badge-warn') + '">' + (it.call_confirmed ? 'تم تأكيد الميعاد ✓' : 'في انتظار المكالمة') + '</span></div>' +
+                '<div><b>' + eh(it.client_name) + '</b> · <span dir="ltr">' + eh(it.phone || '—') + '</span> · <span class="ah-badge ' + (it.call_confirmed ? 'ah-badge-ok' : 'ah-badge-warn') + '">' + (it.call_confirmed ? 'تم تأكيد الميعاد' : 'بانتظار المكالمة') + '</span></div>' +
                 '<div class="ah-sub">' + eh(it.service_name) + ' · <span dir="ltr">' + eh(it.transaction_id) + '</span>' + (it.call_note ? ' · ' + eh(it.call_note) : '') + '</div>' +
               '</div>' +
-              '<button type="button" class="ah-btn ' + (it.call_confirmed ? 'ah-btn-sec' : 'ah-btn-ok') + '" data-ah-call="' + Number(it.id) + '" data-next="' + (it.call_confirmed ? '0' : '1') + '">' + (it.call_confirmed ? 'إلغاء التأكيد' : 'تمت المكالمة وتأكيد الميعاد') + '</button>' +
+              '<button type="button" class="ah-btn ' + (it.call_confirmed ? 'ah-btn-sec' : 'ah-btn-ok') + '" data-ah-call="' + Number(it.id) + '" data-next="' + (it.call_confirmed ? '0' : '1') + '">' + (it.call_confirmed ? 'إلغاء التأكيد' : 'تأكيد المكالمة') + '</button>' +
             '</div>';
           }).join('') +
         '</div>'
@@ -428,27 +452,27 @@
       '<section class="ah-card">' +
         '<div class="ah-head">' +
           '<div>' +
-            '<h3 class="ah-title">رادار تسليم جوازات العباسية الفوري <span class="ah-badge ah-badge-ok">' + dueCount + ' مستحق اليوم</span> <span class="ah-badge ah-badge-mut">إجمالي المفتوح: ' + allCands.length + '</span></h3>' +
-            '<div class="ah-sub">بيعرض حالة كل جواز وتاريخ استلامه، ويرشّح فقط المناديب الفعليين المفعّلين بحساب دخول في قاعدة البيانات.</div>' +
+            '<h3 class="ah-title">رادار جوازات العباسية <span class="ah-badge ah-badge-ok">' + dueCount + ' مستحق اليوم</span> <span class="ah-badge ah-badge-mut">إجمالي المفتوح: ' + allCands.length + '</span></h3>' +
+            '<div class="ah-sub">فرز الجوازات حسب تاريخ الاستلام وترشيح المندوب الأقرب لمحطة العباسية.</div>' +
           '</div>' +
-          '<button type="button" class="ah-btn ah-btn-sec" id="ah-refresh-btn">تحديث الرادار</button>' +
+          '<button type="button" class="ah-btn ah-btn-sec" id="ah-refresh-btn"><i class="fa-solid fa-rotate-right"></i><span>تحديث</span></button>' +
         '</div>' +
         '<div class="ah-grid">' +
           '<div class="ah-box">' +
-            '<b>1) فرز الجوازات حسب الحالة وتاريخ الاستلام</b>' +
+            '<b>فرز الجوازات المفتوحة</b>' +
             filterBarHtml +
             candsHtml +
           '</div>' +
           '<div class="ah-box">' +
-            '<b>2) ترشيح المناديب المفعّلين وحسبة ميعاد العباسية</b>' +
+            '<b>ترشيح المندوب وميعاد التسليم</b>' +
             couriersHtml +
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">' +
               '<input id="ah-win-start" class="ah-input" placeholder="من الساعة (مثال: 5:20 م)" value="' + eh(st.winStart) + '">' +
               '<input id="ah-win-end" class="ah-input" placeholder="إلى الساعة (مثال: 5:50 م)" value="' + eh(st.winEnd) + '">' +
             '</div>' +
             (isManager()
-              ? '<button type="button" id="ah-approve-btn" class="ah-btn ah-btn-pri" style="width:100%;justify-content:center">اعتماد المندوب والميعاد وإرسال للمندوب</button>'
-              : '<div class="ah-sub">اعتماد الميعاد وإرساله للمندوب متاح للمدير فقط.</div>') +
+              ? '<button type="button" id="ah-approve-btn" class="ah-btn ah-btn-pri" style="width:100%;justify-content:center">اعتماد المندوب وإرسال الميعاد</button>'
+              : '<div class="ah-sub">اعتماد الميعاد متاح للمدير فقط.</div>') +
           '</div>' +
         '</div>' +
         callItemsHtml +
@@ -463,7 +487,7 @@
       activateLiveRadarSubView();
     } else if (st.subView === 'pickup') {
       activatePickupSubView();
-    } else {
+    } else if (st.subView === 'abbasiya') {
       renderAbbasiyaPane();
     }
   }
@@ -520,9 +544,9 @@
         '<div style="font-weight:700;margin-bottom:6px">محطة تسليم مجمّعة: ' + eh(h.hub_name) + ' (' + eh(h.window_start) + ' – ' + eh(h.window_end) + ') · ' + h.items.length + ' عملاء</div>' +
         h.items.map(function (it) {
           var badge = it.call_confirmed
-            ? '<span style="background:rgba(16,185,129,.25);color:#34d399;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700">تم تأكيد الميعاد مع العميل ✓</span>'
-            : '<span style="background:rgba(245,158,11,.25);color:#fbbf24;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700">جاري تأكيد المكتب مع العميل</span>';
-          return '<div style="padding:7px 0;border-top:1px solid rgba(255,255,255,.12)">' +
+            ? '<span style="background:rgba(16,185,129,.22);color:#34d399;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700">مؤكد مع العميل</span>'
+            : '<span style="background:rgba(245,158,11,.22);color:#fbbf24;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:700">جاري التأكيد</span>';
+          return '<div style="padding:7px 0;border-top:1px solid rgba(255,255,255,.1)">' +
             '<div><b>' + eh(it.client_name) + '</b> · <span dir="ltr">' + eh(it.phone || '') + '</span> · ' + badge + '</div>' +
             '<div style="font-size:11.5px;opacity:.88;margin-top:2px">' + eh(it.service_name) + ' · <span dir="ltr">' + eh(it.transaction_id) + '</span>' + (it.call_note ? ' · ' + eh(it.call_note) : '') + '</div>' +
           '</div>';
@@ -559,8 +583,9 @@
       return;
     }
 
-    if (t.id === 'ah-refresh-btn') {
-      try { await loadStaffSnap(true); toast('تم تحديث رادار العباسية ✓'); } catch (err) { toast(err.message || 'تعذر التحديث', 'error'); }
+    var refBtn = t.closest ? t.closest('#ah-refresh-btn') : null;
+    if (refBtn) {
+      try { await loadStaffSnap(true); toast('تم تحديث الرادار'); } catch (err) { toast(err.message || 'تعذر التحديث', 'error'); }
       return;
     }
     var cCard = t.closest ? t.closest('[data-ah-courier]') : null;
@@ -575,15 +600,16 @@
       renderAbbasiyaPane();
       return;
     }
-    if (t.id === 'ah-approve-btn') {
+    if (t.id === 'ah-approve-btn' || (t.closest && t.closest('#ah-approve-btn'))) {
+      var ab = t.id === 'ah-approve-btn' ? t : t.closest('#ah-approve-btn');
       if (!isManager()) return toast('اعتماد الميعاد للمدير فقط', 'error');
       var lineIds = Object.keys(st.selectedIds).filter(function (k) { return st.selectedIds[k]; }).map(Number);
-      if (!lineIds.length) return toast('اختار جواز واحد جاهز على الأقل', 'error');
-      if (!st.selectedCourierId) return toast('اختار المندوب الأول', 'error');
+      if (!lineIds.length) return toast('اختر جواز واحد جاهز على الأقل', 'error');
+      if (!st.selectedCourierId) return toast('اختر المندوب الأول', 'error');
       var ws = ($('ah-win-start') && $('ah-win-start').value.trim()) || st.winStart;
       var we = ($('ah-win-end') && $('ah-win-end').value.trim()) || st.winEnd;
       if (!ws || !we) return toast('حدد ميعاد الوصول من وإلى', 'error');
-      t.disabled = true;
+      ab.disabled = true;
       try {
         var r = await sbClient.rpc('abbasiya_hub_approve', {
           p_day: (st.snap && st.snap.day) || null,
@@ -595,8 +621,8 @@
         });
         if (r.error) return toast(r.error.message || 'تعذر الاعتماد', 'error');
         await loadStaffSnap(true);
-        toast('تم اعتماد الميعاد وإرسال محطة العباسية للمندوب ✓');
-      } finally { t.disabled = false; }
+        toast('تم اعتماد الميعاد وإرسال محطة العباسية للمندوب');
+      } finally { ab.disabled = false; }
       return;
     }
     var callBtn = t.closest ? t.closest('[data-ah-call]') : null;
@@ -611,15 +637,16 @@
         });
         if (cr.error) return toast(cr.error.message || 'تعذر حفظ التأكيد', 'error');
         await loadStaffSnap(true);
-        toast(nextVal ? 'تم تأكيد المكالمة وظهر للمندوب ✓' : 'تم إلغاء التأكيد');
+        toast(nextVal ? 'تم تأكيد المكالمة' : 'تم إلغاء التأكيد');
       } finally { callBtn.disabled = false; }
       return;
     }
-    if (t.dataset && t.dataset.ahAct === 'copymsg' && st.snap && st.snap.batch) {
+    var copyBtn = t.closest ? t.closest('[data-ah-act="copymsg"]') : null;
+    if (copyBtn && st.snap && st.snap.batch) {
       var b = st.snap.batch;
       var msg = 'أهلاً بحضرتك من شركة تساهيل، جواز السفر جاهز للتسليم اليوم أمام جوازات العباسية في الميعاد من ' + b.window_start + ' إلى ' + b.window_end + ' مع المندوب ' + b.courier_name + '.';
       copyText(msg);
-      toast('تم نسخ رسالة الواتساب ✓');
+      toast('تم نسخ رسالة الواتساب');
     }
   }
 
@@ -640,7 +667,6 @@
         if (st.internalSwitch) {
           return orig.apply(this, arguments);
         }
-        /* لو أي مكان طلب switchTab('pickup')، نفتحها جوه تابة الرادار والعمليات الموحدة */
         if (id === 'pickup' && isAllowedStaff()) {
           st.subView = 'pickup';
           id = 'radar';

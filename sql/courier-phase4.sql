@@ -3,6 +3,7 @@
 -- التحويل يد بيد، سجل الوصول بدون لوم، التحصيل المالي المرن، وتقفيل الكاش)
 -- قابل لإعادة التشغيل بأمان (Idempotent) — يُشغّل يدوياً في Supabase SQL Editor
 -- - لا يكتب ولا يعدّل في request_lines.status نهائياً.
+-- - لا يشير إلى أي عمود غير موجود مثل profiles.email (يعتمد فقط على full_name).
 -- - يستخدم default auth.uid() مباشرة في أعمدة الجداول، و (select auth.uid()) في سياسات RLS.
 -- - RLS مفعّل على كل جدول جديد، وكل الدوال SECURITY DEFINER مع التحقق الصارم من الدور.
 -- =====================================================================
@@ -201,7 +202,6 @@ declare
   v_partial_uncollected numeric(12,2) := 0;
   v_net_cash numeric(12,2) := 0;
 begin
-  -- أ) إجمالي الكاش الأساسي من المعاملات المؤكدة اليوم والتي لم يُسجل لها استثناء تحصيل
   select coalesce(sum(t_cod.cod_due), 0)
     into v_raw_tx_cash
     from (
@@ -225,7 +225,6 @@ begin
         )
     ) t_cod;
 
-  -- ب) إجمالي الكاش الأساسي من تيكتات الاستلام مع المندوب اليوم والتي لم يُسجل لها استثناء تحصيل
   select coalesce(sum(coalesce(pt.collect_amount, 0)), 0)
     into v_raw_ticket_cash
     from public.pickup_tickets pt
@@ -240,7 +239,6 @@ begin
          and ce.transaction_id = pt.sd_request_id
      );
 
-  -- ج) المبالغ المسجلة في أحداث التحصيل الميداني اليوم
   select coalesce(sum(case when ce.payment_mode in ('cash_full', 'partial_cash') then ce.collected_amount else 0 end), 0),
          coalesce(sum(case when ce.payment_mode in ('instapay_switch', 'partial_instapay') then ce.collected_amount else 0 end), 0),
          coalesce(sum(ce.remaining_amount), 0)
@@ -259,7 +257,7 @@ begin
 end;
 $$;
 
--- 9) دالة الحالة الكاملة للمرحلة 4 لبوابة المندوب (تُستدعى عند فتح البوابة)
+-- 9) دالة الحالة الكاملة للمرحلة 4 لبوابة المندوب
 drop function if exists public.courier_p4_my_state(date);
 create or replace function public.courier_p4_my_state(
   p_day date default (now() at time zone 'Africa/Cairo')::date
@@ -302,10 +300,11 @@ begin
     'staff_list', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', p.id,
-        'name', coalesce(nullif(btrim(p.full_name), ''), p.email, 'موظف مكتب')
+        'name', coalesce(nullif(btrim(p.full_name), ''), 'موظف مكتب')
       ) order by p.full_name)
       from public.profiles p
-      where coalesce(p.role, 'staff') in ('staff', 'manager', 'admin', 'owner')
+      where coalesce(nullif(btrim(p.full_name), ''), '') <> ''
+        and not exists (select 1 from public.couriers cc where cc.user_id = p.id)
     ), '[]'::jsonb),
     'peer_couriers', coalesce((
       select jsonb_agg(jsonb_build_object('id', c2.id, 'name', c2.name) order by c2.name)
@@ -390,7 +389,7 @@ begin
 
   insert into public.courier_dispatch_events (courier_id, courier_name, event_type, payload, status, created_by)
   values (v_c.id, v_c.name, case when v_on then 'waiting' else 'resume' end,
-          jsonb_build_object('driving_mode', v_on, 'note', case when v_on then '🛵 أنا سايق حالياً، هرد أول ما أقف' else '🟢 توقفت ومتاح للرد' end),
+          jsonb_build_object('driving_mode', v_on, 'note', case when v_on then 'في وضع القيادة حالياً، هرد أول ما أقف' else 'متاح للرد' end),
           'ack', auth.uid());
 
   return jsonb_build_object('ok', true, 'driving_mode', v_on);
@@ -431,7 +430,7 @@ begin
     raise exception 'كود الختم الرقمي للموظف يجب أن يكون 4 أرقام' using errcode = '22023';
   end if;
 
-  select coalesce(nullif(btrim(p.full_name), ''), p.email, 'موظف مكتب')
+  select coalesce(nullif(btrim(p.full_name), ''), 'موظف مكتب')
     into v_rec_name
     from public.profiles p
    where p.id = p_receiver_id;
@@ -441,7 +440,6 @@ begin
 
   select pin_code into v_saved_pin from public.staff_digital_pins where user_id = p_receiver_id;
   if v_saved_pin is null then
-    -- أول مرة يستلم فيها الموظف: يتم اعتماد الكود المدخل ككود ختمه الرقمي أو قبول الكود الافتراضي
     insert into public.staff_digital_pins (user_id, staff_name, pin_code, updated_by)
     values (p_receiver_id, v_rec_name, v_pin, auth.uid())
     on conflict (user_id) do nothing;
@@ -449,7 +447,7 @@ begin
     raise exception 'كود الختم الرقمي غير صحيح للموظف %', v_rec_name using errcode = '42501';
   end if;
 
-  v_stamp := 'STAMP-' || to_char(now() at time zone 'Africa/Cairo', 'YYYYMMDD-HH24MI') || '-' || upper(substr(md5(random()::text), 1, 4));
+  v_stamp := 'ST-' || to_char(now() at time zone 'Africa/Cairo', 'YYYYMMDD-HH24MI') || '-' || upper(substr(md5(random()::text), 1, 4));
 
   insert into public.courier_office_handovers (
     handover_day, courier_id, courier_name, receiver_user_id, receiver_name,
@@ -462,7 +460,6 @@ begin
   )
   returning id into v_id;
 
-  -- تسجيل الختم الرقمي في سجل المعاملة (audit_log + tx_comments) حتى يظهر في History المعاملة وفي الرادار
   foreach v_tx in array p_tx_ids loop
     begin
       insert into public.audit_log (transaction_id, action, service, user_name, details)
@@ -485,7 +482,7 @@ begin
         v_tx,
         p_receiver_id,
         v_rec_name,
-        '🔏 ختم رقمي لاستلام الأوراق بالمكتب (' || v_stamp || ') — استلمها: ' || v_rec_name || ' من المندوب: ' || v_c.name
+        'ختم رقمي لاستلام الأوراق بالمكتب (' || v_stamp || ') — استلمها: ' || v_rec_name || ' من المندوب: ' || v_c.name
       );
     exception when others then null;
     end;
@@ -553,7 +550,7 @@ begin
 end;
 $$;
 
--- 14) قبول أو رفض استلام المشوار المحوّل يد بيد (Accept / Reject Hand-to-Hand Transfer)
+-- 14) قبول أو رفض استلام المشوار المحوّل يد بيد
 drop function if exists public.courier_p4_respond_transfer(bigint, text);
 create or replace function public.courier_p4_respond_transfer(
   p_transfer_id bigint,
@@ -674,7 +671,7 @@ begin
       v_tx,
       auth.uid(),
       v_c.name,
-      '🛡️ سجل وصول بدون لوم: وصل المندوب للعميل (' || v_label || ')' ||
+      'سجل وصول بدون لوم: وصل المندوب للعميل (' || v_label || ')' ||
       case when p_lat is not null and p_lng is not null then ' — GPS: ' || round(p_lat, 5) || ',' || round(p_lng, 5) else '' end
     );
   exception when others then null;
@@ -731,7 +728,7 @@ begin
   ) into v_locked;
 
   if v_locked then
-    raise exception '🔒 تم تقفيل وتأكيد حساب اليوم من الإدارة — لا يمكن تعديل المبالغ أو طرق الدفع بعد التقفيل' using errcode = '42501';
+    raise exception 'تم تقفيل وتأكيد حساب اليوم من الإدارة — لا يمكن تعديل المبالغ أو طرق الدفع بعد التقفيل' using errcode = '42501';
   end if;
 
   if v_kind = 'ticket' then
@@ -776,7 +773,7 @@ begin
       v_tx,
       auth.uid(),
       v_c.name,
-      '💳 تحديث تحصيل ميداني (' ||
+      'تحديث تحصيل ميداني (' ||
       case v_mode
         when 'instapay_switch' then 'تحويل من كاش إلى إنستاباي بالكامل'
         when 'partial_cash' then 'دفع جزئي كاش'
@@ -800,7 +797,7 @@ begin
 end;
 $$;
 
--- 17) تفصيل فاتورة العميل بدون أي عمولة مندوب أو تكلفة منفذ (Client Fee Breakdown — No Commission)
+-- 17) تفصيل فاتورة العميل بدون أي عمولة مندوب أو تكلفة منفذ
 drop function if exists public.courier_p4_client_invoice(text);
 create or replace function public.courier_p4_client_invoice(p_tx text)
 returns jsonb
@@ -823,7 +820,6 @@ begin
   select * into v_c from public.couriers where user_id = auth.uid() and active;
   if v_c.id is null then raise exception 'courier not linked' using errcode = '42501'; end if;
 
-  -- لو الرقم تيكت استلام (SD-...)
   select * into v_pt from public.pickup_tickets where sd_request_id = v_tx limit 1;
   if v_pt.id is not null then
     return jsonb_build_object(
@@ -862,7 +858,7 @@ begin
 end;
 $$;
 
--- 18) إرسال تقفيل الكاش آخر اليوم بضغطة واحدة (End-of-Day Cash Handshake)
+-- 18) إرسال تقفيل الكاش آخر اليوم بضغطة واحدة
 drop function if exists public.courier_p4_submit_cash_closing(text);
 create or replace function public.courier_p4_submit_cash_closing(p_note text default null)
 returns jsonb
@@ -886,7 +882,7 @@ begin
 
   select * into v_existing from public.courier_cash_handshakes where courier_id = v_c.id and close_day = v_day;
   if v_existing.id is not null and v_existing.status = 'confirmed' then
-    raise exception '🔒 تم تأكيد تقفيل اليوم بالفعل من الإدارة ولا يمكن إعادة إرساله' using errcode = '42501';
+    raise exception 'تم تأكيد تقفيل اليوم بالفعل من الإدارة ولا يمكن إعادة إرساله' using errcode = '42501';
   end if;
 
   v_totals := public.courier_p4_calc_day_totals(v_c.id, v_c.name, v_day);
@@ -918,7 +914,7 @@ begin
 end;
 $$;
 
--- 19) لوحة متابعة المكتب والرادار للمرحلة 4 (الختم الرقمي، تقفيلات الكاش، سجل الوصول بدون لوم، التحويلات، وضع القيادة)
+-- 19) لوحة متابعة المكتب والرادار للمرحلة 4
 drop function if exists public.radar_p4_office_snapshot(date);
 create or replace function public.radar_p4_office_snapshot(
   p_day date default (now() at time zone 'Africa/Cairo')::date
@@ -973,7 +969,7 @@ begin
 end;
 $$;
 
--- 20) حفظ/تغيير كود الختم الرقمي لموظف المكتب (4 أرقام) + تأكيد تقفيل الكاش آخر اليوم من الإدارة
+-- 20) حفظ/تغيير كود الختم الرقمي لموظف المكتب (4 أرقام) + تأكيد تقفيل الكاش آخر اليوم من الإدارة (بدون أي إشارة لعمود email)
 drop function if exists public.staff_p4_set_my_pin(text);
 create or replace function public.staff_p4_set_my_pin(p_pin text)
 returns jsonb
@@ -992,7 +988,7 @@ begin
     raise exception 'كود الختم الرقمي يجب أن يتكون من 4 أرقام فقط' using errcode = '22023';
   end if;
 
-  select coalesce(nullif(btrim(full_name), ''), email, 'موظف مكتب')
+  select coalesce(nullif(btrim(full_name), ''), 'موظف مكتب')
     into v_name from public.profiles where id = auth.uid();
 
   insert into public.staff_digital_pins (user_id, staff_name, pin_code, updated_by, updated_at)
@@ -1026,13 +1022,13 @@ begin
     raise exception 'staff or manager only' using errcode = '42501';
   end if;
 
-  select coalesce(nullif(btrim(full_name), ''), email, 'الإدارة')
+  select coalesce(nullif(btrim(full_name), ''), 'الإدارة')
     into v_name from public.profiles where id = auth.uid();
 
   update public.courier_cash_handshakes
      set status = v_act,
          confirmed_by = auth.uid(),
-         confirmed_by_name = v_name,
+         confirmed_by_name = coalesce(v_name, 'الإدارة'),
          confirmed_at = now()
    where id = p_handshake_id
    returning * into v_row;
