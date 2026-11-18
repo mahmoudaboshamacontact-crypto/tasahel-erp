@@ -2,8 +2,8 @@
    js/74-abbasiya-hub-radar.js — المرحلة 2: رادار تسليم جوازات العباسية الفوري
    - معزول تماماً في IIFE بدون لمس js/03 أو js/13 أو js/14 أو js/45 أو js/70 أو js/73.
    - قراءة فقط من request_lines عبر RPC؛ جميع التعديلات والاعتمادات عبر دوال السيرفر.
-   - يراقب تبويب المناديب (#tab-couriers) بالـ MutationObserver + تغليف switchTab
-     حتى لو أعادت ملفات تانية تغليف switchTab بعد تسجيل الدخول.
+   - يحتفظ بعقدة panelBox في الذاكرة ويعيد تركيبها فوراً عبر MutationObserver (childList + class)
+     إذا أعاد js/13-couriers.js رسم #tab-couriers عبر innerHTML.
    ===================================================================== */
 (function () {
   'use strict';
@@ -32,7 +32,9 @@
     loadedAt: 0,
     courierHub: null,
     courierLoadedAt: 0,
-    obs: null
+    obs: null,
+    panelBox: null,
+    remountTimer: null
   };
 
   function isManager() { return window.__role === 'manager'; }
@@ -129,21 +131,23 @@
   function ensureStaffPanelHost() {
     var tab = $('tab-couriers');
     if (!tab) return null;
-    var box = $('ah74-panel');
-    if (!box) {
-      box = document.createElement('div');
+    if (!st.panelBox) {
+      var box = document.createElement('div');
       box.id = 'ah74-panel';
-      var radar = $('cop-manager-panel');
-      if (radar && radar.parentElement === tab) {
-        radar.insertAdjacentElement('afterend', box);
-      } else {
-        tab.prepend(box);
-      }
       box.addEventListener('click', onStaffClick);
       box.addEventListener('change', onStaffChange);
       box.addEventListener('input', onStaffInput);
+      st.panelBox = box;
     }
-    return box;
+    if (st.panelBox.parentElement !== tab) {
+      var radar = $('cop-manager-panel');
+      if (radar && radar.parentElement === tab) {
+        radar.insertAdjacentElement('afterend', st.panelBox);
+      } else {
+        tab.prepend(st.panelBox);
+      }
+    }
+    return st.panelBox;
   }
 
   function renderStaffPanel() {
@@ -247,7 +251,10 @@
 
   async function loadStaffSnap(force) {
     if (!sbClient || !isAllowedStaff()) return;
-    if (!force && st.loadedAt && (Date.now() - st.loadedAt < 8000) && $('ah74-panel')) return;
+    if (!force && st.loadedAt && (Date.now() - st.loadedAt < 8000) && st.snap) {
+      ensureStaffPanelHost();
+      return;
+    }
     st.loadedAt = Date.now();
     renderStaffPanel();
     var r = await sbClient.rpc('abbasiya_hub_snapshot');
@@ -268,6 +275,7 @@
     if (!isAllowedStaff()) return;
     var tab = $('tab-couriers');
     if (!tab || tab.classList.contains('hidden')) return;
+    ensureStaffPanelHost();
     loadStaffSnap(force).catch(function (err) {
       var box = ensureStaffPanelHost();
       if (box) box.innerHTML = '<section class="ah-card"><div class="ah-sub">تأكد من تشغيل ملف sql/abbasiya-hub-radar.sql في Supabase. (' + eh(err && err.message) + ')</div></section>';
@@ -279,9 +287,18 @@
     var tab = $('tab-couriers');
     if (!tab || typeof MutationObserver === 'undefined') return;
     st.obs = new MutationObserver(function () {
-      if (!tab.classList.contains('hidden')) triggerStaffIfVisible(false);
+      if (tab.classList.contains('hidden') || !isAllowedStaff()) return;
+      if (!st.panelBox || st.panelBox.parentElement !== tab) {
+        clearTimeout(st.remountTimer);
+        st.remountTimer = setTimeout(function () {
+          ensureStaffPanelHost();
+          if (!st.snap) triggerStaffIfVisible(false);
+        }, 40);
+      } else if (!st.snap) {
+        triggerStaffIfVisible(false);
+      }
     });
-    st.obs.observe(tab, { attributes: true, attributeFilter: ['class'] });
+    st.obs.observe(tab, { attributes: true, attributeFilter: ['class'], childList: true });
   }
 
   async function loadAndRenderCourierHub() {
@@ -441,8 +458,8 @@
   wrap('handleLogout', function (orig) {
     return function () {
       st.snap = null; st.courierHub = null; st.courierLoadedAt = 0; st.loadedAt = 0; st.selectedIds = {};
-      var b1 = $('ah74-panel'), b2 = $('ah74-courier-hub');
-      if (b1) b1.remove();
+      if (st.panelBox && st.panelBox.parentElement) st.panelBox.remove();
+      var b2 = $('ah74-courier-hub');
       if (b2) b2.remove();
       return orig.apply(this, arguments);
     };
