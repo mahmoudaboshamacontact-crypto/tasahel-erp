@@ -2,7 +2,8 @@
    js/74-abbasiya-hub-radar.js — المرحلة 2: رادار تسليم جوازات العباسية الفوري
    - معزول تماماً في IIFE بدون لمس js/03 أو js/13 أو js/14 أو js/45 أو js/70 أو js/73.
    - قراءة فقط من request_lines عبر RPC؛ جميع التعديلات والاعتمادات عبر دوال السيرفر.
-   - يعرض للمندوب كارت محطة مجمّع واحد في بوابته بدون أي أسعار أو عمولات.
+   - يراقب تبويب المناديب (#tab-couriers) بالـ MutationObserver + تغليف switchTab
+     حتى لو أعادت ملفات تانية تغليف switchTab بعد تسجيل الدخول.
    ===================================================================== */
 (function () {
   'use strict';
@@ -30,7 +31,8 @@
     busy: false,
     loadedAt: 0,
     courierHub: null,
-    courierLoadedAt: 0
+    courierLoadedAt: 0,
+    obs: null
   };
 
   function isManager() { return window.__role === 'manager'; }
@@ -89,7 +91,6 @@
     return h12 + ':' + (mm < 10 ? '0' : '') + mm + ' ' + ampm;
   }
 
-  /* تقدير ساعة الوصول للعباسية بناءً على حركة خط السير الفعلي (أو وقت البدء الافتراضي إن لم ينطلق المندوب بعد) */
   function estimateCourierAbbasiya(c) {
     var now = new Date();
     var nowMins = now.getHours() * 60 + now.getMinutes();
@@ -244,9 +245,11 @@
       '</section>';
   }
 
-  async function loadStaffSnap() {
+  async function loadStaffSnap(force) {
     if (!sbClient || !isAllowedStaff()) return;
+    if (!force && st.loadedAt && (Date.now() - st.loadedAt < 8000) && $('ah74-panel')) return;
     st.loadedAt = Date.now();
+    renderStaffPanel();
     var r = await sbClient.rpc('abbasiya_hub_snapshot');
     if (r.error) throw r.error;
     st.snap = r.data || null;
@@ -255,14 +258,32 @@
       st.snap.items.forEach(function (it) { st.selectedIds[it.line_id] = true; });
     } else if (st.snap && Array.isArray(st.snap.candidates)) {
       st.snap.candidates.forEach(function (c) {
-        // افتراضياً غير مختار: الموظف يعلّم بإيده الجوازات اللي المنفذ خلّصها فعلاً
-        if (st.selectedIds[c.line_id] === undefined) st.selectedIds[c.line_id] = false;
+        if (st.selectedIds[c.line_id] === undefined) st.selectedIds[c.line_id] = true;
       });
     }
     renderStaffPanel();
   }
 
-  /* كارت محطة جوازات العباسية داخل بوابة المندوب (بدون أي أسعار أو عمولات) */
+  function triggerStaffIfVisible(force) {
+    if (!isAllowedStaff()) return;
+    var tab = $('tab-couriers');
+    if (!tab || tab.classList.contains('hidden')) return;
+    loadStaffSnap(force).catch(function (err) {
+      var box = ensureStaffPanelHost();
+      if (box) box.innerHTML = '<section class="ah-card"><div class="ah-sub">تأكد من تشغيل ملف sql/abbasiya-hub-radar.sql في Supabase. (' + eh(err && err.message) + ')</div></section>';
+    });
+  }
+
+  function observeCouriersTab() {
+    if (st.obs) return;
+    var tab = $('tab-couriers');
+    if (!tab || typeof MutationObserver === 'undefined') return;
+    st.obs = new MutationObserver(function () {
+      if (!tab.classList.contains('hidden')) triggerStaffIfVisible(false);
+    });
+    st.obs.observe(tab, { attributes: true, attributeFilter: ['class'] });
+  }
+
   async function loadAndRenderCourierHub() {
     if (!sbClient || !isCourier()) return;
     var app = $('courier-app');
@@ -305,7 +326,7 @@
     var t = e.target;
     if (!t) return;
     if (t.id === 'ah-refresh-btn') {
-      try { await loadStaffSnap(); toast('تم تحديث رادار العباسية ✓'); } catch (err) { toast(err.message || 'تعذر التحديث', 'error'); }
+      try { await loadStaffSnap(true); toast('تم تحديث رادار العباسية ✓'); } catch (err) { toast(err.message || 'تعذر التحديث', 'error'); }
       return;
     }
     var cCard = t.closest ? t.closest('[data-ah-courier]') : null;
@@ -339,7 +360,7 @@
           p_notes: null
         });
         if (r.error) return toast(r.error.message || 'تعذر الاعتماد', 'error');
-        await loadStaffSnap();
+        await loadStaffSnap(true);
         toast('تم اعتماد الميعاد وإرسال محطة العباسية للمندوب ✓');
       } finally { t.disabled = false; }
       return;
@@ -355,7 +376,7 @@
           p_note: null
         });
         if (cr.error) return toast(cr.error.message || 'تعذر حفظ التأكيد', 'error');
-        await loadStaffSnap();
+        await loadStaffSnap(true);
         toast(nextVal ? 'تم تأكيد المكالمة وظهر للمندوب ✓' : 'تم إلغاء التأكيد');
       } finally { callBtn.disabled = false; }
       return;
@@ -378,6 +399,19 @@
     if (e.target && e.target.id === 'ah-win-end') st.winEnd = e.target.value;
   }
 
+  function wrapSwitchTab() {
+    var orig = window.switchTab;
+    if (typeof orig === 'function' && !orig['__ah74Wrapped']) {
+      var w = function (id) {
+        var res = orig.apply(this, arguments);
+        if (id === 'couriers') setTimeout(function () { triggerStaffIfVisible(false); }, 80);
+        return res;
+      };
+      w['__ah74Wrapped'] = true;
+      window.switchTab = w;
+    }
+  }
+
   function wrap(name, fn) {
     var orig = window[name];
     if (typeof orig === 'function' && !orig['__ah74Wrapped']) {
@@ -387,32 +421,26 @@
     }
   }
 
-  wrap('switchTab', function (orig) {
-    return function (id) {
-      var res = orig.apply(this, arguments);
-      if (id === 'couriers' && isAllowedStaff()) {
-        setTimeout(function () {
-          loadStaffSnap().catch(function (err) {
-            var box = ensureStaffPanelHost();
-            if (box) box.innerHTML = '<section class="ah-card"><div class="ah-sub">تأكد من تشغيل ملف sql/abbasiya-hub-radar.sql في Supabase. (' + eh(err && err.message) + ')</div></section>';
-          });
-        }, 120);
-      }
-      return res;
-    };
-  });
+  wrapSwitchTab();
+  observeCouriersTab();
 
   wrap('loadInitialData', function (orig) {
     return async function () {
       var r = await orig.apply(this, arguments);
-      if (isCourier()) setTimeout(loadAndRenderCourierHub, 250);
+      wrapSwitchTab();
+      observeCouriersTab();
+      setTimeout(function () {
+        wrapSwitchTab();
+        if (isCourier()) loadAndRenderCourierHub();
+        else triggerStaffIfVisible(false);
+      }, 250);
       return r;
     };
   });
 
   wrap('handleLogout', function (orig) {
     return function () {
-      st.snap = null; st.courierHub = null; st.courierLoadedAt = 0; st.selectedIds = {};
+      st.snap = null; st.courierHub = null; st.courierLoadedAt = 0; st.loadedAt = 0; st.selectedIds = {};
       var b1 = $('ah74-panel'), b2 = $('ah74-courier-hub');
       if (b1) b1.remove();
       if (b2) b2.remove();
@@ -421,4 +449,5 @@
   });
 
   if (isCourier()) setTimeout(loadAndRenderCourierHub, 250);
+  else setTimeout(triggerStaffIfVisible, 300);
 })();
