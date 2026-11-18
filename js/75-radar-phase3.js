@@ -1,9 +1,7 @@
 /* =====================================================================
-   js/75-radar-phase3.js — المرحلة 3: عمليات اليوم، خطوط المناطق، سفارة الإمارات،
-   Domino ETA، عداد الكاش، الإنقاذ الطارئ، المتأخرات، والنداء العام.
-   - معزول تماماً في IIFE بدون لمس js/03 أو js/13 أو js/14 أو js/45 أو js/70 أو js/71 أو js/73 أو js/74.
-   - يضيف تبويب رابع «🚀 عمليات اليوم والإنقاذ» داخل تابة الرادار والعمليات الموحدة.
-   - يضيف قاموس الأحياء الذكي + اقتراح المندوب وتاريخ العميل + عرض تنبيهات المندوب في بوابته.
+   js/75-radar-phase3.js — عمليات اليوم، خطوط المناطق، سفارة الإمارات،
+   عداد الكاش، الإنقاذ الطارئ، المتأخرات، والنداء العام (v3 — تصميم متناسق
+   100% مع ثيم تساهيل الدافئ وبدون زحمة إيموجي).
    ===================================================================== */
 (function () {
   'use strict';
@@ -23,7 +21,6 @@
   };
   var money = function (n) { return Number(n || 0).toLocaleString('ar-EG') + ' ج.م'; };
 
-  /* قاموس خطوط المناطق والأحياء في القاهرة والجيزة */
   var ROUTES = [
     { key: 'giza', label: 'خط الجيزة', areas: ['الجيزة', 'الدقي', 'المهندسين', 'فيصل', 'الهرم', 'العجوزة', 'امبابة', 'إمبابة', 'بولاق', 'أكتوبر', 'اكتوبر', 'الشيخ زايد', 'زايد', 'حدائق الأهرام', 'حدائق الاهرام'] },
     { key: 'nasr', label: 'خط مدينة نصر ومصر الجديدة', areas: ['مدينة نصر', 'مصر الجديدة', 'النزهة', 'شيراتون', 'العباسية', 'الوايلي', 'جسر السويس', 'عين شمس', 'شبرا', 'وسط البلد', 'رمسيس'] },
@@ -93,18 +90,22 @@
     var s = document.createElement('style');
     s.id = 'rp3-style';
     s.textContent = [
-      '.rp3-brief{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}',
-      '.rp3-kpi{border:1px solid var(--r-bd,rgba(148,163,184,.25));border-radius:14px;padding:10px 12px;background:var(--r-card,#fff)}',
-      'html.dark .rp3-kpi{background:#0f172a;border-color:rgba(255,255,255,.1)}',
-      '.rp3-kpi-num{font-size:20px;font-weight:800;color:var(--r-acc,#ea580c)}',
+      '.rp3-brief{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}',
+      '.rp3-kpi{border:1px solid var(--r-line,rgba(40,25,10,.09));border-radius:16px;padding:13px 15px;background:var(--r-card-2,#f7f2ec)}',
+      'html.dark .rp3-kpi{background:#211b17;border-color:rgba(255,255,255,.07)}',
+      '.rp3-kpi-num{font-size:24px;font-weight:800;color:var(--r-text,#231B15);margin-top:4px;font-variant-numeric:tabular-nums}',
+      'html.dark .rp3-kpi-num{color:#f4eee8}',
       '.rp3-grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}',
-      '.rp3-tag-red{background:rgba(225,29,72,.16);color:#e11d48;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;display:inline-flex;align-items:center}',
-      '.rp3-tag-amb{background:rgba(245,158,11,.18);color:#d97706;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;display:inline-flex;align-items:center}',
-      '.rp3-tag-ok{background:rgba(16,185,129,.16);color:#059669;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;display:inline-flex;align-items:center}',
-      'html.dark .rp3-tag-ok{color:#34d399}',
-      '.rp3-route-chk{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border:1px solid var(--r-bd,rgba(148,163,184,.28));border-radius:9px;font-size:11.5px;cursor:pointer}',
-      '.rp3-alert-box{border:1px solid rgba(225,29,72,.35);background:rgba(225,29,72,.08);border-radius:14px;padding:11px 13px;font-size:12.5px;margin-bottom:12px}',
-      '.rp3-courier-bcast{margin:10px 12px 0;padding:12px;border-radius:16px;border:1px solid rgba(245,158,11,.45);background:rgba(245,158,11,.12);color:var(--tx,#f8fafc);font-size:12.5px}',
+      '.rp3-tag-red{background:rgba(225,29,72,.14);color:#e11d48;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;display:inline-flex;align-items:center}',
+      'html.dark .rp3-tag-red{background:rgba(255,107,122,.15);color:#ff6b7a}',
+      '.rp3-tag-amb{background:rgba(245,158,11,.15);color:#d97706;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;display:inline-flex;align-items:center}',
+      'html.dark .rp3-tag-amb{background:rgba(255,194,75,.14);color:#ffc24b}',
+      '.rp3-tag-ok{background:rgba(16,185,129,.14);color:#059669;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;display:inline-flex;align-items:center}',
+      'html.dark .rp3-tag-ok{background:rgba(63,216,192,.14);color:#3fd8c0}',
+      '.rp3-route-chk{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:var(--r-card,#ffffff);border:1px solid var(--r-line,rgba(40,25,10,.1));border-radius:10px;font-size:11.5px;cursor:pointer}',
+      'html.dark .rp3-route-chk{background:#181412;border-color:rgba(255,255,255,.07)}',
+      '.rp3-alert-box{border:1px solid rgba(225,29,72,.3);background:rgba(225,29,72,.08);border-radius:14px;padding:11px 13px;font-size:12.5px;margin-bottom:12px}',
+      '.rp3-courier-bcast{margin:10px 12px 0;padding:12px;border-radius:16px;border:1px solid rgba(245,158,11,.35);background:rgba(245,158,11,.1);color:var(--tx,#f8fafc);font-size:12.5px}',
       '@media (max-width:860px){.rp3-brief{grid-template-columns:repeat(2,1fr)}.rp3-grid2{grid-template-columns:1fr}}'
     ].join('\n');
     document.head.appendChild(s);
@@ -132,7 +133,7 @@
       btn.id = 'rp3-nav-btn';
       btn.type = 'button';
       btn.className = 'ah-nav-pill';
-      btn.textContent = '🚀 عمليات اليوم والإنقاذ';
+      btn.innerHTML = '<i class="fa-solid fa-sliders"></i><span>عمليات اليوم والإنقاذ</span>';
       btn.onclick = function () {
         st.active = true;
         nav.querySelectorAll('.ah-nav-pill').forEach(function (p) { p.classList.remove('active'); });
@@ -147,7 +148,6 @@
       };
       nav.appendChild(btn);
 
-      /* لو المستخدم ضغط أي زر تاني من التلاتة نخفي لوحة المرحلة 3 */
       nav.addEventListener('click', function (ev) {
         var b = ev.target && ev.target.closest ? ev.target.closest('[data-ah-nav]') : null;
         if (b) {
@@ -175,8 +175,8 @@
     if (!iso) return 'لم يتحرك بعد';
     var mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
     if (isNaN(mins) || mins < 1) return 'الآن';
-    if (mins < 60) return 'منذ ' + mins + ' دقيقة';
-    return 'منذ ' + Math.round(mins / 60) + ' ساعة';
+    if (mins < 60) return 'منذ ' + mins + ' د';
+    return 'منذ ' + Math.round(mins / 60) + ' س';
   }
 
   function isStaleTrip(c) {
@@ -189,7 +189,7 @@
     var pane = $('ah-pane-ops3');
     if (!pane) return;
     if (!st.snap) {
-      pane.innerHTML = '<section class="ah-card"><div class="ah-sub">جاري تحميل بيانات عمليات اليوم والرادار الحي…</div></section>';
+      pane.innerHTML = '<section class="ah-card"><div class="ah-sub">جاري تحميل بيانات عمليات اليوم…</div></section>';
       return;
     }
     var d = st.snap;
@@ -205,35 +205,34 @@
 
     var nowHour = new Date().getHours();
     var embAlert = (nowHour >= 8 && nowHour < 10 && embAm.length)
-      ? '<div class="rp3-alert-box"><b>⏰ تنبيه سفارة الإمارات الصباحي (8:00 ص – 10:00 ص):</b> يوجد ' + embAm.length + ' طلبات سفارة إمارات من آخر 3 أيام تحتاج تسليمها في السفارة قبل الساعة 10:00 ص.</div>'
+      ? '<div class="rp3-alert-box"><b>تنبيه سفارة الإمارات الصباحي (8:00 ص – 10:00 ص):</b> يوجد ' + embAm.length + ' طلبات سفارة إمارات من آخر 3 أيام تحتاج تسليمها في السفارة قبل الساعة 10:00 ص.</div>'
       : '';
 
     var briefHtml =
       '<div class="rp3-brief">' +
         '<div class="rp3-kpi"><div class="ah-sub">تيكتات استلام نشطة</div><div class="rp3-kpi-num">' + tickets.length + '</div></div>' +
         '<div class="rp3-kpi"><div class="ah-sub">سفارة الإمارات (آخر 3 أيام)</div><div class="rp3-kpi-num">' + embAm.length + '</div></div>' +
-        '<div class="rp3-kpi"><div class="ah-sub">معاملات مركونة +24 ساعة</div><div class="rp3-kpi-num">' + stale24.length + '</div></div>' +
+        '<div class="rp3-kpi"><div class="ah-sub">معاملات مركونة +24 ساعة</div><div class="rp3-kpi-num" style="color:' + (stale24.length ? 'var(--r-acc,#ff7a3d)' : 'inherit') + '">' + stale24.length + '</div></div>' +
         '<div class="rp3-kpi"><div class="ah-sub">تيكتات معلقة +72 ساعة</div><div class="rp3-kpi-num">' + stale72.length + '</div></div>' +
       '</div>';
 
     var rushBarHtml =
       '<div class="ah-head">' +
-        '<div><h3 class="ah-title">ملخص الصباح والتحكم الميداني</h3><div class="ah-sub">خطوط المناطق، عداد الكاش في إيد المندوب، الإنقاذ الطارئ، وحارس سفارة الإمارات.</div></div>' +
+        '<div><h3 class="ah-title">متابعة التشغيل الميداني والإنقاذ</h3><div class="ah-sub">توزيع خطوط المناطق، عهدة الكاش، مهام سفارة الإمارات، والتنبيهات.</div></div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px">' +
           (isManager()
-            ? '<button type="button" class="ah-btn ' + (rushOn ? 'ah-btn-pri' : 'ah-btn-sec') + '" id="rp3-rush-btn">' + (rushOn ? '🌧️ وضع الذروة والمطر (+25% ETA): شغّال' : '🌧️ تشغيل وضع الذروة والمطر (+25%)') + '</button>'
-            : '<span class="rp3-tag-amb">' + (rushOn ? 'وضع الذروة شغّال (+25% ETA)' : 'الوقت الطبيعي') + '</span>') +
-          '<button type="button" class="ah-btn ah-btn-sec" id="rp3-refresh-btn">تحديث</button>' +
+            ? '<button type="button" class="ah-btn ' + (rushOn ? 'ah-btn-pri' : 'ah-btn-sec') + '" id="rp3-rush-btn"><i class="fa-solid fa-cloud-rain"></i><span>' + (rushOn ? 'وضع الذروة (+25%): مفعّل' : 'تفعيل وضع الذروة (+25%)') + '</span></button>'
+            : '<span class="rp3-tag-amb">' + (rushOn ? 'وضع الذروة مفعّل (+25%)' : 'الوقت الطبيعي') + '</span>') +
+          '<button type="button" class="ah-btn ah-btn-sec" id="rp3-refresh-btn"><i class="fa-solid fa-rotate-right"></i><span>تحديث</span></button>' +
         '</div>' +
       '</div>';
 
-    /* كروت المناديب المفعّلين + توازن الضغط + عداد الكاش + خطوط المناطق */
     var couriersHtml = couriers.length ? couriers.map(function (c) {
       var load = Number(c.active_pickups || 0) + Number(c.pending_deliveries || 0);
       var loadBadge = load >= 7
         ? '<span class="rp3-tag-red">مضغوط (' + load + ')</span>'
         : (load >= 4 ? '<span class="rp3-tag-amb">متوازن (' + load + ')</span>' : '<span class="rp3-tag-ok">خفيف (' + load + ')</span>');
-      var staleBadge = isStaleTrip(c) ? '<span class="rp3-tag-red">🐢 راكد +2 ساعة</span>' : '';
+      var staleBadge = isStaleTrip(c) ? '<span class="rp3-tag-red">متوقف +2 ساعة</span>' : '';
       var etaMins = load * (rushOn ? 31 : 25);
       var routesHtml = ROUTES.map(function (r) {
         var chk = Array.isArray(c.route_keys) && c.route_keys.indexOf(r.key) >= 0;
@@ -246,14 +245,13 @@
       return '<div class="ah-box">' +
         '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px">' +
           '<div><b>' + eh(c.name) + '</b> ' + loadBadge + ' ' + staleBadge + '</div>' +
-          '<span class="rp3-tag-ok">💵 في إيده: ' + eh(money(c.cash_in_hand || 0)) + '</span>' +
+          '<span class="rp3-tag-ok">عهدة كاش: ' + eh(money(c.cash_in_hand || 0)) + '</span>' +
         '</div>' +
-        '<div class="ah-sub">استلام: ' + Number(c.active_pickups || 0) + ' · تسليم: ' + Number(c.pending_deliveries || 0) + ' · Domino ETA المتبقي: ~' + etaMins + ' د · آخر حركة: ' + eh(fmtAgo(c.last_event_at)) + '</div>' +
+        '<div class="ah-sub">استلام: ' + Number(c.active_pickups || 0) + ' · تسليم: ' + Number(c.pending_deliveries || 0) + ' · الوقت المتبقي: ~' + etaMins + ' د · آخر حركة: ' + eh(fmtAgo(c.last_event_at)) + '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">' + routesHtml + '</div>' +
       '</div>';
-    }).join('') : '<div class="ah-sub">مفيش مناديب مفعّلين بحساب دخول حالياً.</div>';
+    }).join('') : '<div class="ah-sub">لا يوجد مناديب مفعّلين حالياً.</div>';
 
-    /* حافظة سفارة الإمارات الصباحية + مهمة استلام المساء */
     var courierOpts = '<option value="">اختر المندوب…</option>' + couriers.map(function (c) {
       return '<option value="' + Number(c.courier_id) + '">' + eh(c.name) + '</option>';
     }).join('');
@@ -261,19 +259,19 @@
     var embHtml =
       '<div class="ah-box">' +
         '<div class="ah-head" style="margin-bottom:4px">' +
-          '<b>🏛️ حافظة سفارة الإمارات (آخر 3 أيام)</b>' +
-          '<button type="button" class="ah-btn ah-btn-sec" id="rp3-copy-emb">نسخ حافظة الصبح (8–10 ص)</button>' +
+          '<b>حافظة سفارة الإمارات (آخر 3 أيام)</b>' +
+          '<button type="button" class="ah-btn ah-btn-sec" id="rp3-copy-emb"><i class="fa-regular fa-copy"></i><span>نسخ حافظة الصبح</span></button>' +
         '</div>' +
         (embAm.length
           ? embAm.map(function (x) {
               return '<div class="ah-row"><span><b>' + eh(x.client_name) + '</b> <span class="ah-badge ah-badge-org" dir="ltr">' + eh(x.transaction_id) + '</span></span><span class="ah-sub">' + eh(x.service) + ' · ' + eh(x.received_date) + '</span></div>';
             }).join('')
           : '<div class="ah-sub">لا توجد طلبات سفارة إمارات جديدة في آخر 3 أيام.</div>') +
-        '<div style="border-top:1px dashed rgba(148,163,184,.3);padding-top:8px;margin-top:4px">' +
-          '<b style="font-size:12.5px">تسجيل مهمة استلام من السفارة (3:00 م – 5:00 م) بدون رقم ريكوست</b>' +
+        '<div style="border-top:1px solid var(--r-line,rgba(148,163,184,.18));padding-top:10px;margin-top:4px">' +
+          '<b style="font-size:12.5px">مهمة استلام من السفارة (3:00 م – 5:00 م)</b>' +
           '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">' +
             '<select id="rp3-emb-courier" class="ah-input" style="flex:1">' + courierOpts + '</select>' +
-            '<input id="rp3-emb-note" class="ah-input" style="flex:1.5" placeholder="مثال: استلام أوراق سفارة الإمارات (3-5 م)">' +
+            '<input id="rp3-emb-note" class="ah-input" style="flex:1.5" placeholder="ملاحظة للمندوب (اختياري)">' +
             '<button type="button" class="ah-btn ah-btn-pri" id="rp3-emb-add">إرسال للمندوب</button>' +
           '</div>' +
           (missions.length ? '<div style="margin-top:6px">' + missions.map(function (m) {
@@ -282,7 +280,6 @@
         '</div>' +
       '</div>';
 
-    /* الموزّع الذكي + الإنقاذ الطارئ (Fleet Rescue) + التاج الأحمر + تاريخ العميل */
     var ticketsHtml = tickets.length ? tickets.map(function (t) {
       var sug = suggestCourierForZone(t.zone || t.address);
       var routeObj = detectRouteFromZone(t.zone || t.address);
@@ -298,8 +295,8 @@
             '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">' +
               '<b>' + eh(t.client_name) + '</b>' +
               '<span class="ah-badge ah-badge-org" dir="ltr">' + eh(t.sd_request_id) + '</span>' +
-              (highCash ? '<span class="rp3-tag-red">👑 حساس مالياً (' + eh(money(t.collect_amount)) + ')</span>' : '') +
-              (t.history_count > 1 ? '<span class="rp3-tag-ok">📜 عميل سابق (' + Number(t.history_count) + ')</span>' : '') +
+              (highCash ? '<span class="rp3-tag-red">تحصيل عالي (' + eh(money(t.collect_amount)) + ')</span>' : '') +
+              (t.history_count > 1 ? '<span class="rp3-tag-ok">عميل سابق (' + Number(t.history_count) + ')</span>' : '') +
               slotWarn +
             '</div>' +
             '<div class="ah-sub" style="margin-top:3px">' +
@@ -310,40 +307,39 @@
           '</div>' +
         '</label>' +
       '</div>';
-    }).join('') : '<div class="ah-sub">لا توجد تيكتات استلام نشطة.</div>';
+    }).join('') : '<div class="ah-sub">لا توجد تيكتات استلام نشطة حالياً.</div>';
 
     var rescueBoxHtml =
       '<div class="ah-box">' +
-        '<b>🚑 الموزّع الذكي والإنقاذ الطارئ (تحويل لمندوب تاني)</b>' +
+        '<b>تحويل التيكتات والإنقاذ السريع</b>' +
         '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
           '<select id="rp3-rescue-courier" class="ah-input" style="flex:1">' + courierOpts + '</select>' +
-          '<button type="button" class="ah-btn ah-btn-pri" id="rp3-rescue-btn">تحويل التيكتات المحددة فوراً</button>' +
+          '<button type="button" class="ah-btn ah-btn-pri" id="rp3-rescue-btn">تحويل المحدد</button>' +
         '</div>' +
         ticketsHtml +
       '</div>';
 
-    /* المتأخرات (+24 ساعة و +72 ساعة) + تشابه الأسماء + النداء العام + الردود السريعة */
     var alertsHtml =
       '<div class="ah-box">' +
-        '<b>⏳ رادار المتأخرات وتنبيهات الأمان</b>' +
+        '<b>المتأخرات والنداء العام</b>' +
         (dups.length
-          ? '<details class="rp3-alert-box" style="margin-bottom:4px"><summary style="cursor:pointer;font-weight:700">⚠️ أسماء متقاربة في التسليمات الجاهزة (' + dups.length + ') — راجع الاسم والموبايل قبل التسليم</summary>' +
+          ? '<details class="rp3-alert-box" style="margin-bottom:4px"><summary style="cursor:pointer;font-weight:700">أسماء متقاربة في التسليمات الجاهزة (' + dups.length + ') — راجع الاسم والموبايل</summary>' +
             '<div style="margin-top:6px">' + dups.map(function (x) {
               return '<div class="ah-sub">• ' + eh((x.names || []).join(' ، ')) + '</div>';
             }).join('') + '</div></details>'
           : '') +
-        '<div class="ah-sub"><b>معاملات مكتملة مركونة +24 ساعة (' + stale24.length + '):</b> ' + (stale24.length ? stale24.slice(0, 6).map(function (x) { return eh(x.client_name) + ' (' + eh(x.transaction_id) + ')'; }).join('، ') : 'لا يوجد ✓') + '</div>' +
-        '<div class="ah-sub"><b>تيكتات استلام معلقة +72 ساعة (' + stale72.length + '):</b> ' + (stale72.length ? stale72.slice(0, 6).map(function (x) { return eh(x.client_name) + ' (' + eh(x.sd_request_id) + ')'; }).join('، ') : 'لا يوجد ✓') + '</div>' +
-        '<div style="border-top:1px dashed rgba(148,163,184,.3);padding-top:8px;margin-top:4px">' +
-          '<b style="font-size:12.5px">📢 نداء عام لكل المناديب (Fleet Broadcast)</b>' +
+        '<div class="ah-sub"><b>معاملات مكتملة +24 ساعة (' + stale24.length + '):</b> ' + (stale24.length ? stale24.slice(0, 6).map(function (x) { return eh(x.client_name) + ' (' + eh(x.transaction_id) + ')'; }).join('، ') : 'لا يوجد') + '</div>' +
+        '<div class="ah-sub"><b>تيكتات معلقة +72 ساعة (' + stale72.length + '):</b> ' + (stale72.length ? stale72.slice(0, 6).map(function (x) { return eh(x.client_name) + ' (' + eh(x.sd_request_id) + ')'; }).join('، ') : 'لا يوجد') + '</div>' +
+        '<div style="border-top:1px solid var(--r-line,rgba(148,163,184,.18));padding-top:10px;margin-top:4px">' +
+          '<b style="font-size:12.5px">رسالة موحدة لكل المناديب</b>' +
           '<div style="display:flex;gap:6px;margin-top:6px">' +
-            '<input id="rp3-bcast-msg" class="ah-input" style="flex:1" maxlength="400" placeholder="اكتب رسالة توصل لكل المناديب فوراً...">' +
-            (isManager() ? '<button type="button" class="ah-btn ah-btn-pri" id="rp3-bcast-send">إرسال للكل</button>' : '<span class="ah-sub">للمدير فقط</span>') +
+            '<input id="rp3-bcast-msg" class="ah-input" style="flex:1" maxlength="400" placeholder="اكتب تنبيه يظهر لكل المناديب...">' +
+            (isManager() ? '<button type="button" class="ah-btn ah-btn-pri" id="rp3-bcast-send">إرسال</button>' : '<span class="ah-sub">للمدير فقط</span>') +
           '</div>' +
           (bcasts.length ? '<div style="margin-top:6px">' + bcasts.slice(0, 3).map(function (b) { return '<div class="ah-sub">• ' + eh(b.message) + '</div>'; }).join('') + '</div>' : '') +
         '</div>' +
-        '<div style="border-top:1px dashed rgba(148,163,184,.3);padding-top:8px;margin-top:4px">' +
-          '<b style="font-size:12.5px">💬 نسخ ردود خدمة العملاء السريعة</b>' +
+        '<div style="border-top:1px solid var(--r-line,rgba(148,163,184,.18));padding-top:10px;margin-top:4px">' +
+          '<b style="font-size:12.5px">ردود خدمة العملاء السريعة</b>' +
           '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">' +
             CANNED_REPLIES.map(function (c, i) {
               return '<button type="button" class="ah-btn ah-btn-sec" data-rp3-reply="' + i + '">' + eh(c.title) + '</button>';
@@ -352,6 +348,7 @@
         '</div>' +
       '</div>';
 
+    var existingP4 = $('cp4-office-radar-box');
     pane.innerHTML =
       '<section class="ah-card">' +
         rushBarHtml +
@@ -359,7 +356,7 @@
         briefHtml +
         '<div class="rp3-grid2">' +
           '<div style="display:flex;flex-direction:column;gap:12px">' +
-            '<b style="font-size:14px">خطوط المناديب، عداد الكاش، وتوازن الضغط</b>' +
+            '<b style="font-size:13.5px">خطوط المناديب وعهدة الكاش</b>' +
             couriersHtml +
             alertsHtml +
           '</div>' +
@@ -369,6 +366,7 @@
           '</div>' +
         '</div>' +
       '</section>';
+    if (existingP4) pane.appendChild(existingP4);
   }
 
   async function loadPhase3Snap(force) {
@@ -393,33 +391,34 @@
   async function onPaneClick(e) {
     var t = e.target;
     if (!t) return;
-    if (t.id === 'rp3-refresh-btn') {
+    if (t.id === 'rp3-refresh-btn' || (t.closest && t.closest('#rp3-refresh-btn'))) {
       return loadPhase3Snap(true);
     }
-    if (t.id === 'rp3-rush-btn') {
+    if (t.id === 'rp3-rush-btn' || (t.closest && t.closest('#rp3-rush-btn'))) {
+      var rb = t.id === 'rp3-rush-btn' ? t : t.closest('#rp3-rush-btn');
       if (!isManager()) return toast('للمدير فقط', 'error');
       var cur = !!(st.snap && st.snap.rush_mode && st.snap.rush_mode.enabled);
-      t.disabled = true;
+      rb.disabled = true;
       try {
         var r = await sbClient.rpc('radar_toggle_rush_mode', { p_enabled: !cur });
         if (r.error) return toast(r.error.message, 'error');
         await loadPhase3Snap(true);
-        toast(!cur ? 'تم تفعيل وضع الذروة (+25% ETA) ✓' : 'تم الرجوع للوضع الطبيعي ✓');
-      } finally { t.disabled = false; }
+        toast(!cur ? 'تم تفعيل وضع الذروة (+25%)' : 'تم الرجوع للوضع الطبيعي');
+      } finally { rb.disabled = false; }
       return;
     }
-    if (t.id === 'rp3-copy-emb') {
+    if (t.id === 'rp3-copy-emb' || (t.closest && t.closest('#rp3-copy-emb'))) {
       var list = (st.snap && st.snap.embassy_am) || [];
       var txt = list.length
         ? 'حافظة سفارة الإمارات (8:00 ص – 10:00 ص):\n' + list.map(function (x, i) { return (i + 1) + ') ' + x.client_name + ' — ' + x.transaction_id; }).join('\n')
         : 'لا توجد طلبات سفارة إمارات حالياً.';
       copyText(txt);
-      return toast('تم نسخ حافظة سفارة الإمارات ✓');
+      return toast('تم نسخ حافظة سفارة الإمارات');
     }
     if (t.id === 'rp3-emb-add') {
       var cid = Number(($('rp3-emb-courier') && $('rp3-emb-courier').value) || 0);
       var note = ($('rp3-emb-note') && $('rp3-emb-note').value.trim()) || 'استلام أوراق من سفارة الإمارات';
-      if (!cid) return toast('اختار المندوب الأول', 'error');
+      if (!cid) return toast('اختر المندوب الأول', 'error');
       t.disabled = true;
       try {
         var er = await sbClient.rpc('radar_add_embassy_mission', {
@@ -430,42 +429,42 @@
         });
         if (er.error) return toast(er.error.message, 'error');
         await loadPhase3Snap(true);
-        toast('تم إرسال مهمة استلام السفارة (3-5 م) للمندوب ✓');
+        toast('تم إرسال مهمة استلام السفارة للمندوب');
       } finally { t.disabled = false; }
       return;
     }
     if (t.id === 'rp3-rescue-btn') {
       var toId = Number(($('rp3-rescue-courier') && $('rp3-rescue-courier').value) || 0);
       var ids = Object.keys(st.rescueSelected).filter(function (k) { return st.rescueSelected[k]; }).map(Number);
-      if (!ids.length) return toast('علّم على تيكت واحد على الأقل للتحويل', 'error');
-      if (!toId) return toast('اختار المندوب البديل', 'error');
+      if (!ids.length) return toast('حدد تيكت واحد على الأقل للتحويل', 'error');
+      if (!toId) return toast('اختر المندوب البديل الأول', 'error');
       t.disabled = true;
       try {
-        var fr = await sbClient.rpc('radar_fleet_rescue', { p_ticket_ids: ids, p_to_courier_id: toId });
-        if (fr.error) return toast(fr.error.message, 'error');
+        var rr = await sbClient.rpc('radar_fleet_rescue', { p_ticket_ids: ids, p_to_courier_id: toId });
+        if (rr.error) return toast(rr.error.message, 'error');
         st.rescueSelected = {};
         await loadPhase3Snap(true);
-        toast('تم تحويل ' + (fr.data && fr.data.moved || ids.length) + ' تيكت إلى ' + (fr.data && fr.data.courier_name || 'المندوب') + ' ✓');
+        toast('تم تحويل التيكتات للمندوب الجديد');
       } finally { t.disabled = false; }
       return;
     }
     if (t.id === 'rp3-bcast-send') {
       if (!isManager()) return toast('للمدير فقط', 'error');
       var msg = ($('rp3-bcast-msg') && $('rp3-bcast-msg').value.trim()) || '';
-      if (msg.length < 2) return toast('اكتب رسالة النداء الأول', 'error');
+      if (msg.length < 2) return toast('اكتب الرسالة الأول', 'error');
       t.disabled = true;
       try {
         var br = await sbClient.rpc('radar_send_broadcast', { p_message: msg });
         if (br.error) return toast(br.error.message, 'error');
         await loadPhase3Snap(true);
-        toast('وصل النداء العام لكل المناديب ✓');
+        toast('وصلت الرسالة لكل المناديب');
       } finally { t.disabled = false; }
       return;
     }
     var rBtn = t.closest ? t.closest('[data-rp3-reply]') : null;
     if (rBtn) {
       var c = CANNED_REPLIES[Number(rBtn.dataset.rp3Reply)];
-      if (c) { copyText(c.text); toast('تم نسخ الرد: ' + c.title + ' ✓'); }
+      if (c) { copyText(c.text); toast('تم نسخ الرد: ' + c.title); }
     }
   }
 
@@ -483,11 +482,10 @@
       document.querySelectorAll('.rp3-rchk[data-cid="' + cid + '"]:checked').forEach(function (el) { keys.push(el.value); });
       var r = await sbClient.rpc('radar_set_courier_routes', { p_courier_id: cid, p_routes: keys });
       if (r.error) return toast(r.error.message, 'error');
-      toast('تم حفظ خطوط المندوب ✓');
+      toast('تم حفظ خطوط المندوب');
     }
   }
 
-  /* عرض النداء العام ومهام السفارة للمندوب في بوابته بدون أي أسعار */
   async function loadAndRenderCourierAlerts() {
     if (!sbClient || !isCourier()) return;
     var app = $('courier-app');
@@ -513,9 +511,9 @@
         host.insertAdjacentElement('afterend', box);
       }
       box.innerHTML =
-        (bcasts.length ? '<div style="font-weight:700;margin-bottom:4px">📢 نداء الإدارة: ' + eh(bcasts[0].message) + '</div>' : '') +
+        (bcasts.length ? '<div style="font-weight:700;margin-bottom:4px">تنبيه الإدارة: ' + eh(bcasts[0].message) + '</div>' : '') +
         missions.map(function (m) {
-          return '<div style="padding-top:4px;border-top:1px solid rgba(255,255,255,.12)">🏛️ <b>مهمة سفارة الإمارات (' + eh(m.window_label) + '):</b> ' + eh(m.notes || 'استلام أوراق') + '</div>';
+          return '<div style="padding-top:4px;border-top:1px solid rgba(255,255,255,.1)"><b>مهمة سفارة الإمارات (' + eh(m.window_label) + '):</b> ' + eh(m.notes || 'استلام أوراق') + '</div>';
         }).join('');
     } catch (e) { /* ignore */ }
   }
