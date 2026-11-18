@@ -417,9 +417,42 @@
 
   async function directConvertTicket(ticket) {
     if (!sbClient) return;
+    if (st.converting) return;
     if (ticket.status === 'converted') return toast('التيكت ده اتحوّل لمعاملة بالفعل', 'error');
-    var txId = 'TX-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
+    // مدفوع مسبقاً: طريقة الدفع الفعلية لازم الموظف يحددها بنفسه، فنفتح شاشة معاملة جديدة للمراجعة
+    if (ticket.payment_status === 'paid') {
+      toast('التيكت مدفوع مسبقاً: راجع طريقة الدفع الفعلية في شاشة معاملة جديدة ثم احفظ', 'error');
+      return prefillNewOrderTab(ticket);
+    }
+    st.converting = true;
+    try { await doDirectConvert(ticket); } finally { st.converting = false; }
+  }
+
+  async function doDirectConvert(ticket) {
     var items = mapTicketToItems(ticket);
+    // لو أي خدمة مش موجودة في الكتالوج: نوقف بدل ما نسجل تكلفة وعمولة 0
+    var missing = items.filter(function (it) { return !findSvc(it.service_name); })
+      .map(function (it) { return it.service_name; });
+    if (missing.length) {
+      return toast('خدمة غير موجودة في الكتالوج: ' + missing.join('، ') + ' — استخدم «فتح في معاملة جديدة»', 'error');
+    }
+    // تأكد من الحالة الحالية في القاعدة (حماية من التحويل مرتين من شاشتين)
+    var cur = await sbClient.from('pickup_tickets').select('status').eq('id', ticket.id).single();
+    if (cur.error) return toast('تعذر التأكد من حالة التيكت: ' + cur.error.message, 'error');
+    if (cur.data.status === 'converted') {
+      ticket.status = 'converted';
+      renderTicketsList();
+      return toast('التيكت ده اتحوّل لمعاملة بالفعل', 'error');
+    }
+    // رقم معاملة غير مستخدم (فحص تكرار قبل الإدخال)
+    var txId = '';
+    for (var tries = 0; tries < 8; tries++) {
+      var cand = 'TX-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);
+      var chk = await sbClient.from('request_lines').select('transaction_id').eq('transaction_id', cand).limit(1);
+      if (chk.error) return toast('تعذر فحص رقم المعاملة: ' + chk.error.message, 'error');
+      if (!chk.data || !chk.data.length) { txId = cand; break; }
+    }
+    if (!txId) return toast('تعذر توليد رقم معاملة غير مستخدم، حاول تاني', 'error');
     var cName = courierNameById(ticket.courier_id);
     var empName = getStaffDisplayName();
     var payMethod = mapPayMethod(ticket);
@@ -460,8 +493,14 @@
     var upd = await sbClient.from('pickup_tickets').update({
       status: 'converted',
       converted_tx_id: txId
-    }).eq('id', ticket.id);
-    if (upd.error) toast('تمت إضافة المعاملة (' + txId + ') لكن تعذر تحديث حالة التيكت: ' + upd.error.message, 'error');
+    }).eq('id', ticket.id).in('status', ['open', 'with_courier']).select('id');
+    if (upd.error || !upd.data || !upd.data.length) {
+      // المعاملة اتسجلت فعلاً: نعرض رقمها بوضوح عشان ما يتحولش التيكت تاني
+      ticket.status = 'converted';
+      ticket.converted_tx_id = txId;
+      renderTicketsList();
+      return toast('تمت إضافة المعاملة (' + txId + ') لكن تعذر تحديث حالة التيكت' + (upd.error ? ': ' + upd.error.message : '') + ' — لا تحوّله تاني، أبلغ المدير', 'error');
+    }
 
     ticket.status = 'converted';
     ticket.converted_tx_id = txId;
