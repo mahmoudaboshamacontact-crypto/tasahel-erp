@@ -210,10 +210,10 @@
 
     var briefHtml =
       '<div class="rp3-brief">' +
-        '<div class="rp3-kpi"><div class="ah-sub">تيكتات استلام نشطة</div><div class="rp3-kpi-num">' + tickets.length + '</div></div>' +
-        '<div class="rp3-kpi"><div class="ah-sub">سفارة الإمارات (آخر 3 أيام)</div><div class="rp3-kpi-num">' + embAm.length + '</div></div>' +
-        '<div class="rp3-kpi"><div class="ah-sub">معاملات مركونة +24 ساعة</div><div class="rp3-kpi-num" style="color:' + (stale24.length ? 'var(--r-acc,#ff7a3d)' : 'inherit') + '">' + stale24.length + '</div></div>' +
-        '<div class="rp3-kpi"><div class="ah-sub">تيكتات معلقة +72 ساعة</div><div class="rp3-kpi-num">' + stale72.length + '</div></div>' +
+        '<div class="rp3-kpi" data-rp3-kpi="tickets" style="cursor:pointer" title="اضغط لعرض التفاصيل"><div class="ah-sub">تيكتات استلام نشطة <span style="opacity:.65">· تفاصيل</span></div><div class="rp3-kpi-num">' + tickets.length + '</div></div>' +
+        '<div class="rp3-kpi" data-rp3-kpi="embassy" style="cursor:pointer" title="اضغط لعرض التفاصيل"><div class="ah-sub">سفارة الإمارات (آخر 3 أيام) <span style="opacity:.65">· تفاصيل</span></div><div class="rp3-kpi-num">' + embAm.length + '</div></div>' +
+        '<div class="rp3-kpi" data-rp3-kpi="stale24" style="cursor:pointer" title="اضغط لعرض التفاصيل"><div class="ah-sub">معاملات مركونة +24 ساعة <span style="opacity:.65">· تفاصيل</span></div><div class="rp3-kpi-num" style="color:' + (stale24.length ? 'var(--r-acc,#ff7a3d)' : 'inherit') + '">' + stale24.length + '</div></div>' +
+        '<div class="rp3-kpi" data-rp3-kpi="stale72" style="cursor:pointer" title="اضغط لعرض التفاصيل"><div class="ah-sub">تيكتات معلقة +72 ساعة <span style="opacity:.65">· تفاصيل</span></div><div class="rp3-kpi-num">' + stale72.length + '</div></div>' +
       '</div>';
 
     var rushBarHtml =
@@ -388,9 +388,68 @@
     }
   }
 
+
+  function openKpiModal(kind) {
+    if (!st.snap) return;
+    var d = st.snap, title = '', rows = [];
+    if (kind === 'tickets') {
+      title = 'تيكتات الاستلام النشطة (' + (d.open_tickets || []).length + ')';
+      rows = (d.open_tickets || []).map(function (x) {
+        return { id: x.sd_request_id, name: x.client_name, sub: (x.zone || x.address || 'بدون منطقة') + ' · ' + (x.service_name || ''), tx: null };
+      });
+    } else if (kind === 'embassy') {
+      title = 'طلبات سفارة الإمارات (آخر 3 أيام)';
+      rows = (d.embassy_am || []).map(function (x) {
+        return { id: x.transaction_id, name: x.client_name, sub: (x.service || '') + ' · ' + (x.received_date || ''), tx: x.transaction_id };
+      });
+    } else if (kind === 'stale24') {
+      title = 'معاملات مكتملة مركونة +24 ساعة (' + (d.stale_complete_24h || []).length + ')';
+      rows = (d.stale_complete_24h || []).map(function (x) {
+        return { id: x.transaction_id, name: x.client_name, sub: (x.service || '') + (x.phone ? ' · ' + x.phone : ''), tx: x.transaction_id };
+      });
+    } else if (kind === 'stale72') {
+      title = 'تيكتات استلام معلقة +72 ساعة (' + (d.stale_tickets_72h || []).length + ')';
+      rows = (d.stale_tickets_72h || []).map(function (x) {
+        return { id: x.sd_request_id, name: x.client_name, sub: (x.zone || 'بدون منطقة') + ' · ' + (x.status || ''), tx: null };
+      });
+    }
+    var old = $('rp3-kpi-modal'); if (old) old.remove();
+    var ov = document.createElement('div');
+    ov.id = 'rp3-kpi-modal';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100025;background:rgba(12,10,9,.82);display:flex;align-items:center;justify-content:center;padding:16px';
+    ov.innerHTML =
+      '<div class="ah-card" dir="rtl" style="width:100%;max-width:560px;max-height:82vh;overflow:auto">' +
+        '<div class="ah-head"><b>' + eh(title) + '</b><button type="button" class="ah-btn ah-btn-sec" id="rp3-kpi-close">إغلاق</button></div>' +
+        (rows.length ? rows.map(function (r) {
+          return '<div class="ah-row" style="margin-bottom:6px">' +
+            '<div style="flex:1;min-width:0"><div><b>' + eh(r.name || '—') + '</b> <span class="ah-badge ah-badge-org" dir="ltr">' + eh(r.id || '') + '</span></div>' +
+            '<div class="ah-sub">' + eh(r.sub) + '</div></div>' +
+            (r.tx && typeof window.openTxModal === 'function'
+              ? '<button type="button" class="ah-btn ah-btn-sec" data-rp3-opentx="' + eh(r.tx) + '">فتح المعاملة</button>'
+              : '') +
+          '</div>';
+        }).join('') : '<div class="ah-sub">لا توجد عناصر حالياً.</div>') +
+      '</div>';
+    ov.addEventListener('click', function (ev) {
+      if (ev.target === ov || ev.target.id === 'rp3-kpi-close') { ov.remove(); return; }
+      var ob = ev.target.closest && ev.target.closest('[data-rp3-opentx]');
+      if (ob) {
+        var txId = ob.getAttribute('data-rp3-opentx');
+        ov.remove();
+        if (typeof window.openTxModal === 'function') window.openTxModal(txId);
+      }
+    });
+    document.body.appendChild(ov);
+  }
+
   async function onPaneClick(e) {
     var t = e.target;
     if (!t) return;
+    var kpiEl = t.closest ? t.closest('[data-rp3-kpi]') : null;
+    if (kpiEl) {
+      openKpiModal(kpiEl.getAttribute('data-rp3-kpi'));
+      return;
+    }
     if (t.id === 'rp3-refresh-btn' || (t.closest && t.closest('#rp3-refresh-btn'))) {
       return loadPhase3Snap(true);
     }

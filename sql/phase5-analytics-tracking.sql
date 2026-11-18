@@ -282,3 +282,68 @@ $$;
 
 revoke all on function public.radar_p5_analytics(int) from public, anon;
 grant execute on function public.radar_p5_analytics(int) to authenticated;
+
+
+-- 4) تفاصيل معاملات منطقة محددة (ومنها مناطق أخرى / غير محدد) لفتحها ومعرفة العناوين الناقصة
+drop function if exists public.radar_p5_zone_details(text, int);
+create or replace function public.radar_p5_zone_details(p_zone text, p_days int default 30)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  v_days int := greatest(1, least(coalesce(p_days, 30), 180));
+  v_from date := ((now() at time zone 'Africa/Cairo')::date - v_days);
+  v_zone text := btrim(coalesce(p_zone, ''));
+begin
+  if not (public.is_staff() or public.is_manager()) then
+    raise exception 'staff or manager only' using errcode = '42501';
+  end if;
+
+  return coalesce((
+    with tx_base as (
+      select
+        l.transaction_id,
+        max(l.client_name) as client_name,
+        max(coalesce(l.address, '')) as addr,
+        sum(coalesce(l.total, coalesce(l.qty, 1) * coalesce(l.unit_price, 0))) as revenue,
+        sum(case when public.norm_ar(l.service) like 'رسوم توصيل%'
+                 then coalesce(nullif(l.exec_total, 0), coalesce(l.qty, 0) * coalesce(l.exec_unit_cost, 0))
+                 else 0 end) as fee_cost
+      from public.request_lines l
+      where l.deleted_at is null
+        and (l.received_at at time zone 'Africa/Cairo')::date >= v_from
+      group by l.transaction_id
+    ),
+    tx_with_zone as (
+      select
+        tb.*,
+        coalesce((select sum(coalesce(ct.fee, 0)) from public.courier_trips ct where ct.transaction_id = tb.transaction_id), 0) as trip_cost,
+        case
+          when tb.addr ~* 'مدينة نصر|مصر الجديدة|النزهة|شيراتون|جسر السويس|الماظة|ألماظة' then 'مدينة نصر ومصر الجديدة'
+          when tb.addr ~* 'التجمع|القاهرة الجديدة|الرحاب|مدينتي|الشروق|المستقبل|القطامية|بدر|العاصمة' then 'التجمع والقاهرة الجديدة'
+          when tb.addr ~* 'الجيزة|الدقي|المهندسين|فيصل|الهرم|العجوزة|إمبابة|امبابة|حدائق الأهرام' then 'الجيزة والمهندسين'
+          when tb.addr ~* 'أكتوبر|اكتوبر|الشيخ زايد|زايد|حدائق أكتوبر' then 'أكتوبر والشيخ زايد'
+          when tb.addr ~* 'المعادي|المقطم|حلوان|دار السلام|البساتين|المنيل' then 'المعادي والمقطم'
+          when tb.addr ~* 'العباسية|الوايلي|وسط البلد|رمسيس|التحرير|الزمالك|جاردن سيتي|شبرا' then 'وسط البلد والعباسية وشبرا'
+          else 'مناطق أخرى / غير محدد'
+        end as zone_name
+      from tx_base tb
+    )
+    select jsonb_agg(jsonb_build_object(
+      'transaction_id', z.transaction_id,
+      'client_name', z.client_name,
+      'address', nullif(btrim(z.addr), ''),
+      'revenue', round(z.revenue, 2),
+      'delivery_cost', round(z.trip_cost + z.fee_cost, 2)
+    ) order by z.revenue desc)
+    from tx_with_zone z
+    where z.zone_name = v_zone
+  ), '[]'::jsonb);
+end;
+$$;
+
+revoke all on function public.radar_p5_zone_details(text, int) from public, anon;
+grant execute on function public.radar_p5_zone_details(text, int) to authenticated;

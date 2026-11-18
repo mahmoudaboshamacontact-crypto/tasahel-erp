@@ -241,14 +241,16 @@
     panelBox.className = 'card p-4 space-y-3';
     panelBox.innerHTML =
       '<div id="cop-radar"></div>' +
-      '<div class="flex items-center justify-between gap-2">' +
-        '<b>متابعة تشغيل المناديب والبلاغات</b>' +
-        '<div class="flex gap-2">' +
-          '<button type="button" class="rounded-lg bg-slate-600 text-white px-3 py-2 text-xs font-bold" id="cop-manager-notifications">الإشعارات</button>' +
-          '<button type="button" class="rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold" id="cop-manager-refresh">تحديث</button>' +
-        '</div>' +
-      '</div>' +
-      '<div id="cop-manager-content" class="text-xs text-slate-500">' + (state.managerHtml || 'جاري تحميل البلاغات والتقفيلات…') + '</div>';
+      '<details id="cop-ops-accordion" style="border:1px solid var(--r-line,rgba(148,163,184,.2));border-radius:14px;padding:10px 14px;background:var(--r-card-2,rgba(255,255,255,.04))">' +
+        '<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700;font-size:13.5px">' +
+          '<span>متابعة تشغيل المناديب والبلاغات والتقفيلات (اضغط للفتح / الطي)</span>' +
+          '<span style="display:inline-flex;align-items:center;gap:6px">' +
+            '<button type="button" class="rounded-lg bg-slate-600 text-white px-2.5 py-1 text-xs font-bold" id="cop-manager-notifications">الإشعارات</button>' +
+            '<button type="button" class="rounded-lg bg-emerald-600 text-white px-2.5 py-1 text-xs font-bold" id="cop-manager-refresh">تحديث</button>' +
+          '</span>' +
+        '</summary>' +
+        '<div id="cop-manager-content" class="text-xs text-slate-500" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--r-line,rgba(148,163,184,.15))">' + (state.managerHtml || 'جاري تحميل البلاغات والتقفيلات…') + '</div>' +
+      '</details>';
     radarBox = panelBox.querySelector('#cop-radar');
     contentBox = panelBox.querySelector('#cop-manager-content');
     const refreshBtn = panelBox.querySelector('#cop-manager-refresh');
@@ -261,6 +263,10 @@
   /* تثبيت اللوحة في أول تاب المناديب بدون أي استدعاء لقاعدة البيانات وبدون حلقة مفرغة */
   function syncPanelPosition() {
     if (isMounting || !isStaff()) return false;
+    const liveSlot = $('ah-pane-live-radar');
+    const radarTab = $('tab-radar');
+    if (panelBox && liveSlot && panelBox.parentNode === liveSlot) return false;
+    if (radarTab && !radarTab.classList.contains('hidden')) return false;
     const root = $('tab-couriers');
     if (!root || root.classList.contains('hidden')) return false;
     ensurePanelDom();

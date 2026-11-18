@@ -274,12 +274,34 @@
     return c.map(x => Object.assign(x, { kind: 'cmd', hay: norm(x.t + ' ' + x.k) }));
   }
   function tabs() {
-    const out = [];
-    document.querySelectorAll('[id^="tab-"][id$="-btn"]').forEach(b => {
-      const id = b.id.slice(4, -4); if (TABS_SKIP[id] === 1 || b.classList.contains('hidden')) return;
+    const out = [], seen = new Set();
+    document.querySelectorAll('#nav-menu .tab-btn, #hdr-shortcuts .tab-btn, [id^="tab-"][id$="-btn"]').forEach(b => {
+      if (b.classList.contains('hidden')) return;
+      const id = (b.id && b.id.startsWith('tab-') && b.id.endsWith('-btn')) ? b.id.slice(4, -4) : (b.getAttribute('data-tab-target') || '');
+      if (id && TABS_SKIP[id] === 1) return;
       const sp = Array.from(b.querySelectorAll('span')).find(s => !s.id && !/rounded-full/.test(s.className) && s.textContent.trim()), ic = b.querySelector('i');
-      if (!sp) return; const t = sp.textContent.trim();
-      out.push({ kind: 'tab', ic: ic ? ic.className.replace('fa-solid ', '').split(' ')[0] : 'fa-window-maximize', t: 'تاب: ' + t, s: '', hay: norm(t + ' تاب'), run: () => { switchTab(id); if (typeof closeNavMenu === 'function') closeNavMenu(); } });
+      const t = sp ? sp.textContent.trim() : b.textContent.trim();
+      if (!t || seen.has(t)) return;
+      seen.add(t);
+      const icCls = ic ? (ic.className.split(' ').find(c => c.startsWith('fa-') && c !== 'fa-solid' && c !== 'fa-regular') || 'fa-window-maximize') : 'fa-window-maximize';
+      out.push({ kind: 'tab', ic: icCls, t: 'شاشة: ' + t, s: 'انتقال مباشر', hay: norm(t + ' تاب شاشة قائمة ' + id), run: () => { if (id && typeof switchTab === 'function') switchTab(id); else b.click(); if (typeof closeNavMenu === 'function') closeNavMenu(); } });
+    });
+    [
+      ['abbasiya', 'رادار جوازات العباسية', 'fa-passport'],
+      ['live_radar', 'رادار المناديب المباشر', 'fa-satellite-dish'],
+      ['pickup', 'تيكتات الاستلام', 'fa-ticket'],
+      ['ops3', 'عمليات اليوم والإنقاذ', 'fa-sliders'],
+      ['analytics5', 'تحليلات المناطق والأداء', 'fa-chart-column']
+    ].forEach(([sub, lbl, icCls]) => {
+      if (seen.has(lbl)) return;
+      seen.add(lbl);
+      out.push({ kind: 'tab', ic: icCls, t: 'العمليات: ' + lbl, s: 'تبويب داخل العمليات', hay: norm(lbl + ' عمليات رادار'), run: () => {
+        if (typeof switchTab === 'function') switchTab('radar');
+        setTimeout(() => {
+          const el = sub === 'ops3' ? $('rp3-nav-btn') : sub === 'analytics5' ? $('p5-nav-btn') : document.querySelector('[data-ah-nav="' + sub + '"]');
+          if (el) el.click();
+        }, 120);
+      } });
     });
     return out;
   }
@@ -289,8 +311,8 @@
     if (!tk.length) {
       return { g: [['إجراءات سريعة', all.filter(x => x.kind === 'cmd').slice(0, 6)], ['آخر المعاملات', I.tx.slice(0, 6).map(txItem)]] };
     }
-    const strong = all.filter(x => hit(x.hay) && norm(x.t.replace('تاب: ', '')).startsWith(tk[0])).slice(0, 3);
-    const rest = all.filter(x => hit(x.hay) && !strong.includes(x)).slice(0, 5);
+    const strong = all.filter(x => hit(x.hay)).slice(0, 6);
+    const rest = all.filter(x => hit(x.hay) && !strong.includes(x)).slice(0, 6);
     const rank = (a, b) => { const ae = a.hay.split(' ').includes(tk[0]) ? 1 : 0, be = b.hay.split(' ').includes(tk[0]) ? 1 : 0; return be - ae || b.t - a.t; };
     const tx = I.tx.filter(x => hit(x.hay)).sort(rank).slice(0, 8).map(txItem);
     const cl = I.cl.filter(x => hit(x.hay)).slice(0, 4).map(c => ({ kind: 'client', ic: 'fa-user', t: c.name, s: [c.phone, c.n + ' معاملة', money(c.sum), ago(c.t)].filter(Boolean).join(' · '), run: () => openClientModal(c.name), alt: { label: 'طلب جديد', run: () => startForClient(c.name) } }));
