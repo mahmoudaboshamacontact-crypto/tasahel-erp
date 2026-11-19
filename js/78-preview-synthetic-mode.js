@@ -52,9 +52,7 @@
   };
   XMLHttpRequest.prototype.send = function () {
     if (this.__tasahilBlockedSupabase) {
-      this.readyState = 4;
-      this.status = 0;
-      this.statusText = 'Blocked in synthetic preview';
+      /* لا نعدّل خصائص XHR للقراءة فقط؛ نُبلغ المستدعي بالفشل فقط. */
       if (typeof this.onerror === 'function') this.onerror(new Event('error'));
       if (typeof this.onloadend === 'function') this.onloadend(new Event('loadend'));
       return;
