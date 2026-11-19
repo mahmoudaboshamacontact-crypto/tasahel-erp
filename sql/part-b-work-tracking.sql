@@ -52,13 +52,13 @@ create table if not exists public.holidays (
   day date not null unique,
   title text not null check (char_length(btrim(title)) between 1 and 120),
   created_at timestamptz not null default now(),
-  created_by uuid default (select auth.uid())
+  created_by uuid default auth.uid()
 );
 
 alter table public.holidays add column if not exists day date;
 alter table public.holidays add column if not exists title text;
 alter table public.holidays add column if not exists created_at timestamptz not null default now();
-alter table public.holidays add column if not exists created_by uuid default (select auth.uid());
+alter table public.holidays add column if not exists created_by uuid default auth.uid();
 
 alter table public.holidays enable row level security;
 revoke all on table public.holidays from public, anon;
@@ -80,7 +80,7 @@ create table if not exists public.shift_handover_notes (
   id bigint generated always as identity primary key,
   shift_date date not null default ((now() at time zone 'Africa/Cairo')::date),
   shift_type text not null default 'صباحية' check (shift_type in ('صباحية', 'مسائية', 'ليلية', 'عام')),
-  author_id uuid not null default (select auth.uid()),
+  author_id uuid not null default auth.uid(),
   author_name text not null default 'موظف',
   summary text not null check (char_length(btrim(summary)) between 1 and 2000),
   pending_txs text[] not null default '{}',

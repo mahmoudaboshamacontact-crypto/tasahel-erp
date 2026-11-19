@@ -14,7 +14,7 @@ create table if not exists public.delivery_confirmations (
   verify_code text,
   area text,
   notes text,
-  confirmed_by uuid not null default (select auth.uid()),
+  confirmed_by uuid not null default auth.uid(),
   confirmed_by_name text not null default 'موظف',
   confirmed_at timestamptz not null default now()
 );
@@ -129,7 +129,7 @@ create table if not exists public.executor_payments (
   amount numeric not null check (amount > 0),
   method text not null default 'كاش',
   reference_note text,
-  created_by uuid not null default (select auth.uid()),
+  created_by uuid not null default auth.uid(),
   created_by_name text not null default 'المدير',
   created_at timestamptz not null default now()
 );
@@ -159,7 +159,7 @@ create table if not exists public.executor_evaluations (
   month text not null check (month ~ '^\d{4}-\d{2}$'),
   quality_score numeric not null default 5 check (quality_score >= 1 and quality_score <= 5),
   notes text,
-  updated_by uuid default (select auth.uid()),
+  updated_by uuid default auth.uid(),
   updated_at timestamptz not null default now(),
   unique (executor_name, month)
 );

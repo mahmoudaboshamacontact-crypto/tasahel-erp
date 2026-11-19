@@ -24,7 +24,7 @@ create table if not exists public.client_profiles (
   tags text[] not null default '{}',
   notes text,
   preferred_contact text default 'واتساب',
-  updated_by uuid default (select auth.uid()),
+  updated_by uuid default auth.uid(),
   updated_by_name text,
   updated_at timestamptz not null default now()
 );
@@ -106,7 +106,7 @@ create table if not exists public.daily_call_logs (
   reason text not null default 'استلام جاهز',
   outcome text not null default 'تم التواصل',
   notes text,
-  called_by uuid not null default (select auth.uid()),
+  called_by uuid not null default auth.uid(),
   called_by_name text not null default 'موظف',
   created_at timestamptz not null default now()
 );
@@ -145,7 +145,7 @@ create table if not exists public.client_satisfaction_surveys (
   phone text,
   score integer not null check (score between 1 and 5),
   comment text,
-  recorded_by uuid default (select auth.uid()),
+  recorded_by uuid default auth.uid(),
   recorded_by_name text,
   created_at timestamptz not null default now()
 );

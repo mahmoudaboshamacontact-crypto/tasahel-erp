@@ -23,7 +23,7 @@ create table if not exists public.morale_settings (
   goal_period text not null default 'day' check (goal_period in ('day', 'month')),
   special_dates jsonb not null default '[]'::jsonb
     check (jsonb_typeof(special_dates) = 'array' and pg_column_size(special_dates) <= 8000),
-  updated_by uuid default (select auth.uid()),
+  updated_by uuid default auth.uid(),
   updated_at timestamptz not null default now()
 );
 insert into public.morale_settings (id) values (1) on conflict (id) do nothing;
