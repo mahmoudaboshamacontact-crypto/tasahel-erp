@@ -789,7 +789,11 @@
     }
   }
 
-  function openOfficeDigitalSignoffModal() {
+  async function openOfficeDigitalSignoffModal() {
+    if (!st.p4) {
+      openP4Dialog('<div style="text-align:center;padding:18px;font-size:13px">جاري تحميل بيانات المكتب…</div>');
+      await loadMyP4State(true);
+    }
     var staff = (st.p4 && Array.isArray(st.p4.staff_list)) ? st.p4.staff_list : [];
     var staffOpts = staff.length
       ? staff.map(function (s) { return '<option value="' + eh(s.id) + '">' + eh(s.name) + '</option>'; }).join('')
@@ -1148,6 +1152,7 @@
   }
 
   async function openEndOfDayCashClosingModal() {
+    openP4Dialog('<div style="text-align:center;padding:18px;font-size:13px">جاري تحميل عهدة الكاش اليومية…</div>');
     await loadMyP4State(true);
     var totals = (st.p4 && st.p4.cash_totals) || { expected_cash: 0, instapay_total: 0, partial_remaining_total: 0 };
     var closeObj = st.p4 && st.p4.closing;
@@ -1539,6 +1544,15 @@
     initBatteryAutoWatcher();
     if (isCourier()) {
       loadMyP4State(false);
+      if (sbClient && !window.__cp4PresenceTimer) {
+        var pingPresence = function () {
+          if (sbClient && isCourier() && !document.hidden) {
+            try { sbClient.rpc('touch_last_seen').catch(function () {}); } catch (e) {}
+          }
+        };
+        pingPresence();
+        window.__cp4PresenceTimer = setInterval(pingPresence, 180000);
+      }
     } else if (isAllowedStaff()) {
       loadAndRenderStaffRadarP4(false);
     }

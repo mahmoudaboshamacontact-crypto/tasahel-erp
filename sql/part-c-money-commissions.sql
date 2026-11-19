@@ -18,7 +18,7 @@ create table if not exists public.discount_approvals (
   requested_unit_price numeric not null default 0,
   reason text,
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
-  requested_by uuid not null default (select auth.uid()),
+  requested_by uuid not null default auth.uid(),
   requested_by_name text not null default 'موظف',
   decided_by uuid,
   decided_by_name text,
@@ -179,7 +179,7 @@ create table if not exists public.wallet_reconciliations (
   actual_amount numeric not null default 0,
   diff_amount numeric generated always as (actual_amount - system_amount) stored,
   notes text,
-  updated_by uuid default (select auth.uid()),
+  updated_by uuid default auth.uid(),
   updated_by_name text,
   updated_at timestamptz not null default now(),
   unique (rec_date, method)
@@ -210,7 +210,7 @@ create table if not exists public.finance_month_settings (
   max_discount_pct numeric not null default 20 check (max_discount_pct >= 0 and max_discount_pct <= 100),
   target_margin_pct numeric not null default 35 check (target_margin_pct >= 5 and target_margin_pct <= 95),
   notes text,
-  updated_by uuid default (select auth.uid()),
+  updated_by uuid default auth.uid(),
   updated_at timestamptz not null default now()
 );
 
