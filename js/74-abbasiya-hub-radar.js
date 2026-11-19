@@ -266,53 +266,16 @@
     if (pPick) pPick.classList.toggle('hidden', st.subView !== 'pickup');
   }
 
-  /* تفعيل رادار المناديب المباشر بشكل مضمون من أول ضغطة (ومنع MutationObserver في js/71 من سحبه لتاب المناديب المخفي) */
-  function mountCopPanelIntoLiveRadar() {
-    var slot = $('ah-pane-live-radar');
-    if (!slot) return false;
-    var cop = $('cop-manager-panel');
-    if (!cop) return false;
-    if (cop.parentElement !== slot) {
-      slot.innerHTML = '';
-      slot.appendChild(cop);
-    }
-    cop.classList.remove('hidden');
-    cop.style.display = 'block';
-    var rBtn2 = cop.querySelector('[data-radar-retry="1"]') || cop.querySelector('#cop-manager-refresh');
-    var rBox = cop.querySelector('#cop-radar');
-    if (rBtn2 && rBox && (!rBox.innerHTML.trim() || rBox.textContent.indexOf('مش قادر يحمّل') !== -1)) {
-      try { rBtn2.click(); } catch (e) {}
-    }
-    return true;
-  }
-
   function activateLiveRadarSubView() {
     var slot = $('ah-pane-live-radar');
     if (!slot) return;
-    var couriersTab = $('tab-couriers');
-    var radarTab = $('tab-radar');
-
-    if (!$('cop-manager-panel') && couriersTab && typeof window.switchTab === 'function') {
-      st.internalSwitch = true;
-      try {
-        window.switchTab('couriers');
-      } finally {
-        couriersTab.classList.add('hidden');
-        couriersTab.style.display = '';
-        if (radarTab) radarTab.classList.remove('hidden');
-        var rBtn = $('tab-radar-btn'), cBtn = $('tab-couriers-btn');
-        if (rBtn) rBtn.className = BTN_ON;
-        if (cBtn) cBtn.className = BTN_OFF;
-        st.internalSwitch = false;
-      }
+    /* الطريقة المباشرة: js/71 بيبني اللوحة ويركبها هنا من غير تبديل تابات */
+    if (typeof window.__copMountRadarInto === 'function') {
+      var ok = false;
+      try { ok = window.__copMountRadarInto(slot, false); } catch (e) { ok = false; }
+      if (ok) return;
     }
-
-    if (!mountCopPanelIntoLiveRadar()) {
-      slot.innerHTML = '<section class="ah-card"><div class="ah-sub">جاري تجهيز رادار المناديب المباشر…</div></section>';
-    }
-    /* إعادة التثبيت بعد 90ms و 220ms لأن js/71 بيعمل setTimeout(..., 80) يسحب فيه اللوحة لتاب المناديب */
-    setTimeout(mountCopPanelIntoLiveRadar, 95);
-    setTimeout(mountCopPanelIntoLiveRadar, 230);
+    slot.innerHTML = '<section class="ah-card"><div class="ah-sub">رادار المناديب المباشر غير متاح حاليًا. حدّث الصفحة (Ctrl+F5) ولو المشكلة فضلت تأكد إن ملف js/71-courier-operations.js اتحمّل.</div></section>';
   }
 
   function activatePickupSubView() {
