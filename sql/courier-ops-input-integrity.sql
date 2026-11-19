@@ -11,7 +11,7 @@ language plpgsql
 stable
 security definer
 set search_path = public
-as $
+as $$
 declare
   v_c public.couriers;
   v_items jsonb;
