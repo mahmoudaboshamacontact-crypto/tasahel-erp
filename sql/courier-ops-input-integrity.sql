@@ -8,9 +8,10 @@ create or replace function public.courier_ops_ledger(
 )
 returns jsonb
 language plpgsql
+stable
 security definer
 set search_path = public
-as $$
+as $
 declare
   v_c public.couriers;
   v_items jsonb;
@@ -18,10 +19,6 @@ begin
   if not public.is_courier() then
     raise exception 'courier only' using errcode = '42501';
   end if;
-
-  -- This function performs cleanup below, so it must not be marked STABLE.
-  delete from public.courier_pending_reminder_state
-   where last_reminded_at < now() - interval '65 days';
 
   select *
     into v_c
@@ -170,6 +167,11 @@ begin
 
   if p_flag not in ('ready_flag', 'client_confirmed') then
     raise exception 'invalid readiness flag' using errcode = '22023';
+  end if;
+
+  if not exists (select 1 from public.courier_trips t where t.transaction_id = v_tx)
+     and not exists (select 1 from public.request_lines l where l.transaction_id = v_tx and l.deleted_at is null) then
+    raise exception 'transaction not found' using errcode = 'P0002';
   end if;
 
   insert into public.courier_dispatch_events(
