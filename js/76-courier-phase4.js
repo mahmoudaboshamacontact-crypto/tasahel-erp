@@ -78,7 +78,7 @@
     var s = document.createElement('style');
     s.id = 'cp-p4-style';
     s.textContent = [
-      '#courier-app[data-amoled="1"]{--bg:#000000;--card:#050505;--hd:#000000;--fld:#0a0a0a;--bd:#1f2937;background:#000000}',
+      '#courier-app[data-amoled="1"]{--bg:#000000;--card:#0b0b0d;--hd:#000000;--fld:#121215;--bd:#27272a;--tx:#f5eee8;--hdtx:#f5eee8;--mu:#a8a29e;--chip:#18181b;--hdbt:#18181b;background:#000000;color:#f5eee8}',
       '#courier-app[data-amoled="1"] .cpn-head,#courier-app[data-amoled="1"] .cp-nav{background:#000000;border-color:#18181b}',
       '#courier-app[data-thumb="left"] .cpn-fab{right:auto;left:16px}',
       '#courier-app[data-thumb="left"] .cpn-tiles{direction:ltr}',
@@ -218,13 +218,23 @@
     if (!app) return;
     ensureCss();
     applyMobilePrefs();
+    var body = $('cp-body');
     var bar = $('cp4-toolkit-bar');
+    if (bar && body && bar.parentElement !== body) {
+      bar.remove();
+      bar = null;
+    }
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'cp4-toolkit-bar';
-      var head = app.querySelector('.cpn-head') || app.firstChild;
-      if (head && head.nextSibling) app.insertBefore(bar, head.nextSibling);
-      else app.insertBefore(bar, app.firstChild);
+      bar.style.margin = '0 -16px 10px';
+      if (body) {
+        body.insertBefore(bar, body.firstChild);
+      } else {
+        var head = app.querySelector('.cpn-head') || app.firstChild;
+        if (head && head.nextSibling) app.insertBefore(bar, head.nextSibling);
+        else app.insertBefore(bar, app.firstChild);
+      }
     }
 
     var parkTxt = st.parkingPin ? 'موقع الركنة' : 'حفظ الركنة';
@@ -337,26 +347,26 @@
     var ptBox = $('pt73-courier-tickets');
     if (ptBox && ptBox.dataset.cp4Decorated !== '1') {
       ptBox.dataset.cp4Decorated = '1';
-      var rows = ptBox.querySelectorAll(':scope > div');
-      rows.forEach(function (row, idx) {
-        if (idx === 0) return;
+      var rows = ptBox.querySelectorAll('.pt73-ticket-item');
+      rows.forEach(function (row) {
         var spanLtr = row.querySelector('span[dir="ltr"]');
         var sdId = spanLtr ? spanLtr.textContent.trim() : '';
         if (!sdId) return;
+        var isPaid = row.getAttribute('data-paid') === '1';
         var txt = row.textContent || '';
         var bHtml = '';
         if (hasSensitiveAsset(txt)) bHtml += '<span class="cp4-shield">أصل مستند مهم</span> ';
         if (hasHighwayToll(txt)) bHtml += '<span class="cp4-toll">طريق سريع / كارتة</span>';
         if (bHtml) {
           var bw = document.createElement('div');
-          bw.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:4px';
+          bw.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px';
           bw.innerHTML = bHtml;
           row.appendChild(bw);
         }
         var act = document.createElement('div');
         act.className = 'cp4-actions-strip';
         act.innerHTML =
-          '<button type="button" class="cp4-act-btn pri" data-cp4-act="open-collect" data-tx="' + eh(sdId) + '" data-kind="ticket">تحصيل / إنستاباي</button>' +
+          (!isPaid ? '<button type="button" class="cp4-act-btn pri" data-cp4-act="open-collect" data-tx="' + eh(sdId) + '" data-kind="ticket">تحصيل / إنستاباي</button>' : '') +
           '<button type="button" class="cp4-act-btn" data-cp4-act="open-invoice" data-tx="' + eh(sdId) + '">فاتورة وإيصال</button>' +
           '<button type="button" class="cp4-act-btn wn" data-cp4-act="open-zeroblame" data-tx="' + eh(sdId) + '">العميل غير متاح</button>' +
           '<button type="button" class="cp4-act-btn" data-cp4-act="open-transfer" data-tx="' + eh(sdId) + '" data-kind="ticket">تحويل لزميل</button>';

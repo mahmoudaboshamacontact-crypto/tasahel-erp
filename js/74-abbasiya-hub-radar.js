@@ -495,12 +495,23 @@
         if (box) box.remove();
         return;
       }
+      var body = $('cp-body');
+      var activeNav = document.querySelector('#cp-nav button.on');
+      var activeTab = activeNav ? (activeNav.getAttribute('data-tab') || '') : '';
+      var showHub = !activeTab || activeTab === 'today' || activeTab === 'trips' || activeTab === 'home' || activeTab === 'account';
+      if (!body || !showHub) { if (box) box.remove(); return; }
       if (!box) {
         box = document.createElement('section');
         box.id = 'ah74-courier-hub';
         box.className = 'ah-courier-hub';
-        var host = $('pt73-courier-tickets') || $('cp-v12-top-banners') || app;
-        host.insertAdjacentElement('afterend', box);
+        box.style.margin = '0 0 12px 0';
+        var host = $('pt73-courier-tickets') || $('cp4-toolkit-bar');
+        if (host && host.parentElement === body) {
+          if (host.nextSibling) body.insertBefore(box, host.nextSibling);
+          else body.appendChild(box);
+        } else {
+          body.insertBefore(box, body.firstChild);
+        }
       }
       var h = st.courierHub;
       box.innerHTML =

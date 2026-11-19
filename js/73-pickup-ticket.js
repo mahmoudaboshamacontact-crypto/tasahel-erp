@@ -192,48 +192,174 @@
     return '<div style="margin-top:4px;padding:4px 8px;border-radius:8px;background:rgba(16,185,129,.18);color:#34d399;font-weight:700;font-size:11.5px">خالص الدفع — استلام أوراق فقط</div>';
   }
 
-  /* عرض تيكتات الاستلام المعيّنة للمندوب (بدون أسعار التكلفة أو المنفذ، مع إظهار مبلغ التحصيل لو العميل مش دافع) */
-  async function loadAndRenderCourierMyTickets() {
+  /* معرفة التاب النشط في بوابة المندوب */
+  function currentCourierTab() {
+    var on = document.querySelector('#cp-nav button.on');
+    return on ? (on.getAttribute('data-tab') || '') : '';
+  }
+
+  function cleanWaPhone(ph) {
+    var d = String(ph || '').replace(/\D+/g, '');
+    if (!d) return '';
+    if (d.startsWith('0')) return '2' + d;
+    return d;
+  }
+
+  function renderCallChecksBadges(cc) {
+    if (!cc || typeof cc !== 'object') return '';
+    var labels = {
+      docs_ready: 'الأوراق جاهزة',
+      address_ok: 'العنوان مؤكد',
+      slot_ok: 'الميعاد مؤكد',
+      fees_ok: 'الرسوم واضحة',
+      whatsapp_ok: 'واتساب مؤكد'
+    };
+    var keys = Object.keys(cc).filter(function (k) { return !!cc[k]; });
+    if (!keys.length) return '';
+    return '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' +
+      keys.map(function (k) {
+        return '<span style="font-size:10.5px;padding:2px 7px;border-radius:999px;background:rgba(16,185,129,.14);color:#34d399;border:1px solid rgba(16,185,129,.3)">✓ ' + eh(labels[k] || k) + '</span>';
+      }).join('') +
+    '</div>';
+  }
+
+  function renderCourierTicketsIntoBody() {
+    var body = $('cp-body');
+    if (!body) return;
+    var old = $('pt73-courier-tickets');
+    var tab = currentCourierTab();
+    var showHere = !tab || tab === 'today' || tab === 'trips' || tab === 'home' || tab === 'account';
+    if (!showHere || !Array.isArray(st.courierTickets) || !st.courierTickets.length) {
+      if (old) old.remove();
+      return;
+    }
+    var box = old;
+    if (!box) {
+      box = document.createElement('section');
+      box.id = 'pt73-courier-tickets';
+      box.className = 'pt-courier-box';
+      box.style.margin = '0 0 12px 0';
+      var bar = $('cp4-toolkit-bar');
+      if (bar && bar.parentElement === body) {
+        if (bar.nextSibling) body.insertBefore(box, bar.nextSibling);
+        else body.appendChild(box);
+      } else {
+        body.insertBefore(box, body.firstChild);
+      }
+    }
+    box.dataset.cp4Decorated = '';
+    var steps = [
+      ['on_the_way', 'في طريقي', '#f59e0b'],
+      ['call_attempt', 'كلمت العميل', '#38bdf8'],
+      ['waiting', 'وصلت للعميل', '#a855f7'],
+      ['near_office', 'تم استلام الأوراق', '#10b981']
+    ];
+    box.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+        '<b style="font-size:13.5px">تيكتات استلام مطلوبة منك (' + st.courierTickets.length + ')</b>' +
+        '<span style="font-size:11px;opacity:.8">اضغط الخطوة لتحديث المكتب</span>' +
+      '</div>' +
+      st.courierTickets.map(function (t) {
+        var itemsList = Array.isArray(t.items) && t.items.length
+          ? t.items
+          : [{ service_name: t.service_name, doc_type: '', qty: t.qty || 1 }];
+        var svcsHtml = itemsList.map(function (it) {
+          return eh(it.service_name) + (it.doc_type ? ' (' + eh(it.doc_type) + ')' : '') + ' × ' + Number(it.qty || 1);
+        }).join(' + ');
+        var waPh = cleanWaPhone(t.phone);
+        var mapQ = encodeURIComponent([t.zone, t.address].filter(Boolean).join(' '));
+        var curStep = '';
+        try { curStep = localStorage.getItem('pt73_step_' + t.id) || ''; } catch (e) {}
+        var isPaid = t.payment_status === 'paid' || Number(t.collect_amount || 0) <= 0;
+
+        return '<div class="pt73-ticket-item" data-ticket-id="' + Number(t.id) + '" data-paid="' + (isPaid ? '1' : '0') + '" style="padding:10px 0;border-top:1px solid rgba(255,255,255,.12)">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;flex-wrap:wrap">' +
+            '<div><b style="font-size:14px">' + eh(t.client_name) + '</b> · <span dir="ltr" style="font-size:12px;opacity:.85">' + eh(t.sd_request_id) + '</span></div>' +
+            '<span style="font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.18);color:#fbbf24;font-weight:700">الميعاد: ' + eh(t.slot_pref || 'غير محدد') + '</span>' +
+          '</div>' +
+          '<div style="font-size:12px;opacity:.92;margin-top:4px">' + svcsHtml + '</div>' +
+          ((t.zone || t.address) ? '<div style="font-size:12px;opacity:.88;margin-top:3px">العنوان: ' + eh([t.zone, t.address].filter(Boolean).join(' — ')) + '</div>' : '') +
+          paymentBadgeForCourier(t) +
+          renderCallChecksBadges(t.call_checks) +
+          (t.summary_comment
+            ? '<details style="margin-top:7px;padding:7px 9px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1)" open>' +
+                '<summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:#93c5fd">ملخص وسكريبت مكالمة الموظف مع العميل</summary>' +
+                '<div style="font-size:12px;margin-top:5px;line-height:1.6;white-space:pre-wrap">' + eh(t.summary_comment) + '</div>' +
+              '</details>'
+            : '') +
+          (t.staff_notes ? '<div style="font-size:11.5px;margin-top:5px;color:#fde68a">ملاحظة الموظف: ' + eh(t.staff_notes) + '</div>' : '') +
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' +
+            (t.phone ? '<a href="tel:' + eh(t.phone) + '" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:10px;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.4);color:#34d399;font-size:12px;font-weight:700;text-decoration:none"><i class="fa-solid fa-phone"></i><span>اتصال</span></a>' : '') +
+            (waPh ? '<a href="https://wa.me/' + eh(waPh) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:10px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#4ade80;font-size:12px;font-weight:700;text-decoration:none"><i class="fa-brands fa-whatsapp"></i><span>واتساب</span></a>' : '') +
+            (mapQ ? '<a href="https://www.google.com/maps/search/?api=1&query=' + mapQ + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:10px;background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.35);color:#38bdf8;font-size:12px;font-weight:700;text-decoration:none"><i class="fa-solid fa-location-dot"></i><span>الخريطة</span></a>' : '') +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:8px">' +
+            steps.map(function (sp) {
+              var active = curStep === sp[0];
+              return '<button type="button" data-pt73-step="' + sp[0] + '" data-pt73-tid="' + Number(t.id) + '" data-pt73-sd="' + eh(t.sd_request_id) + '" data-pt73-cl="' + eh(t.client_name) + '" data-pt73-lbl="' + sp[1] + '" style="padding:8px 8px;border-radius:10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;border:1px solid ' + (active ? sp[2] : 'rgba(255,255,255,.16)') + ';background:' + (active ? sp[2] : 'rgba(255,255,255,.06)') + ';color:' + (active ? '#0b0a09' : 'inherit') + '">' + (active ? '✓ ' : '') + sp[1] + '</button>';
+            }).join('') +
+          '</div>' +
+        '</div>';
+      }).join('');
+  }
+
+  /* عرض تيكتات الاستلام المعيّنة للمندوب (داخل #cp-body القابل للتمرير) */
+  async function loadAndRenderCourierMyTickets(force) {
     if (!sbClient || !isCourier()) return;
     var app = $('courier-app');
     if (!app) return;
-    if (st.courierLoadedAt && (Date.now() - st.courierLoadedAt < 60000)) return;
+    if (!force && st.courierLoadedAt && (Date.now() - st.courierLoadedAt < 60000)) {
+      renderCourierTicketsIntoBody();
+      return;
+    }
     st.courierLoadedAt = Date.now();
     try {
       ensureCss();
       var r = await sbClient.rpc('courier_my_tickets');
       if (r.error || !Array.isArray(r.data)) return;
       st.courierTickets = r.data;
-      var host = $('cp-v12-top-banners') || app;
-      var box = $('pt73-courier-tickets');
-      if (!st.courierTickets.length) {
-        if (box) box.remove();
-        return;
-      }
-      if (!box) {
-        box = document.createElement('section');
-        box.id = 'pt73-courier-tickets';
-        box.className = 'pt-courier-box';
-        host.insertAdjacentElement('afterend', box);
-      }
-      box.innerHTML =
-        '<div style="font-weight:700;margin-bottom:6px">تيكتات استلام مطلوبة منك (' + st.courierTickets.length + ')</div>' +
-        st.courierTickets.map(function (t) {
-          var itemsList = Array.isArray(t.items) && t.items.length
-            ? t.items
-            : [{ service_name: t.service_name, doc_type: '', qty: t.qty || 1 }];
-          var svcsHtml = itemsList.map(function (it) {
-            return eh(it.service_name) + (it.doc_type ? ' (' + eh(it.doc_type) + ')' : '') + ' × ' + Number(it.qty || 1);
-          }).join(' + ');
-          return '<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.1)">' +
-            '<div><b>' + eh(t.client_name) + '</b> · <span dir="ltr">' + eh(t.sd_request_id) + '</span> · الميعاد: <b>' + eh(t.slot_pref) + '</b></div>' +
-            '<div style="font-size:11.5px;opacity:.9;margin-top:2px">' + svcsHtml + (t.zone ? ' · ' + eh(t.zone) : '') + (t.address ? ' — ' + eh(t.address) : '') + '</div>' +
-            paymentBadgeForCourier(t) +
-            (t.staff_notes ? '<div style="font-size:11.5px;margin-top:4px;color:#fde68a">ملاحظة الموظف: ' + eh(t.staff_notes) + '</div>' : '') +
-          '</div>';
-        }).join('');
+      renderCourierTicketsIntoBody();
     } catch (e) { /* ignore */ }
   }
+
+  document.addEventListener('click', async function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var stepBtn = t.closest('[data-pt73-step]');
+    if (stepBtn) {
+      var evType = stepBtn.getAttribute('data-pt73-step');
+      var tid = stepBtn.getAttribute('data-pt73-tid');
+      var sdId = stepBtn.getAttribute('data-pt73-sd') || '';
+      var clName = stepBtn.getAttribute('data-pt73-cl') || '';
+      var lbl = stepBtn.getAttribute('data-pt73-lbl') || evType;
+      stepBtn.disabled = true;
+      try {
+        if (!sbClient) throw new Error('لا يوجد اتصال بالسيرفر');
+        var res = await sbClient.rpc('courier_v12_dispatch_action', {
+          p_event_type: evType,
+          p_tx: null,
+          p_payload: {
+            source: 'pickup_ticket',
+            ticket_id: Number(tid),
+            sd_request_id: sdId,
+            client_name: clName,
+            note: 'تيكت استلام ' + sdId + ' (' + clName + '): ' + lbl
+          }
+        });
+        if (res.error) throw res.error;
+        try { localStorage.setItem('pt73_step_' + tid, evType); } catch (e2) {}
+        renderCourierTicketsIntoBody();
+        if (typeof showToast === 'function') showToast('تم تحديث حالة الاستلام: ' + lbl, 'success');
+      } catch (err) {
+        stepBtn.disabled = false;
+        if (typeof showToast === 'function') showToast((err && err.message) || 'تعذر تحديث الحالة', 'error');
+      }
+      return;
+    }
+    if (t.closest('#cp-nav button')) {
+      setTimeout(renderCourierTicketsIntoBody, 80);
+    }
+  });
 
   function syncDraftRowsFromDom() {
     var rowsEl = document.querySelectorAll('#pt-items-wrap .pt-svc-row');
