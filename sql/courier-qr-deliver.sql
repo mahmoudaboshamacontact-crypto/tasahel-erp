@@ -54,6 +54,8 @@ declare
   v_cancelled integer := 0;
   v_hour_count integer := 0;
   v_cod_due numeric(12,2) := 0;
+  v_client text;
+  v_address text;
 begin
   -- صلاحية: مندوب نشط ومربوط بحسابه فقط
   if not public.is_courier() then
@@ -96,8 +98,10 @@ begin
     count(*) filter (where coalesce(l.delivered, false) = true),
     count(*) filter (where coalesce(l.complete, false) = false),
     count(*) filter (where coalesce(l.under_review, false) = true),
-    count(*) filter (where lower(btrim(coalesce(l.status, ''))) in ('cancelled', 'canceled', 'ملغي', 'ملغى'))
-  into v_total_lines, v_delivered_lines, v_not_complete, v_under_review, v_cancelled
+    count(*) filter (where lower(btrim(coalesce(l.status, ''))) in ('cancelled', 'canceled', 'ملغي', 'ملغى')),
+    max(l.client_name),
+    max(l.address)
+  into v_total_lines, v_delivered_lines, v_not_complete, v_under_review, v_cancelled, v_client, v_address
   from public.request_lines l
   where l.transaction_id = v_tx
     and l.deleted_at is null;
@@ -177,6 +181,8 @@ begin
   return jsonb_build_object(
     'ok', true,
     'transaction_id', v_tx,
+    'client_name', coalesce(nullif(btrim(v_client), ''), ''),
+    'address', coalesce(nullif(btrim(v_address), ''), ''),
     'cod_due', round(v_cod_due, 2),
     'lines_count', v_total_lines
   );
