@@ -545,6 +545,7 @@ begin
     'تسليم عبر QR',
     v_c.name,
     jsonb_build_object(
+      'delivered', jsonb_build_object('old', false, 'new', true),
       'الحالة', 'تم التسليم',
       'المندوب', v_c.name,
       'المستلم', v_recipient,
@@ -553,6 +554,15 @@ begin
       'التحصيل', v_cod_due
     )
   );
+
+  -- تعليق ظاهر في السجل الزمني بالمستلم والمندوب (سطر audit_log لا يعرض التفاصيل)
+  begin
+    insert into public.tx_comments (transaction_id, author_id, author_name, body)
+    values (v_tx, auth.uid(), v_c.name,
+            'تم التسليم عبر QR — المندوب: ' || v_c.name || ' — المستلم: ' || v_recipient || ' — ' || v_now_cairo);
+  exception when others then
+    raise warning 'qr deliver timeline comment failed: %', sqlerrm;
+  end;
 
   return jsonb_build_object(
     'ok', true,
