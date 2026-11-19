@@ -77,20 +77,34 @@
   }
 
   function renderCourierMotivation() {
+    window.__p5RenderMot = renderCourierMotivation;
     var app = $('courier-app');
     if (!app || !st.mot) return;
     ensureCss();
     var m = st.mot;
     var pct = m.daily_target > 0 ? Math.min(100, Math.round((Number(m.today_confirmed || 0) / Number(m.daily_target)) * 100)) : 0;
 
+    var body = $('cp-body');
+    var activeNav = document.querySelector('#cp-nav button.on');
+    var activeTab = activeNav ? (activeNav.getAttribute('data-tab') || '') : '';
+    var showMot = !activeTab || activeTab === 'today' || activeTab === 'home' || activeTab === 'account';
     var box = $('p5-courier-mot');
+    if (!body || !showMot) {
+      if (box) box.remove();
+      return;
+    }
     if (!box) {
       box = document.createElement('section');
       box.id = 'p5-courier-mot';
       box.className = 'p5-mot-card';
-      var host = $('cp4-toolkit-bar') || app.querySelector('.cpn-head') || app.firstChild;
-      if (host && host.nextSibling) app.insertBefore(box, host.nextSibling);
-      else app.insertBefore(box, app.firstChild);
+      box.style.margin = '0 0 12px 0';
+      var host = $('ah74-courier-hub') || $('pt73-courier-tickets') || $('cp4-toolkit-bar');
+      if (host && host.parentElement === body) {
+        if (host.nextSibling) body.insertBefore(box, host.nextSibling);
+        else body.appendChild(box);
+      } else {
+        body.insertBefore(box, body.firstChild);
+      }
     }
 
     var starBadge = m.is_weekly_star
@@ -363,3 +377,5 @@
 
   setTimeout(hookPhase5, 350);
 })();
+
+document.addEventListener('click', function (e) { if (e.target && e.target.closest && e.target.closest('#cp-nav button')) setTimeout(function () { if (typeof window.__p5RenderMot === 'function') window.__p5RenderMot(); }, 90); });

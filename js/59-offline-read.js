@@ -119,8 +119,7 @@
   var origServices = window.loadServices;
   if (typeof origServices === 'function') {
     window.loadServices = async function () {
-      if (!navigator.onLine) { var ok = await restoreServices(); if (ok) showBar(); return; }
-      await origServices.apply(this, arguments);
+      try { await origServices.apply(this, arguments); } catch (e) {}
       if (allServices && allServices.length) { saveServices(); hideBar(); }
       else { var ok2 = await restoreServices(); if (ok2) showBar(); }
     };
@@ -129,8 +128,7 @@
   var origRecent = window.loadRecentRequests;
   if (typeof origRecent === 'function') {
     window.loadRecentRequests = async function () {
-      if (!navigator.onLine) { var ok = await restoreLines(); if (ok) showBar(lastLinesTs); return; }
-      await origRecent.apply(this, arguments);
+      try { await origRecent.apply(this, arguments); } catch (e) {}
       if (allRequestLines && allRequestLines.length) { scheduleSaveLines(); hideBar(); }
       else { var ok2 = await restoreLines(); if (ok2) showBar(lastLinesTs); }
     };
