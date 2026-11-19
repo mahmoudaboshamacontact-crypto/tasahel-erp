@@ -15,7 +15,7 @@ declare
   v_decision text := lower(btrim(coalesce(p_decision, '')));
   v_event public.courier_dispatch_events;
 begin
-  if not (public.is_staff() or public.is_manager()) then
+  if not (public.is_staff() or public.is_manager()) or public.is_courier() then
     raise exception 'staff only' using errcode = '42501';
   end if;
 
