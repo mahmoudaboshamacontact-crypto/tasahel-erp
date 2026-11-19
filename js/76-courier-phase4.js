@@ -412,12 +412,20 @@
   }
 
   async function toggleDrivingMode() {
+    var prev = st.driving;
     st.driving = !st.driving;
     renderTopToolkitBar();
-    toast(st.driving ? 'تم تفعيل وضع القيادة والرد التلقائي' : 'تم إيقاف وضع القيادة');
     if (sbClient) {
-      try { await sbClient.rpc('courier_p4_toggle_driving', { p_driving: st.driving }); } catch (e) {}
+      try {
+        var rd = await sbClient.rpc('courier_p4_toggle_driving', { p_driving: st.driving });
+        if (rd.error) throw rd.error;
+      } catch (e) {
+        st.driving = prev;
+        renderTopToolkitBar();
+        return toast((e && e.message) || 'تعذر تغيير وضع القيادة', true);
+      }
     }
+    toast(st.driving ? 'تم تفعيل وضع القيادة والرد التلقائي' : 'تم إيقاف وضع القيادة');
   }
 
   async function toggleQrFlashlight() {
@@ -644,6 +652,7 @@
       });
       if (r.error) throw r.error;
       var d = r.data || {};
+      if (d.ok === false) throw new Error(d.error || 'كود الختم الرقمي غير صحيح');
       toast('تم ختم الاستلام بنجاح (' + (d.stamp_code || '') + ') باسم ' + (d.receiver_name || ''));
       await loadMyP4State(true);
       openOfficeDigitalSignoffModal();
@@ -664,7 +673,7 @@
       if (!r.error && r.data) inv = r.data;
     } catch (e) {}
 
-    var due = Number((inv && inv.total_due) || 0);
+    var due = Number((inv && (inv.cod_due != null ? inv.cod_due : inv.total_due)) || 0);
     st.calcDue = due;
     st.calcPaid = due;
 
@@ -680,7 +689,7 @@
       '</select>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">' +
         '<div><label style="display:block;font-size:11.5px;color:var(--mu);margin-bottom:3px">إجمالي المطلوب</label>' +
-          '<input id="cp4-col-orig" type="number" class="cp-field" value="' + due + '"></div>' +
+          '<input id="cp4-col-orig" type="number" class="cp-field" value="' + due + '" readonly style="opacity:.75"></div>' +
         '<div><label style="display:block;font-size:11.5px;color:var(--mu);margin-bottom:3px">المحصل فعلياً</label>' +
           '<input id="cp4-col-paid" type="number" class="cp-field" value="' + due + '"></div>' +
       '</div>' +
@@ -943,6 +952,9 @@
         '</div>' +
       '</div>' +
       (locked ? '' :
+        '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px">المبلغ الكاش اللي سلّمته فعليًا للمكتب</label>' +
+        '<input id="cp4-close-handed" type="number" inputmode="decimal" min="0" step="0.01" class="cp-field" value="' + Number(totals.expected_cash || 0) + '" style="margin-bottom:8px">' +
+        '<div style="font-size:11.5px;color:var(--mu);margin-bottom:8px">لو المبلغ مختلف عن المتوقع لازم تكتب ملاحظة بالسبب.</div>' +
         '<input id="cp4-close-note" type="text" class="cp-field" value="' + eh((closeObj && closeObj.courier_note) || '') + '" placeholder="ملاحظة للمحاسب مع التقفيل (اختياري)" style="margin-bottom:12px">' +
         '<button type="button" class="cp-btn cp-go" style="width:100%;margin-bottom:8px" data-cp4-act="close-submit">إرسال تقفيل اليوم للمكتب</button>') +
       '<button type="button" class="cp-btn" style="width:100%" data-cp4-act="dialog-close">إغلاق</button>'
@@ -951,9 +963,11 @@
 
   async function submitEndOfDayCashClosing(btn) {
     var note = (($('cp4-close-note') || {}).value || '').trim();
+    var handedRaw = (($('cp4-close-handed') || {}).value || '').trim();
+    if (handedRaw === '' || isNaN(Number(handedRaw)) || Number(handedRaw) < 0) return toast('سجّل المبلغ الكاش اللي سلّمته فعليًا', true);
     if (btn) btn.disabled = true;
     try {
-      var r = await sbClient.rpc('courier_p4_submit_cash_closing', { p_note: note });
+      var r = await sbClient.rpc('courier_p4_submit_cash_closing', { p_note: note, p_handed_cash: Number(handedRaw) });
       if (r.error) throw r.error;
       toast('تم إرسال تقفيل الكاش للمكتب');
       await loadMyP4State(true);
@@ -1010,7 +1024,7 @@
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
           '<span class="ah-sub" style="margin:0">كود استلام الأوراق الخاص بك (4 أرقام):</span>' +
-          '<input id="cp4-staff-my-pin" type="text" maxlength="4" dir="ltr" class="ah-input" value="' + eh(d.my_pin || '1234') + '" style="width:72px;text-align:center;font-weight:700">' +
+          '<input id="cp4-staff-my-pin" type="text" maxlength="4" dir="ltr" class="ah-input" value="" placeholder="' + (d.my_pin_set ? '••••' : 'اضبطه') + '" autocomplete="off" inputmode="numeric" style="width:72px;text-align:center;font-weight:700">' +
           '<button type="button" class="ah-btn ah-btn-sec" data-cp4-act="staff-save-pin">حفظ الكود</button>' +
           '<button type="button" class="ah-btn ah-btn-sec" data-cp4-act="staff-refresh-p4"><i class="fa-solid fa-rotate-right"></i><span>تحديث</span></button>' +
         '</div>' +
@@ -1034,6 +1048,7 @@
                   '<span class="ah-badge ' + (isConf ? 'ah-badge-ok' : 'ah-badge-warn') + '">' + money(hs.expected_cash) + ' كاش</span>' +
                 '</div>' +
                 '<div class="ah-sub">إنستاباي: ' + money(hs.instapay_total) + ' · متبقي جزئي: ' + money(hs.partial_remaining_total) + '</div>' +
+                '<div class="ah-sub">المسلَّم فعليًا: <b>' + money(hs.handed_cash) + '</b>' + (Number(hs.diff_cash || 0) !== 0 ? ' · <b style="color:#ef4444">فرق: ' + money(hs.diff_cash) + '</b>' : ' · مطابق') + '</div>' +
                 (hs.courier_note ? '<div class="ah-sub">' + eh(hs.courier_note) + '</div>' : '') +
                 '<div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">' +
                   (isConf
@@ -1097,14 +1112,20 @@
     }
     if (t.id === 'cp4-gate-submit') {
       t.disabled = true;
+      try {
+        if (!sbClient) throw new Error('لا يوجد اتصال بالسيرفر');
+        var rg = await sbClient.rpc('courier_p4_complete_gate', { p_checklist: st.gateChecks });
+        if (rg.error) throw rg.error;
+      } catch (err) {
+        t.disabled = false;
+        toast((err && err.message) || 'تعذر تسجيل الجاهزية — جرّب تاني', true);
+        return;
+      }
       st.gateShownToday = true;
-      localStorage.setItem('cp_p4_gate_' + todayCairo(), '1');
+      try { localStorage.setItem('cp_p4_gate_' + todayCairo(), '1'); } catch (e2) {}
       var gm2 = $('cp4-gate-modal');
       if (gm2) gm2.remove();
       toast('تم تأكيد جاهزية بداية اليوم');
-      if (sbClient) {
-        try { await sbClient.rpc('courier_p4_complete_gate', { p_checklist: st.gateChecks }); } catch (err) {}
-      }
       return;
     }
 
@@ -1231,7 +1252,7 @@
         try {
           var rp = await sbClient.rpc('staff_p4_set_my_pin', { p_pin: pinVal });
           if (rp.error) throw rp.error;
-          toast('تم حفظ كودك الرقمي (' + pinVal + ') بنجاح');
+          toast('تم حفظ كودك الرقمي بنجاح'); var pe = $('cp4-staff-my-pin'); if (pe) { pe.value = ''; pe.placeholder = '••••'; }
         } catch (err) {
           toast((err && err.message) || 'تعذر حفظ الكود', true);
         } finally {

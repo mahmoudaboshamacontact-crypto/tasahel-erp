@@ -1,7 +1,7 @@
 // Edge Function: ask-ai (v9) — للمدير فقط. بتجاوب بأرقام مجمّعة (من غير أسماء عملاء ولا تليفونات).
 // وضعين:
 //  1) الجديد (الافتراضي): الـ AI بينادي أدوات get_report / get_late_orders → دوال SQL للمدير بس (sql/part-l-ai-tools.sql).
-//  2) القديم (لو الواجهة بعتت context): نفس سلوك v3، عشان النسخ القديمة من الواجهة متتكسرش.
+//  2) الوضع القديم (context من المتصفح) اتلغى لأسباب الخصوصية.
 // Secrets: GEMINI_API_KEY، و GEMINI_MODEL (اختياري، الافتراضي gemini-3.8-flash). gemini-2.5-flash اتوقف للمستخدمين الجداد.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -14,9 +14,8 @@ const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: 
 const RULES = `إنت مساعد تحليل أرقام لشركة "تساهيل | قسم الخدمات الحكومية". هترد بالعامية المصرية باختصار ووضوح.
 - المبالغ بالجنيه المصري. اذكر الشهر أو الفترة اللي بتتكلم عنها.
 - لو السؤال محتاج مقارنة أو حساب، اعمله وبيّن الأرقام اللي استخدمتها.
-- ممنوع تطلب أو تذكر بيانات عملاء شخصية (مفيش أصلاً).`;
+- ممنوع تطلب أو تذكر بيانات عملاء شخصية (مفيش أصلاً). أسماء الموظفين مجهولة (موظف 1، موظف 2…) ومتحاولش تعرف مين هو.`;
 
-const SYSTEM_OLD = RULES + '\n- اعتمد فقط على الأرقام المرفقة في "البيانات". لو الإجابة مش موجودة فيها قول ده صراحة ومتخترعش أرقام.';
 const systemTools = (today: string) => RULES + `
 - النهارده ${today} (بتوقيت القاهرة). لو الفترة مش محددة في السؤال افترض الشهر الحالي وقول كده.
 - لازم تجيب أي رقم من الأدوات: get_report (مبيعات وتكلفة وهامش تقديري وعمولة وعدد المعاملات، مجمّعة حسب شهر/يوم/خدمة/موظف/طريقة دفع/حالة) و get_late_orders (البنود المتأخرة حسب خدمة أو موظف). ممنوع تخمّن أو تخترع رقم.
@@ -35,7 +34,6 @@ const TOOLS = [{
           from_date: { type: 'STRING', description: 'بداية الفترة YYYY-MM-DD (اختياري، الافتراضي أول الشهر الحالي)' },
           to_date: { type: 'STRING', description: 'نهاية الفترة YYYY-MM-DD شاملة (اختياري، الافتراضي النهارده)' },
           service: { type: 'STRING', description: 'اسم خدمة بالظبط للفلترة (اختياري)' },
-          employee: { type: 'STRING', description: 'اسم موظف بالظبط للفلترة (اختياري)' },
           limit: { type: 'INTEGER', description: 'أقصى عدد صفوف (1-50، الافتراضي 20)' },
         },
         required: ['group_by'],
@@ -68,7 +66,7 @@ async function runTool(sb: any, name: string, a: Record<string, unknown>) {
       p_group: String(a.group_by || ''),
       p_from: isDate(a.from_date) ? a.from_date : null,
       p_to: isDate(a.to_date) ? a.to_date : null,
-      p_service: str(a.service), p_employee: str(a.employee), p_limit: int(a.limit),
+      p_service: str(a.service), p_employee: null, p_limit: int(a.limit),
     });
   } else if (name === 'get_late_orders') {
     r = await sb.rpc('ai_late_orders', { p_group: String(a.group_by || ''), p_limit: int(a.limit) });
@@ -117,16 +115,8 @@ Deno.serve(async (req) => {
       role: h.role === 'model' ? 'model' : 'user', parts: [{ text: String(h.text || '').slice(0, 1500) }],
     }));
 
-    // ---- الوضع القديم (v3): الواجهة بعتت ملخص جاهز ----
-    if (body.context) {
-      const ctx = JSON.stringify(body.context).slice(0, 40000);
-      const j = await gemini(key, model, {
-        systemInstruction: { parts: [{ text: SYSTEM_OLD }] },
-        contents: [...history, { role: 'user', parts: [{ text: `البيانات (JSON):\n${ctx}\n\nالسؤال: ${question}` }] }],
-        generationConfig: gen,
-      });
-      return json({ answer: textOf(j.candidates?.[0]?.content) || 'مفيش رد من النموذج، جرّب صياغة تانية.' });
-    }
+    // الوضع القديم (إرسال context جاهز من المتصفح) اتلغى: كان بيبعت أي JSON للنموذج من غير قائمة حقول مسموحة.
+    if (body.context) return json({ error: 'النسخة دي من الواجهة قديمة. حدّث الصفحة (Ctrl+F5).' }, 400);
 
     // ---- الوضع الجديد: أدوات ----
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date());
