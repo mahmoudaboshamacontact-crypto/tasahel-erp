@@ -95,6 +95,9 @@
       '.cp4-tr-banner{margin:8px 12px 0;padding:10px 12px;border-radius:14px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);font-size:12px}',
       '.cp4-overlay{position:fixed;inset:0;z-index:100020;background:rgba(12,10,9,.82);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}',
       '.cp4-dialog{width:100%;max-width:440px;background:var(--card,#181412);color:var(--tx,#f4eee8);border:1px solid var(--bd,rgba(255,255,255,.1));border-radius:20px;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.55)}',
+      '.cp4-dialog .cp-btn{border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:11px 16px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;color:var(--tx,#f4eee8);background:var(--fld,#241e1a)}',
+      '.cp4-dialog .cp-btn.cp-go{background:#10b981;border-color:#10b981;color:#04110c}',
+      '.cp4-dialog .cp-btn:disabled{opacity:.55;cursor:default}',
       '.cp4-chk-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--fld,#211b17);border:1px solid var(--bd,rgba(255,255,255,.08));margin-bottom:8px;cursor:pointer;font-size:13px;font-weight:600}',
       '.cp4-chk-row.on{border-color:#10b981;background:rgba(16,185,129,.1)}',
       '.cp4-actions-strip{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)}',
@@ -499,9 +502,18 @@
 
   function openQrDeliverConfirmModal(token, info) {
     var txId = String((info && info.transaction_id) || '');
+    var clientName = String((info && info.client_name) || '').trim();
+    var address = String((info && info.address) || '').trim();
     var codDue = Number((info && info.cod_due) || 0);
     var linesCount = Number((info && info.lines_count) || 0);
-    st.qrDeliver = { token: token, transaction_id: txId, cod_due: codDue, lines_count: linesCount };
+    st.qrDeliver = {
+      token: token,
+      transaction_id: txId,
+      client_name: clientName,
+      address: address,
+      cod_due: codDue,
+      lines_count: linesCount
+    };
 
     var codHtml = codDue > 0
       ? '<div style="padding:10px 12px;border-radius:12px;background:rgba(245,158,11,.13);border:1px solid rgba(245,158,11,.4);margin-bottom:10px">' +
@@ -517,9 +529,13 @@
 
     openP4Dialog(
       '<h3 style="margin:0 0 8px;font-size:16px"><i class="fa-solid fa-qrcode" style="color:#10b981;margin-left:6px"></i>تأكيد تسليم الإيصال</h3>' +
-      '<div style="padding:10px 12px;border-radius:12px;background:var(--fld);border:1px solid var(--bd);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">' +
-        '<div><div style="font-size:11px;color:var(--mu)">رقم المعاملة</div><b dir="ltr" style="font-size:15px">' + eh(txId) + '</b></div>' +
-        (linesCount > 0 ? '<span style="font-size:11.5px;color:var(--mu)">' + linesCount + ' بند</span>' : '') +
+      '<div style="padding:10px 12px;border-radius:12px;background:var(--fld);border:1px solid var(--bd);margin-bottom:10px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<div><div style="font-size:11px;color:var(--mu)">رقم المعاملة</div><b dir="ltr" style="font-size:15px">' + eh(txId) + '</b></div>' +
+          (linesCount > 0 ? '<span style="font-size:11.5px;color:var(--mu)">' + linesCount + ' بند</span>' : '') +
+        '</div>' +
+        (clientName ? '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bd);font-size:13px"><span style="color:var(--mu)">العميل: </span><b>' + eh(clientName) + '</b></div>' : '') +
+        (address ? '<div style="margin-top:4px;font-size:12px;color:var(--mu);line-height:1.5"><span>العنوان: </span><span style="color:var(--tx)">' + eh(address) + '</span></div>' : '') +
       '</div>' +
       codHtml +
       '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px">اسم المستلم (إجباري — 3 حروف على الأقل)</label>' +

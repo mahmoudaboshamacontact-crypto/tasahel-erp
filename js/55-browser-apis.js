@@ -171,61 +171,142 @@
   }
 
   async function openQrScanner(onResult) {
-    if (!qrSupported) { return; }
+    if (!qrSupported) {
+      if (typeof showToast === 'function') showToast('الكاميرا غير مدعومة في هذا المتصفح — افتح السيستم من Chrome أو Safari', 'error');
+      return;
+    }
     try {
       stopQrCamera();
-      qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      try {
+        qrStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+      } catch (e1) {
+        qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+          .catch(function () { return navigator.mediaDevices.getUserMedia({ video: true, audio: false }); });
+      }
     } catch (e) {
-      if (typeof showToast === 'function') showToast('تعذّر فتح الكاميرا: تأكد من إذن الكاميرا', 'error');
+      if (typeof showToast === 'function') showToast('تعذّر فتح الكاميرا: تأكد من إعطاء إذن الكاميرا للمتصفح', 'error');
       return;
     }
 
-    /* إنشاء الـ modal */
+    /* إنشاء الـ modal بـ z-index أعلى من بوابة المندوب (99980) والمودالات (100020) */
     var modal = document.createElement('div');
     modal.id = 'qr-scan-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;direction:rtl';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:100050;background:rgba(0,0,0,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px;direction:rtl';
     modal.innerHTML =
-      '<div style="font-size:14px;font-weight:700;color:#fff">وجّه الكاميرا للـ QR Code</div>' +
-      '<video id="qr-video" autoplay playsinline muted style="width:min(90vw,340px);height:min(90vw,340px);border-radius:16px;object-fit:cover;border:2px solid #e97415"></video>' +
+      '<div style="font-size:15px;font-weight:700;color:#fff">وجّه الكاميرا للـ QR Code</div>' +
+      '<div style="position:relative;width:min(90vw,340px);height:min(90vw,340px)">' +
+        '<video id="qr-video" autoplay playsinline muted style="width:100%;height:100%;border-radius:16px;object-fit:cover;border:2px solid #e97415;background:#000"></video>' +
+        '<div style="pointer-events:none;position:absolute;inset:18%;border:2px dashed rgba(255,255,255,.55);border-radius:12px"></div>' +
+      '</div>' +
       '<canvas id="qr-canvas" style="display:none"></canvas>' +
-      '<button id="qr-close" type="button" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;padding:8px 24px;border-radius:999px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">إلغاء</button>';
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">' +
+        '<button id="qr-torch" type="button" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.14);color:#fff;padding:9px 18px;border-radius:999px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">الكشاف</button>' +
+        '<button id="qr-paste" type="button" style="border:1px solid rgba(233,116,21,.55);background:rgba(233,116,21,.2);color:#fff;padding:9px 18px;border-radius:999px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">لصق رابط الإيصال</button>' +
+        '<button id="qr-close" type="button" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;padding:9px 24px;border-radius:999px;font:inherit;font-size:13px;font-weight:700;cursor:pointer">إلغاء</button>' +
+      '</div>';
     document.body.appendChild(modal);
 
     var video = document.getElementById('qr-video');
     var canvas = document.getElementById('qr-canvas');
     video.srcObject = qrStream;
+    try { video.play().catch(function () {}); } catch (e) {}
+
     document.getElementById('qr-close').addEventListener('click', stopQrCamera);
+    var torchOn = false;
+    var torchBtn = document.getElementById('qr-torch');
+    if (torchBtn) {
+      torchBtn.addEventListener('click', async function () {
+        try {
+          var tr = qrStream && qrStream.getVideoTracks && qrStream.getVideoTracks()[0];
+          if (!tr) return;
+          torchOn = !torchOn;
+          await tr.applyConstraints({ advanced: [{ torch: torchOn }] });
+          torchBtn.textContent = torchOn ? 'إطفاء الكشاف' : 'الكشاف';
+        } catch (e) {
+          if (typeof showToast === 'function') showToast('الفلاش غير مدعوم على هذا المتصفح', 'error');
+        }
+      });
+    }
+    var pasteBtn = document.getElementById('qr-paste');
+    if (pasteBtn) {
+      pasteBtn.addEventListener('click', async function () {
+        var txt = '';
+        try {
+          if (navigator.clipboard && navigator.clipboard.readText) txt = await navigator.clipboard.readText();
+        } catch (e) {}
+        if (!txt) txt = window.prompt('الصق رابط التتبع أو رمز الإيصال:') || '';
+        if (txt && txt.trim()) { stopQrCamera(); onResult(txt.trim()); }
+      });
+    }
 
     qrDetector = null;
     if (typeof window.BarcodeDetector !== 'undefined') {
-      try { qrDetector = new window.BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { qrDetector = null; }
+      try {
+        var fmts = typeof window.BarcodeDetector.getSupportedFormats === 'function'
+          ? await window.BarcodeDetector.getSupportedFormats()
+          : ['qr_code'];
+        if (Array.isArray(fmts) && fmts.indexOf('qr_code') !== -1) {
+          qrDetector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        }
+      } catch (e) { qrDetector = null; }
     }
     var jsqr = null;
-    if (!qrDetector) {
-      try { jsqr = await loadJsQr(); } catch (e) {
+    try { jsqr = await loadJsQr(); } catch (e) {
+      if (!qrDetector) {
         stopQrCamera();
         if (typeof showToast === 'function') showToast('تعذّر تحميل قارئ الـ QR، تأكد من الإنترنت', 'error');
         return;
       }
     }
 
-    function done(raw) { stopQrCamera(); onResult(raw); }
-    function next() { qrAnim = requestAnimationFrame(scanFrame); }
+    var finished = false;
+    function done(raw) {
+      if (finished) return;
+      finished = true;
+      stopQrCamera();
+      onResult(raw);
+    }
+    function next() { if (!finished) qrAnim = requestAnimationFrame(scanFrame); }
+    var lastJsQr = 0;
     function scanFrame() {
-      if (!document.getElementById('qr-scan-modal')) return;
+      if (finished || !document.getElementById('qr-scan-modal')) return;
       if (!video || video.readyState < 2 || !video.videoWidth) { next(); return; }
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      var vw = video.videoWidth, vh = video.videoHeight;
+      var maxDim = 640;
+      var scale = Math.min(1, maxDim / Math.max(vw, vh));
+      canvas.width = Math.max(1, Math.round(vw * scale));
+      canvas.height = Math.max(1, Math.round(vh * scale));
       var ctx = canvas.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(video, 0, 0);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      function tryJsQr() {
+        if (!jsqr || finished) return false;
+        var now = Date.now();
+        if (now - lastJsQr < 120) return false;
+        lastJsQr = now;
+        try {
+          var img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          var c = jsqr(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+          if (c && c.data) { done(c.data); return true; }
+        } catch (e) {}
+        return false;
+      }
+
       if (qrDetector) {
         qrDetector.detect(canvas).then(function (codes) {
-          if (codes && codes.length > 0) done(codes[0].rawValue || ''); else next();
-        }).catch(next);
+          if (codes && codes.length > 0 && codes[0].rawValue) {
+            done(codes[0].rawValue);
+          } else {
+            if (!tryJsQr()) next();
+          }
+        }).catch(function () {
+          if (!tryJsQr()) next();
+        });
       } else {
-        var img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        var c = jsqr(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
-        if (c && c.data) done(c.data); else setTimeout(next, 80);
+        if (!tryJsQr()) setTimeout(next, 90);
       }
     }
 
