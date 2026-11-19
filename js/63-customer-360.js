@@ -243,11 +243,12 @@
     if (!txt || !phone || !window.sbClient) return;
 
     try {
-      await window.sbClient.from('client_360_notes').insert({
+      var noteRes = await window.sbClient.from('client_360_notes').insert({
         phone: phone,
         body: txt,
         created_by: window.__userName || 'موظف'
       });
+      if (noteRes.error) throw noteRes.error;
       if (typeof window.showToast === 'function') window.showToast('تمت إضافة الملاحظة بنجاح ✔', 'success');
       window.searchCustomer360();
     } catch (err) {

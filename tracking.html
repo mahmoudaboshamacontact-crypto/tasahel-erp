@@ -228,14 +228,13 @@ body{font-family:'IBM Plex Sans Arabic',Tahoma,'Segoe UI',sans-serif;background:
     }
 
     var liveBox = $('r-courier-live');
-    if (liveBox && d.transaction_id) {
+    if (liveBox) {
       liveBox.hidden = true;
-      rpc('public_courier_live_status', { p_tx: d.transaction_id }).then(function (lv) {
-        if (lv && lv.on_the_way) {
-          liveBox.textContent = 'مندوب تساهيل (' + (lv.courier_name || 'المندوب') + ') في مرحلة التسليم الآن — ' + (lv.eta_label || 'متوقع الوصول خلال ~10 دقائق');
-          liveBox.hidden = false;
-        }
-      }).catch(function () {});
+      var lv = d && d.live;
+      if (lv && lv.on_the_way) {
+        liveBox.textContent = 'مندوب تساهيل (' + (lv.courier_name || 'المندوب') + ') في مرحلة التسليم الآن — ' + (lv.eta_label || 'متوقع الوصول خلال ~10 دقائق');
+        liveBox.hidden = false;
+      }
     }
   }
 

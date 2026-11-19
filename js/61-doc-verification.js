@@ -451,11 +451,12 @@
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> حفظ...'; }
 
     try {
-      await window.sbClient.from('request_line_doc_verifications').delete().eq('line_id', lineId);
-      if (records.length) {
-        var ins = await window.sbClient.from('request_line_doc_verifications').insert(records);
-        if (ins.error) throw ins.error;
-      }
+      // حذف القديم وإدخال الجديد في transaction واحدة على السيرفر (لو فشل، القديم يفضل زي ما هو)
+      var saveRes = await window.sbClient.rpc('save_line_doc_verifications', {
+        p_line_id: Number(lineId),
+        p_records: records
+      });
+      if (saveRes.error) throw saveRes.error;
       delete cachedVerifications[lineId];
 
       if (typeof window.showToast === 'function') {

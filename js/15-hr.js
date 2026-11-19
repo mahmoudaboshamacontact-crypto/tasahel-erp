@@ -298,15 +298,12 @@
     if (!locksOK || lock) return;
     if (!confirm('هيتجمّد كشف مرتبات ' + mLabel(month) + ' ومحدش هيقدر يعدّل الحضور أو السلف والخصومات فيه لحد ما تفتح الشهر. متأكد؟')) return;
     const rows = people().map(p => { const r = livePayroll(p.id); return { month, user_id: p.id, data: { base: r.base, cm: r.cm, bonus: r.bonus, ded: r.ded, adv: r.adv, absDed: r.absDed, absent: r.st.absent, lateMin: r.st.lateMin, earlyMin: r.st.earlyMin, net: r.net } }; });
-    const a = await sbClient.from('hr_payroll_snapshots').upsert(rows, { onConflict: 'month,user_id' });
-    if (a.error) return showError('تعذّر تجميد الكشف', a.error);
-    run(sbClient.from('hr_month_locks').insert({ month, locked_by: currentUser.id }), 'تم قفل الشهر وتجميد الرواتب');
+    // تجميد الكشف + قفل الشهر في عملية واحدة على السيرفر (كله أو مفيش)
+    run(sbClient.rpc('hr_lock_month', { p_month: month, p_rows: rows.map(r => ({ user_id: r.user_id, data: r.data })) }), 'تم قفل الشهر وتجميد الرواتب');
   };
   hr.unlockMonth = async () => {
     if (!lock || !confirm('فتح الشهر هيخلّي الكشف يتحسب من جديد. متأكد؟')) return;
-    const d = await sbClient.from('hr_payroll_snapshots').delete().eq('month', month);
-    if (d.error) return showError('تعذّر فتح الشهر', d.error);
-    run(sbClient.from('hr_month_locks').delete().eq('month', month), 'تم فتح الشهر');
+    run(sbClient.rpc('hr_unlock_month', { p_month: month }), 'تم فتح الشهر');
   };
   hr.manualAtt = e => {
     e.preventDefault(); if (lockedMsg()) return; const f = e.target.elements, ts = t => t ? new Date(f.d.value + 'T' + t).toISOString() : null;
@@ -331,7 +328,7 @@
     const ok = await run(sbClient.from('hr_leaves').insert(row), mgr ? 'تم التسجيل' : 'تم إرسال الطلب للمدير');
     if (ok && !mgr) notifyManager('طلب ' + LK[kind] + ' جديد', nameOf(currentUser.id) + ' قدّم طلب ' + LK[kind] + ' بتاريخ ' + f.f.value);
   };
-  hr.decide = (id, s) => run(sbClient.from('hr_leaves').update({ status: s, decided_by: currentUser.id }).eq('id', id), s === 'approved' ? 'تمت الموافقة' : 'تم الرفض');
+  hr.decide = (id, s) => run(sbClient.rpc('hr_decide_leave', { p_id: String(id), p_status: s }), s === 'approved' ? 'تمت الموافقة' : 'تم الرفض');
   hr.delLv = id => { if (confirm('حذف الطلب ده؟')) run(sbClient.from('hr_leaves').delete().eq('id', id)); };
   hr.genEmail = id => {
     const x = leaves.find(v => String(v.id) === String(id)); if (!x) return;

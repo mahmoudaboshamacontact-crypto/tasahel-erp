@@ -173,19 +173,13 @@
     var currentStage = line ? (line.stage || line.status || 'فحص المستندات') : 'بداية';
 
     try {
-      // 1. تسجيل الحركة في جدول التاريخ
-      await window.sbClient.from('request_line_stage_history').insert({
-        line_id: Number(lineId),
-        stage_from: currentStage,
-        stage_to: nextStage,
-        changed_by: window.__userName || 'موظف',
-        notes: notes || null
+      // تحديث المرحلة + تسجيل الحركة في عملية واحدة على السيرفر (كله أو مفيش)
+      var rpcRes = await window.sbClient.rpc('workflow_advance_line', {
+        p_line_id: Number(lineId),
+        p_next_stage: nextStage,
+        p_notes: notes || null
       });
-
-      // 2. تحديث البند نفسه
-      await window.sbClient.from('request_lines').update({
-        stage: nextStage
-      }).eq('id', lineId);
+      if (rpcRes.error) throw rpcRes.error;
 
       if (line) line.stage = nextStage;
 
