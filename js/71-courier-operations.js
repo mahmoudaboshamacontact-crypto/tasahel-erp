@@ -41,6 +41,10 @@
     const root = $('tab-couriers');
     return !!(root && !root.classList.contains('hidden'));
   }
+  function isRadarVisible() {
+    if (isCouriersTabVisible()) return true;
+    return !!(radarBox && document.body.contains(radarBox) && radarBox.offsetParent !== null);
+  }
 
   function shell() {
     if (typeof window.__ensureCourierPortalCss === 'function') window.__ensureCourierPortalCss();
@@ -282,6 +286,25 @@
     return true;
   }
 
+  /* تركيب لوحة الرادار مباشرة داخل أي حاوية (مركز العمليات) بدون الاعتماد على تبديل التابات */
+  function mountInto(slot, force) {
+    if (!slot || !isStaff()) return false;
+    ensurePanelDom();
+    isMounting = true;
+    try {
+      if (panelBox.parentNode !== slot) { slot.innerHTML = ''; slot.appendChild(panelBox); }
+    } finally { isMounting = false; }
+    panelBox.classList.remove('hidden');
+    panelBox.style.display = 'block';
+    startRadarTimer();
+    const empty = !radarBox.innerHTML.trim();
+    loadV12OfficeRadar(radarBox, !!force || empty || state.radarFailed);
+    const now = Date.now();
+    if (force || !state.managerLoadedAt || state.managerFailed || (now - state.managerLoadedAt >= MIN_REFRESH_MS)) loadManagerPanel(!!force);
+    return true;
+  }
+  window.__copMountRadarInto = mountInto;
+
   function bindCouriersObserver(root) {
     if (!root || !window.MutationObserver || observedRoot === root) return;
     if (couriersObs) { try { couriersObs.disconnect(); } catch (e) {} }
@@ -357,7 +380,10 @@
     state.radarLoadedAt = now;
     try {
       if (typeof window.__ensureCourierPortalCss === 'function') window.__ensureCourierPortalCss();
-      const r = await sbClient.rpc('courier_v12_office_radar');
+      const r = await Promise.race([
+        sbClient.rpc('courier_v12_office_radar'),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('انتهت مهلة الاتصال بالسيرفر (20 ثانية). اتأكد من النت وجرّب تاني.')), 20000))
+      ]);
       if (!r || r.error || !r.data) throw new Error((r && r.error && r.error.message) || 'مفيش بيانات راجعة من السيرفر');
       const d = r.data;
       const couriers = Array.isArray(d.couriers) ? d.couriers : [];
@@ -480,8 +506,8 @@
     }
   }
   function radarTick() {
-    if (document.hidden || !isCouriersTabVisible() || state.radarFailed) {
-      if (!isCouriersTabVisible()) stopRadarTimer();
+    if (document.hidden || !isRadarVisible() || state.radarFailed) {
+      if (!isRadarVisible()) stopRadarTimer();
       return;
     }
     const el = radarBox || $('cop-radar');
