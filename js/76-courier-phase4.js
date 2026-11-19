@@ -64,7 +64,8 @@
     staffSnap: null,
     staffLoadedAt: 0,
     calcDue: 0,
-    calcPaid: 0
+    calcPaid: 0,
+    qrDeliver: null
   };
 
   try {
@@ -261,6 +262,7 @@
 
     bar.innerHTML =
       '<div class="cp4-bar">' +
+        '<button type="button" class="cp4-pill on" data-cp4-act="qr-deliver-scan"><i class="fa-solid fa-qrcode"></i><span>مسح إيصال وتسليم</span></button>' +
         '<button type="button" class="cp4-pill' + (dayLocked ? ' on' : ' warn') + '" data-cp4-act="open-cash-closing"><i class="fa-solid fa-wallet"></i><span>' + closeLabel + '</span></button>' +
         '<button type="button" class="cp4-pill" data-cp4-act="open-office-signoff"><i class="fa-solid fa-file-signature"></i><span>تسليم ورق للمكتب</span></button>' +
         '<button type="button" class="cp4-pill drv' + (st.driving ? ' on' : '') + '" data-cp4-act="toggle-driving"><i class="fa-solid fa-motorcycle"></i><span>' + drvTxt + '</span></button>' +
@@ -440,6 +442,206 @@
       if (b) b.innerHTML = st.torchOn ? 'إطفاء الكشاف' : 'تشغيل الكشاف';
     } catch (e) {
       toast('المتصفح على جهازك لا يدعم تشغيل الفلاش أثناء الكاميرا', true);
+    }
+  }
+
+  /* =====================================================================
+     قفل التسليم بمسح QR الإيصال (بدون خطوة توزيع مسبقة)
+     - يستخدم window.openQrScanner من js/55-browser-apis.js
+     - يستخرج الـ token بنفس regex في js/66-scan-open.js
+     - لا يقرأ request_lines من المتصفح: كل البيانات من رد الـ RPC فقط
+     ===================================================================== */
+  var QR_TOKEN_RX = /^[A-Za-z0-9_-]{16,128}$/;
+  var qrAudioCtx = null;
+
+  function qrDeliverBeep(ok) {
+    try {
+      qrAudioCtx = qrAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (qrAudioCtx.state === 'suspended') qrAudioCtx.resume();
+      var o = qrAudioCtx.createOscillator();
+      var g = qrAudioCtx.createGain();
+      o.type = 'square';
+      o.frequency.value = ok ? 1800 : 300;
+      g.gain.setValueAtTime(0.0001, qrAudioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.25, qrAudioCtx.currentTime + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, qrAudioCtx.currentTime + (ok ? 0.14 : 0.3));
+      o.connect(g);
+      g.connect(qrAudioCtx.destination);
+      o.start();
+      o.stop(qrAudioCtx.currentTime + (ok ? 0.15 : 0.32));
+    } catch (e) { /* الصوت مش أساسي */ }
+    try { if (navigator.vibrate) navigator.vibrate(ok ? 60 : [80, 60, 80]); } catch (e) { /* */ }
+  }
+
+  function parseReceiptToken(raw) {
+    raw = String(raw || '').trim();
+    if (!raw) return null;
+    try {
+      var u = new URL(raw);
+      var t = u.searchParams.get('token') || '';
+      if (QR_TOKEN_RX.test(t)) return t;
+    } catch (e) { /* مش رابط */ }
+    return null;
+  }
+
+  function setQrDeliverError(msg) {
+    var box = $('cp4-qrd-err');
+    if (box) {
+      if (msg) {
+        box.textContent = msg;
+        box.style.display = 'block';
+      } else {
+        box.textContent = '';
+        box.style.display = 'none';
+      }
+    }
+  }
+
+  function openQrDeliverConfirmModal(token, info) {
+    var txId = String((info && info.transaction_id) || '');
+    var codDue = Number((info && info.cod_due) || 0);
+    var linesCount = Number((info && info.lines_count) || 0);
+    st.qrDeliver = { token: token, transaction_id: txId, cod_due: codDue, lines_count: linesCount };
+
+    var codHtml = codDue > 0
+      ? '<div style="padding:10px 12px;border-radius:12px;background:rgba(245,158,11,.13);border:1px solid rgba(245,158,11,.4);margin-bottom:10px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px">' +
+            '<span>المبلغ المطلوب تحصيله:</span>' +
+            '<b style="font-size:16px;color:#f59e0b">' + money(codDue) + '</b>' +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--mu);margin-top:4px">للعرض فقط — يجب إدخال المبلغ المحصّل مطابقًا للمطلوب بالظبط</div>' +
+        '</div>' +
+        '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px">المبلغ المحصّل فعليًا (ج.م)</label>' +
+        '<input id="cp4-qrd-collected" type="number" inputmode="decimal" min="0" step="0.01" class="cp-field" placeholder="' + eh(String(codDue)) + '" style="margin-bottom:10px">'
+      : '<div style="padding:8px 12px;border-radius:12px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35);color:#10b981;font-size:12.5px;font-weight:700;margin-bottom:10px">خالص الدفع — لا يوجد مبلغ مطلوب تحصيله</div>';
+
+    openP4Dialog(
+      '<h3 style="margin:0 0 8px;font-size:16px"><i class="fa-solid fa-qrcode" style="color:#10b981;margin-left:6px"></i>تأكيد تسليم الإيصال</h3>' +
+      '<div style="padding:10px 12px;border-radius:12px;background:var(--fld);border:1px solid var(--bd);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">' +
+        '<div><div style="font-size:11px;color:var(--mu)">رقم المعاملة</div><b dir="ltr" style="font-size:15px">' + eh(txId) + '</b></div>' +
+        (linesCount > 0 ? '<span style="font-size:11.5px;color:var(--mu)">' + linesCount + ' بند</span>' : '') +
+      '</div>' +
+      codHtml +
+      '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px">اسم المستلم (إجباري — 3 حروف على الأقل)</label>' +
+      '<input id="cp4-qrd-recipient" type="text" maxlength="80" class="cp-field" placeholder="اكتب اسم الشخص الذي استلم المعاملة" autocomplete="off" style="margin-bottom:10px">' +
+      '<div id="cp4-qrd-err" style="display:none;padding:8px 10px;border-radius:10px;background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.4);color:#f87171;font-size:12px;font-weight:700;margin-bottom:10px"></div>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button type="button" id="cp4-qrd-submit" class="cp-btn cp-go" style="flex:1" data-cp4-act="qr-deliver-confirm">تأكيد التسليم</button>' +
+        '<button type="button" class="cp-btn" data-cp4-act="dialog-close">إلغاء</button>' +
+      '</div>'
+    );
+
+    var recInput = $('cp4-qrd-recipient');
+    if (recInput) setTimeout(function () { try { recInput.focus(); } catch (e) {} }, 60);
+  }
+
+  function startQrDeliverScan() {
+    if (!sbClient) return toast('لا يوجد اتصال بالسيرفر', true);
+    if (typeof window.openQrScanner !== 'function') {
+      return toast('قارئ الـ QR مش متاح على الجهاز ده', true);
+    }
+    qrDeliverBeep(true); /* فتح الصوت من ضغطة المندوب */
+    window.openQrScanner(async function (raw) {
+      var token = parseReceiptToken(raw);
+      if (!token) {
+        qrDeliverBeep(false);
+        toast('الإيصال غير صالح أو غير جاهز للتسليم', true);
+        return;
+      }
+      openP4Dialog('<div style="text-align:center;padding:18px;font-size:13px">جاري التحقق من الإيصال…</div>');
+      try {
+        var r = await sbClient.rpc('courier_p4_preview_deliver_by_token', { p_token: token });
+        if (r.error) {
+          closeP4Dialog();
+          qrDeliverBeep(false);
+          return toast((r.error && r.error.message) || 'تعذر التحقق من الإيصال', true);
+        }
+        var d = r.data || {};
+        if (!d.ok) {
+          closeP4Dialog();
+          qrDeliverBeep(false);
+          return toast(d.message || 'الإيصال غير صالح أو غير جاهز للتسليم', true);
+        }
+        qrDeliverBeep(true);
+        openQrDeliverConfirmModal(token, d);
+      } catch (e) {
+        closeP4Dialog();
+        qrDeliverBeep(false);
+        toast((e && e.message) || 'تعذر التحقق من الإيصال', true);
+      }
+    });
+  }
+
+  async function submitQrDeliver(btn) {
+    var cur = st.qrDeliver;
+    if (!cur || !cur.token) return;
+    setQrDeliverError('');
+
+    var recipient = (($('cp4-qrd-recipient') || {}).value || '').trim();
+    if (recipient.length < 3 || recipient.length > 80) {
+      qrDeliverBeep(false);
+      setQrDeliverError('اسم المستلم إجباري (3 حروف على الأقل وبحد أقصى 80 حرف)');
+      return;
+    }
+
+    var collectedParam = null;
+    if (cur.cod_due > 0) {
+      var colRaw = (($('cp4-qrd-collected') || {}).value || '').trim();
+      if (colRaw === '' || isNaN(Number(colRaw)) || Number(colRaw) < 0) {
+        qrDeliverBeep(false);
+        setQrDeliverError('أدخل المبلغ المحصّل (' + money(cur.cod_due) + ') قبل التأكيد');
+        return;
+      }
+      collectedParam = Number(colRaw);
+    }
+
+    var submitBtn = btn || $('cp4-qrd-submit');
+    if (submitBtn) {
+      if (submitBtn.disabled) return;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'جاري التسليم…';
+    }
+
+    try {
+      var r = await sbClient.rpc('courier_p4_deliver_by_token', {
+        p_token: cur.token,
+        p_recipient: recipient,
+        p_collected: collectedParam
+      });
+      if (r.error) {
+        qrDeliverBeep(false);
+        var errMsg = (r.error && r.error.message) || 'تعذر قفل التسليم';
+        setQrDeliverError(errMsg);
+        toast(errMsg, true);
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'تأكيد التسليم'; }
+        return;
+      }
+      var d = r.data || {};
+      if (!d.ok) {
+        qrDeliverBeep(false);
+        var failMsg = d.message || 'تعذر قفل التسليم';
+        if (d.code === 'collection_required' && d.cod_due != null && Number(d.cod_due) !== cur.cod_due) {
+          cur.cod_due = Number(d.cod_due);
+          openQrDeliverConfirmModal(cur.token, cur);
+          var recEl = $('cp4-qrd-recipient');
+          if (recEl) recEl.value = recipient;
+        }
+        setQrDeliverError(failMsg);
+        toast(failMsg, true);
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'تأكيد التسليم'; }
+        return;
+      }
+      qrDeliverBeep(true);
+      st.qrDeliver = null;
+      closeP4Dialog();
+      toast('تم تسليم المعاملة ' + (d.transaction_id || '') + ' باسم: ' + (d.recipient || recipient));
+      loadMyP4State(true);
+    } catch (e) {
+      qrDeliverBeep(false);
+      var msg = (e && e.message) || 'تعذر قفل التسليم';
+      setQrDeliverError(msg);
+      toast(msg, true);
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'تأكيد التسليم'; }
     }
   }
 
@@ -1189,6 +1391,12 @@
         return;
       case 'qr-torch':
         toggleQrFlashlight();
+        return;
+      case 'qr-deliver-scan':
+        startQrDeliverScan();
+        return;
+      case 'qr-deliver-confirm':
+        submitQrDeliver(actBtn);
         return;
       case 'open-zeroblame':
         openZeroBlameModal(tx);
