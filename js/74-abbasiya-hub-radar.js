@@ -86,7 +86,7 @@
       'html.dark .ah-row{background:#181412;border-color:rgba(255,255,255,.06)}',
       '.ah-chk-lbl{display:flex;align-items:flex-start;gap:9px;cursor:pointer;flex:1;min-width:200px}',
       '.ah-badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}',
-      '.ah-badge-org{background:rgba(200,162,82,.13);color:#2C3B32}',
+      '.ah-badge-org{background:rgba(200,162,82,.13);color:#036b29}',
       'html.dark .ah-badge-org{background:rgba(255,122,61,.16);color:#ff9d6c}',
       '.ah-badge-ok{background:rgba(16,185,129,.14);color:#059669}',
       'html.dark .ah-badge-ok{background:rgba(63,216,192,.14);color:#3fd8c0}',
@@ -98,7 +98,7 @@
       '.ah-input{border:1px solid var(--r-line,rgba(40,25,10,.14));background:var(--r-card,#ffffff);color:var(--r-text,#231B15);border-radius:10px;padding:7px 11px;font-size:12.5px;font-family:inherit;outline:none}',
       'html.dark .ah-input{background:#151210;color:#f4eee8;border-color:rgba(255,255,255,.1)}',
       '.ah-btn{border:1px solid transparent;border-radius:11px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}',
-      '.ah-btn-pri{background:var(--r-acc,#2C3B32);color:#ffffff}',
+      '.ah-btn-pri{background:var(--r-acc,#036b29);color:#ffffff}',
       'html.dark .ah-btn-pri{background:#ff7a3d;color:#1a0d05}',
       '.ah-btn-ok{background:#0d9488;color:#ffffff}',
       '.ah-btn-sec{background:var(--r-card,#ffffff);border-color:var(--r-line,rgba(40,25,10,.12));color:var(--r-text,#231B15)}',
@@ -106,9 +106,9 @@
       '.ah-btn:disabled{opacity:.5;cursor:not-allowed}',
       '.ah-eta-card{background:var(--r-card,#ffffff);border:1px solid var(--r-line,rgba(40,25,10,.1));border-radius:12px;padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px}',
       'html.dark .ah-eta-card{background:#181412;border-color:rgba(255,255,255,.07)}',
-      '.ah-eta-card.active{border-color:var(--r-acc,#2C3B32);background:rgba(200,162,82,.08)}',
+      '.ah-eta-card.active{border-color:var(--r-acc,#036b29);background:rgba(200,162,82,.08)}',
       'html.dark .ah-eta-card.active{border-color:#ff7a3d;background:rgba(255,122,61,.12)}',
-      '.ah-courier-hub{margin:10px 12px 0;padding:13px;border-radius:16px;border:1px solid rgba(16,185,129,.35);background:rgba(16,185,129,.08);color:var(--tx,#f8fafc);font-size:12.5px}',
+      '.ah-courier-hub{margin:10px 12px 0;padding:13px;border-radius:16px;border:1px solid rgba(3,107,41,.32);background:rgba(3,107,41,.08);color:var(--tx,#111C15);font-size:12.5px}',
       '@media (max-width:860px){.ah-grid{grid-template-columns:1fr}}'
     ].join('\n');
     document.head.appendChild(s);
