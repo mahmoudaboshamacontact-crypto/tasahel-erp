@@ -158,17 +158,24 @@
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', function (ev) {
-      if (ev.data && ev.data.type === 'TS_NOTIF_CLICK' && ev.data.tag === 'pickup_ticket') {
+      if (ev.data && ev.data.type === 'TS_NOTIF_CLICK' && (ev.data.tag === 'pickup_ticket' || ev.data.tag === 'pickup_ticket_cancel')) {
+        if (typeof window.tsRefreshCourierTickets === 'function') {
+          window.tsRefreshCourierTickets(ev.data.tag === 'pickup_ticket_cancel' ? 'cancelled' : 'active');
+        }
         focusCourierTickets();
       }
     });
   }
 
-  /* لو اتفتح الرابط من الإشعار مباشرة (?cp_tab=tickets) */
+  /* لو اتفتح الرابط من الإشعار مباشرة (?cp_tab=tickets أو ?cp_tab=tickets_cancelled) */
   function checkUrlOpenTickets() {
     try {
       var params = new URLSearchParams(window.location.search || '');
-      if (params.get('cp_tab') === 'tickets' && isCourier()) {
+      var cpTab = params.get('cp_tab');
+      if ((cpTab === 'tickets' || cpTab === 'tickets_cancelled') && isCourier()) {
+        if (typeof window.tsRefreshCourierTickets === 'function') {
+          window.tsRefreshCourierTickets(cpTab === 'tickets_cancelled' ? 'cancelled' : 'active');
+        }
         setTimeout(focusCourierTickets, 600);
       }
     } catch (e) { /* */ }
