@@ -290,93 +290,155 @@
     ensureBodyObserver();
     __pt73Rendering = true;
     try {
-    var old = $('pt73-courier-tickets');
-    var tab = currentCourierTab();
-    var showHere = !tab || tab === 'today' || tab === 'trips' || tab === 'home' || tab === 'account';
-    if (!showHere || !Array.isArray(st.courierTickets) || !st.courierTickets.length) {
-      if (old) old.remove();
-      return;
-    }
-    var box = old;
-    if (!box) {
-      box = document.createElement('section');
-      box.id = 'pt73-courier-tickets';
-      box.className = 'pt-courier-box';
-      box.style.margin = '0 0 12px 0';
-      var bar = $('cp4-toolkit-bar');
-      if (bar && bar.parentElement === body) {
-        if (bar.nextSibling) body.insertBefore(box, bar.nextSibling);
-        else body.appendChild(box);
-      } else {
-        body.insertBefore(box, body.firstChild);
+      var old = $('pt73-courier-tickets');
+      var tab = currentCourierTab();
+      var showHere = !tab || tab === 'today' || tab === 'trips' || tab === 'home' || tab === 'account';
+      if (!showHere || !Array.isArray(st.courierTickets) || !st.courierTickets.length) {
+        if (old) old.remove();
+        return;
       }
-    }
-    box.dataset.cp4Decorated = '';
-    var steps = [
-      ['on_the_way', 'في طريقي', '#f59e0b'],
-      ['call_attempt', 'كلمت العميل', '#38bdf8'],
-      ['waiting', 'وصلت للعميل', '#a855f7'],
-      ['near_office', 'تم استلام الأوراق', '#10b981']
-    ];
-    box.innerHTML =
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
-        '<b style="font-size:13.5px">تيكتات استلام مطلوبة منك (' + st.courierTickets.length + ')</b>' +
-        '<span style="font-size:11px;opacity:.8">اضغط الخطوة لتحديث المكتب</span>' +
-      '</div>' +
-      st.courierTickets.map(function (t) {
-        var itemsList = Array.isArray(t.items) && t.items.length
-          ? t.items
-          : [{ service_name: t.service_name, doc_type: '', qty: t.qty || 1 }];
-        var svcsHtml = itemsList.map(function (it) {
-          return eh(it.service_name) + (it.doc_type ? ' (' + eh(it.doc_type) + ')' : '') + ' × ' + Number(it.qty || 1);
-        }).join(' + ');
-        var waPh = cleanWaPhone(t.phone);
-        var mapQ = encodeURIComponent([t.zone, t.address].filter(Boolean).join(' '));
-        var curStep = '';
-        try { curStep = localStorage.getItem('pt73_step_' + t.id) || ''; } catch (e) {}
-        var isPaid = t.payment_status === 'paid' || Number(t.collect_amount || 0) <= 0;
+      var box = old;
+      if (!box) {
+        box = document.createElement('section');
+        box.id = 'pt73-courier-tickets';
+        box.className = 'pt-courier-box';
+        box.style.margin = '0 0 12px 0';
+        var bar = $('cp4-toolkit-bar');
+        if (bar && bar.parentElement === body) {
+          if (bar.nextSibling) body.insertBefore(box, bar.nextSibling);
+          else body.appendChild(box);
+        } else {
+          body.insertBefore(box, body.firstChild);
+        }
+      }
+      box.dataset.cp4Decorated = '';
+      var steps = [
+        ['accepted', 'تأكيد الاستلام'],
+        ['call_attempt', 'كلمت العميل'],
+        ['on_the_way', 'في طريقي'],
+        ['waiting', 'وصلت للعميل'],
+        ['near_office', 'تم استلام الأوراق']
+      ];
+      var rIds = getRouteIds();
+      var pins = getPinsMap();
+      var newCount = 0;
+      st.courierTickets.forEach(function (t) {
+        var cs = '';
+        try { cs = localStorage.getItem('pt73_step_' + t.id) || ''; } catch (e) {}
+        if (!cs) newCount++;
+      });
 
-        return '<div class="pt73-ticket-item" data-ticket-id="' + Number(t.id) + '" data-paid="' + (isPaid ? '1' : '0') + '" style="padding:10px 0;border-top:1px solid rgba(255,255,255,.12)">' +
-          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;flex-wrap:wrap">' +
-            '<div><b style="font-size:14px">' + eh(t.client_name) + '</b> · <span dir="ltr" style="font-size:12px;opacity:.85">' + eh(t.sd_request_id) + '</span></div>' +
-            '<span style="font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.18);color:#fbbf24;font-weight:700">الميعاد: ' + eh(t.slot_pref || 'غير محدد') + '</span>' +
-          '</div>' +
-          '<div style="font-size:12px;opacity:.92;margin-top:4px">' + svcsHtml + '</div>' +
-          ((t.zone || t.address) ? '<div style="font-size:12px;opacity:.88;margin-top:3px">العنوان: ' + eh([t.zone, t.address].filter(Boolean).join(' — ')) + '</div>' : '') +
-          paymentBadgeForCourier(t) +
-          renderCallChecksBadges(t.call_checks) +
-          (t.summary_comment
-            ? '<details style="margin-top:7px;padding:7px 9px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1)" open>' +
-                '<summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:#93c5fd">ملخص وسكريبت مكالمة الموظف مع العميل</summary>' +
-                '<div style="font-size:12px;margin-top:5px;line-height:1.6;white-space:pre-wrap">' + eh(t.summary_comment) + '</div>' +
-              '</details>'
-            : '') +
-          (t.staff_notes ? '<div style="font-size:11.5px;margin-top:5px;color:#fde68a">ملاحظة الموظف: ' + eh(t.staff_notes) + '</div>' : '') +
-          (function () {
-            var rIds = getRouteIds();
-            var rIdx = rIds.indexOf(String(t.sd_request_id));
-            var inRoute = rIdx !== -1;
-            var pins = getPinsMap();
-            var pin = pins[String(t.sd_request_id)];
-            var mapHref = (pin && pin.lat && pin.lng)
-              ? ('https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(pin.lat + ',' + pin.lng))
-              : (mapQ ? ('https://www.google.com/maps/search/?api=1&query=' + mapQ) : '');
-            return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' +
-              '<button type="button" data-pt73-route="' + eh(t.sd_request_id) + '" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:10px;cursor:pointer;font:inherit;font-size:12px;font-weight:700;background:' + (inRoute ? '#ff7a3d' : 'rgba(255,122,61,.15)') + ';border:1px solid rgba(255,122,61,.45);color:' + (inRoute ? '#1a0d05' : '#ff9a62') + '"><i class="fa-solid ' + (inRoute ? 'fa-route' : 'fa-plus') + '"></i><span>' + (inRoute ? ('في خط السير (#' + (rIdx + 1) + ')') : 'ضيف لخط السير') + '</span></button>' +
-              (t.phone ? '<a href="tel:' + eh(t.phone) + '" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:10px;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.4);color:#34d399;font-size:12px;font-weight:700;text-decoration:none"><i class="fa-solid fa-phone"></i><span>اتصال</span></a>' : '') +
-              (waPh ? '<a href="https://wa.me/' + eh(waPh) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:10px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#4ade80;font-size:12px;font-weight:700;text-decoration:none"><i class="fa-brands fa-whatsapp"></i><span>واتساب</span></a>' : '') +
-              (mapHref ? '<a href="' + mapHref + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:10px;background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.35);color:#38bdf8;font-size:12px;font-weight:700;text-decoration:none"><i class="fa-solid fa-location-dot"></i><span>' + (pin ? 'خريطة (GPS)' : 'الخريطة') + '</span></a>' : '') +
-              '<button type="button" data-pt73-pin="' + eh(t.sd_request_id) + '" style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:10px;cursor:pointer;font:inherit;font-size:12px;font-weight:700;background:rgba(148,163,184,.14);border:1px solid rgba(148,163,184,.3);color:inherit"><i class="fa-solid fa-map-pin"></i><span>' + (pin ? 'تحديث اللوكيشن' : 'حفظ اللوكيشن') + '</span></button>' +
-            '</div>';
-          })() +
-          '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:8px">' +
-            steps.map(function (sp) {
-              var active = curStep === sp[0];
-              return '<button type="button" data-pt73-step="' + sp[0] + '" data-pt73-tid="' + Number(t.id) + '" data-pt73-sd="' + eh(t.sd_request_id) + '" data-pt73-cl="' + eh(t.client_name) + '" data-pt73-lbl="' + sp[1] + '" style="padding:8px 8px;border-radius:10px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;border:1px solid ' + (active ? sp[2] : 'rgba(255,255,255,.16)') + ';background:' + (active ? sp[2] : 'rgba(255,255,255,.06)') + ';color:' + (active ? '#0b0a09' : 'inherit') + '">' + (active ? '✓ ' : '') + sp[1] + '</button>';
-            }).join('') +
-          '</div>' +
-        '</div>';
-      }).join('');
+      var secTitle = newCount > 0
+        ? ('جديد بانتظار قبولك (' + newCount + ')')
+        : ('تيكتات الاستلام (' + st.courierTickets.length + ')');
+
+      box.innerHTML =
+        '<div class="ts-sec-head"><span class="ts-sec-title">' + secTitle + '</span><span style="font-size:11px;color:var(--mu)">تيكتات الاستلام (' + st.courierTickets.length + ')</span></div>' +
+        st.courierTickets.map(function (t) {
+          var itemsList = Array.isArray(t.items) && t.items.length
+            ? t.items
+            : [{ service_name: t.service_name, doc_type: '', qty: t.qty || 1 }];
+          var svcsHtml = itemsList.map(function (it) {
+            return eh(it.service_name) + (it.doc_type ? ' (' + eh(it.doc_type) + ')' : '') + (Number(it.qty || 1) > 1 ? ' × ' + Number(it.qty) : '');
+          }).join(' + ');
+          var waPh = cleanWaPhone(t.phone);
+          var mapQ = encodeURIComponent([t.zone, t.address].filter(Boolean).join(' '));
+          var curStep = '';
+          try { curStep = localStorage.getItem('pt73_step_' + t.id) || ''; } catch (e) {}
+          var isPaid = t.payment_status === 'paid' || Number(t.collect_amount || 0) <= 0;
+          var rIdx = rIds.indexOf(String(t.sd_request_id));
+          var inRoute = rIdx !== -1;
+          var pin = pins[String(t.sd_request_id)];
+          var mapHref = (pin && pin.lat && pin.lng)
+            ? ('https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(pin.lat + ',' + pin.lng))
+            : (mapQ ? ('https://www.google.com/maps/search/?api=1&query=' + mapQ) : '');
+
+          /* 5-step progress matching mockup: 1 قبول -> 2 اتصال -> 3 خط السير -> 4 في الطريق -> 5 تم */
+          var doneUpTo = 0, curIdx = 1, statusTxt = 'جديد — بانتظار قبولك';
+          if (curStep === 'near_office') { doneUpTo = 5; curIdx = 6; statusTxt = 'تم استلام الأوراق'; }
+          else if (curStep === 'waiting') { doneUpTo = 4; curIdx = 5; statusTxt = 'وصلت للعميل'; }
+          else if (curStep === 'on_the_way') { doneUpTo = 3; curIdx = 4; statusTxt = 'في الطريق للعميل'; }
+          else if (inRoute) { doneUpTo = 3; curIdx = 4; statusTxt = 'في خط السير'; }
+          else if (curStep === 'call_attempt') { doneUpTo = 2; curIdx = 3; statusTxt = 'تم الاتصال بالعميل'; }
+          else if (curStep === 'accepted') { doneUpTo = 1; curIdx = 2; statusTxt = 'مقبول — اتصل بالعميل'; }
+
+          var stepperLabels = ['قبول', 'اتصال', 'خط السير', 'في الطريق', 'تم'];
+          var stepperHtml = '<div class="ts-stepper">' + stepperLabels.map(function (lbl, idx) {
+            var n = idx + 1;
+            var isDone = n <= doneUpTo;
+            var isCur = !isDone && n === curIdx;
+            var cls = isDone ? 'done' : (isCur ? 'cur' : '');
+            return '<div class="ts-step ' + cls + '"><div class="ts-dot">' + (isDone ? '✓' : n) + '</div><div class="ts-slbl">' + lbl + '</div></div>';
+          }).join('') + '</div>';
+
+          /* Primary 1-click progressive CTA button */
+          var commonAttrs = ' data-pt73-tid="' + Number(t.id) + '" data-pt73-sd="' + eh(t.sd_request_id) + '" data-pt73-cl="' + eh(t.client_name) + '"';
+          var ctaHtml = '';
+          if (!curStep) {
+            ctaHtml = '<button type="button" class="ts-cta gold" data-pt73-step="accepted" data-pt73-lbl="تأكيد استلام التيكت"' + commonAttrs + '><i class="fa-regular fa-circle-check"></i> تأكيد استلام التيكت</button>';
+          } else if (curStep === 'accepted') {
+            ctaHtml = '<button type="button" class="ts-cta" data-pt73-step="call_attempt" data-pt73-lbl="كلمت العميل"' + commonAttrs + '><i class="fa-solid fa-phone"></i> سجّل تم الاتصال</button>';
+          } else if (curStep === 'call_attempt' && !inRoute) {
+            ctaHtml = '<button type="button" class="ts-cta" data-pt73-route="' + eh(t.sd_request_id) + '"><i class="fa-solid fa-route"></i> أضف لخط السير</button>';
+          } else if (curStep !== 'on_the_way' && curStep !== 'waiting' && curStep !== 'near_office') {
+            ctaHtml = '<button type="button" class="ts-cta" data-pt73-step="on_the_way" data-pt73-lbl="في طريقي"' + commonAttrs + '><i class="fa-solid fa-location-arrow"></i> ابدأ التحرك الآن</button>';
+          } else if (curStep === 'on_the_way' || curStep === 'waiting') {
+            ctaHtml = '<button type="button" class="ts-cta done" data-pt73-step="near_office" data-pt73-lbl="تم استلام الأوراق"' + commonAttrs + '><i class="fa-solid fa-check"></i> تم استلام الأوراق</button>';
+          } else {
+            ctaHtml = '<button type="button" class="ts-cta done" disabled><i class="fa-solid fa-check-double"></i> تم الاستلام بنجاح</button>';
+          }
+
+          var cardCls = 'ts-card pt73-ticket-item' + (!curStep ? ' new-ticket' : (inRoute ? ' in-route' : ''));
+          var payChip = isPaid
+            ? '<span class="ts-mchip paid">خالص الدفع</span>'
+            : '<span class="ts-mchip cod">تحصيل ' + Number(t.collect_amount || 0).toLocaleString('en-US') + ' ج.م</span>';
+
+          var locTxt = (pin && pin.zone)
+            ? pin.zone
+            : [t.zone, t.address].filter(Boolean).join(' — ');
+
+          return '<div class="' + cardCls + '" data-ticket-id="' + Number(t.id) + '" data-paid="' + (isPaid ? '1' : '0') + '">' +
+            '<div class="ts-tc-top">' +
+              '<div style="min-width:0;flex:1">' +
+                '<div class="ts-tc-client">' + eh(t.client_name) + '</div>' +
+                '<div class="ts-tc-id"><span dir="ltr">' + eh(t.sd_request_id) + '</span><span>· ' + eh(t.slot_pref || 'اليوم') + '</span></div>' +
+              '</div>' +
+              '<span class="ts-pill ' + (!curStep ? 'new' : 'pickup') + '">' + (!curStep ? 'جديد' : 'استلام') + '</span>' +
+            '</div>' +
+            '<div class="ts-tc-svc">' + svcsHtml + '</div>' +
+            (locTxt ? '<div class="ts-tc-loc"><i class="fa-solid fa-location-dot" style="font-size:12px"></i><span>' + eh(locTxt) + '</span></div>' : '') +
+            '<div class="ts-meta-row">' +
+              payChip +
+              (inRoute ? '<span class="ts-mchip route">خط السير #' + (rIdx + 1) + '</span>' : '') +
+              '<span class="ts-mchip">' + statusTxt + '</span>' +
+            '</div>' +
+            stepperHtml +
+            '<div class="ts-actions">' +
+              ctaHtml +
+              (t.phone ? '<a class="ts-cbtn call" href="tel:' + eh(t.phone) + '" aria-label="اتصال"><i class="fa-solid fa-phone"></i></a>' : '') +
+              (mapHref ? '<a class="ts-cbtn" href="' + mapHref + '" target="_blank" rel="noopener" aria-label="الخريطة"><i class="fa-solid fa-location-arrow"></i></a>' : '') +
+            '</div>' +
+            '<details class="ts-more">' +
+              '<summary><span>ملخص المكالمة وأدوات إضافية (واتساب · GPS · الخطوات)</span><i class="fa-solid fa-chevron-down" style="font-size:10px"></i></summary>' +
+              '<div class="ts-more-body">' +
+                renderCallChecksBadges(t.call_checks) +
+                (t.summary_comment ? '<div style="font-size:11.5px;line-height:1.6;white-space:pre-wrap;padding:8px 10px;border-radius:10px;background:var(--fld)">' + eh(t.summary_comment) + '</div>' : '') +
+                (t.staff_notes ? '<div style="font-size:11.5px;color:var(--wn);font-weight:700">ملاحظة الموظف: ' + eh(t.staff_notes) + '</div>' : '') +
+                '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+                  '<button type="button" class="cp-a cp-sm" data-pt73-route="' + eh(t.sd_request_id) + '">' + (inRoute ? 'إزالة من خط السير' : '+ ضيف لخط السير') + '</button>' +
+                  (waPh ? '<a class="cp-a cp-sm wa" href="https://wa.me/' + eh(waPh) + '" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
+                  '<button type="button" class="cp-a cp-sm" data-pt73-pin="' + eh(t.sd_request_id) + '"><i class="fa-solid fa-map-pin"></i> ' + (pin ? 'تحديث اللوكيشن' : 'حفظ اللوكيشن') + '</button>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px">' +
+                  steps.map(function (sp) {
+                    var active = curStep === sp[0];
+                    return '<button type="button" class="cp-a cp-sm' + (active ? ' pri' : '') + '" data-pt73-step="' + sp[0] + '" data-pt73-lbl="' + sp[1] + '"' + commonAttrs + '>' + (active ? '✓ ' : '') + sp[1] + '</button>';
+                  }).join('') +
+                '</div>' +
+              '</div>' +
+            '</details>' +
+          '</div>';
+        }).join('');
     } finally { __pt73Rendering = false; }
   }
 
@@ -431,10 +493,19 @@
       pinBtn.disabled = true;
       navigator.geolocation.getCurrentPosition(function (pos) {
         var pins = getPinsMap();
-        pins[pTx] = { lat: Number(pos.coords.latitude.toFixed(6)), lng: Number(pos.coords.longitude.toFixed(6)), at: Date.now() };
+        var la = Number(pos.coords.latitude.toFixed(6)), ln = Number(pos.coords.longitude.toFixed(6));
+        pins[pTx] = { lat: la, lng: ln, at: Date.now() };
         try { localStorage.setItem('ts_cp_pins', JSON.stringify(pins)); } catch (e2) {}
         renderCourierTicketsIntoBody();
         if (typeof showToast === 'function') showToast('تم حفظ لوكيشن العميل على التيكت ✓', 'success');
+        if (window.TasahelGeo && window.TasahelGeo.reverseGeocode) {
+          window.TasahelGeo.reverseGeocode(la, ln).then(function (street) {
+            if (street) {
+              var pm = getPinsMap();
+              if (pm[pTx]) { pm[pTx].zone = street; try { localStorage.setItem('ts_cp_pins', JSON.stringify(pm)); } catch (e3) {} renderCourierTicketsIntoBody(); }
+            }
+          }).catch(function () {});
+        }
       }, function () {
         pinBtn.disabled = false;
         if (typeof showToast === 'function') showToast('تعذر تحديد الموقع — تأكد من تفعيل الـ GPS', 'error');
@@ -462,7 +533,7 @@
             note: 'تيكت استلام ' + sdId + ' (' + clName + '): ' + lbl
           }
         });
-        if (res.error) throw res.error;
+        if (res.error && evType !== 'accepted') throw res.error;
         try { localStorage.setItem('pt73_step_' + tid, evType); } catch (e2) {}
         renderCourierTicketsIntoBody();
         if (typeof showToast === 'function') showToast('تم تحديث حالة الاستلام: ' + lbl, 'success');

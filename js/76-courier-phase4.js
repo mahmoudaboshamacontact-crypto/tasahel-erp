@@ -341,7 +341,15 @@
         '<button type="button" class="cp4-act-btn" data-cp4-act="open-invoice" data-tx="' + eh(tx) + '">فاتورة وإيصال</button>' +
         '<button type="button" class="cp4-act-btn wn" data-cp4-act="open-zeroblame" data-tx="' + eh(tx) + '">العميل غير متاح</button>' +
         '<button type="button" class="cp4-act-btn" data-cp4-act="open-transfer" data-tx="' + eh(tx) + '" data-kind="tx">تحويل لزميل</button>';
-      card.appendChild(strip);
+      if (card.classList.contains('cpn-hero') || card.classList.contains('ts-card')) {
+        var det = document.createElement('details');
+        det.className = 'ts-more';
+        det.innerHTML = '<summary><span>أدوات المعاملة (تحصيل · فاتورة · غير متاح · تحويل)</span><i class="fa-solid fa-chevron-down" style="font-size:10px"></i></summary>';
+        det.appendChild(strip);
+        card.appendChild(det);
+      } else {
+        card.appendChild(strip);
+      }
     });
 
     var ptBox = $('pt73-courier-tickets');
@@ -370,7 +378,7 @@
           '<button type="button" class="cp4-act-btn" data-cp4-act="open-invoice" data-tx="' + eh(sdId) + '">فاتورة وإيصال</button>' +
           '<button type="button" class="cp4-act-btn wn" data-cp4-act="open-zeroblame" data-tx="' + eh(sdId) + '">العميل غير متاح</button>' +
           '<button type="button" class="cp4-act-btn" data-cp4-act="open-transfer" data-tx="' + eh(sdId) + '" data-kind="ticket">تحويل لزميل</button>';
-        row.appendChild(act);
+        var moreHost = row.querySelector('.ts-more-body'); if (moreHost) moreHost.appendChild(act); else row.appendChild(act);
       });
     }
   }
