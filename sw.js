@@ -43,12 +43,12 @@ self.addEventListener('fetch', e => {
   if (CDN.indexOf(url.hostname) !== -1) { e.respondWith(staleWhileRevalidate(req)); return; }
 });
 
-// إشعارات الدفع (الجزء ي + المرحلة 3 و4): عنوان ونص قصير بأيقونة السيستم، والضغط يفتح التطبيق/تاب التيكتات.
+// إشعارات الدفع (الجزء ي + المراحل 3 و4 و5): عنوان ونص قصير بأيقونة السيستم، والضغط يفتح التطبيق/تاب التيكتات.
 self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) { /* نص عادي */ }
   const tag = String(d.tag || 'notif');
-  const targetUrl = tag === 'pickup_ticket'
+  const targetUrl = (tag === 'pickup_ticket' || tag === 'pickup_mission')
     ? './?cp_tab=tickets'
     : (tag === 'pickup_ticket_cancel' ? './?cp_tab=tickets_cancelled' : './');
   e.waitUntil(self.registration.showNotification(String(d.title || 'تساهيل').slice(0, 80), {
