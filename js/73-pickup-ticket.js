@@ -43,6 +43,8 @@
     rtStatus: 'idle',
     detailTicketId: null,
     detailContacts: [],
+    detailPapers: [],
+    detailPapersLoading: false,
     mgrTab: 'active',
     courierTab: 'active',
     cancelModalId: null,
@@ -64,6 +66,57 @@
     wrong_number: 'رقم غلط',
     postponed: 'طلب تأجيل'
   };
+  var PAPERS_HOLDER_LABELS = {
+    office: 'المكتب',
+    courier: 'المندوب',
+    customer: 'العميل'
+  };
+  var PAPERS_COURIER_LABELS = {
+    office: 'المكتب',
+    courier: 'عندك',
+    customer: 'العميل'
+  };
+  function papersHolderBadgeClass(h) {
+    if (h === 'courier') return 'pt-badge-papers-courier';
+    if (h === 'customer') return 'pt-badge-papers-customer';
+    return 'pt-badge-papers-office';
+  }
+  function renderCourierPapersBlock(t) {
+    var holder = t.papers_holder || 'office';
+    var pendId = t.papers_pending_event_id ? Number(t.papers_pending_event_id) : null;
+    var pendTo = t.papers_pending_to || '';
+    var isCancelled = t.status === 'cancelled';
+    var holderLbl = PAPERS_COURIER_LABELS[holder] || 'المكتب';
+    var warnHtml = (isCancelled && holder === 'courier')
+      ? '<div class="pt-papers-warn"><i class="fa-solid fa-triangle-exclamation"></i> تنبيه: التيكت ملغي والأوراق ما زالت معك — اضغط «إرجاع الورق للموظف» لتسليمها.</div>'
+      : '';
+    var pendHtml = '';
+    if (pendId && pendTo === 'courier') {
+      pendHtml = '<div class="pt-papers-pending">طلب تسليم أوراق من المكتب بانتظار تأكيدك</div>';
+    } else if (pendId && pendTo === 'office') {
+      pendHtml = '<div class="pt-papers-pending">طلب إرجاع الأوراق للمكتب معلّق بانتظار تأكيد الموظف</div>';
+    }
+    var btns = '';
+    if (pendId && pendTo === 'courier') {
+      btns += '<button type="button" class="pt-btn pt-btn-papers-pri" data-pt73-papers-confirm="' + pendId + '" data-pt73-tid="' + Number(t.id) + '"><i class="fa-solid fa-file-signature"></i> استلمت الأوراق</button>';
+    } else if (holder === 'courier' && !pendId) {
+      if (!isCancelled) {
+        btns += '<button type="button" class="pt-btn pt-btn-papers-pri" data-pt73-papers-customer="' + Number(t.id) + '"><i class="fa-solid fa-handshake"></i> تسليم الأوراق للعميل</button>';
+      }
+      btns += '<button type="button" class="pt-btn pt-btn-papers-warn" data-pt73-papers-return="' + Number(t.id) + '"><i class="fa-solid fa-rotate-left"></i> إرجاع الورق للموظف</button>';
+    } else if (pendId && pendTo === 'office') {
+      btns += '<button type="button" class="pt-btn pt-btn-sec" disabled>بانتظار تأكيد الموظف للاستلام</button>';
+    }
+    return '<div class="pt-papers-box">' +
+      '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px">' +
+        '<span style="font-size:11.5px;font-weight:800">عهدة الأوراق</span>' +
+        '<span class="pt-badge ' + papersHolderBadgeClass(holder) + '">الأوراق عند: ' + eh(holderLbl) + '</span>' +
+      '</div>' +
+      warnHtml +
+      pendHtml +
+      (btns ? '<div style="display:flex;flex-wrap:wrap;gap:6px">' + btns + '</div>' : '') +
+    '</div>';
+  }
   function fmtStepTime(iso) {
     if (!iso) return '';
     try {
@@ -175,6 +228,20 @@
       'html.dark .pt-mission-card{background:var(--card,#141716);color:var(--tx,#f8fafc)}',
       '.pt-mission-strip{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:9px;background:rgba(37,99,235,.14);color:#2563eb;font-size:12px;font-weight:800}',
       '.pt-btn-mission{background:#2563eb;color:#ffffff}',
+      '.pt-badge-papers-office{background:rgba(100,116,139,.16);color:#475569;border:1px solid rgba(100,116,139,.3)}',
+      'html.dark .pt-badge-papers-office{color:#cbd5e1}',
+      '.pt-badge-papers-courier{background:rgba(217,119,6,.16);color:#b45309;border:1px solid rgba(217,119,6,.35)}',
+      'html.dark .pt-badge-papers-courier{color:#fbbf24}',
+      '.pt-badge-papers-customer{background:rgba(37,99,235,.15);color:#2563eb;border:1px solid rgba(37,99,235,.32)}',
+      'html.dark .pt-badge-papers-customer{color:#60a5fa}',
+      '.pt-papers-box{border:1px solid rgba(100,116,139,.28);border-radius:12px;padding:10px;background:rgba(148,163,184,.06);display:flex;flex-direction:column;gap:8px}',
+      '.pt-papers-warn{padding:7px 10px;border-radius:9px;background:rgba(217,119,6,.14);color:#b45309;border:1px solid rgba(217,119,6,.32);font-size:12px;font-weight:700}',
+      'html.dark .pt-papers-warn{color:#fbbf24}',
+      '.pt-papers-pending{padding:6px 10px;border-radius:9px;background:rgba(124,58,237,.13);color:#6d28d9;border:1px solid rgba(124,58,237,.3);font-size:11.5px;font-weight:700}',
+      'html.dark .pt-papers-pending{color:#c4b5fd}',
+      '.pt-btn-papers-pri{background:#2563eb;color:#ffffff}',
+      '.pt-btn-papers-warn{background:#b45309;color:#ffffff}',
+      '.pt-btn-papers-slate{background:#334155;color:#ffffff}',
       '.pt-modal-backdrop{position:fixed;inset:0;z-index:100060;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}',
       '.pt-modal-box{width:100%;max-width:440px;border-radius:16px;padding:18px;background:var(--r-card,#fff);color:var(--r-tx,#0f172a);border:1px solid var(--r-bd,rgba(148,163,184,.25));display:flex;flex-direction:column;gap:12px}',
       'html.dark .pt-modal-box{background:#111827;color:#f8fafc}',
@@ -240,10 +307,10 @@
 
   async function loadTickets() {
     if (!sbClient) return;
-    var colsNew = 'id,sd_request_id,sd_service_id,client_name,phone,address,zone,zone_key,service_name,qty,unit_price,total,executor,slot_pref,courier_id,call_checks,summary_comment,status,courier_step,courier_step_at,cancel_reason,cancelled_at,cancelled_by,courier_ack_at,converted_at,converted_by,mission_id,created_by,created_at,items,payment_status,collect_amount,staff_notes,converted_tx_id';
+    var colsNew = 'id,sd_request_id,sd_service_id,client_name,phone,address,zone,zone_key,service_name,qty,unit_price,total,executor,slot_pref,courier_id,call_checks,summary_comment,status,courier_step,courier_step_at,cancel_reason,cancelled_at,cancelled_by,courier_ack_at,converted_at,converted_by,mission_id,papers_holder,papers_pending_event_id,created_by,created_at,items,payment_status,collect_amount,staff_notes,converted_tx_id';
     var colsOld = 'id,sd_request_id,sd_service_id,client_name,phone,address,zone,service_name,qty,unit_price,total,executor,slot_pref,courier_id,call_checks,summary_comment,status,created_by,created_at';
     var r = await sbClient.from('pickup_tickets').select(colsNew).order('created_at', { ascending: false }).limit(80);
-    if (r.error && /42703|mission_id|converted_at|cancel_reason|cancelled_at|courier_ack_at|courier_step|zone_key|items|payment_status|staff_notes/i.test((r.error.message || '') + ' ' + (r.error.code || ''))) {
+    if (r.error && /42703|papers_holder|papers_pending_event_id|mission_id|converted_at|cancel_reason|cancelled_at|courier_ack_at|courier_step|zone_key|items|payment_status|staff_notes/i.test((r.error.message || '') + ' ' + (r.error.code || ''))) {
       r = await sbClient.from('pickup_tickets').select(colsOld).order('created_at', { ascending: false }).limit(80);
     }
     if (r.error) throw r.error;
@@ -458,6 +525,7 @@
             (t.phone ? '<a class="pt-btn pt-btn-pri" href="tel:' + eh(t.phone) + '" data-pt73-contact="call" data-pt73-tid="' + Number(t.id) + '"><i class="fa-solid fa-phone"></i> اتصال</a>' : '') +
             (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" data-pt73-contact="whatsapp" data-pt73-tid="' + Number(t.id) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
           '</div>' +
+          renderCourierPapersBlock(t) +
         '</div>';
       }).join('');
 
@@ -487,6 +555,7 @@
                 (t.phone ? '<a class="pt-btn pt-btn-pri" href="tel:' + eh(t.phone) + '" data-pt73-contact="call" data-pt73-tid="' + Number(t.id) + '"><i class="fa-solid fa-phone"></i> اتصال بالعميل</a>' : '') +
                 (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" data-pt73-contact="whatsapp" data-pt73-tid="' + Number(t.id) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
               '</div>' +
+              renderCourierPapersBlock(t) +
             '</div>';
           }).join('')
         : '<div class="pt-sub" style="text-align:center;padding:10px 0">مفيش تيكتات ملغية خلال آخر 7 أيام.</div>';
@@ -579,6 +648,7 @@
               (t.phone ? '<a class="ts-cbtn call" href="tel:' + eh(t.phone) + '" data-pt73-contact="call" data-pt73-tid="' + Number(t.id) + '" aria-label="اتصال"><i class="fa-solid fa-phone"></i></a>' : '') +
               (mapHref ? '<a class="ts-cbtn" href="' + mapHref + '" target="_blank" rel="noopener" aria-label="الخريطة"><i class="fa-solid fa-location-arrow"></i></a>' : '') +
             '</div>' +
+            renderCourierPapersBlock(t) +
             '<details class="ts-more">' +
               '<summary><span>ملخص المكالمة وأدوات إضافية (واتساب · GPS · الخطوات)</span><i class="fa-solid fa-chevron-down" style="font-size:10px"></i></summary>' +
               '<div class="ts-more-body">' +
@@ -677,6 +747,68 @@
     if (ctabBtn) {
       st.courierTab = ctabBtn.getAttribute('data-pt73-ctab') === 'cancelled' ? 'cancelled' : 'active';
       renderCourierTicketsIntoBody();
+      return;
+    }
+    var pConfBtn = t.closest('[data-pt73-papers-confirm]');
+    if (pConfBtn) {
+      var pEvId = Number(pConfBtn.getAttribute('data-pt73-papers-confirm'));
+      var pTid = Number(pConfBtn.getAttribute('data-pt73-tid'));
+      if (!pEvId) return;
+      pConfBtn.disabled = true;
+      try {
+        if (!sbClient) throw new Error('لا يوجد اتصال بالسيرفر — حاول تاني');
+        var pcRes = await sbClient.rpc('papers_confirm_handover', { p_event_id: pEvId });
+        if (pcRes.error) throw pcRes.error;
+        if (!pcRes.data || !pcRes.data.ok) throw new Error('تعذر تأكيد استلام الأوراق — حاول تاني');
+        var pItem = st.courierTickets.find(function (x) { return Number(x.id) === pTid; });
+        if (pItem) {
+          pItem.papers_holder = pcRes.data.papers_holder || 'courier';
+          pItem.papers_pending_event_id = null;
+          pItem.papers_pending_to = null;
+          pItem.papers_pending_from = null;
+        }
+        renderCourierTicketsIntoBody();
+        toast('تم تأكيد استلام الأوراق بنجاح', 'success');
+      } catch (err) {
+        pConfBtn.disabled = false;
+        toast((err && err.message) || 'تعذر تأكيد استلام الأوراق', 'error');
+      }
+      return;
+    }
+    var pRetBtn = t.closest('[data-pt73-papers-return]');
+    if (pRetBtn) {
+      var rTid = Number(pRetBtn.getAttribute('data-pt73-papers-return'));
+      if (!rTid) return;
+      pRetBtn.disabled = true;
+      try {
+        if (!sbClient) throw new Error('لا يوجد اتصال بالسيرفر — حاول تاني');
+        var prRes = await sbClient.rpc('papers_request_handover', {
+          p_ticket_id: rTid,
+          p_to_holder: 'office',
+          p_recipient_name: null,
+          p_note: null
+        });
+        if (prRes.error) throw prRes.error;
+        if (!prRes.data || !prRes.data.ok) throw new Error('تعذر تسجيل طلب إرجاع الأوراق');
+        var rItem = st.courierTickets.find(function (x) { return Number(x.id) === rTid; });
+        if (rItem) {
+          rItem.papers_pending_event_id = prRes.data.event_id;
+          rItem.papers_pending_to = 'office';
+          rItem.papers_pending_from = 'courier';
+        }
+        renderCourierTicketsIntoBody();
+        toast('تم إرسال طلب إرجاع الأوراق للموظف — بانتظار تأكيده', 'success');
+      } catch (err) {
+        pRetBtn.disabled = false;
+        toast((err && err.message) || 'تعذر إرسال طلب إرجاع الأوراق', 'error');
+      }
+      return;
+    }
+    var pCustBtn = t.closest('[data-pt73-papers-customer]');
+    if (pCustBtn) {
+      var cTid = Number(pCustBtn.getAttribute('data-pt73-papers-customer'));
+      var cItem2 = st.courierTickets.find(function (x) { return Number(x.id) === cTid; });
+      if (cItem2) openCourierDeliverCustomerModal(cItem2);
       return;
     }
     var confMissionBtn = t.closest('[data-pt73-confirm-mission]');
@@ -996,8 +1128,8 @@
   async function directConvertTicket(ticket, payMethodOverride) {
     if (!sbClient) return false;
     if (st.converting) return false;
-    if (!isAllowedStaff()) {
-      toast('التحويل لمهمة استلام متاح للموظفين', 'error');
+    if (!isManager()) {
+      toast('التحويل لمهمة استلام متاح للمدير فقط', 'error');
       return false;
     }
     if (!ticket.courier_id) {
@@ -1174,6 +1306,9 @@
             '<span class="pt-badge pt-badge-mut">المندوب: ' + eh(courierNameById(t.courier_id)) + '</span>' +
             (t.converted_tx_id ? '<span class="pt-badge pt-badge-org" dir="ltr">' + eh(t.converted_tx_id) + '</span>' : '') +
             (t.mission_id ? '<span class="pt-badge pt-badge-pur" dir="ltr">مهمة #' + Number(t.mission_id) + '</span>' : '') +
+            '<span class="pt-badge ' + papersHolderBadgeClass(t.papers_holder || 'office') + '">الأوراق: ' + eh(PAPERS_HOLDER_LABELS[t.papers_holder || 'office'] || 'المكتب') + '</span>' +
+            (t.papers_pending_event_id ? '<span class="pt-badge pt-badge-pur">تسليم أوراق معلّق</span>' : '') +
+            (t.status === 'cancelled' && (t.papers_holder || 'office') === 'courier' ? '<span class="pt-badge pt-badge-warn">تنبيه: الأوراق مع المندوب</span>' : '') +
           '</div>' +
           '<div class="pt-sub" style="margin-top:5px">' + svcsHtml + ' · الإجمالي: <b>' + eh(money(t.total)) + '</b> · الميعاد: ' + eh(t.slot_pref) + (t.zone ? ' · ' + eh(t.zone) : '') + '</div>' +
           (t.status === 'cancelled'
@@ -1189,7 +1324,7 @@
           (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
           '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="detail" data-id="' + Number(t.id) + '">التفاصيل والتواصل</button>' +
           '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="copy" data-id="' + Number(t.id) + '">نسخ الكومنت</button>' +
-          (canAction && isAllowedStaff()
+          (canAction && isManager()
             ? (t.courier_id
               ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-act="convert" data-id="' + Number(t.id) + '">تحويل لمهمة استلام</button>'
               : '<button type="button" class="pt-btn pt-btn-sec" disabled title="لازم تعيّن مندوب قبل التحويل">تحويل لمهمة استلام</button><span class="pt-sub" style="align-self:center">عيّن مندوب أولاً للتحويل</span>')
@@ -1321,6 +1456,7 @@
     }
     renderTicketsList();
     if (st.detailTicketId && row && Number(row.id) === Number(st.detailTicketId)) {
+      loadDetailPapers(st.detailTicketId);
       renderTicketDetailPanel();
     }
   }
@@ -1362,6 +1498,19 @@
     st.rtDetailChannel = null;
   }
 
+  async function loadDetailPapers(ticketId) {
+    if (!sbClient || !ticketId) return;
+    st.detailPapersLoading = true;
+    try {
+      var pr = await sbClient.rpc('papers_history', { p_ticket_id: Number(ticketId) });
+      if (!pr.error && Array.isArray(pr.data)) st.detailPapers = pr.data;
+    } catch (e) { /* */ }
+    st.detailPapersLoading = false;
+    if (st.detailTicketId && Number(st.detailTicketId) === Number(ticketId)) {
+      renderTicketDetailPanel();
+    }
+  }
+
   function renderTicketDetailPanel() {
     var panel = $('pt-detail-panel');
     if (!panel) return;
@@ -1392,6 +1541,63 @@
         }).join('')
       : '<div class="pt-sub">لم يُسجّل أي تواصل من المندوب على التيكت ده حتى الآن.</div>';
 
+    var pHolder = t.papers_holder || 'office';
+    var pPendingId = t.papers_pending_event_id ? Number(t.papers_pending_event_id) : null;
+    var pEvents = Array.isArray(st.detailPapers) ? st.detailPapers : [];
+    var pendingEv = pEvents.find(function (ev) { return ev.status === 'pending'; }) || null;
+    var canReqToCourier = (pHolder === 'office' && !pPendingId && t.status !== 'cancelled' && !!t.courier_id);
+    var reqCourierReason = '';
+    if (!canReqToCourier) {
+      if (t.status === 'cancelled') reqCourierReason = 'التيكت ملغي';
+      else if (!t.courier_id) reqCourierReason = 'عيّن مندوب أولاً';
+      else if (pPendingId) reqCourierReason = 'يوجد طلب تسليم معلّق بالفعل';
+      else reqCourierReason = 'الأوراق ليست بالمكتب حالياً';
+    }
+    var canConfirmOffice = !!(pendingEv && pendingEv.to_holder === 'office');
+    var confirmOfficeReason = canConfirmOffice ? '' : 'بانتظار طلب المندوب لإرجاع الأوراق';
+
+    var pHistHtml = pEvents.length
+      ? pEvents.map(function (ev) {
+          var fromL = PAPERS_HOLDER_LABELS[ev.from_holder] || ev.from_holder;
+          var toL = PAPERS_HOLDER_LABELS[ev.to_holder] || ev.to_holder;
+          var stLbl = ev.status === 'confirmed' ? 'مؤكّد' : (ev.status === 'pending' ? 'معلّق' : 'ملغي');
+          var stCls = ev.status === 'pending' ? 'pt-badge-pur' : 'pt-badge-mut';
+          var extra = [];
+          if (ev.recipient_name) extra.push('المستلم: ' + ev.recipient_name);
+          if (ev.requested_by_name) extra.push('الطلب بواسطة: ' + ev.requested_by_name);
+          if (ev.confirmed_by_name && ev.status === 'confirmed') extra.push('التأكيد: ' + ev.confirmed_by_name);
+          if (ev.note) extra.push('ملاحظة: ' + ev.note);
+          return '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;padding:7px 10px;border-radius:9px;background:var(--r-bg,rgba(148,163,184,.08));font-size:12px">' +
+            '<div><b>' + eh(fromL) + ' ← ' + eh(toL) + '</b> <span class="pt-badge ' + stCls + '">' + stLbl + '</span>' +
+              (extra.length ? '<div class="pt-sub">' + eh(extra.join(' · ')) + '</div>' : '') +
+            '</div>' +
+            '<span class="pt-sub" dir="ltr">' + eh(fmtStepTime(ev.confirmed_at || ev.requested_at)) + '</span>' +
+          '</div>';
+        }).join('')
+      : '<div class="pt-sub">' + (st.detailPapersLoading ? 'جاري تحميل سجل الأوراق…' : 'لا توجد تحركات مسجّلة للأوراق بعد (الحائز المبدئي: المكتب).') + '</div>';
+
+    var papersSectionHtml =
+      '<div class="pt-papers-box">' +
+        '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px">' +
+          '<b style="font-size:13px"><i class="fa-regular fa-folder-open"></i> الأوراق (عهدة المستندات)</b>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">' +
+            '<span class="pt-badge ' + papersHolderBadgeClass(pHolder) + '">الحائز الحالي: ' + eh(PAPERS_HOLDER_LABELS[pHolder] || 'المكتب') + '</span>' +
+            (pPendingId ? '<span class="pt-badge pt-badge-pur">يوجد طلب تسليم معلّق</span>' : '') +
+          '</div>' +
+        '</div>' +
+        (t.status === 'cancelled' && pHolder === 'courier'
+          ? '<div class="pt-papers-warn"><i class="fa-solid fa-triangle-exclamation"></i> تنبيه: التيكت ملغي والأوراق ما زالت مع المندوب — بانتظار إرجاعها للمكتب وتأكيد الاستلام.</div>'
+          : '') +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">' +
+          '<button type="button" class="pt-btn pt-btn-papers-pri" data-pt-papers="to_courier" data-id="' + Number(t.id) + '"' + (canReqToCourier ? '' : ' disabled title="' + eh(reqCourierReason) + '"') + '>طلب تسليم للمندوب</button>' +
+          '<button type="button" class="pt-btn pt-btn-papers-slate" data-pt-papers="confirm_office" data-id="' + Number(t.id) + '"' + (canConfirmOffice ? ' data-event-id="' + Number(pendingEv.id) + '"' : ' disabled title="' + eh(confirmOfficeReason) + '"') + '>استلام أوراق من المندوب</button>' +
+          (!canReqToCourier && !canConfirmOffice
+            ? '<span class="pt-sub">' + eh(reqCourierReason || confirmOfficeReason) + '</span>'
+            : '') +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:5px">' + pHistHtml + '</div>' +
+      '</div>';
+
     panel.classList.remove('hidden');
     panel.innerHTML =
       '<div class="pt-head">' +
@@ -1402,7 +1608,7 @@
         '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
           (t.phone ? '<a class="pt-btn pt-btn-pri" href="tel:' + eh(t.phone) + '"><i class="fa-solid fa-phone"></i> اتصال</a>' : '') +
           (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
-          (isAllowedStaff() && (t.status === 'open' || t.status === 'with_courier')
+          (isManager() && (t.status === 'open' || t.status === 'with_courier')
             ? (t.courier_id
               ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-act="convert" data-id="' + Number(t.id) + '">تحويل لمهمة استلام</button>'
               : '<button type="button" class="pt-btn pt-btn-sec" disabled>تحويل لمهمة استلام (بدون مندوب)</button>')
@@ -1417,12 +1623,15 @@
         '<b>سجل التواصل مع العميل</b>' +
         '<span class="pt-sub">عدد المرات: <b>' + logs.length + '</b> · آخر تواصل: <b>' + eh(lastAt) + '</b></span>' +
       '</div>' +
+      papersSectionHtml +
       '<div style="display:flex;flex-direction:column;gap:6px">' + logsHtml + '</div>';
   }
 
   async function openTicketDetail(ticketId) {
     st.detailTicketId = Number(ticketId);
     st.detailContacts = [];
+    st.detailPapers = [];
+    st.detailPapersLoading = true;
     renderTicketDetailPanel();
     stopTicketDetailRealtime();
     if (sbClient && typeof sbClient.channel === 'function') {
@@ -1440,14 +1649,19 @@
     }
     if (!sbClient) return;
     try {
-      var r = await sbClient
-        .from('courier_contact_log')
-        .select('id,channel,outcome,created_at,courier_id')
-        .eq('ticket_id', st.detailTicketId)
-        .order('created_at', { ascending: false })
-        .limit(30);
-      if (!r.error && Array.isArray(r.data)) st.detailContacts = r.data;
+      var resAll = await Promise.all([
+        sbClient
+          .from('courier_contact_log')
+          .select('id,channel,outcome,created_at,courier_id')
+          .eq('ticket_id', st.detailTicketId)
+          .order('created_at', { ascending: false })
+          .limit(30),
+        sbClient.rpc('papers_history', { p_ticket_id: st.detailTicketId })
+      ]);
+      if (resAll[0] && !resAll[0].error && Array.isArray(resAll[0].data)) st.detailContacts = resAll[0].data;
+      if (resAll[1] && !resAll[1].error && Array.isArray(resAll[1].data)) st.detailPapers = resAll[1].data;
     } catch (e) { /* */ }
+    st.detailPapersLoading = false;
     renderTicketDetailPanel();
     var p = $('pt-detail-panel');
     if (p && p.scrollIntoView) p.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1572,8 +1786,46 @@
     if (e.target && e.target.id === 'pt-detail-close') {
       st.detailTicketId = null;
       st.detailContacts = [];
+      st.detailPapers = [];
       stopTicketDetailRealtime();
       renderTicketDetailPanel();
+      return;
+    }
+    var pBtn = e.target && e.target.closest ? e.target.closest('[data-pt-papers]') : null;
+    if (pBtn) {
+      var pAct = pBtn.getAttribute('data-pt-papers');
+      var pTicketId = Number(pBtn.getAttribute('data-id'));
+      var pT = st.tickets.find(function (x) { return Number(x.id) === pTicketId; });
+      if (!pT || !sbClient) return;
+      pBtn.disabled = true;
+      try {
+        if (pAct === 'to_courier') {
+          var rq = await sbClient.rpc('papers_request_handover', {
+            p_ticket_id: pTicketId,
+            p_to_holder: 'courier',
+            p_recipient_name: null,
+            p_note: null
+          });
+          if (rq.error) throw rq.error;
+          if (!rq.data || !rq.data.ok) throw new Error('تعذر إرسال طلب تسليم الأوراق');
+          pT.papers_pending_event_id = rq.data.event_id;
+          toast('تم إرسال طلب تسليم الأوراق للمندوب — بانتظار تأكيده', 'success');
+        } else if (pAct === 'confirm_office') {
+          var evId = Number(pBtn.getAttribute('data-event-id') || pT.papers_pending_event_id);
+          if (!evId) throw new Error('لا يوجد طلب إرجاع معلّق');
+          var cf = await sbClient.rpc('papers_confirm_handover', { p_event_id: evId });
+          if (cf.error) throw cf.error;
+          if (!cf.data || !cf.data.ok) throw new Error('تعذر تأكيد استلام الأوراق');
+          pT.papers_holder = cf.data.papers_holder || 'office';
+          pT.papers_pending_event_id = null;
+          toast('تم تأكيد استلام الأوراق في المكتب بنجاح', 'success');
+        }
+        renderTicketsList();
+        await loadDetailPapers(pTicketId);
+      } catch (err) {
+        pBtn.disabled = false;
+        toast((err && err.message) || 'تعذر تنفيذ عملية الأوراق', 'error');
+      }
       return;
     }
     if (e.target && e.target.id === 'pt-refresh-btn') {
@@ -1602,7 +1854,7 @@
       return;
     }
     if (b.dataset.ptAct === 'convert') {
-      if (!isAllowedStaff()) return toast('التحويل لمهمة استلام متاح للموظفين', 'error');
+      if (!isManager()) return toast('التحويل لمهمة استلام متاح للمدير فقط', 'error');
       if (!t.courier_id) return toast('لازم تعيّن مندوب للتيكت قبل التحويل لمهمة استلام', 'error');
       openConvertTicketModal(t);
       return;
@@ -1617,13 +1869,88 @@
     }
   }
 
+  function closeCourierDeliverCustomerModal() {
+    var m = $('pt-papers-cust-modal');
+    if (m) m.remove();
+  }
+
+  function openCourierDeliverCustomerModal(ticket) {
+    if (!ticket) return;
+    closeCourierDeliverCustomerModal();
+    var wrap = document.createElement('div');
+    wrap.id = 'pt-papers-cust-modal';
+    wrap.className = 'pt-modal-backdrop';
+    wrap.innerHTML =
+      '<div class="pt-modal-box" role="dialog" aria-modal="true">' +
+        '<div class="pt-head">' +
+          '<b style="font-size:15px;color:#2563eb">تسليم الأوراق للعميل</b>' +
+          '<button type="button" class="pt-btn pt-btn-sec" id="pt-pcust-close" style="padding:4px 10px">✕</button>' +
+        '</div>' +
+        '<div class="pt-sub">العميل: <b>' + eh(ticket.client_name) + '</b> (<span dir="ltr">' + eh(ticket.sd_request_id) + '</span>) — يتأكد التسليم فوراً باسم المستلم.</div>' +
+        '<div class="pt-field-wrap">' +
+          '<label class="pt-label" for="pt-pcust-name">اسم المستلم * (من 2 إلى 80 حرف)</label>' +
+          '<input id="pt-pcust-name" class="pt-input" type="text" maxlength="80" value="' + eh(ticket.client_name || '') + '" placeholder="اكتب اسم من استلم الأوراق">' +
+        '</div>' +
+        '<div class="pt-field-wrap">' +
+          '<label class="pt-label" for="pt-pcust-note">ملاحظة اختيارية</label>' +
+          '<input id="pt-pcust-note" class="pt-input" type="text" maxlength="300" placeholder="مثال: استلمها أخو العميل">' +
+        '</div>' +
+        '<div style="display:flex;justify-content:flex-end;gap:8px">' +
+          '<button type="button" class="pt-btn pt-btn-sec" id="pt-pcust-abort">تراجع</button>' +
+          '<button type="button" class="pt-btn pt-btn-papers-pri" id="pt-pcust-confirm">تأكيد التسليم للعميل</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(wrap);
+    var inp = $('pt-pcust-name');
+    if (inp) { inp.focus(); inp.select(); }
+
+    wrap.addEventListener('click', async function (ev) {
+      if (ev.target === wrap || ev.target.id === 'pt-pcust-close' || ev.target.id === 'pt-pcust-abort') {
+        closeCourierDeliverCustomerModal();
+        return;
+      }
+      if (ev.target.id === 'pt-pcust-confirm') {
+        var btn = ev.target;
+        var recName = ($('pt-pcust-name') && $('pt-pcust-name').value || '').trim();
+        var note = ($('pt-pcust-note') && $('pt-pcust-note').value || '').trim() || null;
+        if (recName.length < 2 || recName.length > 80) {
+          toast('لازم تكتب اسم المستلم (من 2 إلى 80 حرف)', 'error');
+          if ($('pt-pcust-name')) $('pt-pcust-name').focus();
+          return;
+        }
+        btn.disabled = true;
+        try {
+          if (!sbClient) throw new Error('لا يوجد اتصال بالسيرفر — حاول تاني');
+          var res = await sbClient.rpc('papers_request_handover', {
+            p_ticket_id: Number(ticket.id),
+            p_to_holder: 'customer',
+            p_recipient_name: recName,
+            p_note: note
+          });
+          if (res.error) throw res.error;
+          if (!res.data || !res.data.ok) throw new Error('تعذر تسجيل تسليم الأوراق');
+          ticket.papers_holder = 'customer';
+          ticket.papers_pending_event_id = null;
+          ticket.papers_pending_to = null;
+          ticket.papers_pending_from = null;
+          closeCourierDeliverCustomerModal();
+          renderCourierTicketsIntoBody();
+          toast('تم تسجيل تسليم الأوراق للعميل بنجاح', 'success');
+        } catch (err) {
+          btn.disabled = false;
+          toast((err && err.message) || 'تعذر تسجيل التسليم', 'error');
+        }
+      }
+    });
+  }
+
   function closeConvertTicketModal() {
     var m = $('pt-convert-modal');
     if (m) m.remove();
   }
 
   function openConvertTicketModal(ticket) {
-    if (!ticket || !isAllowedStaff()) return;
+    if (!ticket || !isManager()) return;
     closeConvertTicketModal();
     var defaultPay = ticket.payment_status === 'instapay_on_arrival'
       ? 'إنستا باي'
@@ -1884,7 +2211,7 @@
     return function () {
       try {
         stopTicketsRealtime();
-        st.detailTicketId = null; st.detailContacts = [];
+        st.detailTicketId = null; st.detailContacts = []; st.detailPapers = [];
         st.tickets = []; st.courierTickets = []; st.courierZones = {}; st.courierLoadedAt = 0; st.loaded = false;
         st.collectManual = false;
         st.draftRows = [{ service_name: '', doc_type: '', sd_service_id: '', qty: 1, unit_price: 0 }];
