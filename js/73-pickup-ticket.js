@@ -30,6 +30,7 @@
   var st = {
     tickets: [],
     couriers: [],
+    courierZones: {},
     services: [],
     courierTickets: [],
     courierLoadedAt: 0,
@@ -159,22 +160,30 @@
     var u = getCurUser();
     st.myUid = u ? u.id : null;
     var jobs = [
-      sbClient.from('couriers').select('id,name,active').eq('active', true).order('name')
+      sbClient.from('couriers').select('id,name,active').eq('active', true).order('name'),
+      sbClient.from('courier_zones').select('zone_key,area_key,courier_id')
     ];
     if (!getServicesList().length) {
       jobs.push(sbClient.from('services').select('id,name,unit_price,executor,duration_days,required_docs,script_notes,delivery_mode').order('name'));
     }
     var res = await Promise.all(jobs);
     if (res[0] && !res[0].error && Array.isArray(res[0].data)) st.couriers = res[0].data;
-    if (res[1] && !res[1].error && Array.isArray(res[1].data)) st.services = res[1].data;
+    if (res[1] && !res[1].error && Array.isArray(res[1].data)) {
+      var zmap = {};
+      res[1].data.forEach(function (row) {
+        if (row && row.zone_key) zmap[row.zone_key] = row.courier_id ? Number(row.courier_id) : null;
+      });
+      st.courierZones = zmap;
+    }
+    if (res[2] && !res[2].error && Array.isArray(res[2].data)) st.services = res[2].data;
   }
 
   async function loadTickets() {
     if (!sbClient) return;
-    var colsNew = 'id,sd_request_id,sd_service_id,client_name,phone,address,zone,service_name,qty,unit_price,total,executor,slot_pref,courier_id,call_checks,summary_comment,status,created_by,created_at,items,payment_status,collect_amount,staff_notes,converted_tx_id';
+    var colsNew = 'id,sd_request_id,sd_service_id,client_name,phone,address,zone,zone_key,service_name,qty,unit_price,total,executor,slot_pref,courier_id,call_checks,summary_comment,status,created_by,created_at,items,payment_status,collect_amount,staff_notes,converted_tx_id';
     var colsOld = 'id,sd_request_id,sd_service_id,client_name,phone,address,zone,service_name,qty,unit_price,total,executor,slot_pref,courier_id,call_checks,summary_comment,status,created_by,created_at';
     var r = await sbClient.from('pickup_tickets').select(colsNew).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(60);
-    if (r.error && /42703|items|payment_status|staff_notes/i.test((r.error.message || '') + ' ' + (r.error.code || ''))) {
+    if (r.error && /42703|zone_key|items|payment_status|staff_notes/i.test((r.error.message || '') + ' ' + (r.error.code || ''))) {
       r = await sbClient.from('pickup_tickets').select(colsOld).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(60);
     }
     if (r.error) throw r.error;
@@ -578,13 +587,63 @@
     return el ? el.value : 'paid';
   }
 
+  function getZoneLabel(key) {
+    if (!key) return '';
+    if (typeof window.zoneLabel === 'function') return window.zoneLabel(key);
+    return String(key);
+  }
+
+  function buildZoneSelectOptions() {
+    var areas = Array.isArray(window.AREAS) ? window.AREAS : [];
+    var zones = Array.isArray(window.ZONES) ? window.ZONES : [];
+    var html = '<option value="">اختر المنطقة…</option>';
+    areas.forEach(function (a) {
+      var list = zones.filter(function (z) { return z.area_key === a.area_key; });
+      if (!list.length) return;
+      html += '<optgroup label="' + eh(a.label) + '">' +
+        list.map(function (z) {
+          return '<option value="' + eh(z.zone_key) + '">' + eh(z.label) + '</option>';
+        }).join('') +
+      '</optgroup>';
+    });
+    return html;
+  }
+
+  function applyZoneSuggestion(zoneKey) {
+    var hintEl = $('pt-zone-hint');
+    var crEl = $('pt-courier');
+    var k = String(zoneKey || '').trim();
+    if (!k) {
+      if (hintEl) hintEl.textContent = '';
+      return;
+    }
+    var cid = st.courierZones && Object.prototype.hasOwnProperty.call(st.courierZones, k)
+      ? st.courierZones[k]
+      : null;
+    var matched = cid ? st.couriers.find(function (c) { return Number(c.id) === Number(cid); }) : null;
+    if (matched) {
+      if (crEl) crEl.value = String(matched.id);
+      if (hintEl) {
+        hintEl.style.color = 'var(--r-acc, inherit)';
+        hintEl.textContent = 'المندوب المقترح: ' + matched.name + ' (تقدر تغيّره لو محتاج)';
+      }
+    } else {
+      if (crEl) crEl.value = '';
+      if (hintEl) {
+        hintEl.style.color = 'var(--r-mute, inherit)';
+        hintEl.textContent = 'لا يوجد مندوب لهذه المنطقة — التيكت هيتحفظ بدون مندوب';
+      }
+    }
+  }
+
   function buildScriptAndSummary() {
     syncDraftRowsFromDom();
     var staffName = getStaffDisplayName();
     var nameEl = $('pt-client'), reqEl = $('pt-reqid'), zoneEl = $('pt-zone'), addrEl = $('pt-addr'), slotEl = $('pt-slot'), crEl = $('pt-courier'), notesEl = $('pt-notes');
     var client = (nameEl && nameEl.value.trim()) || 'حضرتك';
     var reqId = (reqEl && reqEl.value.trim()) || '—';
-    var place = (zoneEl && zoneEl.value.trim()) || (addrEl && addrEl.value.trim()) || 'العنوان المسجل';
+    var zoneVal = (zoneEl && zoneEl.value.trim()) || '';
+    var place = (zoneVal ? getZoneLabel(zoneVal) : '') || (addrEl && addrEl.value.trim()) || 'العنوان المسجل';
     var slot = (slotEl && slotEl.value) || 'صباحي';
     var courierName = (crEl && crEl.selectedOptions && crEl.selectedOptions[0]) ? crEl.selectedOptions[0].textContent : 'المندوب';
     var staffNotes = (notesEl && notesEl.value.trim()) || '';
@@ -916,7 +975,7 @@
               '<div class="pt-field-wrap"><label class="pt-label" for="pt-phone">رقم الموبايل *</label><input id="pt-phone" class="pt-input" required dir="ltr" maxlength="30" placeholder="01xxxxxxxxx"></div>' +
               '<div class="pt-field-wrap"><label class="pt-label" for="pt-reqid">Request ID (سمارت ديسك) *</label><input id="pt-reqid" class="pt-input" required dir="ltr" maxlength="80" placeholder="SD-2026-..."></div>' +
               '<div class="pt-field-wrap"><label class="pt-label" for="pt-slot">الميعاد المناسب للتواصل</label><select id="pt-slot" class="pt-select"><option value="صباحي">صباحي</option><option value="بعد الظهر">بعد الظهر</option><option value="مسائي">مسائي</option><option value="سفارة">سفارة الإمارات</option></select></div>' +
-              '<div class="pt-field-wrap"><label class="pt-label" for="pt-zone">المنطقة</label><input id="pt-zone" class="pt-input" maxlength="100" placeholder="مثال: الدقي / المعادي"></div>' +
+              '<div class="pt-field-wrap"><label class="pt-label" for="pt-zone">المنطقة</label><select id="pt-zone" class="pt-select">' + buildZoneSelectOptions() + '</select><div id="pt-zone-hint" class="pt-sub" style="margin-top:2px"></div></div>' +
               '<div class="pt-field-wrap"><label class="pt-label" for="pt-courier">المندوب المعيّن</label><select id="pt-courier" class="pt-select">' + crOptions + '</select></div>' +
             '</div>' +
             '<div class="pt-field-wrap"><label class="pt-label" for="pt-addr">العنوان بالتفصيل</label><input id="pt-addr" class="pt-input" maxlength="400" placeholder="الشارع، الدور، علامة مميزة"></div>' +
@@ -998,7 +1057,8 @@
         client_name: clientName,
         phone: phoneClean,
         address: ($('pt-addr').value || '').trim() || null,
-        zone: ($('pt-zone').value || '').trim() || null,
+        zone: ($('pt-zone').value || '').trim() ? getZoneLabel($('pt-zone').value.trim()) : null,
+        zone_key: ($('pt-zone').value || '').trim() || null,
         service_name: info.items.length > 1 ? firstItem.service_name + ' (+' + (info.items.length - 1) + ')' : firstItem.service_name,
         qty: totalQty,
         unit_price: info.items.length === 1 ? firstItem.unit_price : info.total,
@@ -1027,6 +1087,7 @@
       if (r.data) st.tickets.unshift(r.data);
       renderTicketsList();
       $('pt-form').reset();
+      if ($('pt-zone-hint')) $('pt-zone-hint').textContent = '';
       st.collectManual = false;
       st.draftRows = [{ service_name: '', doc_type: '', sd_service_id: '', qty: 1, unit_price: 0 }];
       if ($('pt-pay-status')) $('pt-pay-status').value = 'paid';
@@ -1168,7 +1229,10 @@
         if (e.target && e.target.id === 'pt-collect-amt') st.collectManual = true;
         refreshLivePreview();
       });
-      pane.addEventListener('change', function () {
+      pane.addEventListener('change', function (e) {
+        if (e.target && e.target.id === 'pt-zone') {
+          applyZoneSuggestion(e.target.value);
+        }
         refreshLivePreview();
       });
     }
@@ -1230,7 +1294,7 @@
   wrap('handleLogout', function (orig) {
     return function () {
       try {
-        st.tickets = []; st.courierTickets = []; st.courierLoadedAt = 0; st.loaded = false;
+        st.tickets = []; st.courierTickets = []; st.courierZones = {}; st.courierLoadedAt = 0; st.loaded = false;
         st.collectManual = false;
         st.draftRows = [{ service_name: '', doc_type: '', sd_service_id: '', qty: 1, unit_price: 0 }];
         remove();
