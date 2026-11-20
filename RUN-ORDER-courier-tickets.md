@@ -37,3 +37,10 @@
      - يحدّث دالة `public.pickup_convert_ticket(p_ticket_id, p_rows)` (للمدير فقط، قفل `FOR UPDATE`، idempotent لو متحوّل قبل كده) لتوليد المعاملة في `request_lines` + إنشاء صف مهمة استلام في `courier_trips` (`kind='pickup'`, `fee=40`, `trip_day=اليوم`, `courier_confirmed_at=null`) + تحديث `mission_id` و`status='converted'` في نفس الـ transaction.
      - يحدّث `public.courier_my_tickets()` لإرجاع التيكتات المحوّلة خلال آخر 7 أيام مع `converted_tx_id`, `converted_at`, `mission_id`, `mission_confirmed` (والتأكيد يتم عبر دالة `courier_confirm_one('pickup', 'trip:' || mission_id)` الموجودة دون إنشاء دالة جديدة).
      - ينشئ تريجر `pickup_ticket_mission_notify_trg` (`AFTER UPDATE OF status`) لإرسال إشعار `pickup_mission` للمندوب («مهمة استلام جديدة» — اسم العميل + المنطقة، بدون تليفون) عبر `public.notifications`.
+5. **المرحلة 6 — عهدة الأوراق (المكتب ↔ المندوب ↔ العميل):**
+   - الملف: `sql/courier-tickets-phase6.sql` *(جاهز للتشغيل بعد المراجعة)*
+   - ما يفعله:
+     - ينشئ جدول `public.papers_custody_events` مع قيد التحولات المسموحة فقط (`office→courier`, `courier→customer`, `courier→office`) وفهرس فريد لطلب واحد معلّق لكل تيكت، مع تفعيل RLS (الموظف والمدير يقرآن الكل، والمندوب يقرأ تيكتاته فقط، وجميع التعديلات عبر دوال RPC).
+     - يضيف عمودي `papers_holder` (افتراضي `'office'`) و`papers_pending_event_id` على `public.pickup_tickets` بدون تعديل سياسات RLS الموجودة ولا لمس `courier_trips` أو دوال العمولات.
+     - ينشئ الدوال `public.papers_request_handover` و`public.papers_confirm_handover` و`public.papers_history` (`SECURITY DEFINER`)، ويحدّث `public.courier_my_tickets()` لإرجاع حقول عهدة الأوراق والطلبات المعلّقة.
+     - ينشئ تريجر `papers_handover_notify_trg` (`AFTER INSERT` على `public.papers_custody_events`) لإرسال إشعار `papers_handover` بدون رقم تليفون (للمندوب عند `office→courier`، ولمنشئ التيكت + المديرين النشطين فقط عند `courier→office`).
