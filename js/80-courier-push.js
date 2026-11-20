@@ -158,7 +158,7 @@
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', function (ev) {
-      if (ev.data && ev.data.type === 'TS_NOTIF_CLICK' && (ev.data.tag === 'pickup_ticket' || ev.data.tag === 'pickup_ticket_cancel')) {
+      if (ev.data && ev.data.type === 'TS_NOTIF_CLICK' && (ev.data.tag === 'pickup_ticket' || ev.data.tag === 'pickup_ticket_cancel' || ev.data.tag === 'pickup_mission')) {
         if (typeof window.tsRefreshCourierTickets === 'function') {
           window.tsRefreshCourierTickets(ev.data.tag === 'pickup_ticket_cancel' ? 'cancelled' : 'active');
         }

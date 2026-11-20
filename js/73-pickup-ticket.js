@@ -171,6 +171,10 @@
       '.pt-cancel-card{border:1px solid rgba(220,38,38,.45);border-right:4px solid #dc2626;border-radius:14px;padding:12px;background:var(--card,var(--r-card,#fff));color:var(--tx,var(--r-tx,#0f172a));display:flex;flex-direction:column;gap:8px}',
       'html.dark .pt-cancel-card{background:var(--card,#141716);color:var(--tx,#f8fafc)}',
       '.pt-cancel-strip{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:9px;background:rgba(220,38,38,.14);color:#dc2626;font-size:12px;font-weight:800}',
+      '.pt-mission-card{border:1px solid rgba(37,99,235,.45);border-right:4px solid #2563eb;border-radius:14px;padding:12px;background:var(--card,var(--r-card,#fff));color:var(--tx,var(--r-tx,#0f172a));display:flex;flex-direction:column;gap:8px}',
+      'html.dark .pt-mission-card{background:var(--card,#141716);color:var(--tx,#f8fafc)}',
+      '.pt-mission-strip{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:9px;background:rgba(37,99,235,.14);color:#2563eb;font-size:12px;font-weight:800}',
+      '.pt-btn-mission{background:#2563eb;color:#ffffff}',
       '.pt-modal-backdrop{position:fixed;inset:0;z-index:100060;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}',
       '.pt-modal-box{width:100%;max-width:440px;border-radius:16px;padding:18px;background:var(--r-card,#fff);color:var(--r-tx,#0f172a);border:1px solid var(--r-bd,rgba(148,163,184,.25));display:flex;flex-direction:column;gap:12px}',
       'html.dark .pt-modal-box{background:#111827;color:#f8fafc}',
@@ -236,10 +240,10 @@
 
   async function loadTickets() {
     if (!sbClient) return;
-    var colsNew = 'id,sd_request_id,sd_service_id,client_name,phone,address,zone,zone_key,service_name,qty,unit_price,total,executor,slot_pref,courier_id,call_checks,summary_comment,status,courier_step,courier_step_at,cancel_reason,cancelled_at,cancelled_by,courier_ack_at,created_by,created_at,items,payment_status,collect_amount,staff_notes,converted_tx_id';
+    var colsNew = 'id,sd_request_id,sd_service_id,client_name,phone,address,zone,zone_key,service_name,qty,unit_price,total,executor,slot_pref,courier_id,call_checks,summary_comment,status,courier_step,courier_step_at,cancel_reason,cancelled_at,cancelled_by,courier_ack_at,converted_at,converted_by,mission_id,created_by,created_at,items,payment_status,collect_amount,staff_notes,converted_tx_id';
     var colsOld = 'id,sd_request_id,sd_service_id,client_name,phone,address,zone,service_name,qty,unit_price,total,executor,slot_pref,courier_id,call_checks,summary_comment,status,created_by,created_at';
     var r = await sbClient.from('pickup_tickets').select(colsNew).order('created_at', { ascending: false }).limit(80);
-    if (r.error && /42703|cancel_reason|cancelled_at|courier_ack_at|courier_step|zone_key|items|payment_status|staff_notes/i.test((r.error.message || '') + ' ' + (r.error.code || ''))) {
+    if (r.error && /42703|mission_id|converted_at|cancel_reason|cancelled_at|courier_ack_at|courier_step|zone_key|items|payment_status|staff_notes/i.test((r.error.message || '') + ' ' + (r.error.code || ''))) {
       r = await sbClient.from('pickup_tickets').select(colsOld).order('created_at', { ascending: false }).limit(80);
     }
     if (r.error) throw r.error;
@@ -385,26 +389,30 @@
         ['papers_received', 'استلمت الأوراق']
       ];
       var activeTickets = st.courierTickets.filter(function (x) { return x.status === 'with_courier'; });
+      var missionTickets = st.courierTickets.filter(function (x) { return x.status === 'converted'; });
       var cancelledTickets = st.courierTickets.filter(function (x) { return x.status === 'cancelled'; });
+      var activeTotal = activeTickets.length + missionTickets.length;
 
-      /* إزالة أي تيكت ملغي من خط السير تلقائياً */
+      /* إزالة أي تيكت ملغي أو محوّل غير مؤكد من خط السير تلقائياً */
       var rIds = getRouteIds();
-      if (cancelledTickets.length && rIds.length) {
-        var cancelledSds = cancelledTickets.map(function (x) { return String(x.sd_request_id); });
-        var cleanedRoute = rIds.filter(function (rid) { return cancelledSds.indexOf(String(rid)) === -1; });
+      var blockedSds = cancelledTickets.concat(missionTickets.filter(function (m) { return !m.mission_confirmed; }))
+        .map(function (x) { return String(x.sd_request_id); });
+      if (blockedSds.length && rIds.length) {
+        var cleanedRoute = rIds.filter(function (rid) { return blockedSds.indexOf(String(rid)) === -1; });
         if (cleanedRoute.length !== rIds.length) {
           rIds = cleanedRoute;
           saveRouteIds(rIds);
         }
       }
 
-      if (st.courierTab === 'cancelled' && !cancelledTickets.length && activeTickets.length) {
+      if (st.courierTab === 'cancelled' && !cancelledTickets.length && activeTotal) {
         st.courierTab = 'active';
-      } else if (st.courierTab === 'active' && !activeTickets.length && cancelledTickets.length) {
+      } else if (st.courierTab === 'active' && !activeTotal && cancelledTickets.length) {
         st.courierTab = 'cancelled';
       }
 
       var pins = getPinsMap();
+      /* عداد الجديد يحسب فقط تيكتات with_courier التي لم تبدأ بعد — لا يحسب الملغي ولا المحوّل */
       var newCount = 0;
       activeTickets.forEach(function (t) {
         if (!t.courier_step) newCount++;
@@ -412,13 +420,46 @@
 
       var secTitle = st.courierTab === 'cancelled'
         ? ('تيكتات ملغية (' + cancelledTickets.length + ')')
-        : (newCount > 0 ? ('جديد بانتظار قبولك (' + newCount + ')') : ('تيكتات الاستلام (' + activeTickets.length + ')'));
+        : (newCount > 0 ? ('جديد بانتظار قبولك (' + newCount + ')') : ('تيكتات ومهام الاستلام (' + activeTotal + ')'));
 
       var tabsHtml =
         '<div class="pt-tabs-bar">' +
-          '<button type="button" class="pt-ftab' + (st.courierTab === 'active' ? ' active' : '') + '" data-pt73-ctab="active">نشط (' + activeTickets.length + ')</button>' +
+          '<button type="button" class="pt-ftab' + (st.courierTab === 'active' ? ' active' : '') + '" data-pt73-ctab="active">نشط (' + activeTotal + ')</button>' +
           '<button type="button" class="pt-ftab pt-ftab-danger' + (st.courierTab === 'cancelled' ? ' active' : '') + '" data-pt73-ctab="cancelled">ملغي (' + cancelledTickets.length + ')</button>' +
         '</div>';
+
+      var missionsHtml = missionTickets.map(function (t) {
+        var waPh = cleanWaPhone(t.phone);
+        var confirmed = !!t.mission_confirmed;
+        var zoneTxt = [t.zone, t.address].filter(Boolean).join(' — ');
+        var itemsList = Array.isArray(t.items) && t.items.length
+          ? t.items
+          : [{ service_name: t.service_name, doc_type: '', qty: t.qty || 1 }];
+        var svcsHtml = itemsList.map(function (it) {
+          return eh(it.service_name) + (it.doc_type ? ' (' + eh(it.doc_type) + ')' : '') + (Number(it.qty || 1) > 1 ? ' × ' + Number(it.qty) : '');
+        }).join(' + ');
+        var convTime = t.converted_at ? fmtStepTime(t.converted_at) : '';
+        return '<div class="pt-mission-card" data-ticket-id="' + Number(t.id) + '">' +
+          '<div class="pt-mission-strip">' +
+            '<span><i class="fa-solid fa-clipboard-check"></i> ' + (confirmed ? 'مهمة استلام مؤكدة' : 'مهمة استلام — بانتظار تأكيدك') + '</span>' +
+            '<span dir="ltr" style="font-size:11px;font-weight:700">' + eh(t.converted_tx_id || t.sd_request_id) + '</span>' +
+          '</div>' +
+          '<div>' +
+            '<div style="font-weight:800;font-size:14px">' + eh(t.client_name) + '</div>' +
+            '<div style="font-size:12px;margin-top:2px">' + svcsHtml + '</div>' +
+            (zoneTxt ? '<div style="font-size:11.5px;color:var(--mu,var(--r-mute,#64748b));margin-top:2px">' + eh(zoneTxt) + (convTime ? ' · ' + eh(convTime) : '') + '</div>' : '') +
+          '</div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+            (confirmed
+              ? '<button type="button" class="pt-btn pt-btn-sec" disabled>تم التأكيد</button>'
+              : (t.mission_id
+                ? '<button type="button" class="pt-btn pt-btn-mission" data-pt73-confirm-mission="' + Number(t.mission_id) + '" data-pt73-tid="' + Number(t.id) + '">تأكيد المهمة</button>'
+                : '<button type="button" class="pt-btn pt-btn-sec" disabled>بانتظار ربط المهمة</button>')) +
+            (t.phone ? '<a class="pt-btn pt-btn-pri" href="tel:' + eh(t.phone) + '" data-pt73-contact="call" data-pt73-tid="' + Number(t.id) + '"><i class="fa-solid fa-phone"></i> اتصال</a>' : '') +
+            (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" data-pt73-contact="whatsapp" data-pt73-tid="' + Number(t.id) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
+          '</div>' +
+        '</div>';
+      }).join('');
 
       var cancelledHtml = cancelledTickets.length
         ? cancelledTickets.map(function (t) {
@@ -451,11 +492,12 @@
         : '<div class="pt-sub" style="text-align:center;padding:10px 0">مفيش تيكتات ملغية خلال آخر 7 أيام.</div>';
 
       box.innerHTML =
-        '<div class="ts-sec-head"><span class="ts-sec-title">' + secTitle + '</span><span style="font-size:11px;color:var(--mu)">نشط: ' + activeTickets.length + ' · ملغي: ' + cancelledTickets.length + '</span></div>' +
+        '<div class="ts-sec-head"><span class="ts-sec-title">' + secTitle + '</span><span style="font-size:11px;color:var(--mu)">نشط: ' + activeTotal + ' · ملغي: ' + cancelledTickets.length + '</span></div>' +
         tabsHtml +
         (st.courierTab === 'cancelled'
           ? '<div style="display:flex;flex-direction:column;gap:10px">' + cancelledHtml + '</div>'
-          : (activeTickets.length ? activeTickets.map(function (t) {
+          : ((missionsHtml ? '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:10px">' + missionsHtml + '</div>' : '') +
+             (activeTickets.length ? activeTickets.map(function (t) {
           var itemsList = Array.isArray(t.items) && t.items.length
             ? t.items
             : [{ service_name: t.service_name, doc_type: '', qty: t.qty || 1 }];
@@ -557,7 +599,7 @@
               '</div>' +
             '</details>' +
           '</div>';
-        }).join('') : '<div class="pt-sub" style="text-align:center;padding:10px 0">مفيش تيكتات استلام نشطة حالياً.</div>'));
+        }).join('') : (!missionsHtml ? '<div class="pt-sub" style="text-align:center;padding:10px 0">مفيش تيكتات استلام نشطة حالياً.</div>' : ''))));
     } finally { __pt73Rendering = false; }
   }
 
@@ -635,6 +677,29 @@
     if (ctabBtn) {
       st.courierTab = ctabBtn.getAttribute('data-pt73-ctab') === 'cancelled' ? 'cancelled' : 'active';
       renderCourierTicketsIntoBody();
+      return;
+    }
+    var confMissionBtn = t.closest('[data-pt73-confirm-mission]');
+    if (confMissionBtn) {
+      var mId = Number(confMissionBtn.getAttribute('data-pt73-confirm-mission'));
+      var mTid = Number(confMissionBtn.getAttribute('data-pt73-tid'));
+      if (!mId) return;
+      confMissionBtn.disabled = true;
+      try {
+        if (!sbClient) throw new Error('لا يوجد اتصال بالسيرفر — حاول تاني');
+        var cmRes = await sbClient.rpc('courier_confirm_one', {
+          p_type: 'pickup',
+          p_ref: 'trip:' + mId
+        });
+        if (cmRes.error) throw cmRes.error;
+        var mItem = st.courierTickets.find(function (x) { return Number(x.id) === mTid; });
+        if (mItem) mItem.mission_confirmed = true;
+        renderCourierTicketsIntoBody();
+        toast('تم تأكيد مهمة الاستلام بنجاح', 'success');
+      } catch (err) {
+        confMissionBtn.disabled = false;
+        toast((err && err.message) || 'تعذر تأكيد المهمة — حاول تاني', 'error');
+      }
       return;
     }
     var ackBtn = t.closest('[data-pt73-ack]');
@@ -928,30 +993,32 @@
     return parts.join(' - ') || null;
   }
 
-  async function directConvertTicket(ticket) {
-    if (!sbClient) return;
-    if (st.converting) return;
-    if (ticket.status === 'converted') return toast('التيكت ده اتحوّل لمعاملة بالفعل', 'error');
-    // مدفوع مسبقاً: طريقة الدفع الفعلية لازم الموظف يحددها بنفسه، فنفتح شاشة معاملة جديدة للمراجعة
-    if (ticket.payment_status === 'paid') {
-      toast('التيكت مدفوع مسبقاً: راجع طريقة الدفع الفعلية في شاشة معاملة جديدة ثم احفظ', 'error');
-      return prefillNewOrderTab(ticket);
+  async function directConvertTicket(ticket, payMethodOverride) {
+    if (!sbClient) return false;
+    if (st.converting) return false;
+    if (!isAllowedStaff()) {
+      toast('التحويل لمهمة استلام متاح للموظفين', 'error');
+      return false;
+    }
+    if (!ticket.courier_id) {
+      toast('لازم تعيّن مندوب للتيكت قبل التحويل لمهمة استلام', 'error');
+      return false;
     }
     st.converting = true;
-    try { await doDirectConvert(ticket); } finally { st.converting = false; }
+    try { return await doDirectConvert(ticket, payMethodOverride); } finally { st.converting = false; }
   }
 
-  async function doDirectConvert(ticket) {
+  async function doDirectConvert(ticket, payMethodOverride) {
     var items = mapTicketToItems(ticket);
-    // لو أي خدمة مش موجودة في الكتالوج: نوقف بدل ما نسجل تكلفة وعمولة 0
     var missing = items.filter(function (it) { return !findSvc(it.service_name); })
       .map(function (it) { return it.service_name; });
     if (missing.length) {
-      return toast('خدمة غير موجودة في الكتالوج: ' + missing.join('، ') + ' — استخدم «فتح في معاملة جديدة»', 'error');
+      toast('خدمة غير موجودة في الكتالوج: ' + missing.join('، ') + ' — استخدم «فتح في معاملة جديدة»', 'error');
+      return false;
     }
     var cName = courierNameById(ticket.courier_id);
     var empName = getStaffDisplayName();
-    var payMethod = mapPayMethod(ticket);
+    var payMethod = payMethodOverride || mapPayMethod(ticket);
     var nowIso = new Date().toISOString().slice(0, 19);
 
     var rows = items.map(function (it) {
@@ -985,17 +1052,25 @@
     // كل الخطوات (قفل التيكت + رقم المعاملة + البنود + تغيير الحالة) في RPC واحدة على السيرفر
     var rc = await sbClient.rpc('pickup_convert_ticket', { p_ticket_id: ticket.id, p_rows: rows });
     if (rc.error) {
-      var already = /اتحوّل لمعاملة بالفعل/.test(rc.error.message || '');
-      if (already) { ticket.status = 'converted'; renderTicketsList(); }
-      return toast((already ? '' : 'فشل التحويل: ') + (rc.error.message || 'خطأ غير معروف'), 'error');
+      toast(rc.error.message || 'فشل التحويل — حاول تاني', 'error');
+      return false;
     }
     var txId = (rc.data && rc.data.transaction_id) || '';
+    var mId = (rc.data && rc.data.mission_id) || null;
 
     ticket.status = 'converted';
     ticket.converted_tx_id = txId;
+    if (mId) ticket.mission_id = mId;
+    ticket.converted_at = ticket.converted_at || new Date().toISOString();
     renderTicketsList();
+    if (st.detailTicketId && Number(st.detailTicketId) === Number(ticket.id)) renderTicketDetailPanel();
     try { if (typeof loadRecentRequests === 'function') await loadRecentRequests(); } catch (e) { /* */ }
-    toast('تم تحويل التيكت إلى معاملة رسمية برقم: ' + txId + ' ✓');
+    if (rc.data && rc.data.already_converted) {
+      toast('التيكت متحوّل بالفعل لمعاملة ' + txId + (mId ? ' (مهمة #' + mId + ')' : ''), 'info');
+    } else {
+      toast('تم التحويل لمعاملة ' + txId + ' وإرسال مهمة الاستلام للمندوب', 'success');
+    }
+    return true;
   }
 
   function prefillNewOrderTab(ticket) {
@@ -1098,6 +1173,7 @@
             payBadge +
             '<span class="pt-badge pt-badge-mut">المندوب: ' + eh(courierNameById(t.courier_id)) + '</span>' +
             (t.converted_tx_id ? '<span class="pt-badge pt-badge-org" dir="ltr">' + eh(t.converted_tx_id) + '</span>' : '') +
+            (t.mission_id ? '<span class="pt-badge pt-badge-pur" dir="ltr">مهمة #' + Number(t.mission_id) + '</span>' : '') +
           '</div>' +
           '<div class="pt-sub" style="margin-top:5px">' + svcsHtml + ' · الإجمالي: <b>' + eh(money(t.total)) + '</b> · الميعاد: ' + eh(t.slot_pref) + (t.zone ? ' · ' + eh(t.zone) : '') + '</div>' +
           (t.status === 'cancelled'
@@ -1113,7 +1189,11 @@
           (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
           '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="detail" data-id="' + Number(t.id) + '">التفاصيل والتواصل</button>' +
           '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="copy" data-id="' + Number(t.id) + '">نسخ الكومنت</button>' +
-          (canAction ? '<button type="button" class="pt-btn pt-btn-ok" data-pt-act="convert" data-id="' + Number(t.id) + '">تحويل مباشر لمعاملة</button>' : '') +
+          (canAction && isAllowedStaff()
+            ? (t.courier_id
+              ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-act="convert" data-id="' + Number(t.id) + '">تحويل لمهمة استلام</button>'
+              : '<button type="button" class="pt-btn pt-btn-sec" disabled title="لازم تعيّن مندوب قبل التحويل">تحويل لمهمة استلام</button><span class="pt-sub" style="align-self:center">عيّن مندوب أولاً للتحويل</span>')
+            : '') +
           (canAction ? '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="prefill" data-id="' + Number(t.id) + '">فتح في معاملة جديدة</button>' : '') +
           (canCancel ? '<button type="button" class="pt-btn pt-btn-danger" data-pt-act="cancel" data-id="' + Number(t.id) + '">إلغاء التيكت</button>' : '') +
         '</div>' +
@@ -1322,6 +1402,11 @@
         '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
           (t.phone ? '<a class="pt-btn pt-btn-pri" href="tel:' + eh(t.phone) + '"><i class="fa-solid fa-phone"></i> اتصال</a>' : '') +
           (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
+          (isAllowedStaff() && (t.status === 'open' || t.status === 'with_courier')
+            ? (t.courier_id
+              ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-act="convert" data-id="' + Number(t.id) + '">تحويل لمهمة استلام</button>'
+              : '<button type="button" class="pt-btn pt-btn-sec" disabled>تحويل لمهمة استلام (بدون مندوب)</button>')
+            : '') +
           (isManager() && (t.status === 'open' || t.status === 'with_courier')
             ? '<button type="button" class="pt-btn pt-btn-danger" data-pt-act="cancel" data-id="' + Number(t.id) + '">إلغاء التيكت</button>'
             : '') +
@@ -1517,8 +1602,9 @@
       return;
     }
     if (b.dataset.ptAct === 'convert') {
-      b.disabled = true;
-      try { await directConvertTicket(t); } finally { b.disabled = false; }
+      if (!isAllowedStaff()) return toast('التحويل لمهمة استلام متاح للموظفين', 'error');
+      if (!t.courier_id) return toast('لازم تعيّن مندوب للتيكت قبل التحويل لمهمة استلام', 'error');
+      openConvertTicketModal(t);
       return;
     }
     if (b.dataset.ptAct === 'prefill') {
@@ -1529,6 +1615,64 @@
       if (!isManager()) return toast('الإلغاء متاح للمدير فقط', 'error');
       openCancelTicketModal(t);
     }
+  }
+
+  function closeConvertTicketModal() {
+    var m = $('pt-convert-modal');
+    if (m) m.remove();
+  }
+
+  function openConvertTicketModal(ticket) {
+    if (!ticket || !isAllowedStaff()) return;
+    closeConvertTicketModal();
+    var defaultPay = ticket.payment_status === 'instapay_on_arrival'
+      ? 'إنستا باي'
+      : (ticket.payment_status === 'cod_cash' ? 'كاش' : 'إنستا باي');
+    var payOptions = ['إنستا باي', 'كاش', 'تحويل بنكي', 'فودافون كاش'].map(function (pm) {
+      return '<option value="' + eh(pm) + '"' + (pm === defaultPay ? ' selected' : '') + '>' + eh(pm) + '</option>';
+    }).join('');
+    var wrap = document.createElement('div');
+    wrap.id = 'pt-convert-modal';
+    wrap.className = 'pt-modal-backdrop';
+    wrap.innerHTML =
+      '<div class="pt-modal-box" role="dialog" aria-modal="true">' +
+        '<div class="pt-head">' +
+          '<b style="font-size:15px;color:#2563eb">تأكيد التحويل لمهمة استلام</b>' +
+          '<button type="button" class="pt-btn pt-btn-sec" id="pt-conv-close" style="padding:4px 10px">✕</button>' +
+        '</div>' +
+        '<div class="pt-sub" style="line-height:1.7">' +
+          'العميل: <b>' + eh(ticket.client_name) + '</b> (<span dir="ltr">' + eh(ticket.sd_request_id) + '</span>)<br>' +
+          'المنطقة: <b>' + eh(ticket.zone || '—') + '</b> · المندوب: <b>' + eh(courierNameById(ticket.courier_id)) + '</b><br>' +
+          'الإجمالي: <b>' + eh(money(ticket.total)) + '</b> · مهمة الاستلام: <b>40 ج.م</b> (تُحتسب بعد تأكيد المندوب فقط)' +
+        '</div>' +
+        '<div class="pt-field-wrap">' +
+          '<label class="pt-label" for="pt-conv-pay">طريقة الدفع المسجّلة مع المعاملة *</label>' +
+          '<select id="pt-conv-pay" class="pt-select">' + payOptions + '</select>' +
+          (ticket.payment_status === 'paid'
+            ? '<div class="pt-sub">التيكت مدفوع مسبقاً — تأكد من طريقة الدفع الفعلية قبل التحويل.</div>'
+            : '') +
+        '</div>' +
+        '<div style="display:flex;justify-content:flex-end;gap:8px">' +
+          '<button type="button" class="pt-btn pt-btn-sec" id="pt-conv-abort">تراجع</button>' +
+          '<button type="button" class="pt-btn pt-btn-mission" id="pt-conv-confirm">تأكيد التحويل لمهمة استلام</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(wrap);
+
+    wrap.addEventListener('click', async function (ev) {
+      if (ev.target === wrap || ev.target.id === 'pt-conv-close' || ev.target.id === 'pt-conv-abort') {
+        closeConvertTicketModal();
+        return;
+      }
+      if (ev.target.id === 'pt-conv-confirm') {
+        var btn = ev.target;
+        var chosenPay = ($('pt-conv-pay') && $('pt-conv-pay').value) || defaultPay;
+        btn.disabled = true;
+        var ok = await directConvertTicket(ticket, chosenPay);
+        if (ok) closeConvertTicketModal();
+        else btn.disabled = false;
+      }
+    });
   }
 
   function closeCancelTicketModal() {
