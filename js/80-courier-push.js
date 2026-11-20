@@ -98,7 +98,7 @@
         '<i class="fa-regular fa-bell" style="font-size:16px;color:var(--ac,var(--r-acc,inherit))"></i>' +
         '<div><b>فعّل إشعارات التيكتات الجديدة</b><div style="font-size:11px;color:var(--mu,var(--r-mute,#64748b))">عشان يوصلك تنبيه فوري أول ما يتعيّن لك تيكت استلام</div></div>' +
       '</div>' +
-      '<button type="button" id="cp-push-enable-btn" style="border:0;border-radius:10px;padding:8px 13px;font-size:12px;font-weight:700;cursor:pointer;background:var(--ac,var(--r-acc,#2C3B32));color:#fff;font-family:inherit">تفعيل الإشعارات</button>';
+      '<button type="button" id="cp-push-enable-btn" style="border:0;border-radius:10px;padding:8px 13px;font-size:12px;font-weight:700;cursor:pointer;background:var(--ac,var(--r-acc,#036b29));color:#fff;font-family:inherit">تفعيل الإشعارات</button>';
 
     body.insertBefore(banner, body.firstChild);
   }
@@ -302,7 +302,7 @@
     /* أزرار اتصال وواتساب ظاهرة على طول في تفاصيل المعاملة */
     if (act && phone && !act.querySelector('[data-p3-tx-contact]')) {
       act.insertAdjacentHTML('beforeend',
-        '<a data-p3-tx-contact="call" href="' + eh(telHref(phone)) + '" class="px-3 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-1.5" style="background:var(--r-acc,#2C3B32);color:#fff">' +
+        '<a data-p3-tx-contact="call" href="' + eh(telHref(phone)) + '" class="px-3 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-1.5" style="background:var(--r-acc,#036b29);color:#fff">' +
           '<i class="fa-solid fa-phone"></i><span>اتصال</span>' +
         '</a>' +
         '<a data-p3-tx-contact="whatsapp" target="_blank" rel="noopener" href="https://wa.me/' + eh(waNum(phone)) + '" class="px-3 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-1.5" style="border:1px solid var(--r-bd,rgba(148,163,184,.35));color:var(--r-tx,inherit)">' +

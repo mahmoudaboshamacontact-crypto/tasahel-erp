@@ -98,12 +98,12 @@
     }
     var btns = '';
     if (pendId && pendTo === 'courier') {
-      btns += '<button type="button" class="pt-btn pt-btn-papers-pri" data-pt73-papers-confirm="' + pendId + '" data-pt73-tid="' + Number(t.id) + '"><i class="fa-solid fa-file-signature"></i> استلمت الأوراق</button>';
+      btns += '<button type="button" class="pt-btn pt-btn-sec" style="border:1px solid var(--burg,#881337)" data-pt73-papers-confirm="' + pendId + '" data-pt73-tid="' + Number(t.id) + '"><i class="fa-solid fa-file-signature"></i> استلمت الأوراق</button>';
     } else if (holder === 'courier' && !pendId) {
       if (!isCancelled) {
-        btns += '<button type="button" class="pt-btn pt-btn-papers-pri" data-pt73-papers-customer="' + Number(t.id) + '"><i class="fa-solid fa-handshake"></i> تسليم الأوراق للعميل</button>';
+        btns += '<button type="button" class="pt-btn pt-btn-sec" data-pt73-papers-customer="' + Number(t.id) + '"><i class="fa-solid fa-handshake"></i> تسليم الأوراق للعميل</button>';
       }
-      btns += '<button type="button" class="pt-btn pt-btn-papers-warn" data-pt73-papers-return="' + Number(t.id) + '"><i class="fa-solid fa-rotate-left"></i> إرجاع الورق للموظف</button>';
+      btns += '<button type="button" class="pt-btn pt-btn-sec" data-pt73-papers-return="' + Number(t.id) + '"><i class="fa-solid fa-rotate-left"></i> إرجاع الورق للموظف</button>';
     } else if (pendId && pendTo === 'office') {
       btns += '<button type="button" class="pt-btn pt-btn-sec" disabled>بانتظار تأكيد الموظف للاستلام</button>';
     }
@@ -185,21 +185,21 @@
       '.pt-label{font-size:11.5px;font-weight:700;color:var(--r-mute,#64748b)}',
       '.pt-input,.pt-select,.pt-textarea{width:100%;box-sizing:border-box;border-radius:11px;border:1px solid var(--r-bd,rgba(148,163,184,.3));background:var(--r-bg,#f8fafc);color:var(--r-tx,#0f172a);padding:9px 11px;font-size:13px;font-family:inherit;outline:none}',
       'html.dark .pt-input,html.dark .pt-select,html.dark .pt-textarea{background:#0b0f17;color:#f8fafc;border-color:rgba(255,255,255,.14)}',
-      '.pt-input:focus,.pt-select:focus,.pt-textarea:focus{border-color:var(--r-acc,#2C3B32)}',
+      '.pt-input:focus,.pt-select:focus,.pt-textarea:focus{border-color:var(--r-acc,#036b29)}',
       '.pt-svc-row{border:1px solid var(--r-bd,rgba(148,163,184,.25));border-radius:13px;padding:10px;background:rgba(148,163,184,.05);display:flex;flex-direction:column;gap:8px}',
       '.pt-svc-row-grid{display:grid;grid-template-columns:2fr 1.3fr 1fr .65fr auto;gap:8px;align-items:end}',
       '.pt-pay-pills{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}',
       '.pt-pay-pill{border:1px solid var(--r-bd,rgba(148,163,184,.3));border-radius:11px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--r-tx,#0f172a);font-family:inherit;text-align:center}',
       'html.dark .pt-pay-pill{color:#f8fafc}',
-      '.pt-pay-pill.active{border-color:var(--r-acc,#2C3B32);background:rgba(200,162,82,.14);color:#2C3B32}',
-      'html.dark .pt-pay-pill.active{color:#D4AF63}',
+      '.pt-pay-pill.active{border-color:var(--r-acc,#036b29);background:rgba(200,162,82,.14);color:#036b29}',
+      'html.dark .pt-pay-pill.active{color:#881337}',
       '.pt-script-box{background:rgba(200,162,82,.07);border:1px solid rgba(200,162,82,.3);border-radius:14px;padding:13px;font-size:12.8px;line-height:1.75;display:flex;flex-direction:column;gap:8px}',
       '.pt-script-sec{padding-top:6px;border-top:1px dashed rgba(200,162,82,.25)}',
       '.pt-script-sec:first-child{padding-top:0;border-top:0}',
       '.pt-chk-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid var(--r-bd,rgba(148,163,184,.2));cursor:pointer;font-size:12.5px}',
       '.pt-btn{border:0;border-radius:12px;padding:9px 14px;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:inherit}',
-      '.pt-btn-pri{background:var(--r-acc,#2C3B32);color:#ffffff}',
-      '.pt-btn-ok{background:#059669;color:#ffffff}',
+      '.pt-btn-pri{background:var(--r-acc,#036b29);color:#ffffff}',
+      '.pt-btn-ok{background:#036b29;color:#ffffff}',
       '.pt-btn-sec{background:rgba(148,163,184,.16);color:var(--r-tx,#0f172a)}',
       'html.dark .pt-btn-sec{background:rgba(255,255,255,.1);color:#f8fafc}',
       '.pt-btn-danger{background:rgba(225,29,72,.14);color:#e11d48;border:1px solid rgba(225,29,72,.3)}',
@@ -208,26 +208,27 @@
       'html.dark .pt-price-bar{color:#34d399}',
       '.pt-ticket-item{border:1px solid var(--r-bd,rgba(148,163,184,.22));border-radius:14px;padding:13px;display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px}',
       '.pt-badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}',
-      '.pt-badge-org{background:rgba(200,162,82,.15);color:#2C3B32}',
+      '.pt-badge-org{background:rgba(200,162,82,.15);color:#036b29}',
       '.pt-badge-ok{background:rgba(16,185,129,.15);color:#10b981}',
       '.pt-badge-warn{background:rgba(245,158,11,.18);color:#d97706}',
       '.pt-badge-pur{background:rgba(139,92,246,.18);color:#7c3aed}',
       '.pt-badge-mut{background:rgba(148,163,184,.18);color:#64748b}',
       '.pt-comment-pre{font-size:11.5px;background:rgba(0,0,0,.06);padding:8px 10px;border-radius:10px;margin-top:6px;line-height:1.55;word-break:break-word}',
       'html.dark .pt-comment-pre{background:rgba(255,255,255,.06)}',
-      '.pt-courier-box{margin:10px 12px 0;padding:12px;border-radius:16px;border:1px solid rgba(200,162,82,.35);background:rgba(200,162,82,.08);color:var(--tx,#f8fafc);font-size:12.5px}',
+      '.pt-courier-box{margin:10px 12px 0;padding:12px;border-radius:16px;border:1px solid var(--bd,rgba(3,107,41,.22));background:transparent;color:var(--tx,#111C15);font-size:12.5px}',
       '.pt-tabs-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}',
       '.pt-ftab{border:1px solid var(--r-bd,rgba(148,163,184,.3));border-radius:10px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--r-tx,var(--tx,inherit));font-family:inherit}',
-      '.pt-ftab.active{background:var(--r-acc,var(--ac,#2C3B32));color:#fff;border-color:var(--r-acc,var(--ac,#2C3B32))}',
+      '.pt-ftab.active{background:#036b29;color:#fff;border-color:#881337;box-shadow:0 0 10px rgba(136,19,55,.24)}',
       '.pt-ftab-danger.active{background:#dc2626;color:#fff;border-color:#dc2626}',
       '.pt-badge-cancel{background:rgba(220,38,38,.16);color:#dc2626;border:1px solid rgba(220,38,38,.35)}',
-      '.pt-cancel-card{border:1px solid rgba(220,38,38,.45);border-right:4px solid #dc2626;border-radius:14px;padding:12px;background:var(--card,var(--r-card,#fff));color:var(--tx,var(--r-tx,#0f172a));display:flex;flex-direction:column;gap:8px}',
-      'html.dark .pt-cancel-card{background:var(--card,#141716);color:var(--tx,#f8fafc)}',
+      '.pt-cancel-card{border:1px solid rgba(220,38,38,.45);border-right:4px solid #dc2626;border-radius:14px;padding:12px;background:var(--card,#ffffff);color:var(--tx,#111C15);display:flex;flex-direction:column;gap:8px}',
+      '#courier-app:not([data-theme=light]) .pt-cancel-card,html.dark .pt-cancel-card{background:var(--card,#171E1A);color:var(--tx,#F4F7F5)}',
       '.pt-cancel-strip{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:9px;background:rgba(220,38,38,.14);color:#dc2626;font-size:12px;font-weight:800}',
-      '.pt-mission-card{border:1px solid rgba(37,99,235,.45);border-right:4px solid #2563eb;border-radius:14px;padding:12px;background:var(--card,var(--r-card,#fff));color:var(--tx,var(--r-tx,#0f172a));display:flex;flex-direction:column;gap:8px}',
-      'html.dark .pt-mission-card{background:var(--card,#141716);color:var(--tx,#f8fafc)}',
-      '.pt-mission-strip{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:9px;background:rgba(37,99,235,.14);color:#2563eb;font-size:12px;font-weight:800}',
-      '.pt-btn-mission{background:#2563eb;color:#ffffff}',
+      '.pt-mission-card{border:1px solid rgba(3,107,41,.38);border-right:4px solid #036b29;border-radius:14px;padding:12px;background:var(--card,#ffffff);color:var(--tx,#111C15);display:flex;flex-direction:column;gap:8px}',
+      '#courier-app:not([data-theme=light]) .pt-mission-card,html.dark .pt-mission-card{background:var(--card,#171E1A);color:var(--tx,#F4F7F5)}',
+      '.pt-mission-strip{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:9px;background:rgba(3,107,41,.12);color:#036b29;font-size:12px;font-weight:800}',
+      '#courier-app:not([data-theme=light]) .pt-mission-strip{color:#86efac}',
+      '.pt-btn-mission{background:#036b29;color:#ffffff}',
       '.pt-badge-papers-office{background:rgba(100,116,139,.16);color:#475569;border:1px solid rgba(100,116,139,.3)}',
       'html.dark .pt-badge-papers-office{color:#cbd5e1}',
       '.pt-badge-papers-courier{background:rgba(217,119,6,.16);color:#b45309;border:1px solid rgba(217,119,6,.35)}',
@@ -522,7 +523,7 @@
               : (t.mission_id
                 ? '<button type="button" class="pt-btn pt-btn-mission" data-pt73-confirm-mission="' + Number(t.mission_id) + '" data-pt73-tid="' + Number(t.id) + '">تأكيد المهمة</button>'
                 : '<button type="button" class="pt-btn pt-btn-sec" disabled>بانتظار ربط المهمة</button>')) +
-            (t.phone ? '<a class="pt-btn pt-btn-pri" href="tel:' + eh(t.phone) + '" data-pt73-contact="call" data-pt73-tid="' + Number(t.id) + '"><i class="fa-solid fa-phone"></i> اتصال</a>' : '') +
+            (t.phone ? '<a class="pt-btn ' + (confirmed ? 'pt-btn-pri' : 'pt-btn-sec') + '" href="tel:' + eh(t.phone) + '" data-pt73-contact="call" data-pt73-tid="' + Number(t.id) + '"><i class="fa-solid fa-phone"></i> اتصال</a>' : '') +
             (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" data-pt73-contact="whatsapp" data-pt73-tid="' + Number(t.id) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
           '</div>' +
           renderCourierPapersBlock(t) +
@@ -649,25 +650,22 @@
               (mapHref ? '<a class="ts-cbtn" href="' + mapHref + '" target="_blank" rel="noopener" aria-label="الخريطة"><i class="fa-solid fa-location-arrow"></i></a>' : '') +
             '</div>' +
             renderCourierPapersBlock(t) +
-            '<details class="ts-more">' +
-              '<summary><span>ملخص المكالمة وأدوات إضافية (واتساب · GPS · الخطوات)</span><i class="fa-solid fa-chevron-down" style="font-size:10px"></i></summary>' +
-              '<div class="ts-more-body">' +
-                renderCallChecksBadges(t.call_checks) +
-                (t.summary_comment ? '<div style="font-size:11.5px;line-height:1.6;white-space:pre-wrap;padding:8px 10px;border-radius:10px;background:var(--fld)">' + eh(t.summary_comment) + '</div>' : '') +
-                (t.staff_notes ? '<div style="font-size:11.5px;color:var(--wn);font-weight:700">ملاحظة الموظف: ' + eh(t.staff_notes) + '</div>' : '') +
-                '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
-                  '<button type="button" class="cp-a cp-sm" data-pt73-route="' + eh(t.sd_request_id) + '">' + (inRoute ? 'إزالة من خط السير' : '+ ضيف لخط السير') + '</button>' +
-                  (waPh ? '<a class="cp-a cp-sm wa" href="https://wa.me/' + eh(waPh) + '" data-pt73-contact="whatsapp" data-pt73-tid="' + Number(t.id) + '" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
-                  '<button type="button" class="cp-a cp-sm" data-pt73-pin="' + eh(t.sd_request_id) + '"><i class="fa-solid fa-map-pin"></i> ' + (pin ? 'تحديث اللوكيشن' : 'حفظ اللوكيشن') + '</button>' +
-                '</div>' +
-                '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px">' +
-                  steps.map(function (sp) {
-                    var active = curStep === sp[0];
-                    return '<button type="button" class="cp-a cp-sm' + (active ? ' pri' : '') + '" data-pt73-step="' + sp[0] + '" data-pt73-lbl="' + sp[1] + '"' + commonAttrs + '>' + (active ? '✓ ' : '') + sp[1] + '</button>';
-                  }).join('') +
-                '</div>' +
-              '</div>' +
-            '</details>' +
+            renderCallChecksBadges(t.call_checks) +
+            (t.staff_notes ? '<div style="font-size:11.5px;color:var(--burg,#881337);font-weight:700;margin-top:6px">ملاحظة الموظف: ' + eh(t.staff_notes) + '</div>' : '') +
+            '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' +
+              '<button type="button" class="cp-a cp-sm" data-pt73-route="' + eh(t.sd_request_id) + '">' + (inRoute ? 'إزالة من خط السير' : '+ ضيف لخط السير') + '</button>' +
+              (waPh ? '<a class="cp-a cp-sm" href="https://wa.me/' + eh(waPh) + '" data-pt73-contact="whatsapp" data-pt73-tid="' + Number(t.id) + '" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
+              '<button type="button" class="cp-a cp-sm" data-pt73-pin="' + eh(t.sd_request_id) + '"><i class="fa-solid fa-map-pin"></i> ' + (pin ? 'تحديث اللوكيشن' : 'حفظ اللوكيشن') + '</button>' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin-top:6px">' +
+              steps.map(function (sp) {
+                var active = curStep === sp[0];
+                return '<button type="button" class="cp-a cp-sm" style="' + (active ? 'border:1px solid var(--burg,#881337);font-weight:800' : '') + '" data-pt73-step="' + sp[0] + '" data-pt73-lbl="' + sp[1] + '"' + commonAttrs + '>' + (active ? '✓ ' : '') + sp[1] + '</button>';
+              }).join('') +
+            '</div>' +
+            (t.summary_comment
+              ? '<details class="ts-more"><summary><span>ملخص المكالمة</span><i class="fa-solid fa-chevron-down" style="font-size:10px"></i></summary><div class="ts-more-body"><div style="font-size:11.5px;line-height:1.6;white-space:pre-wrap;padding:8px 10px;border-radius:10px;background:var(--fld);color:var(--tx)">' + eh(t.summary_comment) + '</div></div></details>'
+              : '') +
           '</div>';
         }).join('') : (!missionsHtml ? '<div class="pt-sub" style="text-align:center;padding:10px 0">مفيش تيكتات استلام نشطة حالياً.</div>' : ''))));
     } finally { __pt73Rendering = false; }
@@ -1018,7 +1016,7 @@
       var hubNote = svc.delivery_mode === 'hub_abbasiya' ? ' (التسليم النهائي في نقطة تجمع جوازات العباسية)' : '';
       return '<div style="margin-top:4px">' +
         '• <b>' + eh(r.service_name) + ':</b> هتحضر <b>' + eh(docs) + '</b> — المدة ' + dur + eh(hubNote) + '.' +
-        (extra ? '<div style="margin-top:2px;color:var(--r-acc,#2C3B32)"><b>تنبيه مهم للعميل:</b> ' + eh(extra) + '</div>' : '') +
+        (extra ? '<div style="margin-top:2px;color:var(--r-acc,#036b29)"><b>تنبيه مهم للعميل:</b> ' + eh(extra) + '</div>' : '') +
       '</div>';
     }).join('');
 
@@ -1316,7 +1314,7 @@
               (t.cancelled_at ? ' · <b>التاريخ:</b> ' + eh(fmtStepTime(t.cancelled_at)) : '') +
               (t.courier_id ? ' · <b>المندوب:</b> ' + (t.courier_ack_at ? 'أكّد الإلغاء (' + eh(fmtStepTime(t.courier_ack_at)) + ')' : 'بانتظار تأكيد المندوب') : '') + '</div>'
             : '') +
-          (t.staff_notes ? '<div class="pt-sub" style="margin-top:3px;color:var(--r-acc,#2C3B32)"><b>ملاحظات:</b> ' + eh(t.staff_notes) + '</div>' : '') +
+          (t.staff_notes ? '<div class="pt-sub" style="margin-top:3px;color:var(--r-acc,#036b29)"><b>ملاحظات:</b> ' + eh(t.staff_notes) + '</div>' : '') +
           (t.summary_comment ? '<div class="pt-comment-pre">' + eh(t.summary_comment) + '</div>' : '') +
         '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:6px">' +

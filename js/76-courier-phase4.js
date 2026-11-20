@@ -86,7 +86,7 @@
       '.cp4-bar{display:flex;align-items:center;gap:6px;overflow-x:auto;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--bd);scrollbar-width:none}',
       '.cp4-bar::-webkit-scrollbar{display:none}',
       '.cp4-pill{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;font-size:11.5px;font-weight:700;background:var(--fld);color:var(--tx);border:1px solid var(--bd);cursor:pointer;white-space:nowrap;font-family:inherit}',
-      '.cp4-pill.on{background:rgba(16,185,129,.15);border-color:#10b981;color:#10b981}',
+      '.cp4-pill.on{background:#036b29;border-color:#881337;color:#ffffff}',
       '.cp4-pill.warn{background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.45);color:#f59e0b}',
       '.cp4-pill.drv.on{background:rgba(239,68,68,.16);border-color:#ef4444;color:#f87171}',
       '.cp4-shield{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:rgba(239,68,68,.13);color:#f87171;border:1px solid rgba(239,68,68,.28)}',
@@ -96,13 +96,13 @@
       '.cp4-overlay{position:fixed;inset:0;z-index:100020;background:rgba(12,10,9,.82);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}',
       '.cp4-dialog{width:100%;max-width:440px;background:var(--card,#181412);color:var(--tx,#f4eee8);border:1px solid var(--bd,rgba(255,255,255,.1));border-radius:20px;padding:18px;box-shadow:0 20px 50px rgba(0,0,0,.55)}',
       '.cp4-dialog .cp-btn{border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:11px 16px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;color:var(--tx,#f4eee8);background:var(--fld,#241e1a)}',
-      '.cp4-dialog .cp-btn.cp-go{background:#10b981;border-color:#10b981;color:#04110c}',
+      '.cp4-dialog .cp-btn.cp-go{background:#036b29;border-color:#036b29;color:#ffffff}',
       '.cp4-dialog .cp-btn:disabled{opacity:.55;cursor:default}',
       '.cp4-chk-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--fld,#211b17);border:1px solid var(--bd,rgba(255,255,255,.08));margin-bottom:8px;cursor:pointer;font-size:13px;font-weight:600}',
-      '.cp4-chk-row.on{border-color:#10b981;background:rgba(16,185,129,.1)}',
+      '.cp4-chk-row.on{border-color:#036b29;background:rgba(3,107,41,.12)}',
       '.cp4-actions-strip{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)}',
       '.cp4-act-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:9px;font-size:11px;font-weight:700;background:var(--fld);color:var(--tx);border:1px solid var(--bd);cursor:pointer;font-family:inherit}',
-      '.cp4-act-btn.pri{background:rgba(16,185,129,.14);border-color:rgba(16,185,129,.4);color:#10b981}',
+      '.cp4-act-btn.pri{background:var(--fld);border-color:var(--burg,#881337);color:var(--tx)}',
       '.cp4-act-btn.wn{background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.4);color:#f59e0b}',
       '.cp4-thermal{background:#fff;color:#0f172a;border-radius:14px;padding:16px;font-family:"Cairo",sans-serif;border:1px dashed #94a3b8;max-width:340px;margin:0 auto}',
       '.cp4-radar-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}',
@@ -341,15 +341,7 @@
         '<button type="button" class="cp4-act-btn" data-cp4-act="open-invoice" data-tx="' + eh(tx) + '">فاتورة وإيصال</button>' +
         '<button type="button" class="cp4-act-btn wn" data-cp4-act="open-zeroblame" data-tx="' + eh(tx) + '">العميل غير متاح</button>' +
         '<button type="button" class="cp4-act-btn" data-cp4-act="open-transfer" data-tx="' + eh(tx) + '" data-kind="tx">تحويل لزميل</button>';
-      if (card.classList.contains('cpn-hero') || card.classList.contains('ts-card')) {
-        var det = document.createElement('details');
-        det.className = 'ts-more';
-        det.innerHTML = '<summary><span>أدوات المعاملة (تحصيل · فاتورة · غير متاح · تحويل)</span><i class="fa-solid fa-chevron-down" style="font-size:10px"></i></summary>';
-        det.appendChild(strip);
-        card.appendChild(det);
-      } else {
-        card.appendChild(strip);
-      }
+      card.appendChild(strip);
     });
 
     var ptBox = $('pt73-courier-tickets');
@@ -378,7 +370,7 @@
           '<button type="button" class="cp4-act-btn" data-cp4-act="open-invoice" data-tx="' + eh(sdId) + '">فاتورة وإيصال</button>' +
           '<button type="button" class="cp4-act-btn wn" data-cp4-act="open-zeroblame" data-tx="' + eh(sdId) + '">العميل غير متاح</button>' +
           '<button type="button" class="cp4-act-btn" data-cp4-act="open-transfer" data-tx="' + eh(sdId) + '" data-kind="ticket">تحويل لزميل</button>';
-        var moreHost = row.querySelector('.ts-more-body'); if (moreHost) moreHost.appendChild(act); else row.appendChild(act);
+        var sumDet = row.querySelector('details.ts-more'); if (sumDet) row.insertBefore(act, sumDet); else row.appendChild(act);
       });
     }
   }
