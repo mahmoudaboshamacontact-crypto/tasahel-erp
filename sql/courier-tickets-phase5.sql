@@ -41,8 +41,8 @@ declare
   v_now        timestamptz := now();
   v_mission_id bigint;
 begin
-  if not public.is_manager() then
-    raise exception 'التحويل لمهمة استلام متاح للمدير فقط' using errcode = '42501';
+  if not public.is_internal_user() then
+    raise exception 'التحويل لمهمة استلام متاح للموظفين' using errcode = '42501';
   end if;
 
   select * into v_t

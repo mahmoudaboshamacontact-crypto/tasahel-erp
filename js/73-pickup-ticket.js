@@ -996,8 +996,8 @@
   async function directConvertTicket(ticket, payMethodOverride) {
     if (!sbClient) return false;
     if (st.converting) return false;
-    if (!isManager()) {
-      toast('التحويل لمهمة استلام متاح للمدير فقط', 'error');
+    if (!isAllowedStaff()) {
+      toast('التحويل لمهمة استلام متاح للموظفين', 'error');
       return false;
     }
     if (!ticket.courier_id) {
@@ -1189,7 +1189,7 @@
           (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
           '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="detail" data-id="' + Number(t.id) + '">التفاصيل والتواصل</button>' +
           '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="copy" data-id="' + Number(t.id) + '">نسخ الكومنت</button>' +
-          (canAction && isManager()
+          (canAction && isAllowedStaff()
             ? (t.courier_id
               ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-act="convert" data-id="' + Number(t.id) + '">تحويل لمهمة استلام</button>'
               : '<button type="button" class="pt-btn pt-btn-sec" disabled title="لازم تعيّن مندوب قبل التحويل">تحويل لمهمة استلام</button><span class="pt-sub" style="align-self:center">عيّن مندوب أولاً للتحويل</span>')
@@ -1402,7 +1402,7 @@
         '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
           (t.phone ? '<a class="pt-btn pt-btn-pri" href="tel:' + eh(t.phone) + '"><i class="fa-solid fa-phone"></i> اتصال</a>' : '') +
           (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
-          (isManager() && (t.status === 'open' || t.status === 'with_courier')
+          (isAllowedStaff() && (t.status === 'open' || t.status === 'with_courier')
             ? (t.courier_id
               ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-act="convert" data-id="' + Number(t.id) + '">تحويل لمهمة استلام</button>'
               : '<button type="button" class="pt-btn pt-btn-sec" disabled>تحويل لمهمة استلام (بدون مندوب)</button>')
@@ -1602,7 +1602,7 @@
       return;
     }
     if (b.dataset.ptAct === 'convert') {
-      if (!isManager()) return toast('التحويل لمهمة استلام متاح للمدير فقط', 'error');
+      if (!isAllowedStaff()) return toast('التحويل لمهمة استلام متاح للموظفين', 'error');
       if (!t.courier_id) return toast('لازم تعيّن مندوب للتيكت قبل التحويل لمهمة استلام', 'error');
       openConvertTicketModal(t);
       return;
@@ -1623,7 +1623,7 @@
   }
 
   function openConvertTicketModal(ticket) {
-    if (!ticket || !isManager()) return;
+    if (!ticket || !isAllowedStaff()) return;
     closeConvertTicketModal();
     var defaultPay = ticket.payment_status === 'instapay_on_arrival'
       ? 'إنستا باي'
