@@ -73,7 +73,7 @@
     } catch (e) { return ym; }
   };
   const dayLabel = s => { try { return new Date(s + 'T12:00:00Z').toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }); } catch (e) { return s; } };
-  const timeOf = iso => { try { if (!iso) return ''; return new Date(iso).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', timeZone: TZ }); } catch (e) { return ''; } };
+  const timeOf = iso => { try { if (!iso) return ''; return new Date(iso).toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: TZ }); } catch (e) { return ''; } };
   const rangeOf = p => {
     const t = today();
     if (p === 'today') return [t, t];
@@ -409,6 +409,16 @@
     if (window.CourierV12) window.CourierV12.haptic(true);
     toast('📍 تم حفظ وتثبيت لوكيشن العميل بنجاح ✓');
     renderTab(false);
+    if (window.TasahelGeo && window.TasahelGeo.reverseGeocode) {
+      window.TasahelGeo.reverseGeocode(lat, lng).then(street => {
+        if (street && st.pins[tx]) {
+          st.pins[tx].zone = street;
+          savePinsState();
+          toast('📍 تم تحديد العنوان: ' + street);
+          renderTab(false);
+        }
+      }).catch(() => null);
+    }
   }
   function saveClientPin(tx) {
     tx = String(tx || '');
@@ -502,6 +512,7 @@
         '<button type="button" class="cp-a cp-sm" data-act="route-clear">مسح الكل</button>' +
       '</div>' +
       '<div>' + stepsChain + '</div>' +
+      '<div id="cp-geo-route-eta"></div>' +
       '<button type="button" class="cp-big" data-act="route-autosort"><i class="fa-solid fa-location-arrow"></i> ابدأ التحرك وافتح خط السير على الخريطة</button>' +
     '</section>';
   }
@@ -958,7 +969,16 @@
   function tickClock() {
     const t = $('cp-time'); if (!t) return;
     const now = new Date();
-    const a = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ });
+    let a = '';
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: TZ }).formatToParts(now);
+      const hh = (parts.find(p => p.type === 'hour') || {}).value || '';
+      const mm = (parts.find(p => p.type === 'minute') || {}).value || '';
+      const dp = ((parts.find(p => p.type === 'dayPeriod') || {}).value || '').toUpperCase() === 'PM' ? 'م' : 'ص';
+      a = hh + ':' + mm + ' ' + dp;
+    } catch (e) {
+      a = now.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: TZ });
+    }
     if (t.textContent !== a) t.textContent = a;
     const eb = $('cp-v12-earn');
     if (eb) { const m = money(todayEarnedAmt()); if (eb.textContent !== m) eb.textContent = m; }
@@ -1016,7 +1036,13 @@
           : '<div style="font-size:12px;color:var(--mu);text-align:center;padding:6px">مفيش نتائج مطابقة في كل الأيام</div>') : '') +
       '</div>';
     }
+    html += '<div id="cp-weather-slot"></div>';
     box.innerHTML = html;
+    if (window.TasahelGeo && window.TasahelGeo.hydrateWeatherSlot) {
+      const sl = $('cp-weather-slot');
+      const pos = st.myPos || {};
+      window.TasahelGeo.hydrateWeatherSlot(sl, pos.lat, pos.lng);
+    }
   }
   function renderTab(top) {
     renderTopBanners();
@@ -1037,6 +1063,27 @@
     else viewChat();
 
     swapFa(b); swapFa($('cp-v12-top-banners'));
+    const etaBox = $('cp-geo-route-eta');
+    if (etaBox && window.TasahelGeo && window.TasahelGeo.calcRouteEta && st.routeTxIds && st.routeTxIds.length) {
+      const wps = [];
+      if (st.myPos && st.myPos.lat && st.myPos.lng) wps.push({ lat: st.myPos.lat, lng: st.myPos.lng });
+      else wps.push({ lat: 30.0012, lng: 31.1765 });
+      st.routeTxIds.forEach(rtx => {
+        const rit = byTx(rtx);
+        if (rit && !rit.confirmed) {
+          const z = detectZoneAndCoords(rit);
+          if (z && z.lat && z.lng) wps.push({ lat: z.lat, lng: z.lng });
+        }
+      });
+      if (wps.length >= 2) {
+        window.TasahelGeo.calcRouteEta(wps).then(info => {
+          const el = $('cp-geo-route-eta');
+          if (info && el) {
+            el.innerHTML = '<div class="cp-geo-eta">🚗 المسار الفعلي: ' + num(info.km) + ' كم · ~' + num(info.min) + ' دقيقة <span style="opacity:.65;font-weight:500">(OSM)</span></div>';
+          }
+        }).catch(() => null);
+      }
+    }
     b.scrollTop = top ? 0 : y;
     if (activeId === 'cp-trip-q' && $('cp-trip-q')) {
       const inp = $('cp-trip-q'); inp.focus();

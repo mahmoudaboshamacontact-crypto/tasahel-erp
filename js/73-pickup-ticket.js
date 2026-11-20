@@ -86,20 +86,20 @@
       '.pt-label{font-size:11.5px;font-weight:700;color:var(--r-mute,#64748b)}',
       '.pt-input,.pt-select,.pt-textarea{width:100%;box-sizing:border-box;border-radius:11px;border:1px solid var(--r-bd,rgba(148,163,184,.3));background:var(--r-bg,#f8fafc);color:var(--r-tx,#0f172a);padding:9px 11px;font-size:13px;font-family:inherit;outline:none}',
       'html.dark .pt-input,html.dark .pt-select,html.dark .pt-textarea{background:#0b0f17;color:#f8fafc;border-color:rgba(255,255,255,.14)}',
-      '.pt-input:focus,.pt-select:focus,.pt-textarea:focus{border-color:var(--r-acc,#ea580c)}',
+      '.pt-input:focus,.pt-select:focus,.pt-textarea:focus{border-color:var(--r-acc,#2C3B32)}',
       '.pt-svc-row{border:1px solid var(--r-bd,rgba(148,163,184,.25));border-radius:13px;padding:10px;background:rgba(148,163,184,.05);display:flex;flex-direction:column;gap:8px}',
       '.pt-svc-row-grid{display:grid;grid-template-columns:2fr 1.3fr 1fr .65fr auto;gap:8px;align-items:end}',
       '.pt-pay-pills{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}',
       '.pt-pay-pill{border:1px solid var(--r-bd,rgba(148,163,184,.3));border-radius:11px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--r-tx,#0f172a);font-family:inherit;text-align:center}',
       'html.dark .pt-pay-pill{color:#f8fafc}',
-      '.pt-pay-pill.active{border-color:var(--r-acc,#ea580c);background:rgba(234,88,12,.14);color:#ea580c}',
-      'html.dark .pt-pay-pill.active{color:#fb923c}',
-      '.pt-script-box{background:rgba(234,88,12,.07);border:1px solid rgba(234,88,12,.3);border-radius:14px;padding:13px;font-size:12.8px;line-height:1.75;display:flex;flex-direction:column;gap:8px}',
-      '.pt-script-sec{padding-top:6px;border-top:1px dashed rgba(234,88,12,.25)}',
+      '.pt-pay-pill.active{border-color:var(--r-acc,#2C3B32);background:rgba(200,162,82,.14);color:#2C3B32}',
+      'html.dark .pt-pay-pill.active{color:#D4AF63}',
+      '.pt-script-box{background:rgba(200,162,82,.07);border:1px solid rgba(200,162,82,.3);border-radius:14px;padding:13px;font-size:12.8px;line-height:1.75;display:flex;flex-direction:column;gap:8px}',
+      '.pt-script-sec{padding-top:6px;border-top:1px dashed rgba(200,162,82,.25)}',
       '.pt-script-sec:first-child{padding-top:0;border-top:0}',
       '.pt-chk-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid var(--r-bd,rgba(148,163,184,.2));cursor:pointer;font-size:12.5px}',
       '.pt-btn{border:0;border-radius:12px;padding:9px 14px;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:inherit}',
-      '.pt-btn-pri{background:var(--r-acc,#ea580c);color:#ffffff}',
+      '.pt-btn-pri{background:var(--r-acc,#2C3B32);color:#ffffff}',
       '.pt-btn-ok{background:#059669;color:#ffffff}',
       '.pt-btn-sec{background:rgba(148,163,184,.16);color:var(--r-tx,#0f172a)}',
       'html.dark .pt-btn-sec{background:rgba(255,255,255,.1);color:#f8fafc}',
@@ -109,14 +109,14 @@
       'html.dark .pt-price-bar{color:#34d399}',
       '.pt-ticket-item{border:1px solid var(--r-bd,rgba(148,163,184,.22));border-radius:14px;padding:13px;display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px}',
       '.pt-badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}',
-      '.pt-badge-org{background:rgba(234,88,12,.15);color:#ea580c}',
+      '.pt-badge-org{background:rgba(200,162,82,.15);color:#2C3B32}',
       '.pt-badge-ok{background:rgba(16,185,129,.15);color:#10b981}',
       '.pt-badge-warn{background:rgba(245,158,11,.18);color:#d97706}',
       '.pt-badge-pur{background:rgba(139,92,246,.18);color:#7c3aed}',
       '.pt-badge-mut{background:rgba(148,163,184,.18);color:#64748b}',
       '.pt-comment-pre{font-size:11.5px;background:rgba(0,0,0,.06);padding:8px 10px;border-radius:10px;margin-top:6px;line-height:1.55;word-break:break-word}',
       'html.dark .pt-comment-pre{background:rgba(255,255,255,.06)}',
-      '.pt-courier-box{margin:10px 12px 0;padding:12px;border-radius:16px;border:1px solid rgba(234,88,12,.35);background:rgba(234,88,12,.08);color:var(--tx,#f8fafc);font-size:12.5px}',
+      '.pt-courier-box{margin:10px 12px 0;padding:12px;border-radius:16px;border:1px solid rgba(200,162,82,.35);background:rgba(200,162,82,.08);color:var(--tx,#f8fafc);font-size:12.5px}',
       '@media (max-width:960px){.pt-grid2{grid-template-columns:1fr}}',
       '@media (max-width:640px){.pt-svc-row-grid{grid-template-columns:1fr 1fr}.pt-pay-pills{grid-template-columns:1fr}}',
       '@media (max-width:520px){.pt-fgrid{grid-template-columns:1fr}}'
@@ -550,7 +550,7 @@
       var hubNote = svc.delivery_mode === 'hub_abbasiya' ? ' (التسليم النهائي في نقطة تجمع جوازات العباسية)' : '';
       return '<div style="margin-top:4px">' +
         '• <b>' + eh(r.service_name) + ':</b> هتحضر <b>' + eh(docs) + '</b> — المدة ' + dur + eh(hubNote) + '.' +
-        (extra ? '<div style="margin-top:2px;color:var(--r-acc,#ea580c)"><b>تنبيه مهم للعميل:</b> ' + eh(extra) + '</div>' : '') +
+        (extra ? '<div style="margin-top:2px;color:var(--r-acc,#2C3B32)"><b>تنبيه مهم للعميل:</b> ' + eh(extra) + '</div>' : '') +
       '</div>';
     }).join('');
 
@@ -804,7 +804,7 @@
             (t.converted_tx_id ? '<span class="pt-badge pt-badge-org" dir="ltr">' + eh(t.converted_tx_id) + '</span>' : '') +
           '</div>' +
           '<div class="pt-sub" style="margin-top:5px">' + svcsHtml + ' · الإجمالي: <b>' + eh(money(t.total)) + '</b> · الميعاد: ' + eh(t.slot_pref) + (t.zone ? ' · ' + eh(t.zone) : '') + '</div>' +
-          (t.staff_notes ? '<div class="pt-sub" style="margin-top:3px;color:var(--r-acc,#ea580c)"><b>ملاحظات:</b> ' + eh(t.staff_notes) + '</div>' : '') +
+          (t.staff_notes ? '<div class="pt-sub" style="margin-top:3px;color:var(--r-acc,#2C3B32)"><b>ملاحظات:</b> ' + eh(t.staff_notes) + '</div>' : '') +
           (t.summary_comment ? '<div class="pt-comment-pre">' + eh(t.summary_comment) + '</div>' : '') +
         '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
