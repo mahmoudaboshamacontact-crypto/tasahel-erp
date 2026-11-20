@@ -43,18 +43,33 @@ self.addEventListener('fetch', e => {
   if (CDN.indexOf(url.hostname) !== -1) { e.respondWith(staleWhileRevalidate(req)); return; }
 });
 
-// إشعارات الدفع (الجزء ي): عنوان ونص قصير بس، والضغط عليه يفتح التطبيق.
+// إشعارات الدفع (الجزء ي + المرحلة 3): عنوان ونص قصير بأيقونة السيستم، والضغط يفتح التطبيق/تاب التيكتات.
 self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) { /* نص عادي */ }
+  const tag = String(d.tag || 'notif');
+  const targetUrl = tag === 'pickup_ticket' ? './?cp_tab=tickets' : './';
   e.waitUntil(self.registration.showNotification(String(d.title || 'تساهيل').slice(0, 80), {
-    body: String(d.body || '').slice(0, 160), tag: d.tag || 'notif', icon: 'icon-192.png', badge: 'icon-192.png', dir: 'rtl', lang: 'ar'
+    body: String(d.body || '').slice(0, 160),
+    tag: tag,
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    dir: 'rtl',
+    lang: 'ar',
+    data: { tag: tag, url: targetUrl }
   }));
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
+  const data = (e.notification && e.notification.data) || {};
+  const targetUrl = data.url || './';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-    for (const c of cs) { if ('focus' in c) return c.focus(); }
-    return self.clients.openWindow('./');
+    for (const c of cs) {
+      if ('focus' in c) {
+        try { c.postMessage({ type: 'TS_NOTIF_CLICK', tag: data.tag || 'notif' }); } catch (_) {}
+        return c.focus();
+      }
+    }
+    return self.clients.openWindow(targetUrl);
   }));
 });

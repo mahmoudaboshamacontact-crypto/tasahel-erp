@@ -38,8 +38,49 @@
     busy: false,
     myUid: null,
     collectManual: false,
+    rtChannel: null,
+    rtDetailChannel: null,
+    rtStatus: 'idle',
+    detailTicketId: null,
+    detailContacts: [],
     draftRows: [{ service_name: '', doc_type: '', sd_service_id: '', qty: 1, unit_price: 0 }]
   };
+
+  var STEP_ORDER = ['accepted', 'call_attempt', 'on_the_way', 'waiting', 'papers_received'];
+  var STEP_LABELS = {
+    accepted: 'تم قبول التيكت',
+    call_attempt: 'كلمت العميل',
+    on_the_way: 'في طريقي',
+    waiting: 'وصلت للعميل',
+    papers_received: 'استلمت الأوراق'
+  };
+  var OUTCOME_LABELS = {
+    answered: 'رد العميل',
+    no_answer: 'لم يرد',
+    wrong_number: 'رقم غلط',
+    postponed: 'طلب تأجيل'
+  };
+  function fmtStepTime(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString('ar-EG', {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
+      });
+    } catch (e) { return String(iso); }
+  }
+  function logTicketContact(ticketId, channel) {
+    if (!sbClient || !ticketId) return;
+    sbClient.rpc('courier_log_contact', {
+      p_ticket_id: Number(ticketId),
+      p_tx: null,
+      p_channel: channel,
+      p_outcome: null
+    }).then(function (res) {
+      if (res && res.error) toast('ما اتسجلش التواصل', 'error');
+    }).catch(function () {
+      toast('ما اتسجلش التواصل', 'error');
+    });
+  }
 
   function getCurUser() {
     return (typeof currentUser !== 'undefined' && currentUser) ? currentUser : window.currentUser;
@@ -180,10 +221,10 @@
 
   async function loadTickets() {
     if (!sbClient) return;
-    var colsNew = 'id,sd_request_id,sd_service_id,client_name,phone,address,zone,zone_key,service_name,qty,unit_price,total,executor,slot_pref,courier_id,call_checks,summary_comment,status,created_by,created_at,items,payment_status,collect_amount,staff_notes,converted_tx_id';
+    var colsNew = 'id,sd_request_id,sd_service_id,client_name,phone,address,zone,zone_key,service_name,qty,unit_price,total,executor,slot_pref,courier_id,call_checks,summary_comment,status,courier_step,courier_step_at,created_by,created_at,items,payment_status,collect_amount,staff_notes,converted_tx_id';
     var colsOld = 'id,sd_request_id,sd_service_id,client_name,phone,address,zone,service_name,qty,unit_price,total,executor,slot_pref,courier_id,call_checks,summary_comment,status,created_by,created_at';
     var r = await sbClient.from('pickup_tickets').select(colsNew).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(60);
-    if (r.error && /42703|zone_key|items|payment_status|staff_notes/i.test((r.error.message || '') + ' ' + (r.error.code || ''))) {
+    if (r.error && /42703|courier_step|zone_key|items|payment_status|staff_notes/i.test((r.error.message || '') + ' ' + (r.error.code || ''))) {
       r = await sbClient.from('pickup_tickets').select(colsOld).neq('status', 'cancelled').order('created_at', { ascending: false }).limit(60);
     }
     if (r.error) throw r.error;
@@ -326,15 +367,13 @@
         ['call_attempt', 'كلمت العميل'],
         ['on_the_way', 'في طريقي'],
         ['waiting', 'وصلت للعميل'],
-        ['near_office', 'تم استلام الأوراق']
+        ['papers_received', 'استلمت الأوراق']
       ];
       var rIds = getRouteIds();
       var pins = getPinsMap();
       var newCount = 0;
       st.courierTickets.forEach(function (t) {
-        var cs = '';
-        try { cs = localStorage.getItem('pt73_step_' + t.id) || ''; } catch (e) {}
-        if (!cs) newCount++;
+        if (!t.courier_step) newCount++;
       });
 
       var secTitle = newCount > 0
@@ -352,8 +391,7 @@
           }).join(' + ');
           var waPh = cleanWaPhone(t.phone);
           var mapQ = encodeURIComponent([t.zone, t.address].filter(Boolean).join(' '));
-          var curStep = '';
-          try { curStep = localStorage.getItem('pt73_step_' + t.id) || ''; } catch (e) {}
+          var curStep = t.courier_step || '';
           var isPaid = t.payment_status === 'paid' || Number(t.collect_amount || 0) <= 0;
           var rIdx = rIds.indexOf(String(t.sd_request_id));
           var inRoute = rIdx !== -1;
@@ -362,16 +400,15 @@
             ? ('https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(pin.lat + ',' + pin.lng))
             : (mapQ ? ('https://www.google.com/maps/search/?api=1&query=' + mapQ) : '');
 
-          /* 5-step progress matching mockup: 1 قبول -> 2 اتصال -> 3 خط السير -> 4 في الطريق -> 5 تم */
+          /* 5-step progress from DB: accepted -> call_attempt -> on_the_way -> waiting -> papers_received */
           var doneUpTo = 0, curIdx = 1, statusTxt = 'جديد — بانتظار قبولك';
-          if (curStep === 'near_office') { doneUpTo = 5; curIdx = 6; statusTxt = 'تم استلام الأوراق'; }
+          if (curStep === 'papers_received') { doneUpTo = 5; curIdx = 6; statusTxt = 'استلمت الأوراق'; }
           else if (curStep === 'waiting') { doneUpTo = 4; curIdx = 5; statusTxt = 'وصلت للعميل'; }
-          else if (curStep === 'on_the_way') { doneUpTo = 3; curIdx = 4; statusTxt = 'في الطريق للعميل'; }
-          else if (inRoute) { doneUpTo = 3; curIdx = 4; statusTxt = 'في خط السير'; }
-          else if (curStep === 'call_attempt') { doneUpTo = 2; curIdx = 3; statusTxt = 'تم الاتصال بالعميل'; }
+          else if (curStep === 'on_the_way') { doneUpTo = 3; curIdx = 4; statusTxt = 'في طريقي للعميل'; }
+          else if (curStep === 'call_attempt') { doneUpTo = 2; curIdx = 3; statusTxt = 'كلمت العميل'; }
           else if (curStep === 'accepted') { doneUpTo = 1; curIdx = 2; statusTxt = 'مقبول — اتصل بالعميل'; }
 
-          var stepperLabels = ['قبول', 'اتصال', 'خط السير', 'في الطريق', 'تم'];
+          var stepperLabels = ['قبول', 'اتصال', 'في الطريق', 'وصلت', 'الأوراق'];
           var stepperHtml = '<div class="ts-stepper">' + stepperLabels.map(function (lbl, idx) {
             var n = idx + 1;
             var isDone = n <= doneUpTo;
@@ -380,21 +417,21 @@
             return '<div class="ts-step ' + cls + '"><div class="ts-dot">' + (isDone ? '✓' : n) + '</div><div class="ts-slbl">' + lbl + '</div></div>';
           }).join('') + '</div>';
 
-          /* Primary 1-click progressive CTA button */
+          /* Primary 1-click progressive CTA button (strict DB order) */
           var commonAttrs = ' data-pt73-tid="' + Number(t.id) + '" data-pt73-sd="' + eh(t.sd_request_id) + '" data-pt73-cl="' + eh(t.client_name) + '"';
           var ctaHtml = '';
           if (!curStep) {
             ctaHtml = '<button type="button" class="ts-cta gold" data-pt73-step="accepted" data-pt73-lbl="تأكيد استلام التيكت"' + commonAttrs + '><i class="fa-regular fa-circle-check"></i> تأكيد استلام التيكت</button>';
           } else if (curStep === 'accepted') {
             ctaHtml = '<button type="button" class="ts-cta" data-pt73-step="call_attempt" data-pt73-lbl="كلمت العميل"' + commonAttrs + '><i class="fa-solid fa-phone"></i> سجّل تم الاتصال</button>';
-          } else if (curStep === 'call_attempt' && !inRoute) {
-            ctaHtml = '<button type="button" class="ts-cta" data-pt73-route="' + eh(t.sd_request_id) + '"><i class="fa-solid fa-route"></i> أضف لخط السير</button>';
-          } else if (curStep !== 'on_the_way' && curStep !== 'waiting' && curStep !== 'near_office') {
-            ctaHtml = '<button type="button" class="ts-cta" data-pt73-step="on_the_way" data-pt73-lbl="في طريقي"' + commonAttrs + '><i class="fa-solid fa-location-arrow"></i> ابدأ التحرك الآن</button>';
-          } else if (curStep === 'on_the_way' || curStep === 'waiting') {
-            ctaHtml = '<button type="button" class="ts-cta done" data-pt73-step="near_office" data-pt73-lbl="تم استلام الأوراق"' + commonAttrs + '><i class="fa-solid fa-check"></i> تم استلام الأوراق</button>';
+          } else if (curStep === 'call_attempt') {
+            ctaHtml = '<button type="button" class="ts-cta" data-pt73-step="on_the_way" data-pt73-lbl="في طريقي"' + commonAttrs + '><i class="fa-solid fa-location-arrow"></i> في طريقي للعميل</button>';
+          } else if (curStep === 'on_the_way') {
+            ctaHtml = '<button type="button" class="ts-cta" data-pt73-step="waiting" data-pt73-lbl="وصلت للعميل"' + commonAttrs + '><i class="fa-solid fa-location-dot"></i> وصلت للعميل</button>';
+          } else if (curStep === 'waiting') {
+            ctaHtml = '<button type="button" class="ts-cta done" data-pt73-step="papers_received" data-pt73-lbl="استلمت الأوراق"' + commonAttrs + '><i class="fa-solid fa-check"></i> استلمت الأوراق</button>';
           } else {
-            ctaHtml = '<button type="button" class="ts-cta done" disabled><i class="fa-solid fa-check-double"></i> تم الاستلام بنجاح</button>';
+            ctaHtml = '<button type="button" class="ts-cta done" disabled><i class="fa-solid fa-check-double"></i> استلمت الأوراق بنجاح</button>';
           }
 
           var cardCls = 'ts-card pt73-ticket-item' + (!curStep ? ' new-ticket' : (inRoute ? ' in-route' : ''));
@@ -424,7 +461,7 @@
             stepperHtml +
             '<div class="ts-actions">' +
               ctaHtml +
-              (t.phone ? '<a class="ts-cbtn call" href="tel:' + eh(t.phone) + '" aria-label="اتصال"><i class="fa-solid fa-phone"></i></a>' : '') +
+              (t.phone ? '<a class="ts-cbtn call" href="tel:' + eh(t.phone) + '" data-pt73-contact="call" data-pt73-tid="' + Number(t.id) + '" aria-label="اتصال"><i class="fa-solid fa-phone"></i></a>' : '') +
               (mapHref ? '<a class="ts-cbtn" href="' + mapHref + '" target="_blank" rel="noopener" aria-label="الخريطة"><i class="fa-solid fa-location-arrow"></i></a>' : '') +
             '</div>' +
             '<details class="ts-more">' +
@@ -435,7 +472,7 @@
                 (t.staff_notes ? '<div style="font-size:11.5px;color:var(--wn);font-weight:700">ملاحظة الموظف: ' + eh(t.staff_notes) + '</div>' : '') +
                 '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
                   '<button type="button" class="cp-a cp-sm" data-pt73-route="' + eh(t.sd_request_id) + '">' + (inRoute ? 'إزالة من خط السير' : '+ ضيف لخط السير') + '</button>' +
-                  (waPh ? '<a class="cp-a cp-sm wa" href="https://wa.me/' + eh(waPh) + '" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
+                  (waPh ? '<a class="cp-a cp-sm wa" href="https://wa.me/' + eh(waPh) + '" data-pt73-contact="whatsapp" data-pt73-tid="' + Number(t.id) + '" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
                   '<button type="button" class="cp-a cp-sm" data-pt73-pin="' + eh(t.sd_request_id) + '"><i class="fa-solid fa-map-pin"></i> ' + (pin ? 'تحديث اللوكيشن' : 'حفظ اللوكيشن') + '</button>' +
                 '</div>' +
                 '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px">' +
@@ -521,34 +558,39 @@
       }, { enableHighAccuracy: true, timeout: 7000 });
       return;
     }
+    var contactLink = t.closest('[data-pt73-contact]');
+    if (contactLink) {
+      var cChannel = contactLink.getAttribute('data-pt73-contact');
+      var cTid = contactLink.getAttribute('data-pt73-tid');
+      if (cTid && (cChannel === 'call' || cChannel === 'whatsapp')) {
+        logTicketContact(Number(cTid), cChannel);
+      }
+      return;
+    }
     var stepBtn = t.closest('[data-pt73-step]');
     if (stepBtn) {
       var evType = stepBtn.getAttribute('data-pt73-step');
-      var tid = stepBtn.getAttribute('data-pt73-tid');
-      var sdId = stepBtn.getAttribute('data-pt73-sd') || '';
-      var clName = stepBtn.getAttribute('data-pt73-cl') || '';
-      var lbl = stepBtn.getAttribute('data-pt73-lbl') || evType;
+      var tid = Number(stepBtn.getAttribute('data-pt73-tid'));
+      var lbl = stepBtn.getAttribute('data-pt73-lbl') || (STEP_LABELS[evType] || evType);
       stepBtn.disabled = true;
       try {
-        if (!sbClient) throw new Error('لا يوجد اتصال بالسيرفر');
-        var res = await sbClient.rpc('courier_v12_dispatch_action', {
-          p_event_type: evType,
-          p_tx: null,
-          p_payload: {
-            source: 'pickup_ticket',
-            ticket_id: Number(tid),
-            sd_request_id: sdId,
-            client_name: clName,
-            note: 'تيكت استلام ' + sdId + ' (' + clName + '): ' + lbl
-          }
+        if (!sbClient) throw new Error('لا يوجد اتصال بالسيرفر — حاول تاني');
+        var res = await sbClient.rpc('courier_ticket_set_step', {
+          p_ticket_id: tid,
+          p_step: evType
         });
-        if (res.error && evType !== 'accepted') throw res.error;
-        try { localStorage.setItem('pt73_step_' + tid, evType); } catch (e2) {}
+        if (res.error) throw res.error;
+        if (!res.data || !res.data.ok) throw new Error('لم يتم تأكيد تحديث الحالة من السيرفر — حاول تاني');
+        var item = st.courierTickets.find(function (x) { return Number(x.id) === tid; });
+        if (item) {
+          item.courier_step = res.data.step || evType;
+          item.courier_step_at = res.data.at || new Date().toISOString();
+        }
         renderCourierTicketsIntoBody();
-        if (typeof showToast === 'function') showToast('تم تحديث حالة الاستلام: ' + lbl, 'success');
+        toast('تم تحديث حالة الاستلام: ' + lbl, 'success');
       } catch (err) {
         stepBtn.disabled = false;
-        if (typeof showToast === 'function') showToast((err && err.message) || 'تعذر تحديث الحالة', 'error');
+        toast((err && err.message) || 'تعذر تحديث الحالة — حاول تاني', 'error');
       }
       return;
     }
@@ -922,6 +964,10 @@
       var canAction = t.status === 'open' || t.status === 'with_courier';
       var canCancel = canAction && (isManager() || !t.created_by || (st.myUid && t.created_by === st.myUid));
 
+      var stepTxt = t.courier_step
+        ? (STEP_LABELS[t.courier_step] || t.courier_step) + (t.courier_step_at ? ' · ' + fmtStepTime(t.courier_step_at) : '')
+        : (t.status === 'with_courier' ? 'بانتظار قبول المندوب' : '');
+      var waPh = cleanWaPhone(t.phone);
       return '<div class="pt-ticket-item" data-ticket-row="' + Number(t.id) + '">' +
         '<div style="flex:1;min-width:250px">' +
           '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">' +
@@ -929,6 +975,7 @@
             '<b class="pt-client-cell">' + eh(t.client_name) + '</b>' +
             '<span class="pt-sub" dir="ltr">' + eh(t.phone) + '</span>' +
             '<span class="pt-badge pt-badge-ok">' + eh(statusLabel[t.status] || t.status) + '</span>' +
+            (stepTxt ? '<span class="pt-badge pt-badge-pur">' + eh(stepTxt) + '</span>' : '') +
             payBadge +
             '<span class="pt-badge pt-badge-mut">المندوب: ' + eh(courierNameById(t.courier_id)) + '</span>' +
             (t.converted_tx_id ? '<span class="pt-badge pt-badge-org" dir="ltr">' + eh(t.converted_tx_id) + '</span>' : '') +
@@ -938,6 +985,9 @@
           (t.summary_comment ? '<div class="pt-comment-pre">' + eh(t.summary_comment) + '</div>' : '') +
         '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+          (t.phone ? '<a class="pt-btn pt-btn-pri" href="tel:' + eh(t.phone) + '"><i class="fa-solid fa-phone"></i> اتصال</a>' : '') +
+          (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
+          '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="detail" data-id="' + Number(t.id) + '">التفاصيل والتواصل</button>' +
           '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="copy" data-id="' + Number(t.id) + '">نسخ الكومنت</button>' +
           (canAction ? '<button type="button" class="pt-btn pt-btn-ok" data-pt-act="convert" data-id="' + Number(t.id) + '">تحويل مباشر لمعاملة</button>' : '') +
           (canAction ? '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="prefill" data-id="' + Number(t.id) + '">فتح في معاملة جديدة</button>' : '') +
@@ -963,9 +1013,14 @@
               '<h2 class="pt-title">تيكت الاستلام المبدئي (سمارت ديسك + السكريبت الحي)</h2>' +
               '<div class="pt-sub">دعم تعدد الخدمات، حالة الدفع والتحصيل للمندوب، شروط كتالوج الخدمات، والتحويل المباشر لمعاملة رسمية.</div>' +
             '</div>' +
-            '<button type="button" class="pt-btn pt-btn-sec" id="pt-refresh-btn">تحديث القائمة</button>' +
+            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+              '<span id="pt-rt-status" class="pt-badge pt-badge-mut">جاري الاتصال بالتحديث المباشر…</span>' +
+              '<button type="button" class="pt-btn pt-btn-sec hidden" id="pt-rt-reconnect">إعادة الاتصال</button>' +
+              '<button type="button" class="pt-btn pt-btn-sec" id="pt-refresh-btn">تحديث القائمة</button>' +
+            '</div>' +
           '</div>' +
         '</section>' +
+        '<section id="pt-detail-panel" class="pt-card hidden" style="display:flex;flex-direction:column;gap:10px"></section>' +
 
         '<form id="pt-form" class="pt-grid2">' +
           '<section class="pt-card" style="display:flex;flex-direction:column;gap:12px">' +
@@ -1026,6 +1081,168 @@
     renderDraftRows();
     refreshLivePreview();
     renderTicketsList();
+    updateRtStatusUi();
+    startTicketsRealtime();
+  }
+
+  function updateRtStatusUi() {
+    var el = $('pt-rt-status'), btn = $('pt-rt-reconnect');
+    if (!el) return;
+    if (st.rtStatus === 'connected') {
+      el.className = 'pt-badge pt-badge-ok';
+      el.textContent = 'تحديث لحظي متصل';
+      if (btn) btn.classList.add('hidden');
+    } else if (st.rtStatus === 'disconnected') {
+      el.className = 'pt-badge pt-badge-warn';
+      el.textContent = 'التحديث متوقف';
+      if (btn) btn.classList.remove('hidden');
+    } else {
+      el.className = 'pt-badge pt-badge-mut';
+      el.textContent = 'جاري الاتصال…';
+      if (btn) btn.classList.add('hidden');
+    }
+  }
+
+  function applyRealtimeTicketRow(payload) {
+    if (!payload) return;
+    var row = payload.new || null;
+    var oldRow = payload.old || null;
+    var ev = payload.eventType;
+    if (ev === 'DELETE' && oldRow && oldRow.id != null) {
+      st.tickets = st.tickets.filter(function (x) { return Number(x.id) !== Number(oldRow.id); });
+    } else if (row && row.id != null) {
+      if (row.status === 'cancelled') {
+        st.tickets = st.tickets.filter(function (x) { return Number(x.id) !== Number(row.id); });
+      } else {
+        var idx = st.tickets.findIndex(function (x) { return Number(x.id) === Number(row.id); });
+        if (idx >= 0) st.tickets[idx] = Object.assign({}, st.tickets[idx], row);
+        else st.tickets.unshift(row);
+      }
+    }
+    renderTicketsList();
+    if (st.detailTicketId && row && Number(row.id) === Number(st.detailTicketId)) {
+      renderTicketDetailPanel();
+    }
+  }
+
+  function stopTicketsRealtime() {
+    if (st.rtChannel && sbClient && typeof sbClient.removeChannel === 'function') {
+      try { sbClient.removeChannel(st.rtChannel); } catch (e) {}
+    }
+    st.rtChannel = null;
+    st.rtStatus = 'idle';
+    stopTicketDetailRealtime();
+  }
+
+  function startTicketsRealtime() {
+    if (!sbClient || typeof sbClient.channel !== 'function' || !isAllowedStaff()) return;
+    if (st.rtChannel) return;
+    st.rtStatus = 'connecting';
+    updateRtStatusUi();
+    try {
+      var ch = sbClient
+        .channel('pt73-pickup-tickets-live')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'pickup_tickets' }, applyRealtimeTicketRow)
+        .subscribe(function (status) {
+          if (status === 'SUBSCRIBED') st.rtStatus = 'connected';
+          else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') st.rtStatus = 'disconnected';
+          updateRtStatusUi();
+        });
+      st.rtChannel = ch;
+    } catch (e) {
+      st.rtStatus = 'disconnected';
+      updateRtStatusUi();
+    }
+  }
+
+  function stopTicketDetailRealtime() {
+    if (st.rtDetailChannel && sbClient && typeof sbClient.removeChannel === 'function') {
+      try { sbClient.removeChannel(st.rtDetailChannel); } catch (e) {}
+    }
+    st.rtDetailChannel = null;
+  }
+
+  function renderTicketDetailPanel() {
+    var panel = $('pt-detail-panel');
+    if (!panel) return;
+    if (!st.detailTicketId) {
+      panel.classList.add('hidden');
+      panel.innerHTML = '';
+      return;
+    }
+    var t = st.tickets.find(function (x) { return Number(x.id) === Number(st.detailTicketId); });
+    if (!t) {
+      panel.classList.add('hidden');
+      return;
+    }
+    var stepTxt = t.courier_step
+      ? (STEP_LABELS[t.courier_step] || t.courier_step) + (t.courier_step_at ? ' (' + fmtStepTime(t.courier_step_at) + ')' : '')
+      : 'لم يبدأ المندوب بعد';
+    var waPh = cleanWaPhone(t.phone);
+    var logs = Array.isArray(st.detailContacts) ? st.detailContacts : [];
+    var lastAt = logs.length ? fmtStepTime(logs[0].created_at) : 'لا يوجد تواصل بعد';
+    var logsHtml = logs.length
+      ? logs.map(function (r) {
+          var ch = r.channel === 'whatsapp' ? 'واتساب' : 'اتصال';
+          var out = r.outcome ? (' · ' + (OUTCOME_LABELS[r.outcome] || r.outcome)) : '';
+          return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:9px;background:var(--r-bg,rgba(148,163,184,.08));font-size:12px">' +
+            '<span><b>' + ch + '</b>' + eh(out) + '</span>' +
+            '<span class="pt-sub" dir="ltr">' + eh(fmtStepTime(r.created_at)) + '</span>' +
+          '</div>';
+        }).join('')
+      : '<div class="pt-sub">لم يُسجّل أي تواصل من المندوب على التيكت ده حتى الآن.</div>';
+
+    panel.classList.remove('hidden');
+    panel.innerHTML =
+      '<div class="pt-head">' +
+        '<div>' +
+          '<b style="font-size:14px">تفاصيل التيكت: ' + eh(t.client_name) + ' (<span dir="ltr">' + eh(t.sd_request_id) + '</span>)</b>' +
+          '<div class="pt-sub">الخطوة الحالية: <b>' + eh(stepTxt) + '</b> · المندوب: <b>' + eh(courierNameById(t.courier_id)) + '</b></div>' +
+        '</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+          (t.phone ? '<a class="pt-btn pt-btn-pri" href="tel:' + eh(t.phone) + '"><i class="fa-solid fa-phone"></i> اتصال</a>' : '') +
+          (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
+          '<button type="button" class="pt-btn pt-btn-sec" id="pt-detail-close">إغلاق</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:12px">' +
+        '<b>سجل التواصل مع العميل</b>' +
+        '<span class="pt-sub">عدد المرات: <b>' + logs.length + '</b> · آخر تواصل: <b>' + eh(lastAt) + '</b></span>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px">' + logsHtml + '</div>';
+  }
+
+  async function openTicketDetail(ticketId) {
+    st.detailTicketId = Number(ticketId);
+    st.detailContacts = [];
+    renderTicketDetailPanel();
+    stopTicketDetailRealtime();
+    if (sbClient && typeof sbClient.channel === 'function') {
+      try {
+        st.rtDetailChannel = sbClient
+          .channel('pt73-ticket-detail-' + st.detailTicketId)
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'pickup_tickets',
+            filter: 'id=eq.' + st.detailTicketId
+          }, applyRealtimeTicketRow)
+          .subscribe();
+      } catch (e) { /* */ }
+    }
+    if (!sbClient) return;
+    try {
+      var r = await sbClient
+        .from('courier_contact_log')
+        .select('id,channel,outcome,created_at,courier_id')
+        .eq('ticket_id', st.detailTicketId)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (!r.error && Array.isArray(r.data)) st.detailContacts = r.data;
+    } catch (e) { /* */ }
+    renderTicketDetailPanel();
+    var p = $('pt-detail-panel');
+    if (p && p.scrollIntoView) p.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   async function onSubmit(e) {
@@ -1133,6 +1350,18 @@
       }
       return;
     }
+    if (e.target && e.target.id === 'pt-rt-reconnect') {
+      stopTicketsRealtime();
+      startTicketsRealtime();
+      return;
+    }
+    if (e.target && e.target.id === 'pt-detail-close') {
+      st.detailTicketId = null;
+      st.detailContacts = [];
+      stopTicketDetailRealtime();
+      renderTicketDetailPanel();
+      return;
+    }
     if (e.target && e.target.id === 'pt-refresh-btn') {
       try {
         await Promise.all([loadDependencies(), loadTickets()]);
@@ -1149,6 +1378,10 @@
     var t = st.tickets.find(function (x) { return Number(x.id) === id; });
     if (!t) return;
 
+    if (b.dataset.ptAct === 'detail') {
+      openTicketDetail(id);
+      return;
+    }
     if (b.dataset.ptAct === 'copy') {
       await copyText(t.summary_comment || '');
       toast('تم نسخ الكومنت ✓');
@@ -1277,6 +1510,8 @@
             var list = $('pt-list');
             if (list) list.innerHTML = '<div class="pt-sub">تأكد من تشغيل التحديث الجديد في sql/pickup-ticket.sql في Supabase. (' + eh(err && err.message) + ')</div>';
           });
+        } else {
+          stopTicketsRealtime();
         }
       } catch (e) { /* */ }
       return res;
@@ -1294,6 +1529,8 @@
   wrap('handleLogout', function (orig) {
     return function () {
       try {
+        stopTicketsRealtime();
+        st.detailTicketId = null; st.detailContacts = [];
         st.tickets = []; st.courierTickets = []; st.courierZones = {}; st.courierLoadedAt = 0; st.loaded = false;
         st.collectManual = false;
         st.draftRows = [{ service_name: '', doc_type: '', sd_service_id: '', qty: 1, unit_price: 0 }];
