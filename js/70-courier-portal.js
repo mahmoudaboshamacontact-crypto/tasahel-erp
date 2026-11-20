@@ -73,7 +73,7 @@
     } catch (e) { return ym; }
   };
   const dayLabel = s => { try { return new Date(s + 'T12:00:00Z').toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }); } catch (e) { return s; } };
-  const timeOf = iso => { try { if (!iso) return ''; return new Date(iso).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', timeZone: TZ }); } catch (e) { return ''; } };
+  const timeOf = iso => { try { if (!iso) return ''; return new Date(iso).toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: TZ }); } catch (e) { return ''; } };
   const rangeOf = p => {
     const t = today();
     if (p === 'today') return [t, t];
@@ -409,6 +409,16 @@
     if (window.CourierV12) window.CourierV12.haptic(true);
     toast('📍 تم حفظ وتثبيت لوكيشن العميل بنجاح ✓');
     renderTab(false);
+    if (window.TasahelGeo && window.TasahelGeo.reverseGeocode) {
+      window.TasahelGeo.reverseGeocode(lat, lng).then(street => {
+        if (street && st.pins[tx]) {
+          st.pins[tx].zone = street;
+          savePinsState();
+          toast('📍 تم تحديد العنوان: ' + street);
+          renderTab(false);
+        }
+      }).catch(() => null);
+    }
   }
   function saveClientPin(tx) {
     tx = String(tx || '');
@@ -502,6 +512,7 @@
         '<button type="button" class="cp-a cp-sm" data-act="route-clear">مسح الكل</button>' +
       '</div>' +
       '<div>' + stepsChain + '</div>' +
+      '<div id="cp-geo-route-eta"></div>' +
       '<button type="button" class="cp-big" data-act="route-autosort"><i class="fa-solid fa-location-arrow"></i> ابدأ التحرك وافتح خط السير على الخريطة</button>' +
     '</section>';
   }
@@ -937,7 +948,7 @@
     const w = $('cp-who-box'); if (!w) return;
     w.innerHTML = myAvTile() +
       '<div class="cpn-wt"><b>' + eh(st.me && st.me.name) + '</b>' +
-      '<div class="cpn-st"><i style="background:' + (st.onBreak ? 'var(--wn)' : 'var(--ok)') + '"></i>' + (st.onBreak ? 'في استراحة' : 'متاح') + ' · <span class="cpn-num" id="cp-time" dir="ltr"></span></div></div>';
+      '<div class="cpn-st"><i style="background:' + (st.onBreak ? 'var(--wn)' : 'var(--ok)') + '"></i>' + (st.onBreak ? 'في استراحة' : 'متاح') + ' · <span class="cpn-num" id="cp-time" dir="rtl"></span></div></div>';
     tickClock();
   }
   function shell() {
@@ -958,7 +969,16 @@
   function tickClock() {
     const t = $('cp-time'); if (!t) return;
     const now = new Date();
-    const a = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ });
+    let a = '';
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: TZ }).formatToParts(now);
+      const hh = (parts.find(p => p.type === 'hour') || {}).value || '';
+      const mm = (parts.find(p => p.type === 'minute') || {}).value || '';
+      const dp = ((parts.find(p => p.type === 'dayPeriod') || {}).value || '').toUpperCase() === 'PM' ? 'م' : 'ص';
+      a = '\u200E' + hh + ':' + mm + ' ' + dp;
+    } catch (e) {
+      a = now.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: TZ });
+    }
     if (t.textContent !== a) t.textContent = a;
     const eb = $('cp-v12-earn');
     if (eb) { const m = money(todayEarnedAmt()); if (eb.textContent !== m) eb.textContent = m; }
@@ -1016,7 +1036,13 @@
           : '<div style="font-size:12px;color:var(--mu);text-align:center;padding:6px">مفيش نتائج مطابقة في كل الأيام</div>') : '') +
       '</div>';
     }
+    html += '<div id="cp-weather-slot"></div>';
     box.innerHTML = html;
+    if (window.TasahelGeo && window.TasahelGeo.hydrateWeatherSlot) {
+      const sl = $('cp-weather-slot');
+      const pos = st.myPos || {};
+      window.TasahelGeo.hydrateWeatherSlot(sl, pos.lat, pos.lng);
+    }
   }
   function renderTab(top) {
     renderTopBanners();
@@ -1037,6 +1063,27 @@
     else viewChat();
 
     swapFa(b); swapFa($('cp-v12-top-banners'));
+    const etaBox = $('cp-geo-route-eta');
+    if (etaBox && window.TasahelGeo && window.TasahelGeo.calcRouteEta && st.routeTxIds && st.routeTxIds.length) {
+      const wps = [];
+      if (st.myPos && st.myPos.lat && st.myPos.lng) wps.push({ lat: st.myPos.lat, lng: st.myPos.lng });
+      else wps.push({ lat: 30.0012, lng: 31.1765 });
+      st.routeTxIds.forEach(rtx => {
+        const rit = byTx(rtx);
+        if (rit && !rit.confirmed) {
+          const z = detectZoneAndCoords(rit);
+          if (z && z.lat && z.lng) wps.push({ lat: z.lat, lng: z.lng });
+        }
+      });
+      if (wps.length >= 2) {
+        window.TasahelGeo.calcRouteEta(wps).then(info => {
+          const el = $('cp-geo-route-eta');
+          if (info && el) {
+            el.innerHTML = '<div class="cp-geo-eta">🚗 المسار الفعلي: ' + num(info.km) + ' كم · ~' + num(info.min) + ' دقيقة <span style="opacity:.65;font-weight:500">(OSM)</span></div>';
+          }
+        }).catch(() => null);
+      }
+    }
     b.scrollTop = top ? 0 : y;
     if (activeId === 'cp-trip-q' && $('cp-trip-q')) {
       const inp = $('cp-trip-q'); inp.focus();
@@ -1064,42 +1111,65 @@
     for (const tx of st.routeTxIds) { const it = pending.find(i => String(i.transaction_id) === String(tx)); if (it) return it; }
     return pending[0] || null;
   }
+  function buildFiveStepper(doneUpTo, curIdx) {
+    const labels = ['قبول', 'اتصال', 'خط السير', 'في الطريق', 'تم'];
+    return '<div class="ts-stepper">' + labels.map((lbl, idx) => {
+      const n = idx + 1;
+      const isDone = n <= doneUpTo;
+      const isCur = !isDone && n === curIdx;
+      const cls = isDone ? 'done' : (isCur ? 'cur' : '');
+      return '<div class="ts-step ' + cls + '"><div class="ts-dot">' + (isDone ? '✓' : num(n)) + '</div><div class="ts-slbl">' + lbl + '</div></div>';
+    }).join('') + '</div>';
+  }
   function heroCard(it, pending) {
     const tx = String(it.transaction_id), z = detectZoneAndCoords(it), k = KIND[it.type];
     const onway = it.live_state === 'on_the_way', waiting = !!st.waitingMap[tx];
-    const stage = waiting ? 2 : (onway ? 1 : 0);
+    const inRouteIdx = routeIndexOf(tx);
+    const called = Number(it.call_attempts || 0) > 0 || !!it.client_confirmed;
     const cod = Number(it.cod_remaining || 0), dist = distTxtOf(it);
     const mates = pending.filter(x => x !== it && normAr(x.client_name || '') === normAr(it.client_name || '') && x.type === it.type).length;
-    const primary = stage === 0
-      ? '<button type="button" class="cpn-btn p" style="width:100%;min-height:54px;font-size:16px" data-act="on-my-way" data-tx="' + eh(tx) + '">' + ic('nav') + 'في طريقي للعميل</button>'
-      : stage === 1
-        ? '<button type="button" class="cpn-btn p" style="width:100%;min-height:54px;font-size:16px" data-act="v12-wait" data-tx="' + eh(tx) + '">' + ic('pin') + 'وصلت عند العميل</button>'
-        : '';
+
+    let doneUpTo = 1, curIdx = 2;
+    if (it.confirmed) { doneUpTo = 5; curIdx = 6; }
+    else if (waiting) { doneUpTo = 4; curIdx = 5; }
+    else if (onway) { doneUpTo = 3; curIdx = 4; }
+    else if (inRouteIdx !== -1) { doneUpTo = 3; curIdx = 4; }
+    else if (called) { doneUpTo = 2; curIdx = 3; }
+
     const slideAttrs = ' data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"';
-    const slide = stage === 2
-      ? '<div class="cpn-slide"' + slideAttrs + '><div class="kn">' + ic('back') + '</div><span>اسحب / اضغط لتأكيد ' + eh(k.sec === 'الاستلام' ? 'الاستلام' : k.sec === 'التسليم' ? 'التسليم' : 'الرسوم') + '</span></div>'
-      : '<button type="button" class="cpn-skip"' + slideAttrs + '>تأكيد المشوار مباشرة بدون خطوات</button>';
-    const tiles = '<div class="cpn-tiles">' +
-      (it.phone ? '<a class="cpn-tile" data-act="v12-call-log" data-tx="' + eh(tx) + '" href="' + eh(telHref(it.phone)) + '"><span class="ti ok">' + ic('phone') + '</span>اتصال</a>' : '') +
-      (it.phone ? '<button type="button" class="cpn-tile" data-act="v12-wa-tpl" data-tx="' + eh(tx) + '"><span class="ti ok">' + ic('chat') + '</span>واتساب</button>' : '') +
-      '<button type="button" class="cpn-tile" data-act="v12-map-opts" data-tx="' + eh(tx) + '"><span class="ti">' + ic('nav') + '</span>الخريطة</button>' +
-      '<button type="button" class="cpn-tile" data-act="detail" data-tx="' + eh(tx) + '"><span class="ti">' + ic('arrow') + '</span>تفاصيل</button>' +
-    '</div>';
+    let primaryBtn = '';
+    if (waiting) {
+      primaryBtn = '<button type="button" class="ts-hero-cta done"' + slideAttrs + '>✓ تأكيد ' + eh(k.sec === 'الاستلام' ? 'الاستلام' : k.sec === 'التسليم' ? 'التسليم' : 'الرسوم') + '</button>';
+    } else if (onway) {
+      primaryBtn = '<button type="button" class="ts-hero-cta" data-act="v12-wait" data-tx="' + eh(tx) + '">' + ic('pin', 16) + ' وصلت عند العميل</button>';
+    } else {
+      primaryBtn = '<button type="button" class="ts-hero-cta" data-act="on-my-way" data-tx="' + eh(tx) + '">' + ic('nav', 16) + ' ابدأ التحرك الآن</button>';
+    }
+
+    const eyebrowLeft = inRouteIdx !== -1 ? ('المحطة #' + num(inRouteIdx + 1) + ' في خط السير') : 'المشوار الحالي';
+    const eyebrowRight = eh(k.sec || k.label) + (dist ? ' · ' + eh(dist) : '');
+
     return '<section class="cpn-hero">' +
-      '<div class="cpn-row" style="justify-content:space-between"><span class="cpn-lbl">المشوار الحالي · ' + eh(k.label) + '</span>' +
-        (dist ? '<span class="cpn-chip" style="background:var(--card)">' + ic('nav', 14) + '<span class="cpn-num">' + eh(dist) + '</span></span>' : '') + '</div>' +
-      '<div style="font-size:21px;font-weight:700;margin-top:6px" data-act="detail" data-tx="' + eh(tx) + '">' + eh(it.client_name || 'بدون اسم') + '</div>' +
-      '<div style="font-size:13px;color:var(--mu);margin-top:2px">' + eh(it.address || z.zone) + '</div>' +
-      (it.landmark_note ? '<div style="margin-top:8px;padding:8px 10px;border-radius:14px;background:var(--acsoft);font-size:12.5px;line-height:1.5"><span class="cpn-lbl" style="color:var(--ac)">ذاكرة المكان</span><br>' + eh(it.landmark_note) + '</div>' : '') +
-      '<div class="cpn-row" style="margin-top:12px;gap:6px;flex-wrap:wrap">' +
-        (cod > 0 ? '<span class="cpn-chip" style="background:var(--wnsoft);color:var(--wn)">تحصيل ' + money(cod) + '</span>' : '<span class="cpn-chip" style="background:var(--oksoft);color:var(--ok)">خالص الدفع</span>') +
-        '<span class="cpn-chip cpn-num" dir="ltr">' + eh(tx) + '</span>' +
-        (mates ? '<span class="cpn-chip">+' + num(mates) + ' طلب لنفس العميل</span>' : '') +
-        (it.office_ready ? '<span class="cpn-chip" style="background:var(--oksoft);color:var(--ok)">جاهز بالمكتب</span>' : '') +
+      '<div class="ts-hero-eyebrow"><span>' + eyebrowLeft + '</span><span>' + eyebrowRight + '</span></div>' +
+      '<div class="ts-hero-client" data-act="detail" data-tx="' + eh(tx) + '">' + eh(it.client_name || 'بدون اسم') + '</div>' +
+      '<div class="ts-hero-sub">' + eh((it.services ? it.services + ' · ' : '') + (it.address || z.zone)) + '</div>' +
+      (it.landmark_note ? '<div style="margin-top:7px;padding:6px 10px;border-radius:10px;background:rgba(212,175,99,.16);font-size:11.5px;color:#FDE68A">💡 ' + eh(it.landmark_note) + '</div>' : '') +
+      '<div class="ts-hero-meta">' +
+        (cod > 0 ? '<span class="ts-hero-chip gold">تحصيل ' + money(cod) + '</span>' : '<span class="ts-hero-chip ok">خالص الدفع</span>') +
+        '<span class="ts-hero-chip cpn-num" dir="ltr">' + eh(tx) + '</span>' +
+        (mates ? '<span class="ts-hero-chip">+' + num(mates) + ' طلب</span>' : '') +
+        (it.office_ready ? '<span class="ts-hero-chip ok">جاهز بالمكتب</span>' : '') +
       '</div>' +
-      '<div class="cpn-steps"><i class="' + (stage >= 1 ? 'on' : '') + '"></i><i class="' + (stage >= 2 ? 'on' : '') + '"></i><i></i></div>' +
-      '<div class="cpn-stl"><span class="' + (stage >= 1 ? 'on' : '') + '">في الطريق</span><span class="' + (stage >= 2 ? 'on' : '') + '">وصلت</span><span>' + eh(doneLabel(it)) + '</span></div>' +
-      primary + slide + tiles +
+      buildFiveStepper(doneUpTo, curIdx) +
+      '<div class="ts-hero-actions">' +
+        primaryBtn +
+        (it.phone ? '<a class="ts-hero-icon" data-act="v12-call-log" data-tx="' + eh(tx) + '" href="' + eh(telHref(it.phone)) + '" aria-label="اتصال">' + ic('phone', 18) + '</a>' : '') +
+        '<button type="button" class="ts-hero-icon" data-act="v12-map-opts" data-tx="' + eh(tx) + '" aria-label="الخريطة">' + ic('nav', 18) + '</button>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:11.5px">' +
+        '<button type="button" style="border:0;background:none;color:rgba(245,243,238,.78);font:inherit;cursor:pointer;padding:2px 0" data-act="detail" data-tx="' + eh(tx) + '">تفاصيل وخيارات إضافية ←</button>' +
+        (!waiting ? '<button type="button" style="border:0;background:none;color:#D4AF63;font:inherit;font-weight:700;cursor:pointer;padding:2px 0"' + slideAttrs + '>تأكيد مباشر</button>' : '') +
+      '</div>' +
     '</section>';
   }
   /* ---------- شاشة الآن (حلقة اليوم + المشوار الحالي + التالي في خط السير) ---------- */
@@ -1328,58 +1398,61 @@
     const tx = String(it.transaction_id);
     const z = detectZoneAndCoords(it);
     const inRouteIdx = routeIndexOf(tx);
-    const isHero = st.activeTx === tx || inRouteIdx === 0;
+    const onway = it.live_state === 'on_the_way';
+    const waiting = !!st.waitingMap[tx];
+    const called = Number(it.call_attempts || 0) > 0 || !!it.client_confirmed;
     let distTxt = '';
     if (st.myPos && window.CourierV12) {
       const km = window.CourierV12.haversineKm(st.myPos.lat, st.myPos.lng, z.lat, z.lng);
       distTxt = km < 1 ? (Math.round(km * 1000) + ' م') : (km.toFixed(1) + ' كم');
     }
     const codAmt = Number(it.cod_remaining || 0);
-    const codBadge = codAmt > 0
-      ? '<span class="cp-tag wt">تحصيل ' + money(codAmt) + '</span>'
-      : '<span class="cp-tag ok">خالص الدفع</span>';
+    const pillCls = it.type === 'delivery' ? 'delivery' : (it.type === 'pickup' ? 'pickup' : 'fee');
+    const pillTxt = it.type === 'delivery' ? 'تسليم' : (it.type === 'pickup' ? 'استلام' : 'رسوم');
 
-    return '<div class="cp-v12-card ' + eh(it.type) + (isHero && !it.confirmed ? ' hero' : '') + '">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
-        '<div style="min-width:0;flex:1" data-act="detail" data-tx="' + eh(tx) + '">' +
-          '<div style="font-size:15.5px;font-weight:900;display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-            '<span>' + eh(it.client_name || 'بدون اسم') + '</span>' +
-            (it.live_state === 'on_the_way' ? '<span class="cp-tag ok">في الطريق</span>' : '') +
-          '</div>' +
-          '<div style="font-size:11.5px;color:var(--mu);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-            '<span>' + eh(z.zone) + '</span>' +
-            (distTxt ? '<span>· ' + eh(distTxt) + '</span>' : '') +
-            '<span dir="ltr">· ' + eh(tx) + '</span>' +
-          '</div>' +
+    let doneUpTo = 1, curIdx = 2;
+    if (it.confirmed) { doneUpTo = 5; curIdx = 6; }
+    else if (waiting) { doneUpTo = 4; curIdx = 5; }
+    else if (onway) { doneUpTo = 3; curIdx = 4; }
+    else if (inRouteIdx !== -1) { doneUpTo = 3; curIdx = 4; }
+    else if (called) { doneUpTo = 2; curIdx = 3; }
+
+    const slideAttrs = ' data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"';
+    let primaryBtn = '';
+    if (it.confirmed) {
+      primaryBtn = '<button type="button" class="ts-cta done" data-act="detail" data-tx="' + eh(tx) + '">✓ تم التأكيد · ' + eh(timeOf(it.confirmed_at)) + '</button>';
+    } else if (waiting) {
+      primaryBtn = '<button type="button" class="ts-cta done"' + slideAttrs + '>✓ تأكيد ' + eh(k.sec) + '</button>';
+    } else if (onway) {
+      primaryBtn = '<button type="button" class="ts-cta gold" data-act="v12-wait" data-tx="' + eh(tx) + '">وصلت عند العميل</button>';
+    } else if (inRouteIdx !== -1) {
+      primaryBtn = '<button type="button" class="ts-cta" data-act="on-my-way" data-tx="' + eh(tx) + '">' + ic('nav', 15) + ' ابدأ التحرك الآن</button>';
+    } else {
+      primaryBtn = '<button type="button" class="ts-cta" data-act="route-toggle" data-tx="' + eh(tx) + '">+ أضف لخط السير</button>';
+    }
+
+    return '<div class="ts-card cp-v12-card ' + eh(it.type) + (inRouteIdx !== -1 && !it.confirmed ? ' in-route' : '') + '">' +
+      '<div class="ts-tc-top" data-act="detail" data-tx="' + eh(tx) + '">' +
+        '<div style="min-width:0;flex:1">' +
+          '<div class="ts-tc-client">' + eh(it.client_name || 'بدون اسم') + '</div>' +
+          '<div class="ts-tc-id"><span dir="ltr">' + eh(tx) + '</span>' + (distTxt ? '<span>· ' + eh(distTxt) + '</span>' : '') + '<span>· ' + money(it.amount) + '</span></div>' +
         '</div>' +
-        '<div style="text-align:end">' +
-          '<span style="display:inline-block;background:rgba(16,185,129,.16);color:#10b981;font-weight:900;font-size:13px;padding:3px 9px;border-radius:999px">' + money(it.amount) + '</span>' +
-        '</div>' +
+        '<span class="ts-pill ' + pillCls + '">' + pillTxt + '</span>' +
       '</div>' +
-      '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">' +
-        '<span class="cp-tag ' + k.cls + '"><i class="fa-solid ' + k.icon + '"></i> ' + eh(k.label) + '</span>' +
-        codBadge +
-        (it.office_ready ? '<span class="cp-tag ok">جاهز بالمكتب</span>' : '') +
-        (it.client_confirmed ? '<span class="cp-tag ok">الميعاد مأكد</span>' : '') +
-        (it.has_signature ? '<span class="cp-tag ok">موقّع</span>' : '') +
-        (Number(it.call_attempts) > 0 ? '<span class="cp-tag k-pk">اتصلت ' + num(it.call_attempts) + '</span>' : '') +
+      (it.services ? '<div class="ts-tc-svc" data-act="detail" data-tx="' + eh(tx) + '">' + eh(it.services) + '</div>' : '') +
+      '<div class="ts-tc-loc" data-act="detail" data-tx="' + eh(tx) + '">' + ic('pin', 14) + '<span>' + eh(it.address || z.zone) + '</span></div>' +
+      '<div class="ts-meta-row">' +
+        (codAmt > 0 ? '<span class="ts-mchip cod">تحصيل ' + money(codAmt) + '</span>' : '<span class="ts-mchip paid">خالص الدفع</span>') +
+        (inRouteIdx !== -1 ? '<span class="ts-mchip route">خط السير #' + num(inRouteIdx + 1) + '</span>' : '') +
+        (onway ? '<span class="ts-mchip paid">في الطريق</span>' : (inRouteIdx !== -1 ? '<span class="ts-mchip">في خط السير</span>' : '')) +
+        (it.office_ready ? '<span class="ts-mchip paid">جاهز بالمكتب</span>' : '') +
       '</div>' +
-      (it.landmark_note ? '<div style="margin-top:6px;font-size:11.5px;color:#38bdf8;background:rgba(56,189,248,.1);padding:4px 8px;border-radius:8px">💡 ' + eh(it.landmark_note) + '</div>' : '') +
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap">' +
-        '<div style="display:flex;align-items:center;gap:7px">' +
-          (it.phone ? '<button type="button" class="cp-v12-ibtn wa" data-act="v12-wa-tpl" data-tx="' + eh(tx) + '" title="واتساب"><i class="fa-brands fa-whatsapp"></i></button>' : '') +
-          (it.phone ? '<a class="cp-v12-ibtn tel" data-act="v12-call-log" data-tx="' + eh(tx) + '" href="' + eh(telHref(it.phone)) + '" title="اتصال"><i class="fa-solid fa-phone"></i></a>' : '') +
-          '<button type="button" class="cp-v12-ibtn map" data-act="v12-map-opts" data-tx="' + eh(tx) + '" title="الخريطة"><i class="fa-solid fa-location-arrow"></i></button>' +
-          '<button type="button" class="cp-v12-ibtn info" data-act="detail" data-tx="' + eh(tx) + '" title="تفاصيل المعاملة"><i class="fa-solid fa-circle-info"></i></button>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:6px">' +
-          '<button type="button" class="cp-a cp-sm' + (inRouteIdx !== -1 ? ' pri' : '') + '" data-act="route-toggle" data-tx="' + eh(tx) + '">' + (inRouteIdx !== -1 ? '✓ محطة ' + num(inRouteIdx + 1) : '+ خط السير') + '</button>' +
-          (!it.confirmed ? '<button type="button" class="cp-a cp-sm" data-act="on-my-way" data-tx="' + eh(tx) + '">في طريقي</button>' : '') +
-        '</div>' +
+      buildFiveStepper(doneUpTo, curIdx) +
+      '<div class="ts-actions">' +
+        primaryBtn +
+        (it.phone ? '<a class="ts-cbtn call" data-act="v12-call-log" data-tx="' + eh(tx) + '" href="' + eh(telHref(it.phone)) + '" aria-label="اتصال">' + ic('phone', 17) + '</a>' : '') +
+        '<button type="button" class="ts-cbtn" data-act="v12-map-opts" data-tx="' + eh(tx) + '" aria-label="الخريطة">' + ic('nav', 17) + '</button>' +
       '</div>' +
-      (!it.confirmed
-        ? '<div class="cpn-slide" data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"><div class="kn">' + ic('back') + '</div><span>اسحب / اضغط لتأكيد ' + eh(k.sec) + '</span></div>'
-        : '<div style="margin-top:8px;font-size:11.5px;color:#10b981;font-weight:800">✓ تم تأكيد المشوار ' + eh(timeOf(it.confirmed_at)) + '</div>') +
     '</div>';
   }
 
