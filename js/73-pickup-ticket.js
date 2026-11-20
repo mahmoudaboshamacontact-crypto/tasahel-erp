@@ -220,19 +220,49 @@
       return (o && typeof o === 'object') ? o : {};
     } catch (e) { return {}; }
   }
+  var __pt73BodyObs = null;
+  var __pt73Rendering = false;
+  function ensureBodyObserver() {
+    var body = $('cp-body');
+    if (!body || __pt73BodyObs || !window.MutationObserver) return;
+    __pt73BodyObs = new MutationObserver(function () {
+      if (__pt73Rendering) return;
+      if (isCourier() && Array.isArray(st.courierTickets) && st.courierTickets.length) {
+        var tab = currentCourierTab();
+        var showHere = !tab || tab === 'today' || tab === 'trips' || tab === 'home' || tab === 'account';
+        if (showHere && !$('pt73-courier-tickets')) {
+          renderCourierTicketsIntoBody();
+          syncTripsHeaderTicketBadge();
+        }
+      }
+    });
+    __pt73BodyObs.observe(body, { childList: true });
+  }
+
   function syncTripsHeaderTicketBadge() {
     var cnt = Array.isArray(st.courierTickets) ? st.courierTickets.length : 0;
     if (!cnt) return;
     var body = $('cp-body');
-    if (!body) return;
-    var sub = body.querySelector('.cp-v12-sub, .cp-sub, p');
-    if (sub && /0 مشوار/.test(sub.textContent || '') && !/استلام/.test(sub.textContent || '')) {
-      sub.textContent = sub.textContent + ' · ' + cnt + ' تيكت استلام';
-    }
+    if (!body || currentCourierTab() !== 'trips') return;
+    body.querySelectorAll('div, p, span').forEach(function (el) {
+      if (el.children.length) return;
+      var t = (el.textContent || '').trim();
+      if (/مفيش مشاوير مطابقة في اليوم ده/.test(t)) {
+        el.style.display = 'none';
+      } else if (/0\s*مشوار/.test(t) && !/استلام/.test(t)) {
+        el.textContent = t.replace(/0\s*مشوار/, cnt + ' استلام (تيكت)');
+      }
+    });
+    body.querySelectorAll('button').forEach(function (btn) {
+      if (btn.dataset.pt73CntDone === '1') return;
+      var t = (btn.textContent || '').trim();
+      if (t === 'الكل 0') { btn.textContent = 'الكل ' + cnt; btn.dataset.pt73CntDone = '1'; }
+      else if (t === 'استلام 0') { btn.textContent = 'استلام ' + cnt; btn.dataset.pt73CntDone = '1'; }
+    });
   }
 
   function renderCallChecksBadges(cc) {
-    if (!cc || typeof cc !== 'object') return '';
+    if (!cc) return '';
     var labels = {
       docs_ready: 'الأوراق جاهزة',
       address_ok: 'العنوان مؤكد',
@@ -240,11 +270,16 @@
       fees_ok: 'الرسوم واضحة',
       whatsapp_ok: 'واتساب مؤكد'
     };
-    var keys = Object.keys(cc).filter(function (k) { return !!cc[k]; });
-    if (!keys.length) return '';
+    var items = [];
+    if (Array.isArray(cc)) {
+      items = cc.map(function (v) { return String(v || '').trim(); }).filter(Boolean);
+    } else if (typeof cc === 'object') {
+      items = Object.keys(cc).filter(function (k) { return !!cc[k]; }).map(function (k) { return labels[k] || k; });
+    }
+    if (!items.length) return '';
     return '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' +
-      keys.map(function (k) {
-        return '<span style="font-size:10.5px;padding:2px 7px;border-radius:999px;background:rgba(16,185,129,.14);color:#34d399;border:1px solid rgba(16,185,129,.3)">✓ ' + eh(labels[k] || k) + '</span>';
+      items.map(function (txt) {
+        return '<span style="font-size:10.5px;padding:2px 7px;border-radius:999px;background:rgba(16,185,129,.14);color:#34d399;border:1px solid rgba(16,185,129,.3)">✓ ' + eh(txt) + '</span>';
       }).join('') +
     '</div>';
   }
@@ -252,6 +287,9 @@
   function renderCourierTicketsIntoBody() {
     var body = $('cp-body');
     if (!body) return;
+    ensureBodyObserver();
+    __pt73Rendering = true;
+    try {
     var old = $('pt73-courier-tickets');
     var tab = currentCourierTab();
     var showHere = !tab || tab === 'today' || tab === 'trips' || tab === 'home' || tab === 'account';
@@ -339,6 +377,7 @@
           '</div>' +
         '</div>';
       }).join('');
+    } finally { __pt73Rendering = false; }
   }
 
   /* عرض تيكتات الاستلام المعيّنة للمندوب (داخل #cp-body القابل للتمرير) */
