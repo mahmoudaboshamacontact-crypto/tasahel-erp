@@ -148,7 +148,7 @@
   /* فتح تاب التيكتات عند المندوب بعد الضغط على الإشعار */
   function focusCourierTickets() {
     if (!isCourier()) return;
-    var navToday = document.querySelector('#cp-nav button[data-tab="today"], #cp-nav button[data-tab="trips"]');
+    var navToday = document.querySelector('#cp-nav button[data-tab="tickets"], #cp-nav button[data-tab="today"]');
     if (navToday && !navToday.classList.contains('on')) navToday.click();
     setTimeout(function () {
       var box = $('pt73-courier-tickets');
