@@ -101,10 +101,10 @@
     if (!root) return;
     root.innerHTML =
       '<div class="cp-modal" data-act="mclose"><div class="cp-box" style="max-width:420px">' +
-        '<h3>✍️ توقيع العميل الإلكتروني</h3>' +
+        '<h3> توقيع العميل الإلكتروني</h3>' +
         '<p>توقيع العميل بصباعه على استلام/تسليم المعاملة <b dir="ltr">' + String(tx) + '</b> (يتحفظ كنص خفيف بدون صور):</p>' +
         '<input id="cp-sig-name" type="text" class="cp-field" style="margin-bottom:8px" value="' + String(clientName || '').replace(/"/g, '&quot;') + '" placeholder="اسم الموقّع">' +
-        '<div style="background:#fff;border-radius:14px;border:2px dashed #10b981;overflow:hidden;touch-action:none">' +
+        '<div style="background:#fff;border-radius:14px;border:2px dashed #036b29;overflow:hidden;touch-action:none">' +
           '<canvas id="cp-sig-canvas" width="360" height="170" style="width:100%;height:170px;display:block;cursor:crosshair"></canvas>' +
         '</div>' +
         '<div class="cp-btns" style="margin-top:10px">' +
@@ -167,11 +167,11 @@
     let lng = Number(initialLng) || 31.2357;
     root.innerHTML =
       '<div class="cp-modal" data-act="mclose"><div class="cp-box" style="max-width:420px">' +
-        '<h3>📍 تثبيت موقع العميل يدوياً</h3>' +
+        '<h3> تثبيت موقع العميل يدوياً</h3>' +
         '<p>لو إشارة الـ GPS ضعيفة، اسحب الدبوس على موقع <b>' + String(clientName || tx) + '</b>:</p>' +
         '<div id="cp-pin-pad" style="position:relative;height:210px;border-radius:14px;background:radial-gradient(circle at 50% 50%,rgba(16,185,129,.18),rgba(15,23,42,.95));border:1px solid var(--bd);overflow:hidden;touch-action:none;cursor:grab">' +
           '<div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:28px 28px"></div>' +
-          '<div id="cp-pin-dot" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);font-size:28px;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5))">📍</div>' +
+          '<div id="cp-pin-dot" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);font-size:28px;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5))"></div>' +
           '<div id="cp-pin-coords" dir="ltr" style="position:absolute;bottom:8px;left:8px;right:8px;text-align:center;font-size:11px;font-weight:700;background:rgba(0,0,0,.55);color:#fff;padding:4px 8px;border-radius:8px">' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</div>' +
         '</div>' +
         '<div class="cp-btns" style="margin-top:10px">' +
@@ -226,7 +226,7 @@
 
     const pinsHtml = pts.map((p, i) => {
       const xy = toXY(p.lat, p.lng);
-      const col = p.it.confirmed ? '#64748b' : (p.it.type === 'delivery' ? '#10b981' : '#3b82f6');
+      const col = p.it.confirmed ? '#64748b' : (p.it.type === 'delivery' ? '#036b29' : '#3b82f6');
       return '<button type="button" data-act="detail" data-tx="' + String(p.it.transaction_id).replace(/"/g, '&quot;') + '" ' +
         'title="' + String(p.it.client_name || '').replace(/"/g, '&quot;') + '" ' +
         'style="position:absolute;left:' + xy.x.toFixed(1) + '%;top:' + xy.y.toFixed(1) + '%;transform:translate(-50%,-100%);border:0;background:transparent;cursor:pointer;padding:0;text-align:center">' +
@@ -244,11 +244,11 @@
     return '<div class="cp-card" style="padding:0;overflow:hidden;border:1px solid rgba(16,185,129,.35)">' +
       '<div style="position:relative;height:260px;background:radial-gradient(circle at 35% 35%,rgba(16,185,129,.12),rgba(11,15,23,.98));overflow:hidden">' +
         '<div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:32px 32px"></div>' +
-        '<div style="position:absolute;top:8px;right:10px;font-size:11px;font-weight:800;color:#fff;background:rgba(15,23,42,.75);padding:4px 9px;border-radius:999px">🗺️ خريطة مشاوير اليوم (اضغط على أي دبوس)</div>' +
+        '<div style="position:absolute;top:8px;right:10px;font-size:11px;font-weight:800;color:#fff;background:rgba(15,23,42,.75);padding:4px 9px;border-radius:999px"> خريطة مشاوير اليوم (اضغط على أي دبوس)</div>' +
         myPinHtml + pinsHtml +
       '</div>' +
       '<div style="display:flex;justify-content:space-around;padding:7px 10px;font-size:11px;color:var(--mu);background:var(--fld)">' +
-        '<span>🟢 تسليم</span><span>🔵 استلام</span><span>🟠 موقعك</span><span>⚫ مؤكد</span>' +
+        '<span> تسليم</span><span> استلام</span><span> موقعك</span><span> مؤكد</span>' +
       '</div>' +
     '</div>';
   }
@@ -264,7 +264,7 @@
     rec.lang = 'ar-EG';
     rec.interimResults = false;
     rec.maxAlternatives = 1;
-    if (typeof showToast === 'function') showToast('🎙️ اتكلم دلوقتي: قول «العميل الجاي» أو «اتصل» أو «خريطة»…');
+    if (typeof showToast === 'function') showToast(' اتكلم دلوقتي: قول «العميل الجاي» أو «اتصل» أو «خريطة»…');
     rec.onresult = e => {
       const cmd = String((e.results && e.results[0] && e.results[0][0] && e.results[0][0].transcript) || '').trim();
       haptic(true);
@@ -290,14 +290,14 @@
     const root = document.getElementById('cp-modal-root');
     if (!root) return;
     const tpls = [
-      { ic: '🛵', lbl: 'أنا في طريقي إليك', msg: 'أهلاً بحضرتك أ/ ' + (clientName || '') + '، معاك ' + (courierName || 'مندوب') + ' من شركة تساهيل، أنا في طريقي لحضرتك دلوقتي بخصوص معاملة رقم ' + tx },
-      { ic: '📍', lbl: 'وصلت عند العنوان', msg: 'أهلاً بحضرتك أ/ ' + (clientName || '') + '، أنا وصلت عند العنوان دلوقتي ومعايا معاملة رقم ' + tx },
-      { ic: '📞', lbl: 'حاولت أتصل بحضرتك', msg: 'أهلاً بحضرتك أ/ ' + (clientName || '') + '، حاولت أتصل بحضرتك بخصوص معاملة تساهيل رقم ' + tx + ' — برجاء الرد أو معاودة الاتصال' },
+      { ic: '', lbl: 'أنا في طريقي إليك', msg: 'أهلاً بحضرتك أ/ ' + (clientName || '') + '، معاك ' + (courierName || 'مندوب') + ' من شركة تساهيل، أنا في طريقي لحضرتك دلوقتي بخصوص معاملة رقم ' + tx },
+      { ic: '', lbl: 'وصلت عند العنوان', msg: 'أهلاً بحضرتك أ/ ' + (clientName || '') + '، أنا وصلت عند العنوان دلوقتي ومعايا معاملة رقم ' + tx },
+      { ic: '', lbl: 'حاولت أتصل بحضرتك', msg: 'أهلاً بحضرتك أ/ ' + (clientName || '') + '، حاولت أتصل بحضرتك بخصوص معاملة تساهيل رقم ' + tx + ' — برجاء الرد أو معاودة الاتصال' },
       { ic: '⏰', lbl: 'هتأخر ١٥ دقيقة بسبب الزحمة', msg: 'أهلاً بحضرتك أ/ ' + (clientName || '') + '، معذرة هتأخر حوالي ١٥ دقيقة بسبب الزحمة في الطريق، وجاي لحضرتك فوراً (معاملة ' + tx + ')' }
     ];
     root.innerHTML =
       '<div class="cp-modal" data-act="mclose"><div class="cp-box" style="max-width:400px">' +
-        '<h3>💬 رسالة واتساب جاهزة</h3>' +
+        '<h3> رسالة واتساب جاهزة</h3>' +
         '<p>اختر الرسالة وهتتفتح فوراً على واتساب <b>' + String(clientName || '') + '</b>:</p>' +
         '<div style="display:flex;flex-direction:column;gap:8px">' +
           tpls.map((t, i) => '<button type="button" class="cp-btn cp-go" style="text-align:right;justify-content:flex-start" data-v12wa="' + i + '">' + t.ic + ' ' + t.lbl + '</button>').join('') +
