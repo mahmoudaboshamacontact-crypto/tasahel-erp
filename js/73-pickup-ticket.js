@@ -209,7 +209,8 @@
       '.pt-ticket-item{border:1px solid var(--r-bd,rgba(148,163,184,.22));border-radius:14px;padding:13px;display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px}',
       '.pt-badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}',
       '.pt-badge-org{background:rgba(200,162,82,.15);color:#036b29}',
-      '.pt-badge-ok{background:rgba(16,185,129,.15);color:#10b981}',
+      '.pt-badge-ok{background:#E3F1E8;color:#024a1c}',
+      'html.dark .pt-badge-ok,#courier-app:not([data-theme=light]) .pt-badge-ok{background:rgba(3,107,41,.22);color:#bbf7d0}',
       '.pt-badge-warn{background:rgba(245,158,11,.18);color:#d97706}',
       '.pt-badge-pur{background:rgba(139,92,246,.18);color:#7c3aed}',
       '.pt-badge-mut{background:rgba(148,163,184,.18);color:#64748b}',
@@ -217,7 +218,7 @@
       'html.dark .pt-comment-pre{background:rgba(255,255,255,.06)}',
       '.pt-courier-box{margin:10px 12px 0;padding:12px;border-radius:16px;border:1px solid var(--bd,rgba(3,107,41,.22));background:transparent;color:var(--tx,#111C15);font-size:12.5px}',
       '.pt-tabs-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}',
-      '.pt-ftab{border:1px solid var(--r-bd,rgba(148,163,184,.3));border-radius:10px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:var(--r-tx,var(--tx,inherit));font-family:inherit}',
+      '.pt-ftab{border:1px solid var(--bd,rgba(3,107,41,.18));border-radius:999px;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;background:var(--card,#ffffff);color:var(--tx,var(--r-tx,#111C15));font-family:inherit}',
       '.pt-ftab.active{background:#036b29;color:#fff;border-color:#881337;box-shadow:0 0 10px rgba(136,19,55,.24)}',
       '.pt-ftab-danger.active{background:#dc2626;color:#fff;border-color:#dc2626}',
       '.pt-badge-cancel{background:rgba(220,38,38,.16);color:#dc2626;border:1px solid rgba(220,38,38,.35)}',
@@ -527,6 +528,7 @@
             (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" data-pt73-contact="whatsapp" data-pt73-tid="' + Number(t.id) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
           '</div>' +
           renderCourierPapersBlock(t) +
+          '<div style="display:flex;justify-content:flex-end"><button type="button" class="cp-a cp-sm" data-pt73-open-detail="' + Number(t.id) + '"><i class="fa-regular fa-file-lines"></i> تفاصيل التيكت</button></div>' +
         '</div>';
       }).join('');
 
@@ -557,6 +559,7 @@
                 (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" data-pt73-contact="whatsapp" data-pt73-tid="' + Number(t.id) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
               '</div>' +
               renderCourierPapersBlock(t) +
+              '<div style="display:flex;justify-content:flex-end"><button type="button" class="cp-a cp-sm" data-pt73-open-detail="' + Number(t.id) + '"><i class="fa-regular fa-file-lines"></i> تفاصيل التيكت</button></div>' +
             '</div>';
           }).join('')
         : '<div class="pt-sub" style="text-align:center;padding:10px 0">مفيش تيكتات ملغية خلال آخر 7 أيام.</div>';
@@ -663,9 +666,9 @@
                 return '<button type="button" class="cp-a cp-sm" style="' + (active ? 'border:1px solid var(--burg,#881337);font-weight:800' : '') + '" data-pt73-step="' + sp[0] + '" data-pt73-lbl="' + sp[1] + '"' + commonAttrs + '>' + (active ? '✓ ' : '') + sp[1] + '</button>';
               }).join('') +
             '</div>' +
-            (t.summary_comment
-              ? '<details class="ts-more"><summary><span>ملخص المكالمة</span><i class="fa-solid fa-chevron-down" style="font-size:10px"></i></summary><div class="ts-more-body"><div style="font-size:11.5px;line-height:1.6;white-space:pre-wrap;padding:8px 10px;border-radius:10px;background:var(--fld);color:var(--tx)">' + eh(t.summary_comment) + '</div></div></details>'
-              : '') +
+            '<div style="display:flex;justify-content:flex-end;margin-top:8px">' +
+              '<button type="button" class="cp-a cp-sm" data-pt73-open-detail="' + Number(t.id) + '"><i class="fa-regular fa-file-lines"></i> تفاصيل التيكت' + (t.summary_comment ? ' وملخص المكالمة' : '') + '</button>' +
+            '</div>' +
           '</div>';
         }).join('') : (!missionsHtml ? '<div class="pt-sub" style="text-align:center;padding:10px 0">مفيش تيكتات استلام نشطة حالياً.</div>' : ''))));
     } finally { __pt73Rendering = false; }
@@ -745,6 +748,13 @@
     if (ctabBtn) {
       st.courierTab = ctabBtn.getAttribute('data-pt73-ctab') === 'cancelled' ? 'cancelled' : 'active';
       renderCourierTicketsIntoBody();
+      return;
+    }
+    var openDetBtn = t.closest('[data-pt73-open-detail]');
+    if (openDetBtn) {
+      var dTid = Number(openDetBtn.getAttribute('data-pt73-open-detail'));
+      var dItem = st.courierTickets.find(function (x) { return Number(x.id) === dTid; });
+      if (dItem) openCourierTicketDetailModal(dItem);
       return;
     }
     var pConfBtn = t.closest('[data-pt73-papers-confirm]');
@@ -1864,6 +1874,133 @@
     if (b.dataset.ptAct === 'cancel') {
       if (!isManager()) return toast('الإلغاء متاح للمدير فقط', 'error');
       openCancelTicketModal(t);
+    }
+  }
+
+  function closeCourierTicketDetailModal() {
+    var m = $('pt-courier-detail-modal');
+    if (m) m.remove();
+  }
+
+  async function openCourierTicketDetailModal(ticket) {
+    if (!ticket) return;
+    closeCourierTicketDetailModal();
+    var waPh = cleanWaPhone(ticket.phone);
+    var mapQ = encodeURIComponent([ticket.zone, ticket.address].filter(Boolean).join(' '));
+    var pins = getPinsMap();
+    var pin = pins[String(ticket.sd_request_id)];
+    var mapHref = (pin && pin.lat && pin.lng)
+      ? ('https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(pin.lat + ',' + pin.lng))
+      : (mapQ ? ('https://www.google.com/maps/search/?api=1&query=' + mapQ) : '');
+    var rIds = getRouteIds();
+    var inRoute = rIds.indexOf(String(ticket.sd_request_id)) !== -1;
+    var isPaid = ticket.payment_status === 'paid' || Number(ticket.collect_amount || 0) <= 0;
+    var curStep = ticket.courier_step || '';
+    var doneUpTo = 0, curIdx = 1;
+    if (curStep === 'papers_received') { doneUpTo = 5; curIdx = 6; }
+    else if (curStep === 'waiting') { doneUpTo = 4; curIdx = 5; }
+    else if (curStep === 'on_the_way') { doneUpTo = 3; curIdx = 4; }
+    else if (curStep === 'call_attempt') { doneUpTo = 2; curIdx = 3; }
+    else if (curStep === 'accepted') { doneUpTo = 1; curIdx = 2; }
+    var stepperLabels = ['قبول', 'اتصال', 'في الطريق', 'وصلت', 'الأوراق'];
+    var stepperHtml = '<div class="ts-stepper">' + stepperLabels.map(function (lbl, idx) {
+      var n = idx + 1;
+      var isDone = n <= doneUpTo;
+      var isCur = !isDone && n === curIdx;
+      var cls = isDone ? 'done' : (isCur ? 'cur' : '');
+      return '<div class="ts-step ' + cls + '"><div class="ts-dot">' + (isDone ? '✓' : n) + '</div><div class="ts-slbl">' + lbl + '</div></div>';
+    }).join('') + '</div>';
+
+    var nextStepMap = {
+      '': ['accepted', 'تأكيد استلام التيكت'],
+      'accepted': ['call_attempt', 'سجّل تم الاتصال'],
+      'call_attempt': ['on_the_way', 'في طريقي للعميل'],
+      'on_the_way': ['waiting', 'وصلت للعميل'],
+      'waiting': ['papers_received', 'استلمت الأوراق']
+    };
+    var ns = nextStepMap[curStep];
+    var primaryBtnHtml = '';
+    if (ticket.status === 'with_courier' && ns) {
+      primaryBtnHtml = '<button type="button" class="ts-cta ts7b-span2" data-pt73-step="' + ns[0] + '" data-pt73-lbl="' + eh(ns[1]) + '" data-pt73-tid="' + Number(ticket.id) + '" data-pt73-sd="' + eh(ticket.sd_request_id) + '" data-pt73-cl="' + eh(ticket.client_name) + '">' + eh(ns[1]) + '</button>';
+    } else if (ticket.status === 'converted' && !ticket.mission_confirmed && ticket.mission_id) {
+      primaryBtnHtml = '<button type="button" class="ts-cta ts7b-span2" data-pt73-confirm-mission="' + Number(ticket.mission_id) + '" data-pt73-tid="' + Number(ticket.id) + '">تأكيد مهمة الاستلام</button>';
+    } else if (ticket.phone) {
+      primaryBtnHtml = '<a class="ts-cta ts7b-span2" href="tel:' + eh(ticket.phone) + '" data-pt73-contact="call" data-pt73-tid="' + Number(ticket.id) + '"><i class="fa-solid fa-phone"></i> اتصال بالعميل</a>';
+    }
+
+    var itemsList = Array.isArray(ticket.items) && ticket.items.length
+      ? ticket.items
+      : [{ service_name: ticket.service_name, doc_type: '', qty: ticket.qty || 1 }];
+    var svcsHtml = itemsList.map(function (it) {
+      return eh(it.service_name) + (it.doc_type ? ' (' + eh(it.doc_type) + ')' : '') + (Number(it.qty || 1) > 1 ? ' × ' + Number(it.qty) : '');
+    }).join(' + ');
+
+    var wrap = document.createElement('div');
+    wrap.id = 'pt-courier-detail-modal';
+    wrap.className = 'ts7b-detail-backdrop';
+    wrap.innerHTML =
+      '<div class="ts7b-detail-sheet" role="dialog" aria-modal="true">' +
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">' +
+          '<div style="min-width:0;flex:1">' +
+            '<div style="font-size:17px;font-weight:900;line-height:1.3">' + eh(ticket.client_name) + '</div>' +
+            '<div style="font-size:11.5px;color:var(--mu)" dir="ltr">' + eh(ticket.converted_tx_id || ticket.sd_request_id) + ' · ' + eh(ticket.slot_pref || 'اليوم') + '</div>' +
+          '</div>' +
+          '<button type="button" class="pt-btn pt-btn-sec" id="pt-cdet-close" style="padding:6px 12px">إغلاق</button>' +
+        '</div>' +
+        (ticket.status === 'cancelled'
+          ? '<div class="pt-cancel-strip"><span><i class="fa-solid fa-ban"></i> تيكت ملغي</span><span>' + eh(ticket.cancel_reason || 'بدون سبب') + '</span></div>'
+          : '') +
+        '<div class="ts7b-amount-hero">' +
+          '<div><div style="font-size:11.5px;opacity:.88">' + (isPaid ? 'حالة الدفع' : 'المبلغ المطلوب تحصيله') + '</div>' +
+            '<div class="ts7b-amount-val">' + (isPaid ? 'خالص الدفع' : (Number(ticket.collect_amount || 0).toLocaleString('en-US') + ' ج.م')) + '</div></div>' +
+          '<span class="pt-badge" style="background:rgba(255,255,255,.18);color:#FFFFFF">' + eh(ticket.zone || 'بدون منطقة') + '</span>' +
+        '</div>' +
+        '<div class="ts-card" style="margin:0">' +
+          '<div style="font-size:12.5px;font-weight:700">' + svcsHtml + '</div>' +
+          (ticket.address ? '<div style="font-size:12px;color:var(--mu);margin-top:4px"><i class="fa-solid fa-location-dot"></i> ' + eh(ticket.address) + '</div>' : '') +
+          stepperHtml +
+        '</div>' +
+        '<div class="ts7b-act-grid">' +
+          primaryBtnHtml +
+          (ticket.phone && primaryBtnHtml.indexOf('tel:') === -1 ? '<a class="pt-btn pt-btn-sec" href="tel:' + eh(ticket.phone) + '" data-pt73-contact="call" data-pt73-tid="' + Number(ticket.id) + '"><i class="fa-solid fa-phone"></i> اتصال</a>' : '') +
+          (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" data-pt73-contact="whatsapp" data-pt73-tid="' + Number(ticket.id) + '"><i class="fa-brands fa-whatsapp"></i> واتساب</a>' : '') +
+          (mapHref ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="' + mapHref + '"><i class="fa-solid fa-location-arrow"></i> الخريطة</a>' : '') +
+          '<button type="button" class="pt-btn pt-btn-sec" data-pt73-route="' + eh(ticket.sd_request_id) + '">' + (inRoute ? 'إزالة من خط السير' : '+ ضيف لخط السير') + '</button>' +
+          '<button type="button" class="pt-btn pt-btn-sec" data-pt73-pin="' + eh(ticket.sd_request_id) + '"><i class="fa-solid fa-map-pin"></i> ' + (pin ? 'تحديث اللوكيشن' : 'حفظ اللوكيشن') + '</button>' +
+        '</div>' +
+        renderCourierPapersBlock(ticket) +
+        '<div id="pt-cdet-papers-hist" class="ts-card" style="margin:0;font-size:12px"><div style="color:var(--mu)">جاري تحميل سجل الأوراق…</div></div>' +
+        (ticket.staff_notes ? '<div class="ts-card" style="margin:0;border-color:var(--burg,#881337)"><b style="font-size:12px;color:var(--burg,#881337)">ملاحظة الموظف</b><div style="font-size:12px;margin-top:4px">' + eh(ticket.staff_notes) + '</div></div>' : '') +
+        (ticket.summary_comment ? '<div class="ts-card" style="margin:0"><b style="font-size:12.5px">ملخص المكالمة</b><div style="font-size:12px;line-height:1.65;white-space:pre-wrap;margin-top:6px">' + eh(ticket.summary_comment) + '</div></div>' : '') +
+      '</div>';
+
+    var host = $('courier-app') || document.body;
+    host.appendChild(wrap);
+    wrap.addEventListener('click', function (ev) {
+      if (ev.target === wrap || ev.target.id === 'pt-cdet-close') {
+        closeCourierTicketDetailModal();
+      }
+    });
+
+    if (sbClient) {
+      try {
+        var hr = await sbClient.rpc('papers_history', { p_ticket_id: Number(ticket.id) });
+        var hBox = $('pt-cdet-papers-hist');
+        if (hBox) {
+          var rows = (!hr.error && Array.isArray(hr.data)) ? hr.data : [];
+          hBox.innerHTML = '<b style="font-size:12.5px;display:block;margin-bottom:6px">سجل عهدة الأوراق</b>' +
+            (rows.length
+              ? rows.map(function (ev) {
+                  var fl = PAPERS_HOLDER_LABELS[ev.from_holder] || ev.from_holder;
+                  var tl = PAPERS_HOLDER_LABELS[ev.to_holder] || ev.to_holder;
+                  var sl = ev.status === 'confirmed' ? 'مؤكّد' : 'معلّق';
+                  return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 8px;border-radius:8px;background:var(--fld);margin-top:4px">' +
+                    '<span><b>' + eh(fl) + ' ← ' + eh(tl) + '</b> (' + sl + ')' + (ev.recipient_name ? ' · ' + eh(ev.recipient_name) : '') + '</span>' +
+                    '<span style="color:var(--mu)" dir="ltr">' + eh(fmtStepTime(ev.confirmed_at || ev.requested_at)) + '</span></div>';
+                }).join('')
+              : '<div style="color:var(--mu)">لا توجد تحركات مسجّلة للأوراق بعد.</div>');
+        }
+      } catch (e) { /* */ }
     }
   }
 
