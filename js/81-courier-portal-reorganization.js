@@ -161,8 +161,11 @@
   }
 
   function hideRankContent(app) {
-    app.querySelectorAll('.cp-motiv,.cpn-lb').forEach(function (node) {
-      node.style.display = 'none';
+    app.querySelectorAll('.cp-motiv').forEach(function (node) { node.style.display = 'none'; });
+    app.querySelectorAll('.cpn-lb').forEach(function (node) {
+      var card = node.closest('.cpn-card');
+      if (card) card.style.display = 'none';
+      else node.style.display = 'none';
     });
     // إخفاء أي رابط قديم للترتيب دون المساس بمحتوى الحساب أو كشف الحساب.
     app.querySelectorAll('[data-tab="rank"]').forEach(function (node) {
