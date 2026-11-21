@@ -236,7 +236,7 @@
       'html.dark body:not(.is-courier-mode) .pt-comment-pre{background:rgba(255,255,255,.06)}',
       '.pt-courier-box{margin:10px 12px 0;padding:12px;border-radius:16px;border:1px solid var(--bd,rgba(3,107,41,.22));background:transparent;color:var(--tx,#111C15);font-size:12.5px}',
       '.pt-tabs-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}',
-      '.pt-ftab{border:1px solid var(--bd,rgba(3,107,41,.18));border-radius:999px;padding:7px 13px;font-size:12px;font-weight:800;cursor:pointer;background:var(--card);color:var(--tx);font-family:inherit;white-space:nowrap}',
+      '.pt-ftab{height:36px;border:1px solid var(--bd,rgba(3,107,41,.18));border-radius:999px;padding:0 14px;font-size:13px;font-weight:700;cursor:pointer;background:var(--card);color:var(--tx);font-family:inherit;white-space:nowrap}',
       '.pt-ftab.active{background:#036b29;color:#fff;border-color:#881337;box-shadow:0 0 10px rgba(136,19,55,.24)}',
       '.pt-ftab-danger.active{background:#dc2626;color:#fff;border-color:#dc2626}',
       '.pt-badge-cancel{background:rgba(220,38,38,.16);color:#dc2626;border:1px solid rgba(220,38,38,.35)}',
@@ -249,6 +249,7 @@
       '#courier-app:not([data-theme=light]) .pt-mission-strip{color:#86efac}',
       '.pt-btn-mission{background:#036b29;color:#ffffff}',
       '.pt-badge-papers-office{background:rgba(100,116,139,.16);color:#475569;border:1px solid rgba(100,116,139,.3)}',
+      '#courier-app:not([data-theme=light]) .pt-badge-papers-office{background:rgba(148,163,184,.22);color:#e2e8f0}',
       'html.dark body:not(.is-courier-mode) .pt-badge-papers-office{color:#cbd5e1}',
       '.pt-badge-papers-courier{background:rgba(217,119,6,.16);color:#b45309;border:1px solid rgba(217,119,6,.35)}',
       'html.dark body:not(.is-courier-mode) .pt-badge-papers-courier{color:#fbbf24}',
@@ -1844,9 +1845,10 @@
           '<span class="pt-badge" style="background:rgba(255,255,255,.18);color:#FFFFFF">' + eh(ticket.zone || '—') + '</span>' +
         '</div>' +
         '<div class="ts7b-tcard" style="margin:0">' +
-          '<div style="font-size:16px;font-weight:900">' + eh(ticket.client_name) + '</div>' +
-          '<div style="font-size:14px;color:var(--mu)">' + svcsHtml + '</div>' +
-          (ticket.address ? '<div style="font-size:12px;color:var(--mu)"><i class="fa-solid fa-location-dot" style="color:#036b29"></i> ' + eh(ticket.address) + '</div>' : '') +
+          '<div class="ts7b-kv"><span class="ts7b-kv-k">اسم العميل</span><div class="ts7b-kv-v">' + eh(ticket.client_name) + '</div></div>' +
+          '<div class="ts7b-kv"><span class="ts7b-kv-k">الخدمة</span><div class="ts7b-kv-v">' + itemsList.map(function (it) { return eh(it.service_name) + (Number(it.qty || 1) > 1 ? ' × ' + Number(it.qty) : ''); }).join(' + ') + '</div></div>' +
+          '<div class="ts7b-kv"><span class="ts7b-kv-k">المستندات المطلوبة</span><div class="ts7b-kv-v">' + eh(itemsList.map(function (it) { return it.doc_type; }).filter(Boolean).join(' · ') || 'حسب بنود الطلب') + '</div></div>' +
+          (ticket.address ? '<div class="ts7b-kv"><span class="ts7b-kv-k">العنوان</span><div class="ts7b-kv-v">' + eh(ticket.address) + '</div></div>' : '') +
           stepperHtml +
         '</div>' +
         '<div class="ts7b-act-grid">' +

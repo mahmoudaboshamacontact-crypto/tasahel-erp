@@ -89,6 +89,8 @@
 
   /* أيقونات SVG (نفس أيقونات التصميم) */
   const IC = {
+    home: '<path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
     ring: '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/>',
     route: '<circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/>',
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
@@ -773,17 +775,19 @@
     }
   };
 
-  function renderGuideBanner(tab) {
-    const g = GUIDES[tab]; if (!g) return '';
-    const open = st.guides[tab] === true;
-    return '<div class="cp-guide">' +
-      '<div class="cp-guide-hd">' +
-        '<div class="cp-guide-ic"><i class="fa-solid ' + g.icon + '"></i></div>' +
-        '<div class="cp-guide-tt"><b>' + eh(g.title) + '</b><p>' + eh(g.desc) + '</p></div>' +
-        '<button type="button" class="cp-guide-x" data-act="guide-toggle" data-gtab="' + tab + '">' + (open ? 'إخفاء' : 'تفاصيل أكتر') + '</button>' +
-      '</div>' +
-      (open ? '<ul class="cp-guide-ul">' + g.steps.map(s => '<li>' + eh(s) + '</li>').join('') + '</ul>' : '') +
-    '</div>';
+  function renderGuideBanner() { return ''; }
+  function openScreenHelpModal() {
+    const map = { today: 'home', tickets: 'trips', trips: 'trips', route: 'trips', review: 'review', chat: 'chat', account: 'home', profile: 'profile' };
+    const g = GUIDES[map[st.tab] || 'home'] || GUIDES.home;
+    if (!g) return;
+    modal(
+      '<h3>' + eh(g.title) + '</h3>' +
+      '<p>' + eh(g.desc) + '</p>' +
+      (Array.isArray(g.steps) && g.steps.length
+        ? '<ul class="cp-guide-ul" style="border-top:1px solid var(--bd);margin-bottom:12px">' + g.steps.map(x => '<li>' + eh(x) + '</li>').join('') + '</ul>'
+        : '') +
+      '<div class="cp-btns"><button type="button" class="cp-btn cp-go" data-act="mclose-btn">فهمت</button></div>'
+    );
   }
 
   /* ---------- ثيم: صباحي (فاتح) / مسائي (داكن) ---------- */
@@ -953,13 +957,14 @@
     const w = $('cp-who-box'); if (!w) return;
     w.innerHTML = myAvTile() +
       '<div class="cpn-wt"><b>' + eh(st.me && st.me.name) + '</b>' +
-      '<div class="cpn-st"><i style="background:' + (st.onBreak ? 'var(--wn)' : 'var(--ok)') + '"></i>' + (st.onBreak ? 'في استراحة' : 'متاح') + ' · <span class="cpn-num" id="cp-time" dir="rtl"></span></div></div>';
+      '<div class="cpn-st"><i style="background:' + (st.onBreak ? 'var(--wn)' : '#036b29') + '"></i><span class="cpn-num" id="cp-time" dir="rtl"></span></div></div>';
     tickClock();
   }
   function shell() {
     overlay(
       '<header class="cpn-head">' +
         '<div class="cpn-who" id="cp-who-box" data-act="profile" title="الحساب الشخصي"></div>' +
+        '<button type="button" class="cpn-ib" id="cp-hdr-info" data-act="screen-help" aria-label="مساعدة الشاشة" title="طريقة الاستخدام">' + ic('info') + '</button>' +
         '<button type="button" class="cpn-ib" id="cp-hdr-review" data-tab="review" aria-label="المراجعة" title="المراجعة">' + ic('check') + '</button>' +
         '<button type="button" class="cpn-ib" data-tab="account" aria-label="حسابي وعمولاتي" title="حسابي وعمولاتي">' + ic('wallet') + '</button>' +
         '<button type="button" class="cpn-ib" id="cp-theme" data-act="theme" aria-label="تغيير المظهر"></button>' +
@@ -1002,7 +1007,8 @@
     const T = [
       ['today', 'home', 'الرئيسية', 0],
       ['tickets', 'check', 'التيكتات', tCnt],
-      ['trips', 'route', 'خط السير', rCnt],
+      ['trips', 'box', 'المشاوير', 0],
+      ['route', 'route', 'خط السير والمحطات', rCnt],
       ['chat', 'chat', 'التواصل', u]
     ];
     const html = T.map(t => '<button type="button" data-tab="' + t[0] + '" aria-label="' + t[2] + '" title="' + t[2] + '" class="' + (st.tab === t[0] ? 'on' : '') + '">' + ic(t[1]) + (t[3] ? '<em class="cp-bdg">' + num(t[3]) + '</em>' : '') + '</button>').join('');
@@ -1071,6 +1077,7 @@
     else if (st.tab === 'home' || st.tab === 'account') b.innerHTML = viewHome();
     else if (st.tab === 'tickets') { b.innerHTML = '<div id="pt73-tickets-host"></div>'; if (typeof window.tsRenderCourierTickets === 'function') window.tsRenderCourierTickets(); }
     else if (st.tab === 'trips') b.innerHTML = viewTrips();
+    else if (st.tab === 'route') b.innerHTML = '<div style="padding:4px 0 10px;font-size:20px;font-weight:900">خط السير والمحطات</div>' + renderSmartRoutePanel();
     else if (st.tab === 'rank') b.innerHTML = viewLeaderboard();
     else if (st.tab === 'review') b.innerHTML = viewReview();
     else viewChat();
@@ -1864,15 +1871,17 @@
     if (phone) contactLinks.push(callBtns(phone));
     if (address) contactLinks.push('<a class="cp-a" target="_blank" rel="noopener" href="' + eh(mapsUrl(address)) + '"><i class="fa-solid fa-location-dot"></i><span>خريطة: ' + eh(address) + '</span></a>');
 
-    const linesHtml = lines.length
-      ? lines.map(l => {
-          const [stLbl, stCls] = STATUS_AR[l.status] || [l.status || 'جاري التنفيذ', 'k-pk'];
-          return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 0;border-bottom:1px dashed var(--bd);font-size:12px">' +
-            '<span>• ' + eh(l.service || 'خدمة') + (l.received_at ? ' <small style="color:var(--mu)">(' + eh(String(l.received_at).slice(0, 10)) + ')</small>' : '') + '</span>' +
-            '<span class="cp-tag ' + stCls + '">' + eh(stLbl) + '</span>' +
-          '</div>';
-        }).join('')
-      : '<div style="font-size:12px;color:var(--mu)">' + eh((fallbackItem && fallbackItem.services) || 'لا توجد تفاصيل خدمات') + '</div>';
+    const svcNames = lines.length
+      ? lines.map(l => l.service).filter(Boolean).join(' + ')
+      : ((fallbackItem && fallbackItem.services) || '—');
+    const docNotes = lines.length
+      ? lines.map(l => l.notes).filter(Boolean).join(' · ')
+      : '';
+    const linesHtml =
+      '<div class="ts7b-kv"><span class="ts7b-kv-k">اسم العميل</span><div class="ts7b-kv-v">' + eh(clientName) + '</div></div>' +
+      '<div class="ts7b-kv"><span class="ts7b-kv-k">الخدمة</span><div class="ts7b-kv-v">' + eh(svcNames) + '</div></div>' +
+      '<div class="ts7b-kv"><span class="ts7b-kv-k">المستندات المطلوبة</span><div class="ts7b-kv-v">' + eh(docNotes || 'حسب بنود الطلب') + '</div></div>' +
+      (address ? '<div class="ts7b-kv"><span class="ts7b-kv-k">العنوان</span><div class="ts7b-kv-v">' + eh(address) + '</div></div>' : '');
 
     const tripsHtml = trips.length
       ? trips.map(t => {
@@ -2182,6 +2191,7 @@
       case 'mclose': if (e.target === el) closeModal(); return;
       case 'mclose-btn': return closeModal();
       case 'logout': return window.handleLogout && window.handleLogout();
+      case 'screen-help': return openScreenHelpModal();
       case 'theme': return toggleTheme();
       case 'refresh': return refreshPortal(el);
       case 'profile': return openProfileModal();
