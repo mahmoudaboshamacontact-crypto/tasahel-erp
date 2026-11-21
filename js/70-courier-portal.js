@@ -289,13 +289,9 @@
     const idx = st.routeTxIds.indexOf(tx);
     if (idx === -1) {
       st.routeTxIds.push(tx);
-      const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
-      sortRouteSelectionNearestFirst(pos.lat, pos.lng);
-      toast('اتضاف واترتب في خط سيرك تلقائياً ✓');
+      toast('اتضاف لآخر خط السير');
     } else {
       st.routeTxIds.splice(idx, 1);
-      const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
-      sortRouteSelectionNearestFirst(pos.lat, pos.lng);
       toast('اتشال من خط السير');
     }
     saveRouteState();
@@ -483,10 +479,12 @@
 
   /* لوحة خط السير المبسطة والواضحة جداً للمندوب (تترتب أوتوماتيك بمجرد الاختيار) */
   function renderSmartRoutePanel() {
-    const picked = st.routeTxIds.map(tx => byTx(tx)).filter(it => it && !it.confirmed);
-    const activeItems = picked.length ? picked : itemsOf(today()).filter(it => !it.confirmed);
+    const activeItems = st.routeTxIds.map(tx => byTx(tx)).filter(it => it && !it.confirmed);
     if (!activeItems.length) {
-      return '<section class="ts7b-route-sheet" style="text-align:center;color:var(--mu);font-weight:700">لا توجد محطات في خط السير</section>';
+      return '<section class="ts7b-route-sheet" style="text-align:center;color:var(--mu);font-weight:700;padding:22px">' +
+        '<div style="font-size:17px;margin-bottom:8px">خط السير لسه فاضي</div>' +
+        '<div style="font-size:13px;font-weight:500">ضيف المشاوير من تاب «المشاوير»، وهتظهر هنا بنفس ترتيب اختيارك</div>' +
+      '</section>';
     }
 
     const cur = activeItems[0];
@@ -496,33 +494,118 @@
     const mapHtml = (window.CpV12 && typeof window.CpV12.renderEmbeddedMap === 'function')
       ? window.CpV12.renderEmbeddedMap(activeItems, st.myPos || null, detectZoneAndCoords)
       : '';
-
-    const stopsPills = activeItems.map((it, idx) =>
-      '<span class="cpn-chip" style="' + (idx === 0 ? 'background:#881337;color:#FFFFFF;border-color:#881337' : '') + '">' + num(idx + 1) + ' · ' + eh((it.client_name || 'عميل').split(' ')[0]) + '</span>'
-    ).join('');
-
-    return '<section style="display:flex;flex-direction:column;gap:12px">' +
-      mapHtml +
-      '<div class="ts7b-route-sheet">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
-          '<span class="cpn-chip" style="background:#881337;color:#FFFFFF;border-color:#881337">محطة 1 / ' + num(activeItems.length) + '</span>' +
-          '<span dir="ltr" style="font-size:12px;font-weight:800;color:var(--mu)">' + eh(cur.transaction_id) + '</span>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">' +
-          '<div style="min-width:0;flex:1"><div style="font-size:16px;font-weight:900;color:var(--tx)">' + eh(cur.client_name || 'عميل') + '</div><div style="font-size:12px;color:var(--mu)">' + eh(z.zone) + '</div></div>' +
-          '<div style="display:flex;gap:8px;flex:none">' +
-            (waPh ? '<a class="ts7b-icbtn" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" aria-label="شات">' + ic('chat', 18) + '</a>' : '') +
-            (cur.phone ? '<a class="ts7b-icbtn" href="' + eh(telHref(cur.phone)) + '" aria-label="اتصال">' + ic('phone', 18) + '</a>' : '') +
+    const mapUrl = buildMultiStopMapsUrl(activeItems, st.myPos || null);
+    const stopCards = activeItems.map((it, idx) => {
+      const tx = String(it.transaction_id || '');
+      const zone = detectZoneAndCoords(it);
+      const isCurrent = idx === 0;
+      return '<article class="cp-route-stop" data-route-stop="' + eh(tx) + '" draggable="true" style="display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--bd);border-radius:14px;background:var(--card);margin-top:8px">' +
+        '<div style="width:28px;height:28px;flex:none;border-radius:9px;display:flex;align-items:center;justify-content:center;background:' + (isCurrent ? 'var(--ac)' : 'var(--fld)') + ';color:' + (isCurrent ? 'var(--acink)' : 'var(--tx)') + ';font-weight:900">' + num(idx + 1) + '</div>' +
+        '<div style="min-width:0;flex:1">' +
+          '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><b style="font-size:14px;color:var(--tx)">' + eh(it.client_name || 'عميل') + '</b>' +
+          (isCurrent ? '<span style="font-size:10px;font-weight:800;color:var(--ac)">المحطة الحالية</span>' : '<span style="font-size:10px;color:var(--mu)">محطة تالية</span>') + '</div>' +
+          '<div dir="ltr" style="font-size:11px;color:var(--mu);margin-top:3px">' + eh(tx) + '</div>' +
+          '<div style="font-size:12px;color:var(--mu);margin-top:5px;line-height:1.6">' + eh(it.address || zone.zone || 'العنوان غير محدد') + '</div>' +
+          '<div style="font-size:11px;color:var(--mu);margin-top:3px">' + eh(dayLabel(it.day)) + ' · ' + eh(kindLabel(it)) + '</div>' +
+          (zone && (!zone.lat || !zone.lng) ? '<div style="font-size:11px;color:var(--burg);margin-top:4px">الموقع غير محدد بدقة — راجع العنوان قبل التحرك</div>' : '') +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">' +
+            (it.phone ? '<a class="cp-btn" href="' + eh(telHref(it.phone)) + '" style="text-decoration:none">اتصال</a>' : '') +
+            (waPh && idx === 0 ? '<a class="cp-btn" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" style="text-decoration:none">واتساب</a>' : '') +
+            '<button type="button" class="cp-btn" data-route-move="-1" data-tx="' + eh(tx) + '" aria-label="تقديم المحطة" title="تقديم المحطة" ' + (idx === 0 ? 'disabled' : '') + '>↑</button>' +
+            '<button type="button" class="cp-btn" data-route-move="1" data-tx="' + eh(tx) + '" aria-label="تأخير المحطة" title="تأخير المحطة" ' + (idx === activeItems.length - 1 ? 'disabled' : '') + '>↓</button>' +
+            '<button type="button" class="cp-btn" data-route-remove="1" data-tx="' + eh(tx) + '" style="color:var(--cancel)">إزالة</button>' +
           '</div>' +
         '</div>' +
-        '<div class="ts7b-route-meta"><span style="color:#036b29;display:inline-flex">' + ic('pin', 18) + '</span><span style="min-width:0;flex:1;word-break:break-word">' + eh(cur.address || z.zone) + '</span></div>' +
-        '<div class="ts7b-route-meta"><span style="color:#036b29;display:inline-flex">' + ic('clock', 18) + '</span><span>' + eh(dayLabel(cur.day)) + ' · ' + eh(kindLabel(cur)) + '</span></div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:6px">' + stopsPills + '</div>' +
-        '<div id="cp-geo-route-eta"></div>' +
+        '<div aria-hidden="true" style="color:var(--mu);font-size:18px;cursor:grab;padding:2px">⠿</div>' +
+      '</article>';
+    }).join('');
+
+    return '<section style="display:flex;flex-direction:column;gap:12px">' +
+      '<div class="ts7b-route-sheet">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
+          '<b style="font-size:16px;color:var(--tx)">خط سيرك اليوم</b>' +
+          '<span class="cpn-chip">' + num(activeItems.length) + ' محطات</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--mu);margin-top:5px">اسحب المحطات لترتيبها، أو استخدم السهمين. الإضافة والإزالة مش هتغيّر ترتيب باقي المحطات.</div>' +
+        (mapUrl ? '<a class="cp-btn" href="' + eh(mapUrl) + '" target="_blank" rel="noopener" style="display:inline-flex;justify-content:center;text-decoration:none;margin-top:10px">فتح خط السير على خرائط Google</a>' : '') +
+      '</div>' +
+      mapHtml +
+      '<div id="cp-geo-route-eta"></div>' +
+      '<div id="cp-route-stops">' + stopCards + '</div>' +
+      '<div class="ts7b-route-sheet" style="margin-top:2px">' +
+        '<div style="font-size:12px;color:var(--mu);margin-bottom:9px">الإجراء للمحطة الحالية فقط</div>' +
+        '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:10px">' +
+          '<b style="color:var(--tx)">' + eh(cur.client_name || 'عميل') + '</b>' +
+          '<span dir="ltr" style="font-size:11px;color:var(--mu)">' + eh(cur.transaction_id) + '</span>' +
+        '</div>' +
         '<button type="button" class="ts7b-route-deliver"' + deliverAttrs + '><i class="fa-solid fa-check"></i> تم التسليم</button>' +
       '</div>' +
     '</section>';
   }
+
+  function reorderRouteStop(tx, delta) {
+    const from = st.routeTxIds.indexOf(String(tx || ''));
+    if (from < 0) return;
+    const to = Math.max(0, Math.min(st.routeTxIds.length - 1, from + Number(delta || 0)));
+    if (to === from) return;
+    const next = st.routeTxIds.slice();
+    const moved = next.splice(from, 1)[0];
+    next.splice(to, 0, moved);
+    st.routeTxIds = next;
+    saveRouteState();
+    renderTab(false);
+  }
+
+  /* إعادة ترتيب المحطات بالسحب، مع أزرار بديلة مناسبة للموبايل */
+  document.addEventListener('click', function (e) {
+    const move = e.target.closest && e.target.closest('[data-route-move]');
+    if (move) {
+      e.preventDefault();
+      reorderRouteStop(move.getAttribute('data-tx'), Number(move.getAttribute('data-route-move')));
+      return;
+    }
+    const remove = e.target.closest && e.target.closest('[data-route-remove]');
+    if (remove) {
+      e.preventDefault();
+      const tx = String(remove.getAttribute('data-tx') || '');
+      st.routeTxIds = st.routeTxIds.filter(x => String(x) !== tx);
+      if (st.activeTx === tx) st.activeTx = '';
+      saveRouteState();
+      renderTab(false);
+      toast('اتشالت المحطة من خط السير');
+    }
+  });
+
+  let routeDragTx = '';
+  document.addEventListener('dragstart', function (e) {
+    const stop = e.target.closest && e.target.closest('[data-route-stop]');
+    if (!stop) return;
+    routeDragTx = stop.getAttribute('data-route-stop') || '';
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', routeDragTx);
+    }
+  });
+  document.addEventListener('dragover', function (e) {
+    if (e.target.closest && e.target.closest('[data-route-stop]')) e.preventDefault();
+  });
+  document.addEventListener('drop', function (e) {
+    const stop = e.target.closest && e.target.closest('[data-route-stop]');
+    if (!stop) return;
+    e.preventDefault();
+    const fromTx = routeDragTx || (e.dataTransfer && e.dataTransfer.getData('text/plain')) || '';
+    const toTx = stop.getAttribute('data-route-stop') || '';
+    routeDragTx = '';
+    const from = st.routeTxIds.indexOf(String(fromTx));
+    const to = st.routeTxIds.indexOf(String(toTx));
+    if (from < 0 || to < 0 || from === to) return;
+    const next = st.routeTxIds.slice();
+    const moved = next.splice(from, 1)[0];
+    next.splice(to, 0, moved);
+    st.routeTxIds = next;
+    saveRouteState();
+    renderTab(false);
+  });
 
   /* كارت «شنطتك آخر اليوم — أوراق مطلوب تسليمها للمكتب» */
   function renderOfficeBagCard() {
