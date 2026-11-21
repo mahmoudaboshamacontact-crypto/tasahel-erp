@@ -110,9 +110,9 @@
       ['open-office-signoff', 'تسليم الورق للمكتب', 'fa-file-signature'],
       ['parking-pin', 'حفظ / فتح موقع الركنة', 'fa-location-dot'],
       ['toggle-amoled', 'توفير البطارية', 'fa-moon'],
-      ['toggle-thumb', 'اختيار اليد', 'fa-hand'],
-      ['toggle-onb', 'دليل الاستخدام', 'fa-book-open']
+      ['toggle-thumb', 'اختيار اليد', 'fa-hand']
     ];
+    if (slot.dataset.ready === '1') return;
     var html = '';
     actions.forEach(function (a) {
       html += menuButton(a[1], '', a[2], 'data-cp4-act="' + a[0] + '"');
@@ -130,6 +130,7 @@
       }
     });
     slot.innerHTML = html;
+    slot.dataset.ready = '1';
   }
 
   function ensureToolbar(app) {
@@ -147,9 +148,11 @@
       if (body && body.parentNode) body.parentNode.insertBefore(toolbar, body);
       else source.parentNode.insertBefore(toolbar, source);
     }
-    // نقل الزرين الأصليين يحافظ على data attributes وتفويض الأحداث.
+    // استبدال الزرين عند إعادة إنشاء شريط المرحلة الرابعة، مع منع التكرار.
+    if (driving.parentElement !== toolbar || scan.parentElement !== toolbar) toolbar.innerHTML = '';
     if (driving.parentElement !== toolbar) toolbar.appendChild(driving);
     if (scan.parentElement !== toolbar) toolbar.appendChild(scan);
+    scan.innerHTML = '<i class="fa-solid fa-qrcode"></i><span>سكان إيصال التسليم</span>';
     source.querySelectorAll('.cp4-bar').forEach(function (bar) { bar.style.display = 'none'; });
     source.querySelectorAll('.cp4-pill').forEach(function (button) {
       if (button !== driving && button !== scan) button.style.display = 'none';
