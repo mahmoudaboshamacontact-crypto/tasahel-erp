@@ -104,7 +104,7 @@
         '<h3>✍️ توقيع العميل الإلكتروني</h3>' +
         '<p>توقيع العميل بصباعه على استلام/تسليم المعاملة <b dir="ltr">' + String(tx) + '</b> (يتحفظ كنص خفيف بدون صور):</p>' +
         '<input id="cp-sig-name" type="text" class="cp-field" style="margin-bottom:8px" value="' + String(clientName || '').replace(/"/g, '&quot;') + '" placeholder="اسم الموقّع">' +
-        '<div style="background:#fff;border-radius:14px;border:2px dashed #036b29;overflow:hidden;touch-action:none">' +
+        '<div style="background:#fff;border-radius:14px;border:2px dashed #10b981;overflow:hidden;touch-action:none">' +
           '<canvas id="cp-sig-canvas" width="360" height="170" style="width:100%;height:170px;display:block;cursor:crosshair"></canvas>' +
         '</div>' +
         '<div class="cp-btns" style="margin-top:10px">' +
@@ -226,7 +226,7 @@
 
     const pinsHtml = pts.map((p, i) => {
       const xy = toXY(p.lat, p.lng);
-      const col = p.it.confirmed ? '#64748b' : (p.it.type === 'delivery' ? '#036b29' : '#3b82f6');
+      const col = p.it.confirmed ? '#64748b' : (p.it.type === 'delivery' ? '#10b981' : '#3b82f6');
       return '<button type="button" data-act="detail" data-tx="' + String(p.it.transaction_id).replace(/"/g, '&quot;') + '" ' +
         'title="' + String(p.it.client_name || '').replace(/"/g, '&quot;') + '" ' +
         'style="position:absolute;left:' + xy.x.toFixed(1) + '%;top:' + xy.y.toFixed(1) + '%;transform:translate(-50%,-100%);border:0;background:transparent;cursor:pointer;padding:0;text-align:center">' +

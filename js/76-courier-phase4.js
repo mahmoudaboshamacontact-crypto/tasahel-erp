@@ -202,7 +202,7 @@
         items.map(function (it) {
           var on = !!c[it[0]];
           return '<div class="cp4-chk-row' + (on ? ' on' : '') + '" data-cp4-gate-chk="' + it[0] + '">' +
-            '<span style="width:20px;height:20px;border-radius:6px;border:2px solid ' + (on ? '#036b29' : '#64748b') + ';background:' + (on ? '#036b29' : 'transparent') + ';color:#04110c;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:12px">' + (on ? '✓' : '') + '</span>' +
+            '<span style="width:20px;height:20px;border-radius:6px;border:2px solid ' + (on ? '#10b981' : '#64748b') + ';background:' + (on ? '#10b981' : 'transparent') + ';color:#04110c;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:12px">' + (on ? '✓' : '') + '</span>' +
             '<span style="flex:1">' + it[1] + '</span>' +
           '</div>';
         }).join('') +
@@ -264,7 +264,7 @@
     var onboardingHtml = st.onboarding
       ? '<div class="cp4-onb-box">' +
           '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">' +
-            '<b style="color:#036b29">دليل المندوب السريع</b>' +
+            '<b style="color:#10b981">دليل المندوب السريع</b>' +
             '<button type="button" class="cp4-act-btn" data-cp4-act="toggle-onb">إغلاق</button>' +
           '</div>' +
           '<div>• اضغط «في طريقي» قبل التحرك للعميل، وعند الوصول لو العميل غير متواجد سجّل «العميل غير متاح» بالـ GPS.</div>' +
@@ -535,10 +535,10 @@
         '</div>' +
         '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px">المبلغ المحصّل فعليًا (ج.م)</label>' +
         '<input id="cp4-qrd-collected" type="number" inputmode="decimal" min="0" step="0.01" class="cp-field" placeholder="' + eh(String(codDue)) + '" style="margin-bottom:10px">'
-      : '<div style="padding:8px 12px;border-radius:12px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35);color:#036b29;font-size:12.5px;font-weight:700;margin-bottom:10px">خالص الدفع — لا يوجد مبلغ مطلوب تحصيله</div>';
+      : '<div style="padding:8px 12px;border-radius:12px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35);color:#10b981;font-size:12.5px;font-weight:700;margin-bottom:10px">خالص الدفع — لا يوجد مبلغ مطلوب تحصيله</div>';
 
     openP4Dialog(
-      '<h3 style="margin:0 0 8px;font-size:16px"><i class="fa-solid fa-qrcode" style="color:#036b29;margin-left:6px"></i>تأكيد تسليم الإيصال</h3>' +
+      '<h3 style="margin:0 0 8px;font-size:16px"><i class="fa-solid fa-qrcode" style="color:#10b981;margin-left:6px"></i>تأكيد تسليم الإيصال</h3>' +
       '<div style="padding:10px 12px;border-radius:12px;background:var(--fld);border:1px solid var(--bd);margin-bottom:10px">' +
         '<div style="display:flex;justify-content:space-between;align-items:center">' +
           '<div><div style="font-size:11px;color:var(--mu)">رقم المعاملة</div><b dir="ltr" style="font-size:15px">' + eh(txId) + '</b></div>' +
@@ -718,7 +718,7 @@
           : 'يرجى الرد علينا هنا باليوم والموعد البديل المناسب لحضرتك (صباحي 10-2 أو مسائي 2-6) لتنسيقه فوراً.');
 
       openP4Dialog(
-        '<h3 style="margin:0 0 8px;color:#036b29;font-size:16px">تم تسجيل إثبات وصولك بالـ GPS</h3>' +
+        '<h3 style="margin:0 0 8px;color:#10b981;font-size:16px">تم تسجيل إثبات وصولك بالـ GPS</h3>' +
         '<p style="font-size:12px;color:var(--mu);margin:0 0 12px">يمكنك الآن إرسال رسالة تحديد موعد بديل للعميل عبر واتساب:</p>' +
         '<div style="display:flex;flex-direction:column;gap:8px">' +
           (phone ? '<a class="cp-btn cp-go" target="_blank" rel="noopener" href="https://wa.me/' + eh(phone) + '?text=' + encodeURIComponent(waMsg) + '" style="text-align:center;text-decoration:none">إرسال رسالة إعادة الجدولة عبر واتساب</a>' : '') +
@@ -822,7 +822,7 @@
     var handovers = (st.p4 && Array.isArray(st.p4.handovers_today)) ? st.p4.handovers_today : [];
     var prevHtml = handovers.length
       ? '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)">' +
-          '<b style="font-size:12px;color:#036b29">الأوراق المسلمة للمكتب اليوم (' + handovers.length + '):</b>' +
+          '<b style="font-size:12px;color:#10b981">الأوراق المسلمة للمكتب اليوم (' + handovers.length + '):</b>' +
           handovers.map(function (h) {
             return '<div style="font-size:11.5px;padding:6px 8px;margin-top:5px;border-radius:10px;background:var(--fld)">' +
               '<b>' + eh(h.stamp_code) + '</b> — استلمها: <b>' + eh(h.receiver_name) + '</b>' +
@@ -911,7 +911,7 @@
 
     openP4Dialog(
       '<h3 style="margin:0 0 6px;font-size:16px">تحصيل المعاملة وحاسبة الفكة (' + eh(tx) + ')</h3>' +
-      '<div style="font-size:12.5px;color:var(--mu);margin-bottom:10px">العميل: <b>' + eh((inv && inv.client_name) || tx) + '</b> · المطلوب: <b style="color:#036b29">' + money(due) + '</b></div>' +
+      '<div style="font-size:12.5px;color:var(--mu);margin-bottom:10px">العميل: <b>' + eh((inv && inv.client_name) || tx) + '</b> · المطلوب: <b style="color:#10b981">' + money(due) + '</b></div>' +
       '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px">طريقة الدفع</label>' +
       '<select id="cp4-col-mode" class="cp-field" style="margin-bottom:10px">' +
         '<option value="cash_full">كاش كامل (' + money(due) + ')</option>' +
@@ -933,7 +933,7 @@
             return '<button type="button" class="cp4-act-btn" data-cp4-act="calc-cash" data-given="' + n + '">' + n + ' ج</button>';
           }).join('') +
         '</div>' +
-        '<div id="cp4-calc-out" style="font-size:12.5px;font-weight:700;color:#036b29">اضغط على الفئة لحساب الباقي للعميل</div>' +
+        '<div id="cp4-calc-out" style="font-size:12.5px;font-weight:700;color:#10b981">اضغط على الفئة لحساب الباقي للعميل</div>' +
       '</div>' +
       '<div style="display:flex;gap:8px">' +
         '<button type="button" class="cp-btn cp-go" style="flex:1" data-cp4-act="col-save" data-tx="' + eh(tx) + '" data-kind="' + eh(kind || 'tx') + '">حفظ التحصيل</button>' +
@@ -1159,7 +1159,7 @@
     var locked = !!(st.p4 && st.p4.day_locked);
 
     var statusBanner = locked
-      ? '<div style="padding:10px 12px;border-radius:12px;background:rgba(16,185,129,.14);border:1px solid rgba(16,185,129,.4);color:#036b29;font-size:12.5px;font-weight:700;margin-bottom:12px">تم استلام وتأكيد تقفيل اليوم من الإدارة (' + eh(closeObj.confirmed_by_name || 'المكتب') + ') — حساب اليوم مقفل.</div>'
+      ? '<div style="padding:10px 12px;border-radius:12px;background:rgba(16,185,129,.14);border:1px solid rgba(16,185,129,.4);color:#10b981;font-size:12.5px;font-weight:700;margin-bottom:12px">تم استلام وتأكيد تقفيل اليوم من الإدارة (' + eh(closeObj.confirmed_by_name || 'المكتب') + ') — حساب اليوم مقفل.</div>'
       : (closeObj && closeObj.status === 'submitted'
           ? '<div style="padding:10px 12px;border-radius:12px;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.4);color:#fbbf24;font-size:12.5px;font-weight:700;margin-bottom:12px">تم إرسال تقفيل اليوم للمكتب وبانتظار تأكيد الاستلام.</div>'
           : '');
@@ -1171,7 +1171,7 @@
       '<div style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:12px">' +
         '<div style="padding:14px;border-radius:14px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35);display:flex;justify-content:space-between;align-items:center">' +
           '<span style="font-size:13px;font-weight:700">صافي الكاش المطلوب تسليمه:</span>' +
-          '<b style="font-size:20px;color:#036b29">' + money(totals.expected_cash) + '</b>' +
+          '<b style="font-size:20px;color:#10b981">' + money(totals.expected_cash) + '</b>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
           '<div style="padding:10px;border-radius:12px;background:var(--fld);border:1px solid var(--bd)">' +
@@ -1464,7 +1464,7 @@
         if (out) {
           var diff = given - needed;
           out.innerHTML = diff >= 0
-            ? ('المستلم <b>' + money(given) + '</b> — الباقي للعميل: <b style="font-size:15px;color:#036b29">' + money(diff) + '</b>')
+            ? ('المستلم <b>' + money(given) + '</b> — الباقي للعميل: <b style="font-size:15px;color:#10b981">' + money(diff) + '</b>')
             : ('المبلغ أقل من المطلوب بـ <b style="color:#f87171">' + money(Math.abs(diff)) + '</b>');
         }
         return;
