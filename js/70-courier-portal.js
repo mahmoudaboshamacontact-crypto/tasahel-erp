@@ -505,7 +505,7 @@
           '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><b style="font-size:14px;color:var(--tx)">' + eh(it.client_name || 'عميل') + '</b>' +
           (isCurrent ? '<span style="font-size:10px;font-weight:800;color:var(--ac)">المحطة الحالية</span>' : '<span style="font-size:10px;color:var(--mu)">محطة تالية</span>') + '</div>' +
           '<div dir="ltr" style="font-size:11px;color:var(--mu);margin-top:3px">' + eh(tx) + '</div>' +
-          '<div style="font-size:12px;color:var(--mu);margin-top:5px;line-height:1.6">' + eh(it.address || zone.zone || 'العنوان غير محدد') + '</div>' +
+          '<div style="font-size:12px;color:var(--mu);margin-top:5px;line-height:1.6">' + eh(it.address || (zone && zone.zone) || 'العنوان غير محدد') + '</div>' +
           '<div style="font-size:11px;color:var(--mu);margin-top:3px">' + eh(dayLabel(it.day)) + ' · ' + eh(kindLabel(it)) + '</div>' +
           (zone && (!zone.lat || !zone.lng) ? '<div style="font-size:11px;color:var(--burg);margin-top:4px">الموقع غير محدد بدقة — راجع العنوان قبل التحرك</div>' : '') +
           '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">' +
