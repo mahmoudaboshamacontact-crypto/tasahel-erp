@@ -144,7 +144,7 @@
       toolbar.id = 'cp81-toolbar';
       toolbar.className = 'cp81-toolbar';
       var body = app.querySelector('#cp-body');
-      if (body) body.insertBefore(toolbar, body.firstChild);
+      if (body && body.parentNode) body.parentNode.insertBefore(toolbar, body);
       else source.parentNode.insertBefore(toolbar, source);
     }
     // نقل الزرين الأصليين يحافظ على data attributes وتفويض الأحداث.
