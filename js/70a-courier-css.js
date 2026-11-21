@@ -4,7 +4,7 @@
   var BASE = [
       'body.is-courier-mode #app,body.is-courier-mode #login{display:none}',
       '#courier-app.hidden,.cp-modal.hidden{display:none}',
-      '#courier-app,#courier-ops-modal{--bg:#0F1411;--card:#171E1A;--tx:#F4F7F5;--mu:#9CAFA3;--bd:rgba(255,255,255,.11);--fld:#212B25;--green-soft:rgba(3,107,41,.22);--green-soft-tx:#bbf7d0;--hd:#0F1411;--hdtx:#F4F7F5;--hdbt:#212B25;--chip:#212B25;--sh:none;--ac:#036b29;--acink:#FFFFFF;--acsoft:rgba(3,107,41,.22);--burg:#be123c;--burg-soft:rgba(190,18,60,.20);--burg-glow:0 0 12px rgba(190,18,60,.36);--cancel:#ef4444;--gd-bg:rgba(3,107,41,.14);--gd-bd:rgba(3,107,41,.36)}',
+      '#courier-app,#courier-ops-modal{--bg:#030404;--card:#0B0E0D;--tx:#F5F7F6;--mu:#8A988F;--bd:rgba(255,255,255,.08);--fld:#121614;--green-soft:rgba(3,107,41,.22);--green-soft-tx:#bbf7d0;--hd:#030404;--hdtx:#F5F7F6;--hdbt:#121614;--chip:#121614;--sh:none;--ac:#036b29;--acink:#FFFFFF;--acsoft:rgba(3,107,41,.22);--burg:#be123c;--burg-soft:rgba(190,18,60,.20);--burg-glow:0 0 12px rgba(190,18,60,.36);--cancel:#ef4444;--gd-bg:rgba(3,107,41,.14);--gd-bd:rgba(3,107,41,.36)}',
       '#courier-app[data-theme=light],#courier-ops-modal[data-theme=light]{--bg:#EEF5F0;--card:#FFFFFF;--tx:#111C15;--mu:#4B5E52;--bd:rgba(3,107,41,.14);--fld:#E3F1E8;--green-soft:#E3F1E8;--green-soft-tx:#024a1c;--hd:#FFFFFF;--hdtx:#111C15;--hdbt:#E8EFEA;--chip:#E8EFEA;--sh:0 1px 3px rgba(17,28,21,.07);--ac:#036b29;--acink:#FFFFFF;--acsoft:rgba(3,107,41,.11);--burg:#881337;--burg-soft:rgba(136,19,55,.12);--burg-glow:0 0 11px rgba(136,19,55,.26);--cancel:#dc2626;--gd-bg:rgba(3,107,41,.08);--gd-bd:rgba(3,107,41,.28)}',
       '#courier-app{position:fixed;inset:0;z-index:99980;display:flex;flex-direction:column;background:var(--bg);color:var(--tx);font-family:inherit;overflow-x:hidden}',
       '#courier-app *{box-sizing:border-box}',
@@ -259,7 +259,7 @@
   '@media (max-width:410px){#courier-app .cpn-head{padding:10px 10px 6px;gap:5px}#courier-app .cpn-ib{width:38px;height:38px;border-radius:12px}#courier-app .cpn-av{width:38px;height:38px;border-radius:12px}#courier-app .cpn-wt b{font-size:14.5px}#courier-app .cpn-st{font-size:11px}#courier-app .cp-body{padding:4px 12px 110px}}',
   '@media (max-width:370px){#courier-app .cpn-tiles{grid-template-columns:repeat(2,1fr);gap:6px}#courier-app .cpn-tools{grid-template-columns:repeat(2,1fr);gap:6px}#courier-app .cpn-tile{min-height:58px}}',
   /* ===== Phase 7A: Tasahel Company Green (#036b29) + Burgundy (#881337) System ===== */
-  '#courier-app{--forest:#036b29;--forest-deep:#024a1c;--brand-green:#036b29;--brand-green-soft:rgba(3,107,41,.20);--surface-soft:#212B25;--ts-sh:0 4px 18px rgba(0,0,0,.28);--ts-sh-lg:0 14px 32px rgba(0,0,0,.44)}',
+  '#courier-app{--forest:#036b29;--forest-deep:#024a1c;--brand-green:#036b29;--brand-green-soft:rgba(3,107,41,.20);--surface-soft:#101312;--ts-sh:0 4px 18px rgba(0,0,0,.28);--ts-sh-lg:0 14px 32px rgba(0,0,0,.44)}',
   '#courier-app[data-theme=light]{--forest:#036b29;--forest-deep:#024a1c;--brand-green:#036b29;--brand-green-soft:rgba(3,107,41,.11);--surface-soft:#E8EFEA;--ts-sh:0 2px 12px rgba(17,28,21,.06);--ts-sh-lg:0 12px 28px rgba(3,107,41,.14)}',
   '#courier-app .cp-nav{background:var(--card);border:1px solid var(--bd);border-radius:999px;margin:0 12px calc(12px + env(safe-area-inset-bottom));padding:5px 6px;gap:4px;box-shadow:0 12px 30px rgba(17,28,21,.12);justify-content:space-around}',
   '#courier-app .cp-nav button{flex:0 0 auto;width:44px;height:44px;border-radius:999px;padding:0;display:inline-flex;align-items:center;justify-content:center;color:var(--mu);position:relative}',
@@ -408,8 +408,8 @@
     '.cp-drawer-panel{position:absolute;top:0;bottom:0;inset-inline-end:0;width:min(78vw,300px);background:var(--card);padding:16px 12px;display:flex;flex-direction:column;gap:6px;overflow:auto}',
     '.cp-drawer-item{width:100%;text-align:start;padding:12px 14px;border:0;border-radius:12px;background:var(--chip);color:var(--tx);font:inherit;font-weight:700;font-size:14px}',
     '.cp-drawer-item.pwr{color:#f87171}',
-    '.cpn-scan{width:auto;padding:0 10px;gap:6px;font-size:12px;font-weight:800;white-space:nowrap}',
-    '.cpn-scan svg{flex:0 0 auto}'
+    '#courier-app .cpn-scan{width:66px;height:54px;border-radius:14px;flex-direction:column;gap:3px;font-size:9.5px;font-weight:800;line-height:1;letter-spacing:.2px;background:linear-gradient(180deg,#14201a,#0a0f0c);border-color:rgba(3,107,41,.45);color:#d9f5e3;box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}',
+    '#courier-app .cpn-scan span{white-space:nowrap}'
   ];
   window.__CP_CSS = BASE.concat(SKIN, SCR, RAD, DRW);
 })();
