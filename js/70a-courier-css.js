@@ -408,8 +408,20 @@
     '.cp-drawer-panel{position:absolute;top:0;bottom:0;inset-inline-end:0;width:min(78vw,300px);background:var(--card);padding:16px 12px;display:flex;flex-direction:column;gap:6px;overflow:auto}',
     '.cp-drawer-item{width:100%;text-align:start;padding:12px 14px;border:0;border-radius:12px;background:var(--chip);color:var(--tx);font:inherit;font-weight:700;font-size:14px}',
     '.cp-drawer-item.pwr{color:#f87171}',
-    '#courier-app .cpn-scan{width:66px;height:54px;border-radius:14px;flex-direction:column;gap:3px;font-size:9.5px;font-weight:800;line-height:1;letter-spacing:.2px;background:linear-gradient(180deg,#14201a,#0a0f0c);border-color:rgba(3,107,41,.45);color:#d9f5e3;box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}',
-    '#courier-app .cpn-scan span{white-space:nowrap}'
+    '#courier-app .cpn-scan{width:auto;min-width:54px;height:42px;padding:0 12px;border-radius:14px;flex-direction:row;gap:6px;font-size:12px;font-weight:800;line-height:1;background:var(--ac);border-color:var(--ac);color:#fff}',
+    '#courier-app .cpn-scan span{white-space:nowrap}',
+    '.cp-drawer-group{display:flex;flex-direction:column;gap:6px}',
+    '.cp-drawer-sep{height:1px;background:var(--bd);margin:8px 2px}',
+    '.cp-drawer-item{display:flex;align-items:center;justify-content:space-between;gap:8px}',
+    '.cp-drawer-item.on{background:var(--acsoft);color:var(--green-soft-tx)}',
+    '.cp-drawer-item .cp-bdg{position:static;margin:0;background:#881337;color:#fff;border-radius:10px;min-width:20px;height:20px;line-height:20px;font-size:11px;font-style:normal;text-align:center;padding:0 6px}',
+    '.cp-stop-list{display:flex;flex-direction:column;gap:8px}',
+    '.cp-stop-row{display:flex;align-items:center;gap:12px;width:100%;text-align:start;padding:12px 14px;border:1px solid var(--bd);border-radius:16px;background:var(--card);color:var(--tx);font:inherit}',
+    '.cp-stop-row .n{flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--chip);font-size:13px}',
+    '.cp-stop-row.cur .n{background:#881337;color:#fff}',
+    '.cp-stop-row .t{display:flex;flex-direction:column;min-width:0;gap:2px}',
+    '.cp-stop-row .t strong{font-size:14.5px}',
+    '.cp-stop-row .t small{color:var(--mu);font-size:12px}'
   ];
   window.__CP_CSS = BASE.concat(SKIN, SCR, RAD, DRW);
 })();

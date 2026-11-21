@@ -489,39 +489,20 @@
     if (!activeItems.length) {
       return '<section class="ts7b-route-sheet" style="text-align:center;color:var(--mu);font-weight:700">لا توجد محطات في خط السير</section>';
     }
-
-    const cur = activeItems[0];
-    const z = detectZoneAndCoords(cur);
-    const waPh = cleanPhoneWa(cur.phone);
-    const deliverAttrs = ' data-act="v12-slide-confirm" data-type="' + eh(cur.type) + '" data-ref="' + eh(itemRef(cur)) + '" data-tx="' + eh(cur.transaction_id) + '" data-amt="' + eh(cur.amount) + '"';
     const mapHtml = (window.CpV12 && typeof window.CpV12.renderEmbeddedMap === 'function')
       ? window.CpV12.renderEmbeddedMap(activeItems, st.myPos || null, detectZoneAndCoords)
       : '';
-
-    const stopsPills = activeItems.map((it, idx) =>
-      '<span class="cpn-chip" style="' + (idx === 0 ? 'background:#881337;color:#FFFFFF;border-color:#881337' : '') + '">' + num(idx + 1) + ' · ' + eh((it.client_name || 'عميل').split(' ')[0]) + '</span>'
-    ).join('');
-
-    return '<section style="display:flex;flex-direction:column;gap:12px">' +
-      mapHtml +
-      '<div class="ts7b-route-sheet">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
-          '<span class="cpn-chip" style="background:#881337;color:#FFFFFF;border-color:#881337">محطة 1 / ' + num(activeItems.length) + '</span>' +
-          '<span dir="ltr" style="font-size:12px;font-weight:800;color:var(--mu)">' + eh(cur.transaction_id) + '</span>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">' +
-          '<div style="min-width:0;flex:1"><div style="font-size:16px;font-weight:900;color:var(--tx)">' + eh(cur.client_name || 'عميل') + '</div><div style="font-size:12px;color:var(--mu)">' + eh(z.zone) + '</div></div>' +
-          '<div style="display:flex;gap:8px;flex:none">' +
-            (waPh ? '<a class="ts7b-icbtn" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" aria-label="شات">' + ic('chat', 18) + '</a>' : '') +
-            (cur.phone ? '<a class="ts7b-icbtn" href="' + eh(telHref(cur.phone)) + '" aria-label="اتصال">' + ic('phone', 18) + '</a>' : '') +
-          '</div>' +
-        '</div>' +
-        '<div class="ts7b-route-meta"><span style="color:#036b29;display:inline-flex">' + ic('pin', 18) + '</span><span style="min-width:0;flex:1;word-break:break-word">' + eh(cur.address || z.zone) + '</span></div>' +
-        '<div class="ts7b-route-meta"><span style="color:#036b29;display:inline-flex">' + ic('clock', 18) + '</span><span>' + eh(dayLabel(cur.day)) + ' · ' + eh(kindLabel(cur)) + '</span></div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:6px">' + stopsPills + '</div>' +
-        '<div id="cp-geo-route-eta"></div>' +
-        '<button type="button" class="ts7b-route-deliver"' + deliverAttrs + '><i class="fa-solid fa-check"></i> تم التسليم</button>' +
-      '</div>' +
+    /* قائمة محطات مختصرة بالترتيب — تفاصيل المحطة الحالية وأزرارها في الرئيسية بس */
+    const rows = activeItems.map((it, idx) => {
+      const z = detectZoneAndCoords(it);
+      return '<button type="button" class="cp-stop-row' + (idx === 0 ? ' cur' : '') + '" data-act="detail" data-tx="' + eh(it.transaction_id) + '">' +
+        '<b class="n">' + num(idx + 1) + '</b>' +
+        '<span class="t"><strong>' + eh(it.client_name || 'عميل') + '</strong><small>' + eh(it.address || z.zone || '') + ' · ' + eh(kindLabel(it)) + '</small></span>' +
+      '</button>';
+    }).join('');
+    return '<section style="display:flex;flex-direction:column;gap:12px">' + mapHtml +
+      '<div id="cp-geo-route-eta"></div>' +
+      '<div class="cp-stop-list">' + rows + '</div>' +
     '</section>';
   }
 
@@ -618,6 +599,9 @@
           try {
             const codes = await det.detect(vid);
             if (codes && codes.length && codes[0].rawValue) {
+              if (!st.batchScan && typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(codes[0].rawValue)) {
+                stopQrCamera(); closeModal(); window.__cp4DeliverFromRaw(codes[0].rawValue); return;
+              }
               const rawCode = extractTxFromScan(codes[0].rawValue);
               const tx = resolveLocalTx(rawCode);
               if (window.CourierV12) window.CourierV12.haptic(!!tx);
@@ -799,7 +783,7 @@
   }
   function applyTheme() {
     const o = $('courier-app'); if (o) o.setAttribute('data-theme', st.theme);
-    const b = $('cp-theme'); if (b) b.innerHTML = st.theme === 'dark' ? ic('sun') : ic('moon');
+    const b = $('cp-theme'); if (b) b.innerHTML = '<span>' + (st.theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن') + '</span>';
   }
   function toggleTheme() { st.theme = st.theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('ts_cp_theme', st.theme); } catch (e) { /* */ } applyTheme(); }
 
@@ -965,26 +949,28 @@
     overlay(
       '<header class="cpn-head">' +
         '<div class="cpn-who" id="cp-who-box" data-act="profile" title="الحساب الشخصي"></div>' +
-        '<button type="button" class="cpn-ib cpn-scan" data-act="qr-scan" aria-label="Scan Receipt" title="Scan Receipt">' + ic('qr') + '<span>Scan Receipt</span></button>' +
-        '<button type="button" class="cpn-ib cpn-scan" data-cp4-act="qr-deliver-scan" aria-label="Scan Delivery" title="Scan Delivery">' + ic('qr') + '<span>Scan Delivery</span></button>' +
+        '<button type="button" class="cpn-ib cpn-scan" data-act="qr-scan" aria-label="Scan" title="Scan">' + ic('qr') + '<span>Scan</span></button>' +
         '<button type="button" class="cpn-ib" id="cp-menu-btn" data-act="menu" aria-label="القائمة" title="القائمة">' + ic('menu') + '</button>' +
       '</header>' +
       '<div class="cp-drawer" id="cp-drawer" hidden>' +
         '<div class="cp-drawer-bg" data-act="menu-close"></div>' +
         '<aside class="cp-drawer-panel" role="menu">' +
-          '<button type="button" class="cp-drawer-item" data-cp4-act="toggle-driving" role="menuitem">Drive Mode</button>' +
-          '<button type="button" class="cp-drawer-item" id="cp-hdr-review" data-tab="review" role="menuitem">المراجعة</button>' +
-          '<button type="button" class="cp-drawer-item" data-tab="account" role="menuitem">حسابي وعمولاتي</button>' +
-          '<button type="button" class="cp-drawer-item" id="cp-hdr-info" data-act="screen-help" role="menuitem">طريقة الاستخدام</button>' +
+          '<div id="cp-drawer-tools" class="cp-drawer-group"></div>' +
+          '<div class="cp-drawer-sep"></div>' +
+          '<button type="button" class="cp-drawer-item" id="cp-hdr-review" data-tab="review" role="menuitem"><span>المراجعة</span></button>' +
+          '<button type="button" class="cp-drawer-item" data-tab="account" role="menuitem"><span>حسابي وعمولاتي</span></button>' +
+          '<button type="button" class="cp-drawer-item" id="cp-hdr-info" data-act="screen-help" role="menuitem"><span>طريقة الاستخدام</span></button>' +
           '<button type="button" class="cp-drawer-item" id="cp-theme" data-act="theme" role="menuitem"></button>' +
-          '<button type="button" class="cp-drawer-item" data-act="refresh" role="menuitem">تحديث</button>' +
-          '<button type="button" class="cp-drawer-item pwr" data-act="logout" role="menuitem">تسجيل الخروج</button>' +
+          '<button type="button" class="cp-drawer-item" data-act="refresh" role="menuitem"><span>تحديث</span></button>' +
+          '<button type="button" class="cp-drawer-item pwr" data-act="logout" role="menuitem"><span>تسجيل الخروج</span></button>' +
         '</aside>' +
       '</div>' +
       '<div id="cp-v12-top-banners"></div>' +
       '<div class="cp-off" id="cp-off">مفيش اتصال بالإنترنت… الحفظ شغال أوفلاين</div>' +
       '<main class="cp-body" id="cp-body"></main>' +
       '<nav class="cp-nav" id="cp-nav" aria-label="التنقل"></nav><div id="cp-modal-root"></div>');
+    const dr = $('cp-drawer');
+    if (dr) dr.addEventListener('click', e => { if (e.target.closest('.cp-drawer-item')) setTimeout(() => { dr.hidden = true; }, 0); });
     updateHeaderWho(); applyTheme(); tickClock(); renderNav(); renderTab(); refreshMyPosQuiet();
   }
   function tickClock() {
@@ -1010,7 +996,7 @@
     const u = unreadTotal(), pend = st.items.filter(i => !i.confirmed).length;
     const revBtn = $('cp-hdr-review');
     if (revBtn) {
-      revBtn.innerHTML = ic('check') + (pend ? '<em class="cp-bdg">' + num(pend) + '</em>' : '');
+      revBtn.innerHTML = '<span>المراجعة</span>' + (pend ? '<em class="cp-bdg">' + num(pend) + '</em>' : '');
     }
     const tCnt = typeof window.tsCourierActiveTicketsCount === 'function' ? window.tsCourierActiveTicketsCount() : 0;
     const rCnt = st.items.filter(i => i.day === today() && !i.confirmed).length;
@@ -1218,7 +1204,7 @@
     '</div>';
 
     const kpis = '<section class="ts7b-kpi2">' +
-      '<div class="ts7b-kpi" data-tab="trips">' +
+      '<div class="ts7b-kpi" data-tab="route">' +
         '<div class="ts7b-kpi-val">' + num(pending.length) + '</div>' +
         '<span class="ts7b-kpi-lbl">مشاوير اليوم</span>' +
       '</div>' +
