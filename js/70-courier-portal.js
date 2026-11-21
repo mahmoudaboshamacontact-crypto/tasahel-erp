@@ -103,6 +103,7 @@
     search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
     qr: '<path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14v7M14 20h3"/>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
     mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
     pin: '<path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
     pause: '<path d="M8 5v14M16 5v14"/>',
@@ -964,13 +965,22 @@
     overlay(
       '<header class="cpn-head">' +
         '<div class="cpn-who" id="cp-who-box" data-act="profile" title="الحساب الشخصي"></div>' +
-        '<button type="button" class="cpn-ib" id="cp-hdr-info" data-act="screen-help" aria-label="مساعدة الشاشة" title="طريقة الاستخدام">' + ic('info') + '</button>' +
-        '<button type="button" class="cpn-ib" id="cp-hdr-review" data-tab="review" aria-label="المراجعة" title="المراجعة">' + ic('check') + '</button>' +
-        '<button type="button" class="cpn-ib" data-tab="account" aria-label="حسابي وعمولاتي" title="حسابي وعمولاتي">' + ic('wallet') + '</button>' +
-        '<button type="button" class="cpn-ib" id="cp-theme" data-act="theme" aria-label="تغيير المظهر"></button>' +
-        '<button type="button" class="cpn-ib" data-act="refresh" aria-label="تحديث">' + ic('refresh') + '</button>' +
-        '<button type="button" class="cpn-ib pwr" data-act="logout" aria-label="تسجيل الخروج">' + ic('power') + '</button>' +
+        '<button type="button" class="cpn-ib cpn-scan" data-act="qr-scan" aria-label="Scan Receipt" title="Scan Receipt">' + ic('qr') + '<span>Scan Receipt</span></button>' +
+        '<button type="button" class="cpn-ib cpn-scan" data-cp4-act="qr-deliver-scan" aria-label="Scan Delivery" title="Scan Delivery">' + ic('qr') + '<span>Scan Delivery</span></button>' +
+        '<button type="button" class="cpn-ib" id="cp-menu-btn" data-act="menu" aria-label="القائمة" title="القائمة">' + ic('menu') + '</button>' +
       '</header>' +
+      '<div class="cp-drawer" id="cp-drawer" hidden>' +
+        '<div class="cp-drawer-bg" data-act="menu-close"></div>' +
+        '<aside class="cp-drawer-panel" role="menu">' +
+          '<button type="button" class="cp-drawer-item" data-cp4-act="toggle-driving" role="menuitem">Drive Mode</button>' +
+          '<button type="button" class="cp-drawer-item" id="cp-hdr-review" data-tab="review" role="menuitem">المراجعة</button>' +
+          '<button type="button" class="cp-drawer-item" data-tab="account" role="menuitem">حسابي وعمولاتي</button>' +
+          '<button type="button" class="cp-drawer-item" id="cp-hdr-info" data-act="screen-help" role="menuitem">طريقة الاستخدام</button>' +
+          '<button type="button" class="cp-drawer-item" id="cp-theme" data-act="theme" role="menuitem"></button>' +
+          '<button type="button" class="cp-drawer-item" data-act="refresh" role="menuitem">تحديث</button>' +
+          '<button type="button" class="cp-drawer-item pwr" data-act="logout" role="menuitem">تسجيل الخروج</button>' +
+        '</aside>' +
+      '</div>' +
       '<div id="cp-v12-top-banners"></div>' +
       '<div class="cp-off" id="cp-off">مفيش اتصال بالإنترنت… الحفظ شغال أوفلاين</div>' +
       '<main class="cp-body" id="cp-body"></main>' +
@@ -1007,7 +1017,6 @@
     const T = [
       ['today', 'home', 'الرئيسية', 0],
       ['tickets', 'check', 'التيكتات', tCnt],
-      ['trips', 'box', 'المشاوير', 0],
       ['route', 'route', 'خط السير والمحطات', rCnt],
       ['chat', 'chat', 'التواصل', u]
     ];
@@ -1015,6 +1024,7 @@
     if (n.dataset.h !== html) { n.dataset.h = html; n.innerHTML = html; }
   }
   function setTab(t) {
+    const dr = $('cp-drawer'); if (dr) dr.hidden = true;
     st.tab = t === 'home' ? 'account' : t;
     if (st.tab !== 'chat') st.chat = null;
     if (st.tab === 'rank') loadLeaderboard(true);
@@ -2191,6 +2201,8 @@
       case 'mclose': if (e.target === el) closeModal(); return;
       case 'mclose-btn': return closeModal();
       case 'logout': return window.handleLogout && window.handleLogout();
+      case 'menu': { const d = $('cp-drawer'); if (d) d.hidden = false; return; }
+      case 'menu-close': { const d = $('cp-drawer'); if (d) d.hidden = true; return; }
       case 'screen-help': return openScreenHelpModal();
       case 'theme': return toggleTheme();
       case 'refresh': return refreshPortal(el);
