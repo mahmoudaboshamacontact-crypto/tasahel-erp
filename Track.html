@@ -251,7 +251,7 @@ textarea{border-radius:14px;background:#f8fafc;border-color:#e2e8f0}
   function $(id) { return document.getElementById(id); }
   var token = (new URLSearchParams(location.search).get('token') || '').trim();
   var validShape = /^[A-Za-z0-9_-]{16,128}$/.test(token);
-  var loaded = false, busy = false, cdTimer = null, last = null, topic = '', pending = false, opened = {}, firstTL = true;
+  var loaded = false, busy = false, cdTimer = null, last = null, topic = (new URLSearchParams(location.search).get('topic') === 'delivery' ? 'موعد التسليم' : ''), pending = false, opened = {}, firstTL = true;
 
   function rpc(name, args) {
     return fetch(SB_URL + '/rest/v1/rpc/' + name, {

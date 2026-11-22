@@ -11,9 +11,16 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
   /* عنوان صفحة التتبع: افتراضياً Track.html جنب السيستم. تقدر تغيّره من النافذة */
   function base() {
-    const saved = localStorage.getItem('track_base');
-    if (saved) return saved;
-    return new URL('Track.html', location.href).href.split('#')[0].split('?')[0];
+    const fallback = new URL('Track.html', location.href).href.split('#')[0].split('?')[0];
+    try {
+      const saved = localStorage.getItem('track_base');
+      if (!saved) return fallback;
+      const u = new URL(saved, location.href);
+      if (!/^https?:$/.test(u.protocol) || u.username || u.password) return fallback;
+      u.pathname = u.pathname.replace(/[^/]*$/, 'Track.html');
+      u.search = ''; u.hash = '';
+      return u.href;
+    } catch (e) { return fallback; }
   }
   const linkFor = t => base() + '?token=' + encodeURIComponent(t);
   function rnd(n) {

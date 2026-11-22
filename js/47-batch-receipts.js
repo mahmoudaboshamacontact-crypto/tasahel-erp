@@ -89,12 +89,15 @@
   /* ---------------- توليد رابط التتبع وQR Code للإيصال ---------------- */
   function trackBaseUrl() {
     try {
+      const fallback = new URL('Track.html', location.href).href.split('#')[0].split('?')[0];
       const saved = localStorage.getItem('track_base');
-      if (saved) return saved;
-    } catch (e) { /* */ }
-    try {
-      return new URL('Track.html', location.href).href.split('#')[0].split('?')[0];
-    } catch (e2) {
+      if (!saved) return fallback;
+      const u = new URL(saved, location.href);
+      if (!/^https?:$/.test(u.protocol) || u.username || u.password) return fallback;
+      u.pathname = u.pathname.replace(/[^/]*$/, 'Track.html');
+      u.search = ''; u.hash = '';
+      return u.href;
+    } catch (e) {
       return 'https://tasahel.com.eg/Track.html';
     }
   }

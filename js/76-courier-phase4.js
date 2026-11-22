@@ -721,12 +721,12 @@
       var phone = String(d.phone || '').replace(/\D+/g, '');
       if (phone.startsWith('0')) phone = '2' + phone;
       var trackUrl = d.tracking_token
-        ? (window.location.origin + '/tracking.html?token=' + encodeURIComponent(d.tracking_token) + '&reschedule=1')
+        ? (window.location.origin + '/Track.html?token=' + encodeURIComponent(d.tracking_token) + '&topic=delivery')
         : '';
       var waMsg = 'أهلاً بحضرتك أ/ ' + (d.client_name || '') + ' من شركة تساهيل\n' +
         'مندوبنا وصل لحضرتك اليوم بخصوص المعاملة (' + tx + ') ولكن تعذر التواصل (' + (d.reason_label || '') + ').\n' +
         (trackUrl
-          ? ('يمكنك تحديد الموعد الجديد المناسب لك مباشرة عبر الرابط:\n' + trackUrl)
+          ? ('تقدر تبعتلنا الموعد البديل المناسب لحضرتك من خلال استفسار «موعد التسليم» في رابط متابعة الطلب:\n' + trackUrl)
           : 'يرجى الرد علينا هنا باليوم والموعد البديل المناسب لحضرتك (صباحي 10-2 أو مسائي 2-6) لتنسيقه فوراً.');
 
       openP4Dialog(
