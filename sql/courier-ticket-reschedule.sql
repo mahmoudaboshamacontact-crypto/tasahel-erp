@@ -37,6 +37,19 @@ create index if not exists pickup_ticket_reschedule_pending_recent_idx
 
 alter table public.pickup_ticket_reschedule_requests enable row level security;
 
+do $
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (
+       select 1 from pg_publication_tables
+       where pubname = 'supabase_realtime'
+         and schemaname = 'public'
+         and tablename = 'pickup_ticket_reschedule_requests'
+     ) then
+    alter publication supabase_realtime add table public.pickup_ticket_reschedule_requests;
+  end if;
+end $;
+
 drop policy if exists pickup_ticket_reschedule_staff_select
   on public.pickup_ticket_reschedule_requests;
 create policy pickup_ticket_reschedule_staff_select
@@ -110,6 +123,7 @@ begin
     raise exception 'التيكت ده مش متعيّن لحضرتك' using errcode = '42501';
   end if;
   if v_t.status <> 'with_courier'
+     or v_t.courier_step is null
      or v_t.courier_step not in ('accepted', 'call_attempt', 'on_the_way') then
     raise exception 'طلب التأجيل متاح قبل الوصول للعميل واستلام الأوراق فقط' using errcode = '22023';
   end if;
