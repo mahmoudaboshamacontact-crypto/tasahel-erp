@@ -168,7 +168,7 @@
       }
       button.disabled = true;
       try {
-        var result = await window.sbClient.rpc('courier_ticket_request_reschedule', {
+        var result = await getSb().rpc('courier_ticket_request_reschedule', {
           p_ticket_id: Number(ticketId),
           p_proposed_slot: proposed,
           p_reason: reason
@@ -190,14 +190,14 @@
   }
 
   async function loadOfficeRequests() {
-    if (!isOffice() || !window.sbClient || officeBusy) return;
+    if (!isOffice() || !getSb() || officeBusy) return;
     var panel = $('pt81-office-panel');
     if (!panel) return;
     officeBusy = true;
     var list = $('pt81-office-list');
     if (list) list.innerHTML = '<div class="pt81-muted">جاري تحميل طلبات التأجيل…</div>';
     try {
-      var result = await window.sbClient.rpc('pickup_ticket_reschedule_requests');
+      var result = await getSb().rpc('pickup_ticket_reschedule_requests');
       if (result.error) throw result.error;
       var rows = Array.isArray(result.data) ? result.data : [];
       officeLoaded = true;
@@ -286,7 +286,7 @@
       if (!window.confirm(confirmText)) return;
       decisionButton.disabled = true;
       try {
-        var result = await window.sbClient.rpc('pickup_ticket_reschedule_resolve', {
+        var result = await getSb().rpc('pickup_ticket_reschedule_resolve', {
           p_request_id: requestId,
           p_decision: decision,
           p_note: note || null
