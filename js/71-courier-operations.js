@@ -430,6 +430,7 @@
         reschedule_status:t.reschedule_status || '',
         proposed_slot:t.proposed_slot || '',
         reschedule_reason:t.reschedule_reason || '',
+        action_history:Array.isArray(t.action_history) ? t.action_history : [],
         source:'ticket'
       })).filter(t => t.status !== 'delivered');
       const tripRows = opsItems.filter(x => x && x.operational_status !== 'delivered').map(x => ({
@@ -480,7 +481,13 @@
         const clients = rows.length ? '<div style="display:flex;flex-direction:column;gap:7px;margin:9px 0">' + grouped.map(g => {
           const groupKey = Number(c.id) + '-' + String(g.status).replace(/[^a-z0-9_-]/gi,'');
           const st = statusText[g.status] || String(g.status || 'نشط');
-          const cards = g.rows.map(x => '<div style="padding:7px 9px;border-radius:10px;background:var(--bg);border:1px solid var(--bd)"><b>' + esc(x.client_name || 'عميل بدون اسم') + '</b><div class="cpo-lbl">' + (x.source === 'ticket' ? 'تيكت استلام' : 'مشوار') + ' · <span dir="ltr">' + esc(x.transaction_id || '—') + '</span> · ' + esc(ago(x.at)) + '</div>' + (x.source === 'ticket' && x.reschedule_status === 'pending' ? '<div class="cpo-lbl" style="color:var(--wn)">طلب تأجيل معلّق · الموعد المقترح: ' + esc(x.proposed_slot || 'غير محدد') + (x.reschedule_reason ? ' · ' + esc(x.reschedule_reason) : '') + '</div>' : '') + (x.source === 'ticket' && x.reschedule_status === 'approved' ? '<div class="cpo-lbl">تمت الموافقة على التأجيل · ' + esc(x.proposed_slot || '') + '</div>' : '') + '</div>').join('');
+          const cards = g.rows.map(x => {
+            const historyLabels = {accepted:'قبول التيكت',call_attempt:'تم الاتصال',on_the_way:'في الطريق',waiting:'وصل للعميل',papers_received:'استلم الأوراق'};
+            const history = x.source === 'ticket' && x.action_history.length
+              ? '<div class="cpo-lbl" style="margin-top:5px">تسلسل الأكشنات: ' + x.action_history.map(h => esc(historyLabels[h.step] || h.step) + ' · ' + esc(ago(h.created_at))).join(' ← ') + '</div>'
+              : '';
+            return '<div style="padding:7px 9px;border-radius:10px;background:var(--bg);border:1px solid var(--bd)"><b>' + esc(x.client_name || 'عميل بدون اسم') + '</b><div class="cpo-lbl">' + (x.source === 'ticket' ? 'تيكت / معاملة مرتبطة' : 'مشوار') + ' · <span dir="ltr">' + esc(x.transaction_id || '—') + '</span> · ' + esc(ago(x.at)) + '</div>' + history + (x.source === 'ticket' && x.reschedule_status === 'pending' ? '<div class="cpo-lbl" style="color:var(--wn)">طلب تأجيل معلّق · الموعد المقترح: ' + esc(x.proposed_slot || 'غير محدد') + (x.reschedule_reason ? ' · ' + esc(x.reschedule_reason) : '') + '</div>' : '') + (x.source === 'ticket' && x.reschedule_status === 'approved' ? '<div class="cpo-lbl">تمت الموافقة على التأجيل · ' + esc(x.proposed_slot || '') + '</div>' : '') + '</div>';
+          }).join('');
           return '<div style="border:1px solid var(--bd);border-radius:10px;overflow:hidden"><button type="button" class="cpo-btn g" data-radar-group="' + esc(groupKey) + '" aria-expanded="false" style="width:100%;justify-content:space-between;border:0;border-radius:0"><span>' + esc(st) + '</span><span class="cpo-num">' + g.rows.length + ' طلبات　⌄</span></button><div data-radar-panel="' + esc(groupKey) + '" hidden style="padding:7px">' + cards + '</div></div>';
         }).join('') + '</div>' : '<div class="cpo-lbl" style="margin:8px 0">مفيش معاملات نشطة ظاهرة للمندوب ده</div>';
         const sub = le.tx ? (nameByTx[le.tx] ? '<b style="color:var(--tx)">' + esc(nameByTx[le.tx]) + '</b> · ' : '') + '<span dir="ltr" class="cpo-num">' + esc(le.tx) + (le.at ? ' · من ' + esc(tm(le.at)) : '') + '</span>' : (le.type === 'near_office' ? 'قرب من المكتب' + (le.at ? ' · ' + esc(tm(le.at)) : '') : (le.at ? 'من ' + esc(tm(le.at)) : '&nbsp;'));
