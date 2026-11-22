@@ -391,16 +391,19 @@
       /* بيانات الرحلات محدودة بفترة RPC، وبيانات تيكتات الاستلام من RPC إضافي اختياري لحد تشغيل SQL المقترح. */
       let radarTickets = [];
       let opsItems = Array.isArray(state.items) ? state.items : [];
+      const radarMonthStart = new Date(); radarMonthStart.setDate(1); radarMonthStart.setHours(0,0,0,0);
+      const radarMonthStartDate = [radarMonthStart.getFullYear(), String(radarMonthStart.getMonth()+1).padStart(2,'0'), '01'].join('-');
       try {
-        const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
-        const monthStartDate = [monthStart.getFullYear(), String(monthStart.getMonth()+1).padStart(2,'0'), '01'].join('-');
         const [ir, tr] = await Promise.all([
-          rpc('courier_ops_items', { p_from: monthStartDate, p_to: null }),
+          rpc('courier_ops_items', { p_from: radarMonthStartDate, p_to: null }),
           rpc('courier_radar_active_tickets', {})
         ]);
         if (!ir.error && Array.isArray(ir.data)) { opsItems = ir.data; state.items = ir.data; }
         if (!tr.error && Array.isArray(tr.data)) radarTickets = tr.data;
       } catch (e) { /* نكمل بالبيانات المتاحة */ }
+      /* استبعاد أي بيانات قديمة رجعت من كاش محلي، مع الاحتفاظ بالسجلات التي لا يوجد لها تاريخ معروف للمراجعة. */
+      opsItems = opsItems.filter(x => { const d = x && x.trip_day ? new Date(x.trip_day).getTime() : NaN; return !Number.isFinite(d) || d >= radarMonthStart.getTime(); });
+      state.items = opsItems;
       /* اسم العميل لكل معاملة */
       const nameByTx = {};
       opsItems.forEach(x => { if (x && x.transaction_id && x.client_name) nameByTx[x.transaction_id] = String(x.client_name).trim(); });
@@ -412,7 +415,7 @@
         papers_received:'استلم الأوراق'
       };
       const tripDayByTx = new Map(opsItems.filter(x => x && x.transaction_id).map(x => [String(x.transaction_id).toUpperCase(), x.trip_day]));
-      const monthStartMs = monthStart.getTime();
+      const monthStartMs = radarMonthStart.getTime();
       const ticketRows = radarTickets.filter(t => {
         const tx = String(t.transaction_id || t.sd_request_id || '').toUpperCase();
         const linkedTripDay = tripDayByTx.get(tx);
