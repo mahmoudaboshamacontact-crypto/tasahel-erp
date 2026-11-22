@@ -281,9 +281,12 @@ begin
   if v_t.id is null then
     raise exception 'تيكت الاستلام المرتبط بالطلب غير موجود' using errcode = 'P0002';
   end if;
-  if v_t.status <> 'with_courier'
-     or v_t.courier_step not in ('accepted', 'call_attempt', 'on_the_way') then
-    raise exception 'حالة التيكت لم تعد تسمح بتطبيق التأجيل' using errcode = '22023';
+  if v_decision = 'approved' then
+    if v_t.status <> 'with_courier'
+       or v_t.courier_step is null
+       or v_t.courier_step not in ('accepted', 'call_attempt', 'on_the_way') then
+      raise exception 'حالة التيكت لم تعد تسمح بتطبيق التأجيل؛ ارفض الطلب أو راجعه' using errcode = '22023';
+    end if;
   end if;
 
   update public.pickup_ticket_reschedule_requests
