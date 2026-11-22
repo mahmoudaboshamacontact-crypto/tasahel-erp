@@ -62,7 +62,7 @@
     root.querySelectorAll('[data-cop="tab"]').forEach(b=>{b.style.background=b.dataset.tab===state.tab?'#10b981':'var(--chip)';b.style.color=b.dataset.tab===state.tab?'#052e24':'var(--tx)';});
   }
   async function loadRoute() {
-    const r=await rpc('courier_ops_items',{p_from:null,p_to:null}); if(r.error)throw r.error;
+    const cairoToday=new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'}); const r=await rpc('courier_ops_items',{p_from:cairoToday.slice(0,8)+'01',p_to:null}); if(r.error)throw r.error;
     state.items=(Array.isArray(r.data)?r.data:[]).filter(x=>x&&x.client_name&&String(x.client_name).trim()&&String(x.client_name).trim()!=='بدون اسم');
   }
   async function loadIssues() {
@@ -351,7 +351,7 @@
     state.managerLoadedAt = now;
     if (!state.managerHtml) c.textContent = 'جاري التحميل…';
     try{
-      const [ir,cr,tr]=await Promise.all([rpc('courier_ops_issues',{p_status:null}),rpc('courier_ops_closings',{p_from:null,p_to:null}),rpc('courier_ops_items',{p_from:null,p_to:null})]);
+      const cairoToday=new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'}); const monthStart=cairoToday.slice(0,8)+'01'; const [ir,cr,tr]=await Promise.all([rpc('courier_ops_issues',{p_status:null}),rpc('courier_ops_closings',{p_from:null,p_to:null}),rpc('courier_ops_items',{p_from:monthStart,p_to:null})]);
       if(ir.error)throw ir.error;if(cr.error)throw cr.error;if(tr.error)throw tr.error;
       state.issues=ir.data||[];state.closings=cr.data||[];
       state.items=(tr.data||[]).filter(x=>x&&x.client_name&&String(x.client_name).trim()&&String(x.client_name).trim()!=='بدون اسم');
@@ -388,16 +388,51 @@
       const d = r.data;
       const couriers = Array.isArray(d.couriers) ? d.couriers : [];
       const pending = Array.isArray(d.pending_requests) ? d.pending_requests : [];
-      /* اسم العميل لكل معاملة (علشان الرادار يوضّح الحالة لأنهي عميل) */
-      const nameByTx = {};
+      /* بيانات الرحلات محدودة بفترة RPC، وبيانات تيكتات الاستلام من RPC إضافي اختياري لحد تشغيل SQL المقترح. */
+      let radarTickets = [];
+      let opsItems = Array.isArray(state.items) ? state.items : [];
+      const radarMonthStart = new Date(); radarMonthStart.setDate(1); radarMonthStart.setHours(0,0,0,0);
+      const radarMonthStartDate = [radarMonthStart.getFullYear(), String(radarMonthStart.getMonth()+1).padStart(2,'0'), '01'].join('-');
       try {
-        let its = Array.isArray(state.items) ? state.items : [];
-        if (!its.length && couriers.some(c => c.last_event && c.last_event.tx)) {
-          const ir = await rpc('courier_ops_items', { p_from: null, p_to: null });
-          its = Array.isArray(ir && ir.data) ? ir.data : [];
-        }
-        its.forEach(x => { if (x && x.transaction_id && x.client_name) nameByTx[x.transaction_id] = String(x.client_name).trim(); });
-      } catch (e) { /* الرادار يكمل من غير الأسماء */ }
+        const [ir, tr] = await Promise.all([
+          rpc('courier_ops_items', { p_from: radarMonthStartDate, p_to: null }),
+          rpc('courier_radar_active_tickets', {})
+        ]);
+        if (!ir.error && Array.isArray(ir.data)) { opsItems = ir.data; state.items = ir.data; }
+        if (!tr.error && Array.isArray(tr.data)) radarTickets = tr.data;
+      } catch (e) { /* نكمل بالبيانات المتاحة */ }
+      /* استبعاد أي بيانات قديمة رجعت من كاش محلي، مع الاحتفاظ بالسجلات التي لا يوجد لها تاريخ معروف للمراجعة. */
+      opsItems = opsItems.filter(x => { const d = x && x.trip_day ? new Date(x.trip_day).getTime() : NaN; return !Number.isFinite(d) || d >= radarMonthStart.getTime(); });
+      state.items = opsItems;
+      /* اسم العميل لكل معاملة */
+      const nameByTx = {};
+      opsItems.forEach(x => { if (x && x.transaction_id && x.client_name) nameByTx[x.transaction_id] = String(x.client_name).trim(); });
+      const normCourier = s => String(s || '').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/\s+/g, ' ').trim().toLowerCase();
+      const statusText = {
+        new:'جديد', accepted:'تم قبول التيكت', call_attempt:'تم الاتصال', collecting:'جاري الاستلام', collected:'تم الاستلام',
+        on_the_way:'في الطريق', waiting:'وصل عند العميل', arrived:'وصل عند العميل',
+        reschedule_pending:'طلب تأجيل', postponed:'مؤجل', cancelled:'ملغي',
+        papers_received:'استلم الأوراق'
+      };
+      const tripDayByTx = new Map(opsItems.filter(x => x && x.transaction_id).map(x => [String(x.transaction_id).toUpperCase(), x.trip_day]));
+      const monthStartMs = radarMonthStart.getTime();
+      const ticketRows = radarTickets.filter(t => {
+        const tx = String(t.transaction_id || t.sd_request_id || '').toUpperCase();
+        const linkedTripDay = tripDayByTx.get(tx);
+        const ticketDate = linkedTripDay || t.created_at;
+        const stamp = ticketDate ? new Date(ticketDate).getTime() : NaN;
+        return !Number.isFinite(stamp) || stamp >= monthStartMs;
+      }).map(t => ({
+        ticket_id:Number(t.ticket_id), courier_id:Number(t.courier_id), courier_name:t.courier_name,
+        client_name:t.client_name, transaction_id:t.transaction_id || t.sd_request_id,
+        status:t.radar_status || t.status_label || t.courier_step || t.status || 'new',
+        at:t.status_at || t.courier_step_at || t.created_at, source:'ticket'
+      })).filter(t => t.status !== 'delivered');
+      const tripRows = opsItems.filter(x => x && x.operational_status !== 'delivered').map(x => ({
+        courier_name:x.courier, client_name:x.client_name, transaction_id:x.transaction_id,
+        status:x.operational_status || 'new', at:x.updated_at || x.trip_day, source:'trip'
+      }));
+      const allRadarRows = ticketRows.concat(tripRows).sort((a,b) => new Date(b.at || 0) - new Date(a.at || 0));
       const totalToday = couriers.reduce((s, c) => s + Number(c.total_today || 0), 0);
       const confToday = couriers.reduce((s, c) => s + Number(c.confirmed_today || 0), 0);
       const evLabels = {
@@ -411,8 +446,17 @@
       };
       const svg = (n, z) => '<svg class="cpo-i" viewBox="0 0 24 24" style="width:' + (z || 16) + 'px;height:' + (z || 16) + 'px" aria-hidden="true">' + I[n] + '</svg>';
       const tm = at => { if (!at) return ''; const d = new Date(at); return isNaN(d) ? '' : d.toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' }); };
-      const ago = at => { if (!at) return 'دلوقتي'; const m = Math.round((Date.now() - new Date(at).getTime()) / 60000); return m < 1 ? 'دلوقتي' : m < 60 ? 'من ' + m + ' د' : 'من ' + Math.round(m / 60) + ' س'; };
-      const onWay = couriers.filter(c => c.last_event && c.last_event.type === 'on_the_way');
+      const ago = at => { if (!at) return 'دلوقتي'; const stamp = new Date(at).getTime(); if (!Number.isFinite(stamp)) return 'وقت غير محدد'; const m = Math.round((Date.now() - stamp) / 60000); return m <= 0 ? 'دلوقتي' : m < 60 ? 'من ' + m + ' د' : 'من ' + Math.round(m / 60) + ' س'; };
+      const onWayRows = ticketRows.filter(x => x.status === 'on_the_way');
+      const radarRowKey = (courierId, courierName, tx) => (courierId ? 'id:' + Number(courierId) : 'name:' + normCourier(courierName)) + '|tx:' + String(tx || '').trim().toUpperCase();
+      const knownOnWayRows = new Set(onWayRows.map(x => radarRowKey(x.courier_id, x.courier_name, x.transaction_id)));
+      couriers.forEach(c => {
+        const le = c.last_event || {};
+        if (le.type === 'on_the_way' && le.tx && !knownOnWayRows.has(radarRowKey(c.id, c.name, le.tx))) {
+          onWayRows.push({ courier_id:Number(c.id), courier_name:c.name, client_name:nameByTx[le.tx] || '', transaction_id:le.tx, status:'on_the_way', at:le.at, source:'event' });
+        }
+      });
+      const onWayCount = new Set(onWayRows.map(x => x.courier_id || normCourier(x.courier_name))).size;
       const stTag = t => t === 'on_the_way' ? ['ac', 'في الطريق'] : t === 'waiting' ? ['wn', 'وصل عند العميل'] : t === 'break' ? ['mu', 'في استراحة'] : ['ok', 'متاح'];
       const head = '<div class="cpo-row" style="gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:200px"><div style="font-size:26px;font-weight:700">رادار المكتب</div>' +
         '<div class="cpo-row" style="gap:7px;font-size:13px;color:var(--mu)"><span style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></span>مباشر · بيتحدّث كل دقيقة عند فتح التاب · آخر تحديث <span class="cpo-num">' + new Date().toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit', second: '2-digit' }) + '</span></div></div>' +
@@ -422,12 +466,22 @@
         '<div class="cpo-card"><div class="cpo-lbl">مشاوير اليوم</div><div class="cpo-big cpo-num">' + totalToday + '</div></div>' +
         '<div class="cpo-card"><div class="cpo-lbl">اتأكدت من المناديب</div><div class="cpo-big cpo-num" style="color:var(--ok)">' + confToday + '</div></div>' +
         '<div class="cpo-card" style="background:var(--wnsoft)"><div class="cpo-lbl" style="color:var(--wn)">طلبات بانتظار موافقتك</div><div class="cpo-big cpo-num" style="color:var(--wn)">' + pending.length + '</div></div>' +
-        '<div class="cpo-card"><div class="cpo-lbl">مناديب في الطريق</div><div class="cpo-big cpo-num" style="color:var(--ac)">' + onWay.length + '<span style="font-size:16px;color:var(--mu)"> / ' + couriers.length + '</span></div></div></div>';
+        '<div class="cpo-card"><div class="cpo-lbl">مناديب في الطريق</div><div class="cpo-big cpo-num" style="color:var(--ac)">' + onWayCount + '<span style="font-size:16px;color:var(--mu)"> / ' + couriers.length + '</span></div></div></div>';
       const cc = c => {
         const le = c.last_event || {}, t = stTag(le.type), tot = Number(c.total_today || 0), cf = Number(c.confirmed_today || 0);
+        const rows = allRadarRows.filter(x => x.courier_id ? Number(x.courier_id) === Number(c.id) : normCourier(x.courier_name) === normCourier(c.name));
+        const statusOrder = ['new','accepted','call_attempt','collecting','collected','on_the_way','waiting','arrived','reschedule_pending','postponed','papers_received','cancelled'];
+        const grouped = statusOrder.map(status => ({status, rows:rows.filter(x => x.status === status)})).filter(g => g.rows.length);
+        rows.filter(x => !statusOrder.includes(x.status)).forEach(x => { const key=String(x.status||'new'); let g=grouped.find(v=>v.status===key); if(!g){g={status:key,rows:[]};grouped.push(g);} g.rows.push(x); });
+        const clients = rows.length ? '<div style="display:flex;flex-direction:column;gap:7px;margin:9px 0">' + grouped.map(g => {
+          const groupKey = Number(c.id) + '-' + String(g.status).replace(/[^a-z0-9_-]/gi,'');
+          const st = statusText[g.status] || String(g.status || 'نشط');
+          const cards = g.rows.map(x => '<div style="padding:7px 9px;border-radius:10px;background:var(--bg);border:1px solid var(--bd)"><b>' + esc(x.client_name || 'عميل بدون اسم') + '</b><div class="cpo-lbl">' + (x.source === 'ticket' ? 'تيكت استلام' : 'مشوار') + ' · <span dir="ltr">' + esc(x.transaction_id || '—') + '</span> · ' + esc(ago(x.at)) + '</div></div>').join('');
+          return '<div style="border:1px solid var(--bd);border-radius:10px;overflow:hidden"><button type="button" class="cpo-btn g" data-radar-group="' + esc(groupKey) + '" aria-expanded="false" style="width:100%;justify-content:space-between;border:0;border-radius:0"><span>' + esc(st) + '</span><span class="cpo-num">' + g.rows.length + ' طلبات　⌄</span></button><div data-radar-panel="' + esc(groupKey) + '" hidden style="padding:7px">' + cards + '</div></div>';
+        }).join('') + '</div>' : '<div class="cpo-lbl" style="margin:8px 0">مفيش معاملات نشطة ظاهرة للمندوب ده</div>';
         const sub = le.tx ? (nameByTx[le.tx] ? '<b style="color:var(--tx)">' + esc(nameByTx[le.tx]) + '</b> · ' : '') + '<span dir="ltr" class="cpo-num">' + esc(le.tx) + (le.at ? ' · من ' + esc(tm(le.at)) : '') + '</span>' : (le.type === 'near_office' ? 'قرب من المكتب' + (le.at ? ' · ' + esc(tm(le.at)) : '') : (le.at ? 'من ' + esc(tm(le.at)) : '&nbsp;'));
         return '<div class="cpo-cc"><div class="cpo-row" style="justify-content:space-between"><b>' + esc(c.name) + '</b><span class="cpo-tag ' + t[0] + '">' + t[1] + '</span></div>' +
-          '<div style="font-size:12.5px;color:var(--mu)">' + sub + '</div>' +
+          '<div style="font-size:12.5px;color:var(--mu)">' + sub + '</div>' + clients +
           '<div class="cpo-row"><div class="cpo-bar" style="flex:1"><span style="width:' + (tot ? Math.round(cf / tot * 100) : 0) + '%"></span></div><span class="cpo-num cpo-lbl">' + cf + '/' + tot + '</span></div>' +
           '<button type="button" class="cpo-btn g" style="align-self:flex-start" data-v12ping="' + Number(c.id) + '" data-cname="' + esc(c.name) + '">' + svg('warn') + 'تنبيه عاجل</button></div>';
       };
@@ -450,12 +504,13 @@
         '<div class="cpo-row" style="justify-content:space-between;padding:8px 0"><span style="font-size:14px">جاهز بالمكتب</span><button type="button" role="switch" aria-label="جاهز بالمكتب" class="cpo-sw" data-ready="ready_flag"><i></i></button></div>' +
         '<div class="cpo-row" style="justify-content:space-between;padding:8px 0"><span style="font-size:14px">الميعاد متأكد مع العميل</span><button type="button" role="switch" aria-label="الميعاد متأكد" class="cpo-sw" data-ready="client_confirmed"><i></i></button></div>' +
         '<div class="cpo-lbl" style="margin-top:6px">بتظهر للمندوب كعلامة على كارت المشوار</div></div>';
-      const w = onWay[0], wle = w && w.last_event;
       const cust = '<div class="cpo-card" style="flex:1"><b style="font-size:16px">اللي العميل بيشوفه</b><div class="cpo-cc" style="margin-top:10px;padding:14px;border-radius:18px">' +
-        (w ? '<div class="cpo-lbl">تتبع طلبك · <span class="cpo-num" dir="ltr">' + esc(wle.tx || '') + '</span></div><div class="cpo-row" style="gap:12px"><div class="cpo-ico">' + svg('truck', 20) + '</div><div><b>' + esc(String(w.name || '').split(' ')[0]) + ' في الطريق ليك</b><div class="cpo-lbl">المندوب في طريقه إليك دلوقتي</div></div></div>' +
-          '<div class="cpo-row" style="gap:6px"><div style="flex:1;height:6px;border-radius:6px;background:var(--ac)"></div><div style="flex:1;height:6px;border-radius:6px;background:var(--ac)"></div><div style="flex:1;height:6px;border-radius:6px;background:var(--bg)"></div></div>'
-          : '<div class="cpo-lbl">مفيش مندوب في الطريق دلوقتي — لما يضغط «في طريقي» هتشوف هنا اللي العميل هيشوفه.</div>') + '</div>' +
-        '<div class="cpo-lbl" style="margin-top:10px;line-height:1.5">الاسم الأول بس، من غير رقم أو مكان.</div></div>';
+        (onWayRows.length ? onWayRows.map(x => {
+          const courierFirst = String(x.courier_name || '').trim().split(/\s+/)[0] || 'المندوب';
+          const clientFirst = String(x.client_name || '').trim().split(/\s+/)[0];
+          return '<div class="cpo-row" style="gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)"><div class="cpo-ico">' + svg('truck', 20) + '</div><div><b>' + esc(courierFirst) + ' في الطريق' + (clientFirst ? ' لـ ' + esc(clientFirst) : '') + '</b><div class="cpo-lbl">المندوب في طريقه للعميل</div></div></div>';
+        }).join('') : '<div class="cpo-lbl">مفيش مندوب في الطريق دلوقتي.</div>') + '</div>' +
+        '<div class="cpo-lbl" style="margin-top:10px;line-height:1.5">الاسم الأول للمندوب والعميل فقط، من غير رقم أو عنوان.</div></div>';
       state.radarFailed = false;
       state.radarLoadedAt = Date.now();
       target.innerHTML = '<div class="cpo-wrap">' + head + pulse + '<div class="cpo-cols"><div class="cpo-main">' + couriersCard + apCard + '</div><div class="cpo-side">' + feed + ready + cust + '</div></div></div>';
@@ -473,6 +528,13 @@
   async function radarClick(ev) {
     const t = ev.target.closest && ev.target.closest('button'); if (!t) return;
     const el = radarBox || $('cop-radar');
+    if (t.dataset.radarGroup) {
+      if (!el) return;
+      const key = t.dataset.radarGroup;
+      const panel = Array.from(el.querySelectorAll('[data-radar-panel]')).find(node => node.dataset.radarPanel === key);
+      if (panel) { panel.hidden = !panel.hidden; t.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true'); }
+      return;
+    }
     if (t.dataset.radarRetry) return loadV12OfficeRadar(el, true);
     if (t.dataset.radarNotif) { shell(); state.tab = 'notifications'; return render(); }
     if (t.dataset.v12res) {

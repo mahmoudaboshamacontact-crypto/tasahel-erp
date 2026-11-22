@@ -1839,7 +1839,7 @@
     if (st.itemsLoading) return st.itemsLoading;
     st.itemsLoading = (async () => {
       try {
-        const t = today(), r = await sbClient.rpc('courier_items', { p_from: addDays(t, -62), p_to: t });
+        const t = today(), r = await sbClient.rpc('courier_items', { p_from: monthStart(t), p_to: t });
         if (r.error) throw r.error;
         setOffline(false);
         const rawData = Array.isArray(r.data) ? r.data : []; const data = rawData.filter(x => x && (x.type === 'fee' || Number(x.lines) > 0 || (x.client_name && String(x.client_name).trim() && String(x.client_name).trim() !== 'بدون اسم'))); const sig = JSON.stringify(data);
@@ -1972,6 +1972,9 @@
   /* مودال تفاصيل العميل والمعاملة (البند A.2) — بدون أي أسعار عميل أو مدفوعات */
   async function openClientDetail(tx) {
     const fallbackItem = byTx(tx);
+    const ticketStepState = typeof window.tsCourierTicketStepForTx === 'function' ? window.tsCourierTicketStepForTx(tx) : null;
+    const ticketReachedCustomer = !!(fallbackItem && (fallbackItem.live_state === 'waiting' || fallbackItem.confirmed)) ||
+      !!(ticketStepState && (ticketStepState.step === 'waiting' || ticketStepState.step === 'papers_received'));
     const sameClientItems = fallbackItem
       ? st.items.filter(x => normAr(x.client_name) === normAr(fallbackItem.client_name) && x.day === fallbackItem.day)
       : [];
@@ -2084,7 +2087,7 @@
         (phone ? dtile('v12-wa-tpl', 'ok', 'chat', 'واتساب') : '') +
         dtile('v12-sign', '', 'pen', 'توقيع', ' data-client="' + eh(clientName) + '"') +
         dtile('v12-wait', '', 'clock', waitSince ? 'انتظار' : 'وصلت/انتظار') +
-        dtile('v12-expense', 'wn', 'wallet', 'مصروف') + dtile('v12-handoff', 'wn', 'swap', 'تحويل') + dtile('v12-reschedule', 'wn', 'cal', 'تأجيل لبكرة') +
+        dtile('v12-expense', 'wn', 'wallet', 'مصروف') + dtile('v12-handoff', 'wn', 'swap', 'تحويل') + (ticketReachedCustomer ? '' : dtile('v12-reschedule', 'wn', 'cal', 'تأجيل لبكرة')) +
         '<button type="button" class="cpn-tile" data-act="note" data-tx="' + eh(tx) + '"><span class="ti" style="background:var(--ersoft);color:var(--er)">' + ic('flag') + '</span>بلاغ</button>' +
       '</div>' +
       '<div class="cpn-row" style="margin:10px 16px 0;gap:6px;flex-wrap:wrap">' +
@@ -2565,15 +2568,26 @@
         ta.value = el.dataset.t; st.draft = el.dataset.t; return sendMsg();
       }
       case 'send-loc': {
+        const showLocationHelp = reason => {
+          const apple = /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+          const steps = apple
+            ? 'على آيفون: افتح إعدادات الجهاز > الخصوصية والأمان > خدمات الموقع > Safari (أو Chrome) > أثناء استخدام التطبيق. ولو بتستخدم Safari افتح إعدادات الموقع من زر aA بجوار العنوان واسمح بالموقع.'
+            : 'على أندرويد: افتح رمز إعدادات الموقع بجوار عنوان الصفحة (القفل أو رمز التحكم) > الأذونات > الموقع > سماح. واتأكد إن خدمة الموقع / GPS شغالة من إعدادات الجهاز.';
+          window.alert((reason ? reason + '\n\n' : '') + steps + '\n\nالموقع هيتبعت للمدير بس في الشات.');
+        };
         const go = pos => {
           const mgr = st.contacts.find(c => c.is_manager) || st.contacts[0];
           if (!mgr) return toast('مفيش جهة اتصال متاحة دلوقتي', true);
           st.draft = ' موقعي الحالي: https://maps.google.com/?q=' + pos.lat.toFixed(6) + ',' + pos.lng.toFixed(6);
           openChat(mgr.id, null);
         };
-        if (!navigator.geolocation) return toast('الموقع غير متاح على الجهاز ده', true);
+        if (!navigator.geolocation) { showLocationHelp('الموقع غير مدعوم في المتصفح أو الصفحة الحالية.'); return; }
         navigator.geolocation.getCurrentPosition(p => { st.myPos = { lat: p.coords.latitude, lng: p.coords.longitude }; go(st.myPos); },
-          () => { if (st.myPos) go(st.myPos); else toast('مقدرتش أجيب موقعك — فعّل الـ GPS', true); }, { enableHighAccuracy: true, timeout: 8000 });
+          err => {
+            if (err && err.code === 1) { showLocationHelp('تم رفض إذن الوصول للموقع. فعّله وجرب تاني.'); return; }
+            if (st.myPos) { go(st.myPos); return; }
+            showLocationHelp('مقدرتش أجيب موقعك. اتأكد من تشغيل GPS والسماح للموقع.');
+          }, { enableHighAccuracy: true, timeout: 8000 });
         return;
       }
       case 'qr-scan': return openQrScannerModal();
