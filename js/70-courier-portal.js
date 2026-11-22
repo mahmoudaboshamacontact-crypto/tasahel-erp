@@ -570,6 +570,21 @@
   }
   window.__cpToggleBatch = v => { st.batchScan = !!v; };
   window.__cpRerender = () => { if (document.getElementById('cp-body')) renderTab(false); };
+  /* سكان واحد: إيصال تسليم → شاشة التسليم (اسم المستلم + التحصيل)، كود معاملة → تفاصيل المعاملة.
+     بيستخدم القارئ العام (BarcodeDetector + jsQR احتياطي) عشان يشتغل على كل الأجهزة. زرار «لصق» جواه بديل للكتابة اليدوية. */
+  function openUnifiedScan() {
+    if (typeof window.openQrScanner !== 'function') return openQrScannerModal();
+    if (typeof window.__cp4Beep === 'function') window.__cp4Beep(true); /* فتح الصوت من ضغطة المندوب */
+    window.openQrScanner(function (raw) {
+      if (typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(raw) && typeof window.__cp4DeliverFromRaw === 'function') {
+        return window.__cp4DeliverFromRaw(raw);
+      }
+      const tx = resolveLocalTx(extractTxFromScan(raw));
+      if (tx) return openClientDetail(tx);
+      toast('الكود ده مش خاص بإيصال أو معاملة تساهيل', true);
+    });
+  }
+
   async function openQrScannerModal() {
     stopQrCamera();
     modal(
@@ -786,7 +801,7 @@
   }
   function applyTheme() {
     const o = $('courier-app'); if (o) o.setAttribute('data-theme', st.theme);
-    const b = $('cp-theme'); if (b) b.innerHTML = '<span>' + (st.theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن') + '</span>';
+    const b = $('cp-theme'); if (b) b.innerHTML = st.theme === 'dark' ? ic('sun') : ic('moon');
   }
   function toggleTheme() { st.theme = st.theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('ts_cp_theme', st.theme); } catch (e) { /* */ } applyTheme(); }
 
@@ -952,6 +967,7 @@
     overlay(
       '<header class="cpn-head">' +
         '<div class="cpn-who" id="cp-who-box" data-act="profile" title="الحساب الشخصي"></div>' +
+        '<button type="button" class="cpn-ib" id="cp-theme" data-act="theme" aria-label="الوضع الفاتح / الداكن"></button>' +
         '<button type="button" class="cpn-ib cpn-scan" data-act="qr-scan" aria-label="Scan" title="Scan">' + ic('qr') + '<span>Scan</span></button>' +
         '<button type="button" class="cpn-ib" id="cp-menu-btn" data-act="menu" aria-label="القائمة" title="القائمة">' + ic('menu') + '</button>' +
       '</header>' +
@@ -963,7 +979,6 @@
           '<button type="button" class="cp-drawer-item" id="cp-hdr-review" data-tab="review" role="menuitem"><span>المراجعة</span></button>' +
           '<button type="button" class="cp-drawer-item" data-tab="account" role="menuitem"><span>حسابي وعمولاتي</span></button>' +
           '<button type="button" class="cp-drawer-item" id="cp-hdr-info" data-act="screen-help" role="menuitem"><span>طريقة الاستخدام</span></button>' +
-          '<button type="button" class="cp-drawer-item" id="cp-theme" data-act="theme" role="menuitem"></button>' +
           '<button type="button" class="cp-drawer-item" data-act="refresh" role="menuitem"><span>تحديث</span></button>' +
           '<button type="button" class="cp-drawer-item pwr" data-act="logout" role="menuitem"><span>تسجيل الخروج</span></button>' +
         '</aside>' +
@@ -2518,7 +2533,7 @@
           () => { if (st.myPos) go(st.myPos); else toast('مقدرتش أجيب موقعك — فعّل الـ GPS', true); }, { enableHighAccuracy: true, timeout: 8000 });
         return;
       }
-      case 'qr-scan': return openQrScannerModal();
+      case 'qr-scan': return openUnifiedScan();
       case 'qr-close': stopQrCamera(); return closeModal();
       case 'qr-go': {
         const inp = $('cp-qr-manual');

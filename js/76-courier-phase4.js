@@ -607,6 +607,7 @@
   /* السكان الموحّد في js/70 بيستخدم الدالتين دول: لو الكود إيصال تسليم يكمّل هنا، وإلا يفتح المعاملة */
   window.__cp4ReceiptToken = parseReceiptToken;
   window.__cp4DeliverFromRaw = handleDeliverRaw;
+  window.__cp4Beep = qrDeliverBeep;
 
   async function submitQrDeliver(btn) {
     var cur = st.qrDeliver;
