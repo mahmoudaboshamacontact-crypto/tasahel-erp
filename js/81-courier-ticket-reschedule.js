@@ -63,7 +63,7 @@
   function courierActionHtml(ticket) {
     if (!ticket || ticket.status !== 'with_courier') return '';
     var step = String(ticket.courier_step || '');
-    if (['accepted', 'call_attempt', 'on_the_way'].indexOf(step) === -1) return '';
+    if (step === 'papers_received') return '';
     var req = currentRequest(ticket.id);
     if (req && req.status === 'pending') {
       return '<div class="pt81-request-state">طلب التأجيل اتبعت للمكتب — مستني الموافقة أو الرفض</div>';
