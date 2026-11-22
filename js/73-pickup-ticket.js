@@ -374,6 +374,16 @@
     });
   };
 
+  /* قراءة حالة تيكت مرتبطة بمعاملة من بوابة المندوب، بدون كشف بيانات إضافية. */
+  window.tsCourierTicketStepForTx = function (tx) {
+    var key = String(tx || '').trim().toUpperCase();
+    var list = Array.isArray(st.courierTickets) ? st.courierTickets : [];
+    var ticket = list.find(function (x) {
+      return String(x.converted_tx_id || x.sd_request_id || '').trim().toUpperCase() === key;
+    });
+    return ticket ? { step: ticket.courier_step || '', status: ticket.status || '' } : null;
+  };
+
   window.tsPapersWithCourier = function () {
     var list = Array.isArray(st.courierTickets) ? st.courierTickets : [];
     return list.filter(function (x) { return x.papers_holder === 'courier'; }).length;
