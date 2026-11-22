@@ -22,6 +22,7 @@ begin
   return coalesce((
     select jsonb_agg(
       jsonb_build_object(
+        'ticket_id', t.id,
         'courier_id', c.id,
         'courier_name', c.name,
         'client_name', t.client_name,
