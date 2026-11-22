@@ -570,10 +570,9 @@
   }
   window.__cpToggleBatch = v => { st.batchScan = !!v; };
   window.__cpRerender = () => { if (document.getElementById('cp-body')) renderTab(false); };
-  /* سكان واحد: إيصال تسليم → شاشة التسليم (اسم المستلم + التحصيل)، كود معاملة → تفاصيل المعاملة.
-     بيستخدم القارئ العام (BarcodeDetector + jsQR احتياطي) عشان يشتغل على كل الأجهزة. زرار «لصق» جواه بديل للكتابة اليدوية. */
-  function openUnifiedScan() {
-    if (typeof window.openQrScanner !== 'function') return openQrScannerModal();
+  /* قارئ بديل (BarcodeDetector + jsQR احتياطي) للموبايلات القديمة. نفس التوجيه: إيصال تسليم → شاشة التسليم، كود معاملة → تفاصيلها. */
+  function openAltScanner() {
+    if (typeof window.openQrScanner !== 'function') return toast('القارئ البديل مش متاح على الجهاز ده', true);
     if (typeof window.__cp4Beep === 'function') window.__cp4Beep(true); /* فتح الصوت من ضغطة المندوب */
     window.openQrScanner(function (raw) {
       if (typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(raw) && typeof window.__cp4DeliverFromRaw === 'function') {
@@ -600,7 +599,7 @@
         '<input id="cp-qr-manual" type="text" dir="ltr" class="cp-field" placeholder="أو اكتب رقم المعاملة هنا (مثال: TX-2026-...)">' +
         '<button type="button" class="cp-btn cp-go" data-act="qr-go">فتح</button>' +
       '</div>' +
-      '<div class="cp-btns"><button type="button" class="cp-btn" data-act="qr-close">إغلاق</button></div>'
+      '<div class="cp-btns"><button type="button" class="cp-btn" data-act="qr-alt">قارئ بديل</button><button type="button" class="cp-btn" data-act="qr-close">إغلاق</button></div>'
     );
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no camera');
@@ -641,11 +640,11 @@
         requestAnimationFrame(scanLoop);
       } else if (msg) {
         msg.style.display = 'flex';
-        msg.textContent = 'اكتب رقم المعاملة بالأسفل للفتح السريع';
+        msg.textContent = 'القارئ ده مش مدعوم على جهازك — جرّب «قارئ بديل» أو اكتب رقم المعاملة بالأسفل';
       }
     } catch (e) {
       const msg = $('cp-qr-msg');
-      if (msg) msg.textContent = 'تعذر فتح الكاميرا — اكتب رقم المعاملة بالأسفل مباشرة';
+      if (msg) msg.textContent = 'تعذر فتح الكاميرا — اكتب رقم المعاملة أو لصق رابط الإيصال بالأسفل';
     }
   }
 
@@ -2533,11 +2532,16 @@
           () => { if (st.myPos) go(st.myPos); else toast('مقدرتش أجيب موقعك — فعّل الـ GPS', true); }, { enableHighAccuracy: true, timeout: 8000 });
         return;
       }
-      case 'qr-scan': return openUnifiedScan();
+      case 'qr-scan': return openQrScannerModal();
+      case 'qr-alt': stopQrCamera(); closeModal(); return openAltScanner();
       case 'qr-close': stopQrCamera(); return closeModal();
       case 'qr-go': {
         const inp = $('cp-qr-manual');
-        const code = extractTxFromScan(inp ? inp.value : '');
+        const rawIn = String(inp ? inp.value : '').trim();
+        if (rawIn && typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(rawIn) && typeof window.__cp4DeliverFromRaw === 'function') {
+          stopQrCamera(); closeModal(); return window.__cp4DeliverFromRaw(rawIn);
+        }
+        const code = extractTxFromScan(rawIn);
         stopQrCamera();
         if (!code) return toast('اكتب رقم المعاملة الأول', true);
         return openClientDetail(code);
