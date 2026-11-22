@@ -388,6 +388,16 @@
       const d = r.data;
       const couriers = Array.isArray(d.couriers) ? d.couriers : [];
       const pending = Array.isArray(d.pending_requests) ? d.pending_requests : [];
+      /* اسم العميل لكل معاملة (علشان الرادار يوضّح الحالة لأنهي عميل) */
+      const nameByTx = {};
+      try {
+        let its = Array.isArray(state.items) ? state.items : [];
+        if (!its.length && couriers.some(c => c.last_event && c.last_event.tx)) {
+          const ir = await rpc('courier_ops_items', { p_from: null, p_to: null });
+          its = Array.isArray(ir && ir.data) ? ir.data : [];
+        }
+        its.forEach(x => { if (x && x.transaction_id && x.client_name) nameByTx[x.transaction_id] = String(x.client_name).trim(); });
+      } catch (e) { /* الرادار يكمل من غير الأسماء */ }
       const totalToday = couriers.reduce((s, c) => s + Number(c.total_today || 0), 0);
       const confToday = couriers.reduce((s, c) => s + Number(c.confirmed_today || 0), 0);
       const evLabels = {
@@ -415,7 +425,7 @@
         '<div class="cpo-card"><div class="cpo-lbl">مناديب في الطريق</div><div class="cpo-big cpo-num" style="color:var(--ac)">' + onWay.length + '<span style="font-size:16px;color:var(--mu)"> / ' + couriers.length + '</span></div></div></div>';
       const cc = c => {
         const le = c.last_event || {}, t = stTag(le.type), tot = Number(c.total_today || 0), cf = Number(c.confirmed_today || 0);
-        const sub = le.tx ? '<span dir="ltr" class="cpo-num">' + esc(le.tx) + (le.at ? ' · من ' + esc(tm(le.at)) : '') + '</span>' : (le.type === 'near_office' ? 'قرب من المكتب' + (le.at ? ' · ' + esc(tm(le.at)) : '') : (le.at ? 'من ' + esc(tm(le.at)) : '&nbsp;'));
+        const sub = le.tx ? (nameByTx[le.tx] ? '<b style="color:var(--tx)">' + esc(nameByTx[le.tx]) + '</b> · ' : '') + '<span dir="ltr" class="cpo-num">' + esc(le.tx) + (le.at ? ' · من ' + esc(tm(le.at)) : '') + '</span>' : (le.type === 'near_office' ? 'قرب من المكتب' + (le.at ? ' · ' + esc(tm(le.at)) : '') : (le.at ? 'من ' + esc(tm(le.at)) : '&nbsp;'));
         return '<div class="cpo-cc"><div class="cpo-row" style="justify-content:space-between"><b>' + esc(c.name) + '</b><span class="cpo-tag ' + t[0] + '">' + t[1] + '</span></div>' +
           '<div style="font-size:12.5px;color:var(--mu)">' + sub + '</div>' +
           '<div class="cpo-row"><div class="cpo-bar" style="flex:1"><span style="width:' + (tot ? Math.round(cf / tot * 100) : 0) + '%"></span></div><span class="cpo-num cpo-lbl">' + cf + '/' + tot + '</span></div>' +
@@ -432,7 +442,7 @@
         : '<div class="cpo-lbl" style="padding:14px 0">مفيش طلبات معلقة دلوقتي</div>';
       const apCard = '<div class="cpo-card"><div class="cpo-row" style="justify-content:space-between;margin-bottom:4px"><b style="font-size:16px">بانتظار موافقتك</b><span class="cpo-tag wn cpo-num">' + pending.length + '</span></div>' + apr + '</div>';
       const feedItems = pending.slice(0, 5).map(q => ({ c: 'ac', t: esc(q.courier_name) + ' ' + esc(evLabels[q.event_type] || q.event_type), at: q.created_at || q.at }))
-        .concat(couriers.filter(c => c.last_event && c.last_event.type && c.last_event.at).slice(0, 3).map(c => ({ c: c.last_event.type === 'break' ? 'er' : 'ok', t: esc(c.name) + ': ' + esc(evLabels[c.last_event.type] || c.last_event.type), at: c.last_event.at })));
+        .concat(couriers.filter(c => c.last_event && c.last_event.type && c.last_event.at).slice(0, 3).map(c => ({ c: c.last_event.type === 'break' ? 'er' : 'ok', t: esc(c.name) + ': ' + esc(evLabels[c.last_event.type] || c.last_event.type) + (c.last_event.tx ? ' — ' + esc(nameByTx[c.last_event.tx] || c.last_event.tx) : ''), at: c.last_event.at })));
       const feed = '<div class="cpo-card"><b style="font-size:16px">اللي بيوصل للإدارة فورًا</b><div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.45">' +
         (feedItems.length ? feedItems.map(f => '<div class="cpo-row" style="align-items:flex-start"><span style="width:8px;height:8px;border-radius:50%;background:var(--' + f.c + ');margin-top:6px;flex:none"></span><span>' + f.t + ' · <span class="cpo-lbl cpo-num">' + ago(f.at) + '</span></span></div>').join('') : '<span class="cpo-lbl">مفيش حاجة جديدة</span>') + '</div></div>';
       const ready = '<div class="cpo-card"><b style="font-size:16px">علّم جاهزية المعاملة</b>' +
