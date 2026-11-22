@@ -280,13 +280,14 @@
     var tools = $('cp-drawer-tools');
     if (tools) {
       var I = window.__cpIc || function () { return ''; };
-      var item = function (act, label, on, icon) {
-        return '<button type="button" class="cp-drawer-item' + (on ? ' on' : '') + '" role="menuitem" data-cp4-act="' + act + '">' + I(icon) + '<span>' + label + '</span></button>';
+      var item = function (act, label, on, icon, chip) {
+        return '<button type="button" class="cp-drawer-item' + (on ? ' on' : '') + '" role="menuitem" data-cp4-act="' + act + '">' + I(icon) + '<span>' + label + '</span>' + (chip ? '<em class="cp-chipnum">' + chip + '</em>' : '') + '</button>';
       };
+      var cash = Number(st.p4 && st.p4.cash_totals && st.p4.cash_totals.expected_cash) || 0;
+      var cashChip = (!dayLocked && cash > 0) ? (Math.round(cash).toLocaleString('ar-EG') + ' ج') : '';
       tools.innerHTML =
         item('toggle-driving', st.driving ? 'Drive Mode · ON' : 'Drive Mode', st.driving, 'route') +
-        item('open-cash-closing', closeLabel, dayLocked, 'cash') +
-        item('open-office-signoff', 'تسليم ورق للمكتب', false, 'papers') +
+        item('end-of-day', 'إنهاء اليوم', dayLocked, 'cash', cashChip) +
         item('parking-pin', parkTxt, st.parkingPin, 'pin') +
         item('toggle-amoled', 'توفير البطارية', st.amoled, 'battery') +
         item('toggle-thumb', 'اليد: ' + (st.thumbSide === 'left' ? 'يسار' : 'يمين'), false, 'swap');
@@ -1162,6 +1163,47 @@
     }
   }
 
+  /* «إنهاء اليوم»: قايمة واحدة بكل اللي لازم يخلص قبل ما المندوب يمشي (مراجعة المشاوير، الكاش، الأوراق، البيانات غير المبعوتة) */
+  async function openEndOfDayModal() {
+    openP4Dialog('<div style="text-align:center;padding:18px;font-size:13px">جاري تحميل ملخص اليوم…</div>');
+    await loadMyP4State(true);
+    var sum = (typeof window.__cpDaySummary === 'function') ? window.__cpDaySummary() : { total: 0, pending: 0 };
+    var totals = (st.p4 && st.p4.cash_totals) || { expected_cash: 0 };
+    var closeObj = st.p4 && st.p4.closing;
+    var locked = !!(st.p4 && st.p4.day_locked);
+    var submitted = !!(closeObj && closeObj.status === 'submitted');
+    var papers = (typeof window.tsPapersWithCourier === 'function') ? window.tsPapersWithCourier() : 0;
+    var queued = (window.CourierV12 && window.CourierV12.queueSize) ? window.CourierV12.queueSize() : 0;
+
+    var row = function (ok, title, sub, act, label) {
+      return '<div style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--bd);border-radius:14px;margin-bottom:8px;background:var(--fld)">' +
+        '<span style="flex:none;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;background:' + (ok ? '#036b29' : '#881337') + '">' + (ok ? '✓' : '!') + '</span>' +
+        '<div style="flex:1;min-width:0"><b style="font-size:13.5px">' + title + '</b><div style="font-size:12px;color:var(--mu);margin-top:2px">' + sub + '</div></div>' +
+        (act ? '<button type="button" class="cp-btn cp-sm' + (ok ? '' : ' cp-go') + '" data-cp4-act="' + act + '">' + label + '</button>' : '') +
+      '</div>';
+    };
+
+    var rows =
+      row(sum.pending === 0, 'مشاوير اليوم',
+        sum.pending === 0 ? (sum.total ? 'كل المشاوير مؤكدة' : 'مفيش مشاوير النهارده') : (sum.pending + ' من ' + sum.total + ' لسه مش مؤكدة'),
+        sum.pending === 0 ? '' : 'eod-review', 'مراجعة') +
+      row(locked || submitted, 'كاش اليوم',
+        locked ? 'تم التقفيل والاعتماد' : (submitted ? 'اتبعت للمكتب وبانتظار الاعتماد' : ('المطلوب تسليمه ' + money(totals.expected_cash))),
+        locked ? '' : 'open-cash-closing', submitted ? 'عرض' : 'تقفيل') +
+      row(papers === 0, 'الأوراق',
+        papers === 0 ? 'مفيش أوراق معاك من التيكتات' : ('معاك ' + papers + ' من التيكتات للتسليم للمكتب'),
+        'open-office-signoff', 'تسليم للمكتب') +
+      (queued > 0 ? row(false, 'بيانات لسه ما اتبعتتش', queued + ' إجراء محفوظ على الموبايل بانتظار النت', 'eod-flush', 'إرسال الآن') : '');
+
+    var allDone = sum.pending === 0 && (locked || submitted) && papers === 0 && queued === 0;
+    openP4Dialog(
+      '<h3 style="margin:0 0 4px;font-size:16px">إنهاء اليوم</h3>' +
+      '<p style="font-size:12px;color:var(--mu);margin:0 0 12px">' + (allDone ? 'كله تمام — تقدر تمشي' : 'خلّص البنود اللي عليها علامة تعجب قبل ما تمشي') + '</p>' +
+      rows +
+      '<button type="button" class="cp-btn" style="width:100%;margin-top:4px" data-cp4-act="dialog-close">إغلاق</button>'
+    );
+  }
+
   async function openEndOfDayCashClosingModal() {
     openP4Dialog('<div style="text-align:center;padding:18px;font-size:13px">جاري تحميل عهدة الكاش اليومية…</div>');
     await loadMyP4State(true);
@@ -1488,6 +1530,18 @@
         return;
       case 'share-thermal':
         shareThermalReceiptImage(actBtn);
+        return;
+      case 'end-of-day':
+        openEndOfDayModal();
+        return;
+      case 'eod-review':
+        closeP4Dialog();
+        if (typeof window.__cpGoTab === 'function') window.__cpGoTab('review');
+        return;
+      case 'eod-flush':
+        if (window.CourierV12 && window.CourierV12.flushOfflineQueue) {
+          window.CourierV12.flushOfflineQueue().then(function () { openEndOfDayModal(); });
+        }
         return;
       case 'open-cash-closing':
         openEndOfDayCashClosingModal();

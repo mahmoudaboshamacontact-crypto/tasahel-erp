@@ -323,6 +323,7 @@
     haversineKm: haversineKm,
     queueOrRun: queueOrRun,
     flushOfflineQueue: flushOfflineQueue,
+    queueSize: function () { return readQueue().length; },
     openSignatureModal: openSignatureModal,
     openPinDropperModal: openPinDropperModal,
     renderEmbeddedMap: renderEmbeddedMap,

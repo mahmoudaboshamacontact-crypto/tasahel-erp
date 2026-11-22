@@ -414,6 +414,7 @@
     '#courier-app .cpn-slide .kn{touch-action:none;position:relative;z-index:1;cursor:grab}',
     '#courier-app .cpn-slide:before{content:"";position:absolute;inset-block:0;inset-inline-start:0;width:calc(var(--slide,0%) + 54px);background:color-mix(in srgb,var(--ac) 30%,transparent);border-radius:20px;pointer-events:none}',
     '#courier-app .cpn-slide span{position:relative;z-index:1}',
+    '.cp-drawer-item .cp-chipnum{margin-inline-start:auto;font-style:normal;font-size:12px;font-weight:800;padding:2px 9px;border-radius:999px;background:var(--acsoft);color:var(--green-soft-tx)}',
     '.cp-drawer-group{display:flex;flex-direction:column;gap:2px}',
     '.cp-drawer-item:active{background:var(--chip)}',
     '#courier-app .ts7b-search input,#courier-app .cpn-search input{background:transparent!important;border:0!important;box-shadow:none!important;outline:none}',
