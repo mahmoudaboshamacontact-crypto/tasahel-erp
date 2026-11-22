@@ -12,6 +12,7 @@
   var officeLoaded = false;
   var officeBusy = false;
   var lastCourierLoad = 0;
+  var realtimeChannel = null;
 
   function $(id) { return document.getElementById(id); }
   function getSb() { return typeof sbClient !== 'undefined' ? sbClient : window.sbClient; }
@@ -67,12 +68,15 @@
     if (req && req.status === 'pending') {
       return '<div class="pt81-request-state">طلب التأجيل اتبعت للمكتب — مستني الموافقة أو الرفض</div>';
     }
-    if (req && (req.status === 'approved' || req.status === 'rejected')) {
-      var label = req.status === 'approved' ? 'المكتب وافق على التأجيل' : 'المكتب رفض طلب التأجيل';
-      return '<div class="pt81-request-state">' + label +
-        (req.status === 'approved' ? ' · الموعد المقترح: ' + esc(req.proposed_slot) : '') +
+    if (req && req.status === 'approved') {
+      return '<div class="pt81-request-state">المكتب وافق على التأجيل · الموعد الجديد: ' + esc(req.proposed_slot) +
         (req.decision_note ? '<div>ملاحظة المكتب: ' + esc(req.decision_note) + '</div>' : '') +
         '</div>';
+    }
+    if (req && req.status === 'rejected') {
+      return '<div class="pt81-request-state">المكتب رفض طلب التأجيل السابق' +
+        (req.decision_note ? '<div>ملاحظة المكتب: ' + esc(req.decision_note) + '</div>' : '') +
+        '</div><div class="pt81-actions"><button type="button" class="pt81-btn" data-pt81-request="' + Number(ticket.id) + '">إرسال طلب تأجيل جديد</button></div>';
     }
     return '<div class="pt81-actions"><button type="button" class="pt81-btn" data-pt81-request="' +
       Number(ticket.id) + '">العميل طلب تأجيل</button></div>';
@@ -230,13 +234,14 @@
   var officeObserver = null;
   function ensureOfficePanel() {
     if (!isOffice()) return;
-    var list = $('pt-list');
     var pane = $('tab-pickup');
-    if (!list || !pane) return;
+    if (!pane) return;
     if (!officeObserver && typeof MutationObserver === 'function') {
       officeObserver = new MutationObserver(function () { if (isOffice()) ensureOfficePanel(); });
       officeObserver.observe(pane, { childList: true, subtree: true });
     }
+    var list = $('pt-list');
+    if (!list) return;
     var panel = $('pt81-office-panel');
     if (!panel) {
       panel = document.createElement('section');
@@ -327,15 +332,40 @@
       var result = await original.apply(this, arguments);
       addStyles();
       wrapCourierRows();
+      setupRealtime();
       if (isCourier()) loadCourierRequests(true);
       if (isOffice()) ensureOfficePanel();
       return result;
     };
   });
 
+
+  function setupRealtime() {
+    var client = getSb();
+    if (!client || typeof client.channel !== 'function' || realtimeChannel) return;
+    try {
+      realtimeChannel = client.channel('pt81-ticket-reschedule')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'pickup_ticket_reschedule_requests'
+        }, function () {
+          if (isOffice()) {
+            officeLoaded = false;
+            loadOfficeRequests();
+          }
+          if (isCourier()) loadCourierRequests(true);
+        })
+        .subscribe();
+    } catch (error) {
+      realtimeChannel = null;
+    }
+  }
+
   function start() {
     addStyles();
     wrapCourierRows();
+    setupRealtime();
     if (isCourier()) loadCourierRequests(true);
     if (isOffice()) {
       ensureOfficePanel();
