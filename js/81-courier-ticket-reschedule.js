@@ -224,7 +224,7 @@
         '</article>';
       }).join('');
     } catch (error) {
-      officeLoaded = false;
+      officeLoaded = true;
       if (list) list.innerHTML = '<div class="pt81-muted">تعذر تحميل الطلبات: ' + esc(error && error.message) + '</div>';
     } finally {
       officeBusy = false;
@@ -373,6 +373,7 @@
       realtimeChannel = null;
       courierRequests = {};
       officeLoaded = false;
+      if (officeObserver) { officeObserver.disconnect(); officeObserver = null; }
       return original.apply(this, arguments);
     };
   });
