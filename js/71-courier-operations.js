@@ -404,7 +404,7 @@
       opsItems.forEach(x => { if (x && x.transaction_id && x.client_name) nameByTx[x.transaction_id] = String(x.client_name).trim(); });
       const normCourier = s => String(s || '').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/\s+/g, ' ').trim().toLowerCase();
       const statusText = {
-        new:'جديد', collecting:'جاري الاستلام', collected:'تم الاستلام',
+        new:'جديد', accepted:'تم قبول التيكت', call_attempt:'تم الاتصال', collecting:'جاري الاستلام', collected:'تم الاستلام',
         on_the_way:'في الطريق', waiting:'وصل عند العميل', arrived:'وصل عند العميل',
         reschedule_pending:'طلب تأجيل', postponed:'مؤجل', cancelled:'ملغي',
         papers_received:'استلم الأوراق'
