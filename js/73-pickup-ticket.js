@@ -919,7 +919,7 @@
   function buildLineNote(ticket, item) {
     var parts = [];
     if (item.doc_type) parts.push('نوع المستند: ' + item.doc_type);
-    if (ticket.staff_notes) parts.push(ticket.staff_notes);
+    /* ملاحظة التذكرة ما تدخلش في ملاحظات المعاملة — بتتسجل في سجل التعليقات بعد التحويل */
     return parts.join(' - ') || null;
   }
 
@@ -998,6 +998,16 @@
     if (rc.data && rc.data.already_converted) {
       toast('التيكت متحوّل بالفعل لمعاملة ' + txId + (mId ? ' (مهمة #' + mId + ')' : ''), 'info');
     } else {
+      if (ticket.staff_notes && txId) {
+        try {
+          var cu = getCurUser();
+          await sbClient.from('tx_comments').insert({
+            transaction_id: txId,
+            author_id: cu && cu.id,
+            body: 'ملاحظة التذكرة (للمندوب): ' + ticket.staff_notes
+          });
+        } catch (e) { /* السجل مش أساسي — التحويل نفسه نجح */ }
+      }
       toast('تم التحويل لمعاملة ' + txId + ' وإرسال مهمة الاستلام للمندوب', 'success');
     }
     return true;
