@@ -62,7 +62,7 @@
     root.querySelectorAll('[data-cop="tab"]').forEach(b=>{b.style.background=b.dataset.tab===state.tab?'#10b981':'var(--chip)';b.style.color=b.dataset.tab===state.tab?'#052e24':'var(--tx)';});
   }
   async function loadRoute() {
-    const r=await rpc('courier_ops_items',{p_from:null,p_to:null}); if(r.error)throw r.error;
+    const cairoToday=new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'}); const r=await rpc('courier_ops_items',{p_from:cairoToday.slice(0,8)+'01',p_to:null}); if(r.error)throw r.error;
     state.items=(Array.isArray(r.data)?r.data:[]).filter(x=>x&&x.client_name&&String(x.client_name).trim()&&String(x.client_name).trim()!=='بدون اسم');
   }
   async function loadIssues() {
@@ -351,7 +351,7 @@
     state.managerLoadedAt = now;
     if (!state.managerHtml) c.textContent = 'جاري التحميل…';
     try{
-      const [ir,cr,tr]=await Promise.all([rpc('courier_ops_issues',{p_status:null}),rpc('courier_ops_closings',{p_from:null,p_to:null}),rpc('courier_ops_items',{p_from:null,p_to:null})]);
+      const cairoToday=new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'}); const monthStart=cairoToday.slice(0,8)+'01'; const [ir,cr,tr]=await Promise.all([rpc('courier_ops_issues',{p_status:null}),rpc('courier_ops_closings',{p_from:null,p_to:null}),rpc('courier_ops_items',{p_from:monthStart,p_to:null})]);
       if(ir.error)throw ir.error;if(cr.error)throw cr.error;if(tr.error)throw tr.error;
       state.issues=ir.data||[];state.closings=cr.data||[];
       state.items=(tr.data||[]).filter(x=>x&&x.client_name&&String(x.client_name).trim()&&String(x.client_name).trim()!=='بدون اسم');
