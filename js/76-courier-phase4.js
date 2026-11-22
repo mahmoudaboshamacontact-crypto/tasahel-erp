@@ -26,7 +26,7 @@
       var t = document.createElement('div');
       t.className = 'cp-toast' + (bad ? ' err' : '');
       t.textContent = msg;
-      document.body.appendChild(t);
+      $('courier-app').appendChild(t);
       setTimeout(function () { t.remove(); }, 3400);
       return;
     }
@@ -279,17 +279,17 @@
     /* كل الاختصارات في درج القائمة (مكان واحد) بدل شريط الأزرار اللي فوق كل شاشة */
     var tools = $('cp-drawer-tools');
     if (tools) {
-      var item = function (act, label, on) {
-        return '<button type="button" class="cp-drawer-item' + (on ? ' on' : '') + '" role="menuitem" data-cp4-act="' + act + '"><span>' + label + '</span></button>';
+      var I = window.__cpIc || function () { return ''; };
+      var item = function (act, label, on, icon) {
+        return '<button type="button" class="cp-drawer-item' + (on ? ' on' : '') + '" role="menuitem" data-cp4-act="' + act + '">' + I(icon) + '<span>' + label + '</span></button>';
       };
       tools.innerHTML =
-        item('toggle-driving', st.driving ? 'Drive Mode · ON' : 'Drive Mode', st.driving) +
-        item('open-cash-closing', closeLabel, dayLocked) +
-        item('open-office-signoff', 'تسليم ورق للمكتب', false) +
-        item('parking-pin', parkTxt, st.parkingPin) +
-        item('toggle-amoled', 'توفير البطارية', st.amoled) +
-        item('toggle-thumb', 'اليد: ' + (st.thumbSide === 'left' ? 'يسار' : 'يمين'), false) +
-        item('toggle-onb', 'دليل الاستخدام', st.onboarding);
+        item('toggle-driving', st.driving ? 'Drive Mode · ON' : 'Drive Mode', st.driving, 'route') +
+        item('open-cash-closing', closeLabel, dayLocked, 'cash') +
+        item('open-office-signoff', 'تسليم ورق للمكتب', false, 'papers') +
+        item('parking-pin', parkTxt, st.parkingPin, 'pin') +
+        item('toggle-amoled', 'توفير البطارية', st.amoled, 'battery') +
+        item('toggle-thumb', 'اليد: ' + (st.thumbSide === 'left' ? 'يسار' : 'يمين'), false, 'swap');
     }
   }
 

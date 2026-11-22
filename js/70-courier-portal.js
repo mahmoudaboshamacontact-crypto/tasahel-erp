@@ -105,6 +105,10 @@
     qr: '<path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14v7M14 20h3"/>',
     menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
     chev: '<path d="M6 9l6 6 6-6"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+    papers: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 15l2 2 4-4"/>',
+    battery: '<rect x="3" y="8" width="16" height="9" rx="2"/><path d="M21 11v3M7 12.5h5"/>',
+    cash: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
     cal: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/>',
     mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
     pin: '<path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
@@ -142,6 +146,7 @@
       el.replaceWith(svg);
     });
   }
+  window.__cpIc = (n, sz) => ic(n, sz);
   const ic = (n, sz) => '<svg class="cpn-i" viewBox="0 0 24 24" aria-hidden="true"' + (sz ? ' style="width:' + sz + 'px;height:' + sz + 'px"' : '') + '>' + (IC[n] || '') + '</svg>';
 
   /* ---------- حفظ واسترجاع حالة بطاقات التعريف ---------- */
@@ -570,10 +575,9 @@
   }
   window.__cpToggleBatch = v => { st.batchScan = !!v; };
   window.__cpRerender = () => { if (document.getElementById('cp-body')) renderTab(false); };
-  /* سكان واحد: إيصال تسليم → شاشة التسليم (اسم المستلم + التحصيل)، كود معاملة → تفاصيل المعاملة.
-     بيستخدم القارئ العام (BarcodeDetector + jsQR احتياطي) عشان يشتغل على كل الأجهزة. زرار «لصق» جواه بديل للكتابة اليدوية. */
-  function openUnifiedScan() {
-    if (typeof window.openQrScanner !== 'function') return openQrScannerModal();
+  /* قارئ بديل (BarcodeDetector + jsQR احتياطي) للموبايلات القديمة. نفس التوجيه: إيصال تسليم → شاشة التسليم، كود معاملة → تفاصيلها. */
+  function openAltScanner() {
+    if (typeof window.openQrScanner !== 'function') return toast('القارئ البديل مش متاح على الجهاز ده', true);
     if (typeof window.__cp4Beep === 'function') window.__cp4Beep(true); /* فتح الصوت من ضغطة المندوب */
     window.openQrScanner(function (raw) {
       if (typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(raw) && typeof window.__cp4DeliverFromRaw === 'function') {
@@ -600,7 +604,7 @@
         '<input id="cp-qr-manual" type="text" dir="ltr" class="cp-field" placeholder="أو اكتب رقم المعاملة هنا (مثال: TX-2026-...)">' +
         '<button type="button" class="cp-btn cp-go" data-act="qr-go">فتح</button>' +
       '</div>' +
-      '<div class="cp-btns"><button type="button" class="cp-btn" data-act="qr-close">إغلاق</button></div>'
+      '<div class="cp-btns"><button type="button" class="cp-btn" data-act="qr-alt">قارئ بديل</button><button type="button" class="cp-btn" data-act="qr-close">إغلاق</button></div>'
     );
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no camera');
@@ -641,11 +645,11 @@
         requestAnimationFrame(scanLoop);
       } else if (msg) {
         msg.style.display = 'flex';
-        msg.textContent = 'اكتب رقم المعاملة بالأسفل للفتح السريع';
+        msg.textContent = 'القارئ ده مش مدعوم على جهازك — جرّب «قارئ بديل» أو اكتب رقم المعاملة بالأسفل';
       }
     } catch (e) {
       const msg = $('cp-qr-msg');
-      if (msg) msg.textContent = 'تعذر فتح الكاميرا — اكتب رقم المعاملة بالأسفل مباشرة';
+      if (msg) msg.textContent = 'تعذر فتح الكاميرا — اكتب رقم المعاملة أو لصق رابط الإيصال بالأسفل';
     }
   }
 
@@ -817,7 +821,7 @@
   /* ---------- مساعدات ---------- */
   function toast(msg, bad) {
     const t = document.createElement('div'); t.className = 'cp-toast' + (bad ? ' err' : ''); t.textContent = msg;
-    document.body.appendChild(t); setTimeout(() => t.remove(), 3600);
+    ($('courier-app') || document.body).appendChild(t); setTimeout(() => t.remove(), 3600);
   }
   function errMsg(e) {
     const m = String((e && e.message) || e || '');
@@ -974,13 +978,18 @@
       '<div class="cp-drawer" id="cp-drawer" hidden>' +
         '<div class="cp-drawer-bg" data-act="menu-close"></div>' +
         '<aside class="cp-drawer-panel" role="menu">' +
+          '<div class="cp-drawer-title">التنقل</div>' +
+          '<button type="button" class="cp-drawer-item" id="cp-hdr-review" data-tab="review" role="menuitem">' + ic('check') + '<span>المراجعة</span></button>' +
+          '<button type="button" class="cp-drawer-item" data-tab="account" role="menuitem">' + ic('wallet') + '<span>حسابي وكشف الحساب</span></button>' +
+          '<div class="cp-drawer-sep"></div>' +
+          '<div class="cp-drawer-title">أدوات المندوب</div>' +
           '<div id="cp-drawer-tools" class="cp-drawer-group"></div>' +
           '<div class="cp-drawer-sep"></div>' +
-          '<button type="button" class="cp-drawer-item" id="cp-hdr-review" data-tab="review" role="menuitem"><span>المراجعة</span></button>' +
-          '<button type="button" class="cp-drawer-item" data-tab="account" role="menuitem"><span>حسابي وعمولاتي</span></button>' +
-          '<button type="button" class="cp-drawer-item" id="cp-hdr-info" data-act="screen-help" role="menuitem"><span>طريقة الاستخدام</span></button>' +
-          '<button type="button" class="cp-drawer-item" data-act="refresh" role="menuitem"><span>تحديث</span></button>' +
-          '<button type="button" class="cp-drawer-item pwr" data-act="logout" role="menuitem"><span>تسجيل الخروج</span></button>' +
+          '<div class="cp-drawer-title">إعدادات ومساعدة</div>' +
+          '<button type="button" class="cp-drawer-item" data-act="profile" role="menuitem">' + ic('user') + '<span>ملفي الشخصي</span></button>' +
+          '<button type="button" class="cp-drawer-item" id="cp-hdr-info" data-act="screen-help" role="menuitem">' + ic('info') + '<span>دليل الاستخدام</span></button>' +
+          '<button type="button" class="cp-drawer-item" data-act="refresh" role="menuitem">' + ic('refresh') + '<span>تحديث البيانات</span></button>' +
+          '<button type="button" class="cp-drawer-item pwr" data-act="logout" role="menuitem">' + ic('power') + '<span>تسجيل الخروج</span></button>' +
         '</aside>' +
       '</div>' +
       '<div id="cp-v12-top-banners"></div>' +
@@ -1014,7 +1023,7 @@
     const u = unreadTotal(), pend = st.items.filter(i => !i.confirmed).length;
     const revBtn = $('cp-hdr-review');
     if (revBtn) {
-      revBtn.innerHTML = '<span>المراجعة</span>' + (pend ? '<em class="cp-bdg">' + num(pend) + '</em>' : '');
+      revBtn.innerHTML = ic('check') + '<span>المراجعة</span>' + (pend ? '<em class="cp-bdg">' + num(pend) + '</em>' : '');
     }
     const tCnt = typeof window.tsCourierActiveTicketsCount === 'function' ? window.tsCourierActiveTicketsCount() : 0;
     const rCnt = st.items.filter(i => i.day === today() && !i.confirmed).length;
@@ -2533,11 +2542,16 @@
           () => { if (st.myPos) go(st.myPos); else toast('مقدرتش أجيب موقعك — فعّل الـ GPS', true); }, { enableHighAccuracy: true, timeout: 8000 });
         return;
       }
-      case 'qr-scan': return openUnifiedScan();
+      case 'qr-scan': return openQrScannerModal();
+      case 'qr-alt': stopQrCamera(); closeModal(); return openAltScanner();
       case 'qr-close': stopQrCamera(); return closeModal();
       case 'qr-go': {
         const inp = $('cp-qr-manual');
-        const code = extractTxFromScan(inp ? inp.value : '');
+        const rawIn = String(inp ? inp.value : '').trim();
+        if (rawIn && typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(rawIn) && typeof window.__cp4DeliverFromRaw === 'function') {
+          stopQrCamera(); closeModal(); return window.__cp4DeliverFromRaw(rawIn);
+        }
+        const code = extractTxFromScan(rawIn);
         stopQrCamera();
         if (!code) return toast('اكتب رقم المعاملة الأول', true);
         return openClientDetail(code);
