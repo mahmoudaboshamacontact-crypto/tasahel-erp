@@ -100,42 +100,6 @@
     return btns ? '<div style="display:flex;flex-wrap:wrap;gap:8px">' + btns + '</div>' : '';
   }
 
-  function renderCourierPapersBlock(t) {
-    var holder = t.papers_holder || 'office';
-    var pendId = t.papers_pending_event_id ? Number(t.papers_pending_event_id) : null;
-    var pendTo = t.papers_pending_to || '';
-    var isCancelled = t.status === 'cancelled';
-    var holderLbl = PAPERS_COURIER_LABELS[holder] || 'المكتب';
-    var warnHtml = (isCancelled && holder === 'courier')
-      ? '<div class="pt-papers-warn"><i class="fa-solid fa-triangle-exclamation"></i> تنبيه: التيكت ملغي والأوراق ما زالت معك — اضغط «إرجاع الورق للموظف» لتسليمها.</div>'
-      : '';
-    var pendHtml = '';
-    if (pendId && pendTo === 'courier') {
-      pendHtml = '<div class="pt-papers-pending">طلب تسليم أوراق من المكتب بانتظار تأكيدك</div>';
-    } else if (pendId && pendTo === 'office') {
-      pendHtml = '<div class="pt-papers-pending">طلب إرجاع الأوراق للمكتب معلّق بانتظار تأكيد الموظف</div>';
-    }
-    var btns = '';
-    if (pendId && pendTo === 'courier') {
-      btns += '<button type="button" class="pt-btn pt-btn-sec" style="border:1px solid var(--burg,#881337)" data-pt73-papers-confirm="' + pendId + '" data-pt73-tid="' + Number(t.id) + '"><i class="fa-solid fa-file-signature"></i> استلمت الأوراق</button>';
-    } else if (holder === 'courier' && !pendId) {
-      if (!isCancelled) {
-        btns += '<button type="button" class="pt-btn pt-btn-sec" data-pt73-papers-customer="' + Number(t.id) + '"><i class="fa-solid fa-handshake"></i> تسليم الأوراق للعميل</button>';
-      }
-      btns += '<button type="button" class="pt-btn pt-btn-sec" data-pt73-papers-return="' + Number(t.id) + '"><i class="fa-solid fa-rotate-left"></i> إرجاع الورق للموظف</button>';
-    } else if (pendId && pendTo === 'office') {
-      btns += '<button type="button" class="pt-btn pt-btn-sec" disabled>بانتظار تأكيد الموظف للاستلام</button>';
-    }
-    return '<div class="pt-papers-box">' +
-      '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px">' +
-        '<span style="font-size:11.5px;font-weight:800">عهدة الأوراق</span>' +
-        '<span class="pt-badge ' + papersHolderBadgeClass(holder) + '">الأوراق عند: ' + eh(holderLbl) + '</span>' +
-      '</div>' +
-      warnHtml +
-      pendHtml +
-      (btns ? '<div style="display:flex;flex-wrap:wrap;gap:6px">' + btns + '</div>' : '') +
-    '</div>';
-  }
   function fmtStepTime(iso) {
     if (!iso) return '';
     try {
@@ -339,16 +303,6 @@
     st.loaded = true;
   }
 
-  function paymentBadgeForCourier(t) {
-    if (t.payment_status === 'cod_cash') {
-      return '<div style="margin-top:4px;padding:4px 8px;border-radius:8px;background:rgba(245,158,11,.2);color:#fbbf24;font-weight:700;font-size:11.5px">مطلوب تحصيل كاش: ' + eh(money(t.collect_amount || 0)) + ' + عمل إيصال للعميل</div>';
-    }
-    if (t.payment_status === 'instapay_on_arrival') {
-      return '<div style="margin-top:4px;padding:4px 8px;border-radius:8px;background:rgba(139,92,246,.22);color:#c4b5fd;font-weight:700;font-size:11.5px">مطلوب تأكيد تحويل إنستا باي: ' + eh(money(t.collect_amount || 0)) + ' + إيصال</div>';
-    }
-    return '<div style="margin-top:4px;padding:4px 8px;border-radius:8px;background:rgba(16,185,129,.18);color:#34d399;font-weight:700;font-size:11.5px">خالص الدفع — استلام أوراق فقط</div>';
-  }
-
   /* معرفة التاب النشط في بوابة المندوب */
   function currentCourierTab() {
     var on = document.querySelector('#cp-nav button.on');
@@ -377,24 +331,6 @@
       return (o && typeof o === 'object') ? o : {};
     } catch (e) { return {}; }
   }
-  var __pt73BodyObs = null;
-  var __pt73Rendering = false;
-  function ensureBodyObserver() {
-    var body = $('cp-body');
-    if (!body || __pt73BodyObs || !window.MutationObserver) return;
-    __pt73BodyObs = new MutationObserver(function () {
-      if (__pt73Rendering) return;
-      if (isCourier() && Array.isArray(st.courierTickets) && st.courierTickets.length) {
-        var tab = currentCourierTab();
-        var showHere = !tab || tab === 'today' || tab === 'trips' || tab === 'home' || tab === 'account';
-        if (showHere && !$('pt73-courier-tickets')) {
-          renderCourierTicketsIntoBody();
-          syncTripsHeaderTicketBadge();
-        }
-      }
-    });
-    __pt73BodyObs.observe(body, { childList: true });
-  }
 
   function syncTripsHeaderTicketBadge() {
     var cnt = Array.isArray(st.courierTickets) ? st.courierTickets.filter(function (x) { return x.status === 'with_courier'; }).length : 0;
@@ -416,29 +352,6 @@
       if (t === 'الكل 0') { btn.textContent = 'الكل ' + cnt; btn.dataset.pt73CntDone = '1'; }
       else if (t === 'استلام 0') { btn.textContent = 'استلام ' + cnt; btn.dataset.pt73CntDone = '1'; }
     });
-  }
-
-  function renderCallChecksBadges(cc) {
-    if (!cc) return '';
-    var labels = {
-      docs_ready: 'الأوراق جاهزة',
-      address_ok: 'العنوان مؤكد',
-      slot_ok: 'الميعاد مؤكد',
-      fees_ok: 'الرسوم واضحة',
-      whatsapp_ok: 'واتساب مؤكد'
-    };
-    var items = [];
-    if (Array.isArray(cc)) {
-      items = cc.map(function (v) { return String(v || '').trim(); }).filter(Boolean);
-    } else if (typeof cc === 'object') {
-      items = Object.keys(cc).filter(function (k) { return !!cc[k]; }).map(function (k) { return labels[k] || k; });
-    }
-    if (!items.length) return '';
-    return '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">' +
-      items.map(function (txt) {
-        return '<span style="font-size:10.5px;padding:2px 7px;border-radius:999px;background:rgba(16,185,129,.14);color:#34d399;border:1px solid rgba(16,185,129,.3)">✓ ' + eh(txt) + '</span>';
-      }).join('') +
-    '</div>';
   }
 
   /* التيكتات بتتعرض جوه شاشة «التيكتات» الموحّدة في js/70 (قايمة واحدة مع المشاوير) — هنا بنطلب إعادة الرسم بس. */
