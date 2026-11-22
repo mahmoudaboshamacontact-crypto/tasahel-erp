@@ -435,10 +435,11 @@
       const tm = at => { if (!at) return ''; const d = new Date(at); return isNaN(d) ? '' : d.toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' }); };
       const ago = at => { if (!at) return 'دلوقتي'; const m = Math.round((Date.now() - new Date(at).getTime()) / 60000); return m < 1 ? 'دلوقتي' : m < 60 ? 'من ' + m + ' د' : 'من ' + Math.round(m / 60) + ' س'; };
       const onWayRows = ticketRows.filter(x => x.status === 'on_the_way');
-      const knownOnWayTx = new Set(onWayRows.map(x => String(x.transaction_id || '').toUpperCase()));
+      const radarRowKey = (courierId, courierName, tx) => (courierId ? 'id:' + Number(courierId) : 'name:' + normCourier(courierName)) + '|tx:' + String(tx || '').trim().toUpperCase();
+      const knownOnWayRows = new Set(onWayRows.map(x => radarRowKey(x.courier_id, x.courier_name, x.transaction_id)));
       couriers.forEach(c => {
         const le = c.last_event || {};
-        if (le.type === 'on_the_way' && le.tx && !knownOnWayTx.has(String(le.tx).toUpperCase())) {
+        if (le.type === 'on_the_way' && le.tx && !knownOnWayRows.has(radarRowKey(c.id, c.name, le.tx))) {
           onWayRows.push({ courier_id:Number(c.id), courier_name:c.name, client_name:nameByTx[le.tx] || '', transaction_id:le.tx, status:'on_the_way', at:le.at, source:'event' });
         }
       });
@@ -487,8 +488,8 @@
         '<div class="cpo-lbl" style="margin-top:6px">بتظهر للمندوب كعلامة على كارت المشوار</div></div>';
       const cust = '<div class="cpo-card" style="flex:1"><b style="font-size:16px">اللي العميل بيشوفه</b><div class="cpo-cc" style="margin-top:10px;padding:14px;border-radius:18px">' +
         (onWayRows.length ? onWayRows.map(x => {
-          const courierFirst = String(x.courier_name || '').trim().split(/\\s+/)[0] || 'المندوب';
-          const clientFirst = String(x.client_name || '').trim().split(/\\s+/)[0];
+          const courierFirst = String(x.courier_name || '').trim().split(/\s+/)[0] || 'المندوب';
+          const clientFirst = String(x.client_name || '').trim().split(/\s+/)[0];
           return '<div class="cpo-row" style="gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)"><div class="cpo-ico">' + svg('truck', 20) + '</div><div><b>' + esc(courierFirst) + ' في الطريق' + (clientFirst ? ' لـ ' + esc(clientFirst) : '') + '</b><div class="cpo-lbl">المندوب في طريقه للعميل</div></div></div>';
         }).join('') : '<div class="cpo-lbl">مفيش مندوب في الطريق دلوقتي.</div>') + '</div>' +
         '<div class="cpo-lbl" style="margin-top:10px;line-height:1.5">الاسم الأول للمندوب والعميل فقط، من غير رقم أو عنوان.</div></div>';
