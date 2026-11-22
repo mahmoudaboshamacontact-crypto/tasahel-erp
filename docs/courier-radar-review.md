@@ -11,19 +11,19 @@
 
 ## 2) مربع «اللي العميل بيشوفه»
 
-- في `js/71-courier-operations.js` كان الاختيار عند السطر 415: `couriers.filter(c => c.last_event && c.last_event.type === 'on_the_way')`.
+- في `js/71-courier-operations.js` كان الاختيار عند السطر 437: `couriers.filter(c => c.last_event && c.last_event.type === 'on_the_way')`.
 - مربع العميل كان بياخد أول مندوب فقط من `onWay[0]`، ويعرض رقم المعاملة واسم المندوب الأول؛ لذلك باقي المناديب/العملاء مش ظاهرين.
 - مصدر `last_event` هو `courier_dispatch_events` داخل `courier_v12_office_radar` (في `sql/courier-v12-modern.sql`، تقريباً الأسطر 261–279).
-- زر «في طريقي» في `js/73-pickup-ticket.js` عند الأسطر 661–664 يستدعي `courier_ticket_set_step(p_ticket_id, p_step='on_the_way')`. الدالة في `sql/courier-phase3.sql` (الأسطر 27–121) بتحدّث `pickup_tickets.courier_step` و`courier_step_at` فقط؛ لا تضيف صفاً في `courier_dispatch_events`.
+- زر «في طريقي» في `js/73-pickup-ticket.js` عند الأسطر 671–675 يستدعي `courier_ticket_set_step(p_ticket_id, p_step='on_the_way')`. الدالة في `sql/courier-phase3.sql` (الأسطر 27–121) بتحدّث `pickup_tickets.courier_step` و`courier_step_at` فقط؛ لا تضيف صفاً في `courier_dispatch_events`.
 - بالتالي خطوة تيكت الاستلام لا تصل إلى `last_event` في الرادار الحالي. أما زر «ابدأ التحرك الآن» في شاشة المشوار العادية فله مسار أحداث منفصل.
 - الواجهة دلوقتي بتعرض كل عناصر «في الطريق» اللي ترجع من RPC التيكتات المقترح، وتستخدم حدث الرادار القديم كـ fallback للرحلات. العرض في مربع العميل بيستخدم الاسم الأول للمندوب والاسم الأول للعميل فقط، من غير رقم معاملة أو عنوان أو تليفون.
 - لحد تشغيل SQL المقترح، حالة تيكت الاستلام نفسها مش هتظهر في المربع؛ ده قيد بيانات/RPC مش مشكلة تنسيق في الواجهة.
 
 ## 3) منع الأفعال المتعارضة
 
-- في `js/73-pickup-ticket.js` الدالة `ticketPrimaryBtn` (الأسطر 376–395 تقريباً) بتعرض الخطوة التالية فقط بالترتيب: قبول ← اتصال ← في الطريق ← وصلت ← استلمت الأوراق. مفيش زر تأجيل في كارت التيكت ده.
+- في `js/73-pickup-ticket.js` الدالة `ticketPrimaryBtn` (الأسطر 392–411 تقريباً) بتعرض الخطوة التالية فقط بالترتيب: قبول ← اتصال ← في الطريق ← وصلت ← استلمت الأوراق. مفيش زر تأجيل في كارت التيكت ده.
 - `courier_ticket_set_step` في `sql/courier-phase3.sql` بيرفض نفس الخطوة، والقفز، والرجوع لخطوة سابقة (الأسطر 82–94). لذلك مفيش زر «تراجع» آمن متاح من غير تغيير قواعد السيرفر؛ ما أضفتش زر تراجع.
-- زر «تأجيل لبكرة» موجود في تفاصيل المشوار العادي في `js/70-courier-portal.js` (كان ضمن مجموعة `dtile` قرب السطر 2086). اتخفى لما تكون حالة المشوار `waiting` أو تم تأكيده، أو حالة تيكت الاستلام `waiting` / `papers_received`.
+- زر «تأجيل لبكرة» موجود في تفاصيل المشوار العادي في `js/70-courier-portal.js` (كان ضمن مجموعة `dtile` السطر 2090). اتخفى لما تكون حالة المشوار `waiting` أو تم تأكيده، أو حالة تيكت الاستلام `waiting` / `papers_received`.
 - جدول القواعد:
   
   | الحالة الحالية | الفعل المسموح في الواجهة |
@@ -49,9 +49,9 @@
 
 ### المسار الحالي
 
-1. حقل `staff_notes` بيتحفظ على صف `pickup_tickets` عند إنشاء التيكت في `js/73-pickup-ticket.js` قرب السطر 1500.
-2. الدالة `buildLineNote` في `js/73-pickup-ticket.js` (الأسطر 908–912) بتضيف `ticket.staff_notes` إلى ملاحظة كل بند، بجانب نوع المستند.
-3. عند التحويل، `doDirectConvertTicket` بيحط الناتج في `notes` لكل بند (قرب السطر 967)، وبعدها يستدعي `pickup_convert_ticket` (السطر 972).
+1. حقل `staff_notes` بيتحفظ على صف `pickup_tickets` عند إنشاء التيكت في `js/73-pickup-ticket.js` السطر 1510.
+2. الدالة `buildLineNote` في `js/73-pickup-ticket.js` (الأسطر 918–921) بتضيف `ticket.staff_notes` إلى ملاحظة كل بند، بجانب نوع المستند.
+3. عند التحويل، `doDirectConvertTicket` بيحط الناتج في `notes` لكل بند (قرب السطر 982)، وبعدها يستدعي `pickup_convert_ticket` (السطر 972).
 4. دالة `pickup_convert_ticket` في `sql/courier-tickets-phase5.sql` بتنسخ `x.notes` إلى `request_lines.notes` أثناء الإدخال (راجع جزء INSERT في الدالة). الدالة لا تنفذ INSERT في `tx_comments`، ولا تمسح `pickup_tickets.staff_notes`.
 5. بالتالي الملاحظة بتفضل في سجل التيكت، وفي نفس الوقت بتتكرر داخل `request_lines.notes` لكل بند في المعاملة. دي مش عملية نقل حصري.
 6. واجهة المندوب في `js/70-courier-portal.js` بتجمع `lines[].notes` في `docNotes` وبتعرضها تحت عنوان «المستندات المطلوبة» (مش كحقل منفصل اسمه ملاحظات)، وده سبب ظهور نص الملاحظة هناك.
