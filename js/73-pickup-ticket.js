@@ -363,13 +363,14 @@
 
   var STEP_DONE = { accepted: 1, call_attempt: 2, on_the_way: 3, waiting: 4, papers_received: 5 };
 
-  /* التيكتات الظاهرة للمندوب: جاري/جديد + ملغي لسه ما اتأكدش + أوراق مع المندوب. التيكت المتحوّل بيظهر كمشوار عادي في القايمة (من غير تكرار). */
+  /* التيكتات الظاهرة للمندوب: المفتوحة والملغاة التي لم يؤكدها فقط.
+     بعد التحويل تختفي من قائمة التيكتات؛ المعاملة الناتجة تظهر في المشاوير للتأكيد،
+     مع الاحتفاظ بسجل التيكت المحوّل في الذاكرة لربط خطواته بالمعاملة. */
   window.tsWorkTickets = function () {
     var list = Array.isArray(st.courierTickets) ? st.courierTickets : [];
     return list.filter(function (x) {
       if (x.status === 'with_courier') return true;
       if (x.status === 'cancelled') return !x.courier_ack_at;
-      if (x.status === 'converted') return x.papers_holder === 'courier' || !!x.papers_pending_event_id;
       return false;
     });
   };
