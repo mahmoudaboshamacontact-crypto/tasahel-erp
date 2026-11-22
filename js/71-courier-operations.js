@@ -424,7 +424,7 @@
         client_name:t.client_name, transaction_id:t.transaction_id || t.sd_request_id,
         status:t.radar_status || t.status_label || t.courier_step || t.status || 'new',
         at:t.status_at || t.courier_step_at || t.created_at, source:'ticket'
-      }));
+      })).filter(t => t.status !== 'delivered');
       const tripRows = opsItems.filter(x => x && x.operational_status !== 'delivered').map(x => ({
         courier_name:x.courier, client_name:x.client_name, transaction_id:x.transaction_id,
         status:x.operational_status || 'new', at:x.updated_at || x.trip_day, source:'trip'
@@ -474,7 +474,7 @@
           const groupKey = Number(c.id) + '-' + String(g.status).replace(/[^a-z0-9_-]/gi,'');
           const st = statusText[g.status] || String(g.status || 'نشط');
           const cards = g.rows.map(x => '<div style="padding:7px 9px;border-radius:10px;background:var(--bg);border:1px solid var(--bd)"><b>' + esc(x.client_name || 'عميل بدون اسم') + '</b><div class="cpo-lbl">' + (x.source === 'ticket' ? 'تيكت استلام' : 'مشوار') + ' · <span dir="ltr">' + esc(x.transaction_id || '—') + '</span> · ' + esc(ago(x.at)) + '</div></div>').join('');
-          return '<div style="border:1px solid var(--bd);border-radius:10px;overflow:hidden"><button type="button" class="cpo-btn g" data-radar-group="' + esc(groupKey) + '" aria-expanded="false" style="width:100%;justify-content:space-between;border:0;border-radius:0"><span>' + esc(st) + '</span><span class="cpo-num">' + g.rows.length + ' طلبات　⌄</span></button><div data-radar-panel="' + esc(groupKey) + '" hidden style="padding:7px;display:flex;flex-direction:column;gap:7px">' + cards + '</div></div>';
+          return '<div style="border:1px solid var(--bd);border-radius:10px;overflow:hidden"><button type="button" class="cpo-btn g" data-radar-group="' + esc(groupKey) + '" aria-expanded="false" style="width:100%;justify-content:space-between;border:0;border-radius:0"><span>' + esc(st) + '</span><span class="cpo-num">' + g.rows.length + ' طلبات　⌄</span></button><div data-radar-panel="' + esc(groupKey) + '" hidden style="padding:7px">' + cards + '</div></div>';
         }).join('') + '</div>' : '<div class="cpo-lbl" style="margin:8px 0">مفيش معاملات نشطة ظاهرة للمندوب ده</div>';
         const sub = le.tx ? (nameByTx[le.tx] ? '<b style="color:var(--tx)">' + esc(nameByTx[le.tx]) + '</b> · ' : '') + '<span dir="ltr" class="cpo-num">' + esc(le.tx) + (le.at ? ' · من ' + esc(tm(le.at)) : '') + '</span>' : (le.type === 'near_office' ? 'قرب من المكتب' + (le.at ? ' · ' + esc(tm(le.at)) : '') : (le.at ? 'من ' + esc(tm(le.at)) : '&nbsp;'));
         return '<div class="cpo-cc"><div class="cpo-row" style="justify-content:space-between"><b>' + esc(c.name) + '</b><span class="cpo-tag ' + t[0] + '">' + t[1] + '</span></div>' +
@@ -526,6 +526,7 @@
     const t = ev.target.closest && ev.target.closest('button'); if (!t) return;
     const el = radarBox || $('cop-radar');
     if (t.dataset.radarGroup) {
+      if (!el) return;
       const key = t.dataset.radarGroup;
       const panel = Array.from(el.querySelectorAll('[data-radar-panel]')).find(node => node.dataset.radarPanel === key);
       if (panel) { panel.hidden = !panel.hidden; t.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true'); }
