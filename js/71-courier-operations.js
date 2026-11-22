@@ -482,9 +482,9 @@
           const groupKey = Number(c.id) + '-' + String(g.status).replace(/[^a-z0-9_-]/gi,'');
           const st = statusText[g.status] || String(g.status || 'نشط');
           const cards = g.rows.map(x => {
-            const historyLabels = {accepted:'قبول التيكت',call_attempt:'تم الاتصال',on_the_way:'في الطريق',waiting:'وصل للعميل',papers_received:'استلم الأوراق'};
+            const historyLabels = {accepted:'قبول التيكت',call_attempt:'تم الاتصال',on_the_way:'في الطريق',waiting:'وصل للعميل',papers_received:'استلم الأوراق',contact_call:'اتصال',contact_whatsapp:'واتساب'};
             const history = x.source === 'ticket' && x.action_history.length
-              ? '<div class="cpo-lbl" style="margin-top:5px">تسلسل الأكشنات: ' + x.action_history.map(h => esc(historyLabels[h.step] || h.step) + ' · ' + esc(ago(h.created_at))).join(' ← ') + '</div>'
+              ? '<div class="cpo-lbl" style="margin-top:5px">تسلسل الأكشنات: ' + x.action_history.map(h => esc(historyLabels[h.step] || h.step) + (h.outcome ? ' (' + esc(h.outcome) + ')' : '') + ' · ' + esc(ago(h.created_at))).join(' ← ') + '</div>'
               : '';
             return '<div style="padding:7px 9px;border-radius:10px;background:var(--bg);border:1px solid var(--bd)"><b>' + esc(x.client_name || 'عميل بدون اسم') + '</b><div class="cpo-lbl">' + (x.source === 'ticket' ? 'تيكت / معاملة مرتبطة' : 'مشوار') + ' · <span dir="ltr">' + esc(x.transaction_id || '—') + '</span> · ' + esc(ago(x.at)) + '</div>' + history + (x.source === 'ticket' && x.reschedule_status === 'pending' ? '<div class="cpo-lbl" style="color:var(--wn)">طلب تأجيل معلّق · الموعد المقترح: ' + esc(x.proposed_slot || 'غير محدد') + (x.reschedule_reason ? ' · ' + esc(x.reschedule_reason) : '') + '</div>' : '') + (x.source === 'ticket' && x.reschedule_status === 'approved' ? '<div class="cpo-lbl">تمت الموافقة على التأجيل · ' + esc(x.proposed_slot || '') + '</div>' : '') + '</div>';
           }).join('');
