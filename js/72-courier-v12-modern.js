@@ -334,3 +334,28 @@
     savePresets: p => { try { localStorage.setItem(PRESET_KEY, JSON.stringify((p || []).slice(0, 10))); } catch (e) {} }
   };
 })();
+
+/* مؤشر ثابت في الهيدر: «لسه ما اتبعتش» / «مفيش نت» */
+(function () {
+  function paint() {
+    try {
+      var host = document.getElementById('cp-theme');
+      if (!host || !host.parentNode) return;
+      var n = (window.CourierV12 && window.CourierV12.queueSize) ? window.CourierV12.queueSize() : 0;
+      var off = typeof navigator !== 'undefined' && navigator.onLine === false;
+      var el = document.getElementById('cp-unsent');
+      if (!n && !off) { if (el) el.remove(); return; }
+      if (!el) {
+        el = document.createElement('span');
+        el.id = 'cp-unsent';
+        el.style.cssText = 'font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px;white-space:nowrap;background:rgba(245,158,11,.18);color:#f59e0b;border:1px solid rgba(245,158,11,.45)';
+        host.parentNode.insertBefore(el, host);
+      }
+      el.textContent = (off ? 'مفيش نت' : 'بيتبعت') + (n ? ' · ' + n + ' لسه' : '');
+      el.title = n ? 'في ' + n + ' إجراء محفوظ على الجهاز وهيتبعت لما النت يرجع' : 'مفيش اتصال بالنت — شغلك بيتحفظ';
+    } catch (e) { /* */ }
+  }
+  setInterval(paint, 4000);
+  window.addEventListener('online', paint);
+  window.addEventListener('offline', paint);
+})();
