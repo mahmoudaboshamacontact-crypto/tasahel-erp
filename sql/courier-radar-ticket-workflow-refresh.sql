@@ -70,12 +70,20 @@ begin
         'reschedule_created_at', rr.created_at,
         'action_history', coalesce((
           select jsonb_agg(jsonb_build_object(
-            'step', h.step,
-            'transaction_id', coalesce(h.transaction_id, t.converted_tx_id),
-            'created_at', h.created_at
-          ) order by h.created_at)
-          from public.pickup_ticket_action_history h
-          where h.ticket_id = t.id
+            'step', a.action,
+            'outcome', a.outcome,
+            'transaction_id', t.converted_tx_id,
+            'created_at', a.created_at
+          ) order by a.created_at)
+          from (
+            select h.step as action, null::text as outcome, h.created_at
+            from public.pickup_ticket_action_history h
+            where h.ticket_id = t.id
+            union all
+            select 'contact_' || cl.channel as action, cl.outcome, cl.created_at
+            from public.courier_contact_log cl
+            where cl.ticket_id = t.id
+          ) a
         ), '[]'::jsonb),
         'status_at',
           case
