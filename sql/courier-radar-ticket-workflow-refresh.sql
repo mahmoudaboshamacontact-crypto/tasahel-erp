@@ -1,6 +1,7 @@
 -- ============================================================
 -- إصلاح رادار المناديب: إظهار التيكتات المحوّلة وطلبات التأجيل
 -- Idempotent: استبدال تعريف RPC فقط، دون تغيير الجداول أو السياسات.
+-- ترتيب التشغيل: شغّل pickup-ticket-action-history.sql أولاً.
 -- التشغيل يدويًا بعد مراجعة Claude.
 -- ============================================================
 
@@ -52,6 +53,10 @@ begin
             when e.event_type = 'on_the_way'
               and e.created_at > coalesce(t.courier_step_at, t.created_at)
               then 'on_the_way'
+            when t.status = 'converted' and exists (
+              select 1 from public.courier_trips mt
+              where mt.id = t.mission_id and mt.courier_confirmed_at is not null
+            ) then 'trip_confirmed'
             when t.status = 'converted' and t.courier_step is null
               then 'converted'
             else coalesce(t.courier_step, 'new')
