@@ -1,4 +1,5 @@
 -- بند 8/9: حالة CLOSED للاسترداد + إخفاء الطلب المسترد المقفول من رادار العباسية (لم يُنفَّذ بعد — ينتظر موافقة محمود)
+-- CLOSED محفوظة في line_refunds (closed_at) ومش في request_lines: عشان تريجرات request_lines (قفل الشهر، تأكيد أجر المندوب) ما تتأثرش.
 -- لا يلمس js/42 ولا دوال الاسترداد الحالية. إضافات فقط.
 -- الاستثناء: بوابة المنفّذ الآخر (مثل سعد) لا تقرأ من abbasiya_hub_snapshot، فتظل تشوف الطلب مع حالة الاسترداد والسبب.
 
@@ -11,7 +12,7 @@ returns void
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare r public.line_refunds%rowtype;
 begin
-  if not (public.is_manager() or public.is_staff()) then
+  if not public.is_manager() then  -- زرار CLOSED للمدير فقط
     raise exception 'forbidden' using errcode = '42501';
   end if;
   select * into r from public.line_refunds where id = p_id for update;
