@@ -441,139 +441,90 @@
     '</div>';
   }
 
+  /* التيكتات بتتعرض جوه شاشة «التيكتات» الموحّدة في js/70 (قايمة واحدة مع المشاوير) — هنا بنطلب إعادة الرسم بس. */
   function renderCourierTicketsIntoBody() {
-    var body = $('cp-body');
-    if (!body) return;
-    ensureBodyObserver();
-    __pt73Rendering = true;
-    try {
-      var old = $('pt73-courier-tickets');
-      var tab = currentCourierTab();
-      var showHere = (tab === 'tickets');
-      if (!showHere) {
-        if (old) old.remove();
-        return;
-      }
-      var list = Array.isArray(st.courierTickets) ? st.courierTickets : [];
-      var box = old;
-      if (!box) {
-        box = document.createElement('section');
-        box.id = 'pt73-courier-tickets';
-        box.className = 'pt-courier-box';
-        box.style.margin = '0';
-        var host = $('pt73-tickets-host');
-        if (host) host.appendChild(box);
-        else body.appendChild(box);
-      }
-      box.dataset.cp4Decorated = '1';
-
-      var newTickets = list.filter(function (x) { return x.status === 'with_courier' && !x.courier_step; });
-      var ongoingTickets = list.filter(function (x) { return x.status === 'with_courier' && !!x.courier_step; });
-      var convertedTickets = list.filter(function (x) { return x.status === 'converted'; });
-      var cancelledTickets = list.filter(function (x) { return x.status === 'cancelled'; });
-
-      var validTabs = ['new', 'ongoing', 'converted', 'cancelled'];
-      if (validTabs.indexOf(st.courierTab) === -1) st.courierTab = 'new';
-      if (st.courierTab === 'new' && !newTickets.length) {
-        if (ongoingTickets.length) st.courierTab = 'ongoing';
-        else if (convertedTickets.length) st.courierTab = 'converted';
-        else if (cancelledTickets.length) st.courierTab = 'cancelled';
-      }
-
-      var tabsHtml =
-        '<div class="pt-tabs-bar" style="overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px">' +
-          '<button type="button" class="pt-ftab' + (st.courierTab === 'new' ? ' active' : '') + '" data-pt73-ctab="new">جديد (' + newTickets.length + ')</button>' +
-          '<button type="button" class="pt-ftab' + (st.courierTab === 'ongoing' ? ' active' : '') + '" data-pt73-ctab="ongoing">جاري (' + ongoingTickets.length + ')</button>' +
-          '<button type="button" class="pt-ftab' + (st.courierTab === 'converted' ? ' active' : '') + '" data-pt73-ctab="converted">تم التحويل (' + convertedTickets.length + ')</button>' +
-          '<button type="button" class="pt-ftab pt-ftab-danger' + (st.courierTab === 'cancelled' ? ' active' : '') + '" data-pt73-ctab="cancelled">ملغي (' + cancelledTickets.length + ')</button>' +
-        '</div>';
-
-      var stepperLabels = ['قبول', 'اتصال', 'طريق', 'وصلت', 'أوراق'];
-      var pins = getPinsMap();
-
-      function buildStepperHtml(curStep) {
-        var doneUpTo = 0, curIdx = 1;
-        if (curStep === 'papers_received') { doneUpTo = 5; curIdx = 6; }
-        else if (curStep === 'waiting') { doneUpTo = 4; curIdx = 5; }
-        else if (curStep === 'on_the_way') { doneUpTo = 3; curIdx = 4; }
-        else if (curStep === 'call_attempt') { doneUpTo = 2; curIdx = 3; }
-        else if (curStep === 'accepted') { doneUpTo = 1; curIdx = 2; }
-        return '<div class="ts-stepper" style="margin:6px 0 4px">' + stepperLabels.map(function (lbl, idx) {
-          var n = idx + 1;
-          var isDone = n <= doneUpTo;
-          var isCur = !isDone && n === curIdx;
-          return '<div class="ts-step ' + (isDone ? 'done' : (isCur ? 'cur' : '')) + '"><div class="ts-dot">' + (isDone ? '✓' : n) + '</div><div class="ts-slbl">' + lbl + '</div></div>';
-        }).join('') + '</div>';
-      }
-
-      function buildTicketCard(t) {
-        var waPh = cleanWaPhone(t.phone);
-        var pin = pins[String(t.sd_request_id)];
-        var mapQ = encodeURIComponent([t.zone, t.address].filter(Boolean).join(' '));
-        var mapHref = (pin && pin.lat && pin.lng)
-          ? ('https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(pin.lat + ',' + pin.lng))
-          : (mapQ ? ('https://www.google.com/maps/search/?api=1&query=' + mapQ) : '');
-        var curStep = t.courier_step || '';
-        var isNew = t.status === 'with_courier' && !curStep;
-        var isCancelled = t.status === 'cancelled';
-        var isConverted = t.status === 'converted';
-        var commonAttrs = ' data-pt73-tid="' + Number(t.id) + '" data-pt73-sd="' + eh(t.sd_request_id) + '" data-pt73-cl="' + eh(t.client_name) + '"';
-
-        var badgeHtml = isCancelled
-          ? '<span class="pt-badge pt-badge-cancel">ملغي</span>'
-          : (isConverted
-            ? '<span class="pt-badge pt-badge-ok">' + (t.mission_confirmed ? 'مؤكد' : 'مهمة') + '</span>'
-            : (isNew ? '<span class="ts-pill new">جديد</span>' : '<span class="pt-badge pt-badge-ok">جاري</span>'));
-
-        var primaryBtn = '';
-        if (isCancelled) {
-          primaryBtn = t.courier_ack_at
-            ? '<button type="button" class="ts-cta done" disabled>تم تأكيد الإلغاء</button>'
-            : '<button type="button" class="pt-btn pt-btn-danger" style="width:100%;min-height:42px;border-radius:14px" data-pt73-ack="' + Number(t.id) + '">تأكيد الإلغاء</button>';
-        } else if (isConverted) {
-          primaryBtn = t.mission_confirmed
-            ? '<button type="button" class="ts-cta done" disabled>تم التأكيد ✓</button>'
-            : (t.mission_id
-              ? '<button type="button" class="ts-cta" data-pt73-confirm-mission="' + Number(t.mission_id) + '" data-pt73-tid="' + Number(t.id) + '">تأكيد المهمة</button>'
-              : '<button type="button" class="ts-cta done" disabled>بانتظار الربط</button>');
-        } else {
-          if (!curStep) primaryBtn = '<button type="button" class="ts-cta" data-pt73-step="accepted" data-pt73-lbl="قبول"' + commonAttrs + '>قبول التيكت</button>';
-          else if (curStep === 'accepted') primaryBtn = '<button type="button" class="ts-cta" data-pt73-step="call_attempt" data-pt73-lbl="اتصال"' + commonAttrs + '>تم الاتصال</button>';
-          else if (curStep === 'call_attempt') primaryBtn = '<button type="button" class="ts-cta" data-pt73-step="on_the_way" data-pt73-lbl="طريق"' + commonAttrs + '>في الطريق</button>';
-          else if (curStep === 'on_the_way') primaryBtn = '<button type="button" class="ts-cta" data-pt73-step="waiting" data-pt73-lbl="وصلت"' + commonAttrs + '>وصلت</button>';
-          else if (curStep === 'waiting') primaryBtn = '<button type="button" class="ts-cta" data-pt73-step="papers_received" data-pt73-lbl="أوراق"' + commonAttrs + '>استلمت الأوراق</button>';
-          else primaryBtn = '<button type="button" class="ts-cta done" disabled>تم استلام الأوراق ✓</button>';
-        }
-
-        var cardCls = 'ts7b-tcard pt73-ticket-item' + (isNew ? ' is-new' : '') + (isCancelled ? ' is-cancel' : '');
-        return '<div class="' + cardCls + '" data-ticket-id="' + Number(t.id) + '">' +
-          '<div class="ts-tc-top">' +
-            '<div style="min-width:0;flex:1">' +
-              '<div class="ts-tc-client">' + eh(t.client_name) + '</div>' +
-              '<div class="ts-tc-id"><span dir="ltr">' + eh(t.converted_tx_id || t.sd_request_id) + '</span>' + (t.zone ? '<span>· ' + eh(t.zone) + '</span>' : '') + '</div>' +
-            '</div>' +
-            badgeHtml +
-          '</div>' +
-          (!isCancelled ? buildStepperHtml(curStep) : '<div style="font-size:12px;color:#dc2626;font-weight:700">' + eh((t.cancel_reason || 'ملغي').trim()) + '</div>') +
-          '<div>' + primaryBtn + '</div>' +
-          '<div class="ts7b-trow">' +
-            (t.phone ? '<a class="ts7b-icbtn" href="tel:' + eh(t.phone) + '" data-pt73-contact="call" data-pt73-tid="' + Number(t.id) + '" aria-label="اتصال"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></a>' : '') +
-            (waPh ? '<a class="ts7b-icbtn" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" data-pt73-contact="whatsapp" data-pt73-tid="' + Number(t.id) + '" aria-label="واتساب"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></a>' : '') +
-            (mapHref ? '<a class="ts7b-icbtn" target="_blank" rel="noopener" href="' + mapHref + '" aria-label="لوكيشن"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></a>' : '') +
-            '<button type="button" class="ts7b-detbtn" data-pt73-open-detail="' + Number(t.id) + '">التفاصيل <i class="fa-solid fa-chevron-left" style="font-size:10px"></i></button>' +
-          '</div>' +
-        '</div>';
-      }
-
-      var curList = st.courierTab === 'new' ? newTickets
-        : (st.courierTab === 'ongoing' ? ongoingTickets
-          : (st.courierTab === 'converted' ? convertedTickets : cancelledTickets));
-
-      box.innerHTML = tabsHtml + (curList.length
-        ? curList.map(buildTicketCard).join('')
-        : '<div class="ts7b-tcard" style="text-align:center;color:var(--mu);font-weight:700">لا توجد تيكتات في هذا القسم</div>');
-    } finally { __pt73Rendering = false; }
+    if (typeof window.__cpRerender === 'function' && currentCourierTab() === 'tickets') window.__cpRerender();
   }
+
+  var STEP_DONE = { accepted: 1, call_attempt: 2, on_the_way: 3, waiting: 4, papers_received: 5 };
+
+  /* التيكتات الظاهرة للمندوب: جاري/جديد + ملغي لسه ما اتأكدش + أوراق مع المندوب. التيكت المتحوّل بيظهر كمشوار عادي في القايمة (من غير تكرار). */
+  window.tsWorkTickets = function () {
+    var list = Array.isArray(st.courierTickets) ? st.courierTickets : [];
+    return list.filter(function (x) {
+      if (x.status === 'with_courier') return true;
+      if (x.status === 'cancelled') return !x.courier_ack_at;
+      if (x.status === 'converted') return x.papers_holder === 'courier' || !!x.papers_pending_event_id;
+      return false;
+    });
+  };
+
+  function ticketPrimaryBtn(t) {
+    var common = ' data-pt73-tid="' + Number(t.id) + '" data-pt73-sd="' + eh(t.sd_request_id) + '" data-pt73-cl="' + eh(t.client_name) + '"';
+    var cs = t.courier_step || '';
+    if (t.status === 'cancelled') {
+      return '<button type="button" class="pt-btn pt-btn-danger" style="width:100%;min-height:42px;border-radius:14px" data-pt73-ack="' + Number(t.id) + '">تأكيد الإلغاء</button>';
+    }
+    if (t.status === 'converted') return '';
+    var next = !cs ? ['accepted', 'قبول', 'قبول التيكت']
+      : cs === 'accepted' ? ['call_attempt', 'اتصال', 'تم الاتصال']
+      : cs === 'call_attempt' ? ['on_the_way', 'طريق', 'في الطريق']
+      : cs === 'on_the_way' ? ['waiting', 'وصلت', 'وصلت']
+      : cs === 'waiting' ? ['papers_received', 'أوراق', 'استلمت الأوراق'] : null;
+    if (!next) return '<button type="button" class="ts-cta done" disabled>تم استلام الأوراق ✓</button>';
+    return '<button type="button" class="ts-cta" data-pt73-step="' + next[0] + '" data-pt73-lbl="' + next[1] + '"' + common + '>' + next[2] + '</button>';
+  }
+
+  function ticketWorkRow(t, openKey) {
+    var key = 't' + Number(t.id), open = openKey === key;
+    var done = STEP_DONE[t.courier_step || ''] || 0, pct = Math.round(done / 5 * 100);
+    var isCancel = t.status === 'cancelled', isConv = t.status === 'converted';
+    var tag = isCancel ? '<span class="cpw-tag bad">ملغي</span>'
+      : (isConv ? '<span class="cpw-tag">أوراق معاك</span>' : (!t.courier_step ? '<span class="cpw-tag new">جديد</span>' : ''));
+    var head = '<button type="button" class="cpw-head" data-act="trip-open" data-key="' + key + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+      '<span class="cpw-main"><strong>' + eh(t.client_name) + '</strong><small dir="ltr">' + eh(t.phone || '') + ' · ' + eh(t.converted_tx_id || t.sd_request_id) + '</small></span>' +
+      tag + '<span class="cpw-chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span></button>' +
+      '<div class="cpw-bar"><i style="width:' + (isCancel ? 0 : pct) + '%"></i></div>';
+    var body = '';
+    if (open) {
+      var waPh = cleanWaPhone(t.phone);
+      var pin = getPinsMap()[String(t.sd_request_id)];
+      var mapQ = encodeURIComponent([t.zone, t.address].filter(Boolean).join(' '));
+      var mapHref = (pin && pin.lat && pin.lng)
+        ? ('https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(pin.lat + ',' + pin.lng))
+        : (mapQ ? ('https://www.google.com/maps/search/?api=1&query=' + mapQ) : '');
+      var isPaid = t.payment_status === 'paid' || Number(t.collect_amount || 0) <= 0;
+      var items = Array.isArray(t.items) && t.items.length ? t.items : [{ service_name: t.service_name, doc_type: '', qty: t.qty || 1 }];
+      var kv = function (k, v) { return v ? '<div class="cpw-kv"><span>' + k + '</span><b>' + v + '</b></div>' : ''; };
+      var holder = t.papers_holder || 'office';
+      var icon = function (href, extra, path, label) {
+        return '<a class="ts7b-icbtn" href="' + href + '"' + extra + ' aria-label="' + label + '"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' + path + '</svg></a>';
+      };
+      body = '<div class="cpw-body">' +
+        (isCancel ? '<div class="pt-cancel-strip"><span>ملغي</span><span>' + eh(t.cancel_reason || '—') + '</span></div>' : '') +
+        kv('الخدمة', items.map(function (it) { return eh(it.service_name) + (Number(it.qty || 1) > 1 ? ' × ' + Number(it.qty) : ''); }).join(' + ')) +
+        kv('المستندات', eh(items.map(function (it) { return it.doc_type; }).filter(Boolean).join(' · '))) +
+        kv('المنطقة', eh(t.zone || '')) + kv('العنوان', eh(t.address || '')) +
+        kv('الدفع', isPaid ? 'خالص الدفع' : ('تحصيل ' + Number(t.collect_amount || 0).toLocaleString('en-US') + ' ج.م')) +
+        kv('الميعاد', eh(t.slot_pref || '')) +
+        kv('الأوراق', '<span class="pt-badge ' + papersHolderBadgeClass(holder) + '">' + eh(PAPERS_COURIER_LABELS[holder] || 'المكتب') + '</span>') +
+        (t.staff_notes ? kv('ملاحظة', eh(t.staff_notes)) : '') +
+        (t.summary_comment ? kv('ملخص المكالمة', '<span style="white-space:pre-wrap">' + eh(t.summary_comment) + '</span>') : '') +
+        renderCourierPapersActionsOnly(t) +
+        '<div class="cpw-act">' + ticketPrimaryBtn(t) + '</div>' +
+        '<div class="ts7b-trow">' +
+          (t.phone ? icon('tel:' + eh(t.phone), ' data-pt73-contact="call" data-pt73-tid="' + Number(t.id) + '"', '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>', 'اتصال') : '') +
+          (waPh ? icon('https://wa.me/' + eh(waPh), ' target="_blank" rel="noopener" data-pt73-contact="whatsapp" data-pt73-tid="' + Number(t.id) + '"', '<path d="M21 12a9 9 0 0 1-13.4 7.8L3 21l1.3-4.4A9 9 0 1 1 21 12z"/>', 'واتساب') : '') +
+          (mapHref ? icon(mapHref, ' target="_blank" rel="noopener"', '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>', 'لوكيشن') : '') +
+        '</div>' +
+      '</div>';
+    }
+    return '<div class="cpw-card' + (open ? ' open' : '') + (isCancel ? ' bad' : '') + '">' + head + body + '</div>';
+  }
+
+  window.tsWorkTicketRows = function (list, openKey) {
+    return (list || []).map(function (t) { return ticketWorkRow(t, openKey); }).join('');
+  };
 
   window.tsRenderCourierTickets = renderCourierTicketsIntoBody;
   window.tsCourierActiveTicketsCount = function () {
