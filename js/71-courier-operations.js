@@ -409,7 +409,7 @@
       opsItems.forEach(x => { if (x && x.transaction_id && x.client_name) nameByTx[x.transaction_id] = String(x.client_name).trim(); });
       const normCourier = s => String(s || '').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/\s+/g, ' ').trim().toLowerCase();
       const statusText = {
-        new:'جديد', accepted:'تم قبول التيكت', call_attempt:'تم الاتصال', collecting:'جاري الاستلام', collected:'تم الاستلام',
+        new:'جديد', converted:'المعاملة اتعملت — تأكيد فقط', accepted:'تم قبول التيكت', call_attempt:'تم الاتصال', collecting:'جاري الاستلام', collected:'تم الاستلام',
         on_the_way:'في الطريق', waiting:'وصل عند العميل', arrived:'وصل عند العميل',
         reschedule_pending:'طلب تأجيل', postponed:'مؤجل', cancelled:'ملغي',
         papers_received:'استلم الأوراق'
@@ -426,7 +426,11 @@
         ticket_id:Number(t.ticket_id), courier_id:Number(t.courier_id), courier_name:t.courier_name,
         client_name:t.client_name, transaction_id:t.transaction_id || t.sd_request_id,
         status:t.radar_status || t.status_label || t.courier_step || t.status || 'new',
-        at:t.status_at || t.courier_step_at || t.created_at, source:'ticket'
+        at:t.status_at || t.courier_step_at || t.converted_at || t.created_at,
+        reschedule_status:t.reschedule_status || '',
+        proposed_slot:t.proposed_slot || '',
+        reschedule_reason:t.reschedule_reason || '',
+        source:'ticket'
       })).filter(t => t.status !== 'delivered');
       const tripRows = opsItems.filter(x => x && x.operational_status !== 'delivered').map(x => ({
         courier_name:x.courier, client_name:x.client_name, transaction_id:x.transaction_id,
@@ -476,7 +480,7 @@
         const clients = rows.length ? '<div style="display:flex;flex-direction:column;gap:7px;margin:9px 0">' + grouped.map(g => {
           const groupKey = Number(c.id) + '-' + String(g.status).replace(/[^a-z0-9_-]/gi,'');
           const st = statusText[g.status] || String(g.status || 'نشط');
-          const cards = g.rows.map(x => '<div style="padding:7px 9px;border-radius:10px;background:var(--bg);border:1px solid var(--bd)"><b>' + esc(x.client_name || 'عميل بدون اسم') + '</b><div class="cpo-lbl">' + (x.source === 'ticket' ? 'تيكت استلام' : 'مشوار') + ' · <span dir="ltr">' + esc(x.transaction_id || '—') + '</span> · ' + esc(ago(x.at)) + '</div></div>').join('');
+          const cards = g.rows.map(x => '<div style="padding:7px 9px;border-radius:10px;background:var(--bg);border:1px solid var(--bd)"><b>' + esc(x.client_name || 'عميل بدون اسم') + '</b><div class="cpo-lbl">' + (x.source === 'ticket' ? 'تيكت استلام' : 'مشوار') + ' · <span dir="ltr">' + esc(x.transaction_id || '—') + '</span> · ' + esc(ago(x.at)) + '</div>' + (x.source === 'ticket' && x.reschedule_status === 'pending' ? '<div class="cpo-lbl" style="color:var(--wn)">طلب تأجيل معلّق · الموعد المقترح: ' + esc(x.proposed_slot || 'غير محدد') + (x.reschedule_reason ? ' · ' + esc(x.reschedule_reason) : '') + '</div>' : '') + (x.source === 'ticket' && x.reschedule_status === 'approved' ? '<div class="cpo-lbl">تمت الموافقة على التأجيل · ' + esc(x.proposed_slot || '') + '</div>' : '') + '</div>').join('');
           return '<div style="border:1px solid var(--bd);border-radius:10px;overflow:hidden"><button type="button" class="cpo-btn g" data-radar-group="' + esc(groupKey) + '" aria-expanded="false" style="width:100%;justify-content:space-between;border:0;border-radius:0"><span>' + esc(st) + '</span><span class="cpo-num">' + g.rows.length + ' طلبات　⌄</span></button><div data-radar-panel="' + esc(groupKey) + '" hidden style="padding:7px">' + cards + '</div></div>';
         }).join('') + '</div>' : '<div class="cpo-lbl" style="margin:8px 0">مفيش معاملات نشطة ظاهرة للمندوب ده</div>';
         const sub = le.tx ? (nameByTx[le.tx] ? '<b style="color:var(--tx)">' + esc(nameByTx[le.tx]) + '</b> · ' : '') + '<span dir="ltr" class="cpo-num">' + esc(le.tx) + (le.at ? ' · من ' + esc(tm(le.at)) : '') + '</span>' : (le.type === 'near_office' ? 'قرب من المكتب' + (le.at ? ' · ' + esc(tm(le.at)) : '') : (le.at ? 'من ' + esc(tm(le.at)) : '&nbsp;'));
