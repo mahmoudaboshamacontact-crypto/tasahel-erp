@@ -362,6 +362,21 @@
     }
   }
 
+
+  wrap('handleLogout', function (original) {
+    return function () {
+      try {
+        if (realtimeChannel && getSb() && typeof getSb().removeChannel === 'function') {
+          getSb().removeChannel(realtimeChannel);
+        }
+      } catch (error) {}
+      realtimeChannel = null;
+      courierRequests = {};
+      officeLoaded = false;
+      return original.apply(this, arguments);
+    };
+  });
+
   function start() {
     addStyles();
     wrapCourierRows();
