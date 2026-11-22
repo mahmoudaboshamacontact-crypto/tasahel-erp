@@ -273,19 +273,24 @@
         '</div>'
       : '';
 
-    bar.innerHTML =
-      '<div class="cp4-bar">' +
-        '<button type="button" class="cp4-pill on" data-cp4-act="qr-deliver-scan"><i class="fa-solid fa-qrcode"></i><span>مسح إيصال وتسليم</span></button>' +
-        '<button type="button" class="cp4-pill' + (dayLocked ? ' on' : ' warn') + '" data-cp4-act="open-cash-closing"><i class="fa-solid fa-wallet"></i><span>' + closeLabel + '</span></button>' +
-        '<button type="button" class="cp4-pill" data-cp4-act="open-office-signoff"><i class="fa-solid fa-file-signature"></i><span>تسليم ورق للمكتب</span></button>' +
-        '<button type="button" class="cp4-pill drv' + (st.driving ? ' on' : '') + '" data-cp4-act="toggle-driving"><i class="fa-solid fa-motorcycle"></i><span>' + drvTxt + '</span></button>' +
-        '<button type="button" class="cp4-pill' + (st.parkingPin ? ' on' : '') + '" data-cp4-act="parking-pin"><i class="fa-solid fa-location-dot"></i><span>' + parkTxt + '</span></button>' +
-        '<button type="button" class="cp4-pill' + (st.amoled ? ' on' : '') + '" data-cp4-act="toggle-amoled"><i class="fa-solid fa-moon"></i><span>توفير البطارية</span></button>' +
-        '<button type="button" class="cp4-pill" data-cp4-act="toggle-thumb"><span>اليد: ' + (st.thumbSide === 'left' ? 'يسار' : 'يمين') + '</span></button>' +
-        '<button type="button" class="cp4-pill' + (st.onboarding ? ' on' : '') + '" data-cp4-act="toggle-onb"><span>دليل الاستخدام</span></button>' +
-      '</div>' +
-      incomingHtml +
-      onboardingHtml;
+    bar.innerHTML = incomingHtml + onboardingHtml;
+    bar.style.display = (incomingHtml || onboardingHtml) ? '' : 'none';
+
+    /* كل الاختصارات في درج القائمة (مكان واحد) بدل شريط الأزرار اللي فوق كل شاشة */
+    var tools = $('cp-drawer-tools');
+    if (tools) {
+      var item = function (act, label, on) {
+        return '<button type="button" class="cp-drawer-item' + (on ? ' on' : '') + '" role="menuitem" data-cp4-act="' + act + '"><span>' + label + '</span></button>';
+      };
+      tools.innerHTML =
+        item('toggle-driving', st.driving ? 'Drive Mode · ON' : 'Drive Mode', st.driving) +
+        item('open-cash-closing', closeLabel, dayLocked) +
+        item('open-office-signoff', 'تسليم ورق للمكتب', false) +
+        item('parking-pin', parkTxt, st.parkingPin) +
+        item('toggle-amoled', 'توفير البطارية', st.amoled) +
+        item('toggle-thumb', 'اليد: ' + (st.thumbSide === 'left' ? 'يسار' : 'يمين'), false) +
+        item('toggle-onb', 'دليل الاستخدام', st.onboarding);
+    }
   }
 
   function hasSensitiveAsset(text) {
@@ -567,36 +572,42 @@
       return toast('قارئ الـ QR مش متاح على الجهاز ده', true);
     }
     qrDeliverBeep(true); /* فتح الصوت من ضغطة المندوب */
-    window.openQrScanner(async function (raw) {
-      var token = parseReceiptToken(raw);
-      if (!token) {
-        qrDeliverBeep(false);
-        toast('الإيصال غير صالح أو غير جاهز للتسليم', true);
-        return;
-      }
-      openP4Dialog('<div style="text-align:center;padding:18px;font-size:13px">جاري التحقق من الإيصال…</div>');
-      try {
-        var r = await sbClient.rpc('courier_p4_preview_deliver_by_token', { p_token: token });
-        if (r.error) {
-          closeP4Dialog();
-          qrDeliverBeep(false);
-          return toast((r.error && r.error.message) || 'تعذر التحقق من الإيصال', true);
-        }
-        var d = r.data || {};
-        if (!d.ok) {
-          closeP4Dialog();
-          qrDeliverBeep(false);
-          return toast(d.message || 'الإيصال غير صالح أو غير جاهز للتسليم', true);
-        }
-        qrDeliverBeep(true);
-        openQrDeliverConfirmModal(token, d);
-      } catch (e) {
+    window.openQrScanner(handleDeliverRaw);
+  }
+
+  async function handleDeliverRaw(raw) {
+    var token = parseReceiptToken(raw);
+    if (!token) {
+      qrDeliverBeep(false);
+      toast('الإيصال غير صالح أو غير جاهز للتسليم', true);
+      return;
+    }
+    openP4Dialog('<div style="text-align:center;padding:18px;font-size:13px">جاري التحقق من الإيصال…</div>');
+    try {
+      var r = await sbClient.rpc('courier_p4_preview_deliver_by_token', { p_token: token });
+      if (r.error) {
         closeP4Dialog();
         qrDeliverBeep(false);
-        toast((e && e.message) || 'تعذر التحقق من الإيصال', true);
+        return toast((r.error && r.error.message) || 'تعذر التحقق من الإيصال', true);
       }
-    });
-  }
+      var d = r.data || {};
+      if (!d.ok) {
+        closeP4Dialog();
+        qrDeliverBeep(false);
+        return toast(d.message || 'الإيصال غير صالح أو غير جاهز للتسليم', true);
+      }
+      qrDeliverBeep(true);
+      openQrDeliverConfirmModal(token, d);
+    } catch (e) {
+      closeP4Dialog();
+      qrDeliverBeep(false);
+      toast((e && e.message) || 'تعذر التحقق من الإيصال', true);
+    }
+}
+  /* السكان الموحّد في js/70 بيستخدم الدالتين دول: لو الكود إيصال تسليم يكمّل هنا، وإلا يفتح المعاملة */
+  window.__cp4ReceiptToken = parseReceiptToken;
+  window.__cp4DeliverFromRaw = handleDeliverRaw;
+  window.__cp4Beep = qrDeliverBeep;
 
   async function submitQrDeliver(btn) {
     var cur = st.qrDeliver;

@@ -21,7 +21,7 @@
 
   const st = {
     me: null, prevTab: 'home', avUrl: '', avPendingBlob: null, avPendingUrl: '', avRemoved: false, items: [], sig: '', tab: 'today', period: 'today', month: '', lbPeriod: 'month',
-    day: null, type: 'all', statusFilter: 'all', q: '',
+    day: null, type: 'all', statusFilter: 'all', q: '', wf: 'all', calOpen: false, calMonth: '',
     leaderboard: [], lbsig: '', lbLoaded: false,
     notesMap: {}, nsig: '',
     contacts: [], csig: '', chat: null, msgs: [], msig: '', draft: '',
@@ -103,6 +103,9 @@
     search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
     qr: '<path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14v7M14 20h3"/>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+    chev: '<path d="M6 9l6 6 6-6"/>',
+    cal: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/>',
     mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
     pin: '<path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
     pause: '<path d="M8 5v14M16 5v14"/>',
@@ -488,39 +491,20 @@
     if (!activeItems.length) {
       return '<section class="ts7b-route-sheet" style="text-align:center;color:var(--mu);font-weight:700">لا توجد محطات في خط السير</section>';
     }
-
-    const cur = activeItems[0];
-    const z = detectZoneAndCoords(cur);
-    const waPh = cleanPhoneWa(cur.phone);
-    const deliverAttrs = ' data-act="v12-slide-confirm" data-type="' + eh(cur.type) + '" data-ref="' + eh(itemRef(cur)) + '" data-tx="' + eh(cur.transaction_id) + '" data-amt="' + eh(cur.amount) + '"';
     const mapHtml = (window.CpV12 && typeof window.CpV12.renderEmbeddedMap === 'function')
       ? window.CpV12.renderEmbeddedMap(activeItems, st.myPos || null, detectZoneAndCoords)
       : '';
-
-    const stopsPills = activeItems.map((it, idx) =>
-      '<span class="cpn-chip" style="' + (idx === 0 ? 'background:#881337;color:#FFFFFF;border-color:#881337' : '') + '">' + num(idx + 1) + ' · ' + eh((it.client_name || 'عميل').split(' ')[0]) + '</span>'
-    ).join('');
-
-    return '<section style="display:flex;flex-direction:column;gap:12px">' +
-      mapHtml +
-      '<div class="ts7b-route-sheet">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
-          '<span class="cpn-chip" style="background:#881337;color:#FFFFFF;border-color:#881337">محطة 1 / ' + num(activeItems.length) + '</span>' +
-          '<span dir="ltr" style="font-size:12px;font-weight:800;color:var(--mu)">' + eh(cur.transaction_id) + '</span>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">' +
-          '<div style="min-width:0;flex:1"><div style="font-size:16px;font-weight:900;color:var(--tx)">' + eh(cur.client_name || 'عميل') + '</div><div style="font-size:12px;color:var(--mu)">' + eh(z.zone) + '</div></div>' +
-          '<div style="display:flex;gap:8px;flex:none">' +
-            (waPh ? '<a class="ts7b-icbtn" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" aria-label="شات">' + ic('chat', 18) + '</a>' : '') +
-            (cur.phone ? '<a class="ts7b-icbtn" href="' + eh(telHref(cur.phone)) + '" aria-label="اتصال">' + ic('phone', 18) + '</a>' : '') +
-          '</div>' +
-        '</div>' +
-        '<div class="ts7b-route-meta"><span style="color:#036b29;display:inline-flex">' + ic('pin', 18) + '</span><span style="min-width:0;flex:1;word-break:break-word">' + eh(cur.address || z.zone) + '</span></div>' +
-        '<div class="ts7b-route-meta"><span style="color:#036b29;display:inline-flex">' + ic('clock', 18) + '</span><span>' + eh(dayLabel(cur.day)) + ' · ' + eh(kindLabel(cur)) + '</span></div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:6px">' + stopsPills + '</div>' +
-        '<div id="cp-geo-route-eta"></div>' +
-        '<button type="button" class="ts7b-route-deliver"' + deliverAttrs + '><i class="fa-solid fa-check"></i> تم التسليم</button>' +
-      '</div>' +
+    /* قائمة محطات مختصرة بالترتيب — تفاصيل المحطة الحالية وأزرارها في الرئيسية بس */
+    const rows = activeItems.map((it, idx) => {
+      const z = detectZoneAndCoords(it);
+      return '<button type="button" class="cp-stop-row' + (idx === 0 ? ' cur' : '') + '" data-act="detail" data-tx="' + eh(it.transaction_id) + '">' +
+        '<b class="n">' + num(idx + 1) + '</b>' +
+        '<span class="t"><strong>' + eh(it.client_name || 'عميل') + '</strong><small>' + eh(it.address || z.zone || '') + ' · ' + eh(kindLabel(it)) + '</small></span>' +
+      '</button>';
+    }).join('');
+    return '<section style="display:flex;flex-direction:column;gap:12px">' + mapHtml +
+      '<div id="cp-geo-route-eta"></div>' +
+      '<div class="cp-stop-list">' + rows + '</div>' +
     '</section>';
   }
 
@@ -585,6 +569,22 @@
     return direct ? String(direct.transaction_id) : c;
   }
   window.__cpToggleBatch = v => { st.batchScan = !!v; };
+  window.__cpRerender = () => { if (document.getElementById('cp-body')) renderTab(false); };
+  /* سكان واحد: إيصال تسليم → شاشة التسليم (اسم المستلم + التحصيل)، كود معاملة → تفاصيل المعاملة.
+     بيستخدم القارئ العام (BarcodeDetector + jsQR احتياطي) عشان يشتغل على كل الأجهزة. زرار «لصق» جواه بديل للكتابة اليدوية. */
+  function openUnifiedScan() {
+    if (typeof window.openQrScanner !== 'function') return openQrScannerModal();
+    if (typeof window.__cp4Beep === 'function') window.__cp4Beep(true); /* فتح الصوت من ضغطة المندوب */
+    window.openQrScanner(function (raw) {
+      if (typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(raw) && typeof window.__cp4DeliverFromRaw === 'function') {
+        return window.__cp4DeliverFromRaw(raw);
+      }
+      const tx = resolveLocalTx(extractTxFromScan(raw));
+      if (tx) return openClientDetail(tx);
+      toast('الكود ده مش خاص بإيصال أو معاملة تساهيل', true);
+    });
+  }
+
   async function openQrScannerModal() {
     stopQrCamera();
     modal(
@@ -617,6 +617,9 @@
           try {
             const codes = await det.detect(vid);
             if (codes && codes.length && codes[0].rawValue) {
+              if (!st.batchScan && typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(codes[0].rawValue)) {
+                stopQrCamera(); closeModal(); window.__cp4DeliverFromRaw(codes[0].rawValue); return;
+              }
               const rawCode = extractTxFromScan(codes[0].rawValue);
               const tx = resolveLocalTx(rawCode);
               if (window.CourierV12) window.CourierV12.haptic(!!tx);
@@ -964,17 +967,28 @@
     overlay(
       '<header class="cpn-head">' +
         '<div class="cpn-who" id="cp-who-box" data-act="profile" title="الحساب الشخصي"></div>' +
-        '<button type="button" class="cpn-ib" id="cp-hdr-info" data-act="screen-help" aria-label="مساعدة الشاشة" title="طريقة الاستخدام">' + ic('info') + '</button>' +
-        '<button type="button" class="cpn-ib" id="cp-hdr-review" data-tab="review" aria-label="المراجعة" title="المراجعة">' + ic('check') + '</button>' +
-        '<button type="button" class="cpn-ib" data-tab="account" aria-label="حسابي وعمولاتي" title="حسابي وعمولاتي">' + ic('wallet') + '</button>' +
-        '<button type="button" class="cpn-ib" id="cp-theme" data-act="theme" aria-label="تغيير المظهر"></button>' +
-        '<button type="button" class="cpn-ib" data-act="refresh" aria-label="تحديث">' + ic('refresh') + '</button>' +
-        '<button type="button" class="cpn-ib pwr" data-act="logout" aria-label="تسجيل الخروج">' + ic('power') + '</button>' +
+        '<button type="button" class="cpn-ib" id="cp-theme" data-act="theme" aria-label="الوضع الفاتح / الداكن"></button>' +
+        '<button type="button" class="cpn-ib cpn-scan" data-act="qr-scan" aria-label="Scan" title="Scan">' + ic('qr') + '<span>Scan</span></button>' +
+        '<button type="button" class="cpn-ib" id="cp-menu-btn" data-act="menu" aria-label="القائمة" title="القائمة">' + ic('menu') + '</button>' +
       '</header>' +
+      '<div class="cp-drawer" id="cp-drawer" hidden>' +
+        '<div class="cp-drawer-bg" data-act="menu-close"></div>' +
+        '<aside class="cp-drawer-panel" role="menu">' +
+          '<div id="cp-drawer-tools" class="cp-drawer-group"></div>' +
+          '<div class="cp-drawer-sep"></div>' +
+          '<button type="button" class="cp-drawer-item" id="cp-hdr-review" data-tab="review" role="menuitem"><span>المراجعة</span></button>' +
+          '<button type="button" class="cp-drawer-item" data-tab="account" role="menuitem"><span>حسابي وعمولاتي</span></button>' +
+          '<button type="button" class="cp-drawer-item" id="cp-hdr-info" data-act="screen-help" role="menuitem"><span>طريقة الاستخدام</span></button>' +
+          '<button type="button" class="cp-drawer-item" data-act="refresh" role="menuitem"><span>تحديث</span></button>' +
+          '<button type="button" class="cp-drawer-item pwr" data-act="logout" role="menuitem"><span>تسجيل الخروج</span></button>' +
+        '</aside>' +
+      '</div>' +
       '<div id="cp-v12-top-banners"></div>' +
       '<div class="cp-off" id="cp-off">مفيش اتصال بالإنترنت… الحفظ شغال أوفلاين</div>' +
       '<main class="cp-body" id="cp-body"></main>' +
       '<nav class="cp-nav" id="cp-nav" aria-label="التنقل"></nav><div id="cp-modal-root"></div>');
+    const dr = $('cp-drawer');
+    if (dr) dr.addEventListener('click', e => { if (e.target.closest('.cp-drawer-item')) setTimeout(() => { dr.hidden = true; }, 0); });
     updateHeaderWho(); applyTheme(); tickClock(); renderNav(); renderTab(); refreshMyPosQuiet();
   }
   function tickClock() {
@@ -1000,14 +1014,13 @@
     const u = unreadTotal(), pend = st.items.filter(i => !i.confirmed).length;
     const revBtn = $('cp-hdr-review');
     if (revBtn) {
-      revBtn.innerHTML = ic('check') + (pend ? '<em class="cp-bdg">' + num(pend) + '</em>' : '');
+      revBtn.innerHTML = '<span>المراجعة</span>' + (pend ? '<em class="cp-bdg">' + num(pend) + '</em>' : '');
     }
     const tCnt = typeof window.tsCourierActiveTicketsCount === 'function' ? window.tsCourierActiveTicketsCount() : 0;
     const rCnt = st.items.filter(i => i.day === today() && !i.confirmed).length;
     const T = [
       ['today', 'home', 'الرئيسية', 0],
       ['tickets', 'check', 'التيكتات', tCnt],
-      ['trips', 'box', 'المشاوير', 0],
       ['route', 'route', 'خط السير والمحطات', rCnt],
       ['chat', 'chat', 'التواصل', u]
     ];
@@ -1015,6 +1028,7 @@
     if (n.dataset.h !== html) { n.dataset.h = html; n.innerHTML = html; }
   }
   function setTab(t) {
+    const dr = $('cp-drawer'); if (dr) dr.hidden = true;
     st.tab = t === 'home' ? 'account' : t;
     if (st.tab !== 'chat') st.chat = null;
     if (st.tab === 'rank') loadLeaderboard(true);
@@ -1075,7 +1089,7 @@
     if (st.tab === 'profile') b.innerHTML = viewProfile();
     else if (st.tab === 'today') b.innerHTML = viewToday();
     else if (st.tab === 'home' || st.tab === 'account') b.innerHTML = viewHome();
-    else if (st.tab === 'tickets') { b.innerHTML = '<div id="pt73-tickets-host"></div>'; if (typeof window.tsRenderCourierTickets === 'function') window.tsRenderCourierTickets(); }
+    else if (st.tab === 'tickets') b.innerHTML = viewWork();
     else if (st.tab === 'trips') b.innerHTML = viewTrips();
     else if (st.tab === 'route') b.innerHTML = '<div style="padding:4px 0 10px;font-size:20px;font-weight:900">خط السير والمحطات</div>' + renderSmartRoutePanel();
     else if (st.tab === 'rank') b.innerHTML = viewLeaderboard();
@@ -1208,7 +1222,7 @@
     '</div>';
 
     const kpis = '<section class="ts7b-kpi2">' +
-      '<div class="ts7b-kpi" data-tab="trips">' +
+      '<div class="ts7b-kpi" data-tab="route">' +
         '<div class="ts7b-kpi-val">' + num(pending.length) + '</div>' +
         '<span class="ts7b-kpi-lbl">مشاوير اليوم</span>' +
       '</div>' +
@@ -1262,6 +1276,85 @@
   });
 
   /* ---------- 2) مشاويري (تجميع ريكوستات نفس العميل + تفاصيل بالضغط) ---------- */
+  /* ---------- شاشة «التيكتات» الموحّدة: قايمة واحدة (مشاوير + تيكتات استلام جديدة) + تقويم + فلاتر ---------- */
+  const WF = [['all', 'الكل'], ['pickup', 'استلام'], ['delivery', 'تسليم'], ['confirmed', 'مؤكد'], ['pending', 'غير مؤكد'], ['fee', 'مشاوير']];
+  const shiftMonth = (ym, n) => { const d = new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+  function itemSteps(it) {
+    if (it.confirmed) return 5;
+    const tx = String(it.transaction_id);
+    if (st.waitingMap[tx]) return 4;
+    if (it.live_state === 'on_the_way' || routeIndexOf(tx) !== -1) return 3;
+    if (Number(it.call_attempts || 0) > 0 || it.client_confirmed) return 2;
+    return 1;
+  }
+  const workTickets = () => (typeof window.tsWorkTickets === 'function' ? window.tsWorkTickets() : []);
+  function dayDots() {
+    const m = {};
+    st.items.forEach(it => { const d = m[it.day] || (m[it.day] = { ok: 0, no: 0 }); if (it.confirmed) d.ok++; else d.no++; });
+    const tk = workTickets();
+    if (tk.length) { const t = today(); const d = m[t] || (m[t] = { ok: 0, no: 0 }); d.no += tk.length; }
+    return m;
+  }
+  function calendarHtml() {
+    const ym = st.calMonth || st.day.slice(0, 7), t = today(), dots = dayDots();
+    const dim = new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 0)).getUTCDate();
+    const lead = (new Date(ym + '-01T00:00:00Z').getUTCDay() + 1) % 7; /* الأسبوع بيبدأ السبت */
+    let cells = '';
+    for (let i = 0; i < lead; i++) cells += '<span></span>';
+    for (let d = 1; d <= dim; d++) {
+      const ds = ym + '-' + String(d).padStart(2, '0'), x = dots[ds] || { ok: 0, no: 0 };
+      cells += '<button type="button" class="cpw-d' + (ds === st.day ? ' sel' : '') + (ds === t ? ' td' : '') + '" data-act="cal-day" data-day="' + ds + '">' +
+        '<i class="dots"><b' + (x.ok ? ' class="g"' : '') + '></b><b' + (x.no ? ' class="r"' : '') + '></b></i>' + num(d) + '</button>';
+    }
+    return '<div class="cpw-cal">' +
+      '<div class="cpw-calhead"><button type="button" class="cpn-ib" data-act="cal-next" aria-label="الشهر التالي">' + ic('fwd') + '</button><b>' + eh(monthLabel(ym)) + '</b>' +
+      '<button type="button" class="cpn-ib" data-act="cal-prev" aria-label="الشهر السابق" style="transform:scaleX(-1)">' + ic('fwd') + '</button></div>' +
+      '<div class="cpw-wk">' + ['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج'].map(x => '<span>' + x + '</span>').join('') + '</div>' +
+      '<div class="cpw-grid">' + cells + '</div>' +
+      '<div class="cpw-key"><span><b class="g"></b>مؤكد</span><span><b class="r"></b>غير مؤكد</span></div>' +
+    '</div>';
+  }
+  function workItemRow(g) {
+    const it = g.items[0], open = st.openKey === g.key;
+    const steps = Math.min.apply(null, g.items.map(itemSteps)), allConf = g.items.every(x => x.confirmed);
+    return '<div class="cpw-card' + (open ? ' open' : '') + '">' +
+      '<button type="button" class="cpw-head" data-act="trip-open" data-key="' + eh(g.key) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+        '<span class="cpw-main"><strong>' + eh(g.client_name) + (g.items.length > 1 ? ' <em>· ' + num(g.items.length) + ' طلبات</em>' : '') + '</strong>' +
+        '<small dir="ltr">' + eh(g.phone || '') + ' · ' + eh(it.transaction_id) + '</small></span>' +
+        '<span class="cpw-tag' + (allConf ? ' ok' : '') + '">' + (allConf ? 'مؤكد' : eh(KIND[g.type] ? KIND[g.type].label : '')) + '</span>' +
+        '<span class="cpw-chev">' + ic('chev', 18) + '</span></button>' +
+      '<div class="cpw-bar"><i style="width:' + Math.round(steps / 5 * 100) + '%"></i></div>' +
+      (open ? '<div class="cpw-body">' + tripGroupCard(g) + '</div>' : '') +
+    '</div>';
+  }
+  function viewWork() {
+    if (!st.day) st.day = today();
+    const f = st.wf || 'all', isToday = st.day === today();
+    const q = normAr((st.q || '').trim());
+    const all = itemsOf(st.day);
+    const tkAll = isToday ? workTickets() : [];
+    const itemOk = i => f === 'all' || (f === 'confirmed' ? i.confirmed : f === 'pending' ? !i.confirmed : i.type === f);
+    const tkOk = f === 'all' || f === 'pickup' || f === 'pending';
+    const qItem = i => !q || normAr([i.client_name, i.transaction_id, i.phone, i.address, i.services, i.employee].map(x => String(x || '')).join(' ')).includes(q);
+    const qTk = t => !q || normAr([t.client_name, t.sd_request_id, t.phone, t.address, t.zone].map(x => String(x || '')).join(' ')).includes(q);
+    const rows = all.filter(i => itemOk(i) && qItem(i));
+    const tks = tkOk ? tkAll.filter(qTk) : [];
+    const cnt = k => all.filter(i => k === 'all' || (k === 'confirmed' ? i.confirmed : k === 'pending' ? !i.confirmed : i.type === k)).length +
+      ((k === 'all' || k === 'pickup' || k === 'pending') ? tkAll.length : 0);
+    const chips = '<div class="cpn-chips cpw-chips">' + WF.map(c => '<button type="button" class="cpn-chip' + (f === c[0] ? ' on' : '') + '" data-wf="' + c[0] + '">' + c[1] + ' ' + num(cnt(c[0])) + '</button>').join('') + '</div>';
+    const calBtn = '<button type="button" class="cpw-calbtn" data-act="cal-toggle" aria-expanded="' + (st.calOpen ? 'true' : 'false') + '">' + ic('cal', 18) +
+      '<span>' + eh(dayLabel(st.day)) + (isToday ? ' · النهارده' : '') + '</span><span class="cpw-chev">' + ic('chev', 18) + '</span></button>';
+    const searchBar = '<div class="cpn-search">' + ic('search') +
+      '<input id="cp-trip-q" type="text" value="' + eh(st.q) + '" placeholder="ابحث بالاسم أو التليفون أو رقم المعاملة" aria-label="بحث">' +
+      (st.q ? '<button type="button" class="x" data-act="qclear" aria-label="مسح البحث">' + ic('x', 16) + '</button>' : '') + '</div>';
+    const groups = groupItemsByClient(rows);
+    const tkHtml = tks.length && typeof window.tsWorkTicketRows === 'function' ? window.tsWorkTicketRows(tks, st.openKey) : '';
+    const empty = (!groups.length && !tks.length)
+      ? '<div class="cp-empty">' + (st.loaded ? 'مفيش حاجة مطابقة في اليوم ده' : 'جاري التحميل…') + '</div>' : '';
+    return calBtn + (st.calOpen ? calendarHtml() : '') + searchBar + chips +
+      '<div class="cpw-list">' + tkHtml + groups.map(workItemRow).join('') + empty + '</div>';
+  }
+
   function dayNav() {
     const t = today();
     return '<div class="cp-day"><button type="button" data-act="dprev">اليوم السابق</button><div class="t">' + eh(dayLabel(st.day)) + (st.day === t ? ' · النهارده' : '') + '</div>' +
@@ -2177,7 +2270,7 @@
     if (e.target && e.target.id === 'cp-trip-q') st.q = e.target.value;
   }
   function onClick(e) {
-    const el = e.target.closest('[data-act],[data-tab],[data-per],[data-month],[data-lbper],[data-type],[data-sfilter]'); if (!el) return;
+    const el = e.target.closest('[data-act],[data-tab],[data-per],[data-month],[data-lbper],[data-type],[data-sfilter],[data-wf]'); if (!el) return;
     if (!el.dataset.act) {
       if (el.dataset.tab) return setTab(el.dataset.tab);
       if (el.dataset.per) { st.period = el.dataset.per; return renderTab(false); }
@@ -2185,12 +2278,15 @@
       if (el.dataset.lbper) { st.lbPeriod = el.dataset.lbper; st.lbsig = ''; renderTab(false); return loadLeaderboard(false); }
       if (el.dataset.type) { st.type = el.dataset.type; return renderTab(false); }
       if (el.dataset.sfilter) { st.statusFilter = el.dataset.sfilter; return renderTab(false); }
+      if (el.dataset.wf) { st.wf = el.dataset.wf; st.openKey = null; return renderTab(false); }
     }
     const a = el.dataset.act, tx = el.dataset.tx;
     switch (a) {
       case 'mclose': if (e.target === el) closeModal(); return;
       case 'mclose-btn': return closeModal();
       case 'logout': return window.handleLogout && window.handleLogout();
+      case 'menu': { const d = $('cp-drawer'); if (d) d.hidden = false; return; }
+      case 'menu-close': { const d = $('cp-drawer'); if (d) d.hidden = true; return; }
       case 'screen-help': return openScreenHelpModal();
       case 'theme': return toggleTheme();
       case 'refresh': return refreshPortal(el);
@@ -2207,6 +2303,10 @@
         return;
       }
       case 'qclear': st.q = ''; return renderTab(false);
+      case 'cal-toggle': st.calOpen = !st.calOpen; if (st.calOpen) st.calMonth = (st.day || today()).slice(0, 7); return renderTab(false);
+      case 'cal-day': st.day = el.dataset.day; st.calOpen = false; st.openKey = null; return renderTab(false);
+      case 'cal-prev': st.calMonth = shiftMonth(st.calMonth || st.day.slice(0, 7), -1); return renderTab(false);
+      case 'cal-next': st.calMonth = shiftMonth(st.calMonth || st.day.slice(0, 7), 1); return renderTab(false);
       case 'dprev': st.day = addDays(st.day, -1); return renderTab(false);
       case 'dnext': if (st.day < today()) { st.day = addDays(st.day, 1); renderTab(false); } return;
       case 'dset': st.day = el.dataset.day; return renderTab(true);
@@ -2433,7 +2533,7 @@
           () => { if (st.myPos) go(st.myPos); else toast('مقدرتش أجيب موقعك — فعّل الـ GPS', true); }, { enableHighAccuracy: true, timeout: 8000 });
         return;
       }
-      case 'qr-scan': return openQrScannerModal();
+      case 'qr-scan': return openUnifiedScan();
       case 'qr-close': stopQrCamera(); return closeModal();
       case 'qr-go': {
         const inp = $('cp-qr-manual');
