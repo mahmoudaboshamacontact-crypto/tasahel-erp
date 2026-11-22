@@ -1529,7 +1529,7 @@
         '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">' +
           '<b>' + money(it.amount) + '</b>' +
           '<button type="button" class="cp-a cp-sm" data-act="detail" data-tx="' + eh(it.transaction_id) + '">التفاصيل</button>' +
-          (!it.confirmed ? '<button type="button" class="cp-a cp-sm pri" data-act="ask-one" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(it.transaction_id) + '" data-amt="' + eh(it.amount) + '">أكّد ده بس</button>' : '<span class="cp-tag ok">✓ مؤكد</span>') +
+          (!it.confirmed ? '<button type="button" class="cp-a cp-sm pri" data-act="ask-one" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(it.transaction_id) + '" data-amt="' + eh(it.amount) + '">' + (pickupTicketReadyForTrip(it) ? 'تأكيد مشوار الاستلام' : 'أكّد ده بس') + '</button>' : '<span class="cp-tag ok">✓ مؤكد</span>') +
           '<button type="button" class="cp-a cp-sm" data-act="note" data-tx="' + eh(it.transaction_id) + '">ملاحظة</button>' +
         '</div>' +
       '</div>';
