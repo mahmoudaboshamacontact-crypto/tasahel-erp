@@ -63,6 +63,15 @@ begin
         'reschedule_reason', rr.reason,
         'reschedule_note', rr.decision_note,
         'reschedule_created_at', rr.created_at,
+        'action_history', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'step', h.step,
+            'transaction_id', coalesce(h.transaction_id, t.converted_tx_id),
+            'created_at', h.created_at
+          ) order by h.created_at)
+          from public.pickup_ticket_action_history h
+          where h.ticket_id = t.id
+        ), '[]'::jsonb),
         'status_at',
           case
             when t.status = 'cancelled'
