@@ -368,12 +368,56 @@
      مع الاحتفاظ بسجل التيكت المحوّل في الذاكرة لربط خطواته بالمعاملة. */
   window.tsWorkTickets = function () {
     var list = Array.isArray(st.courierTickets) ? st.courierTickets : [];
+    var SLOT = { 'صباحي': 0, 'بعد الظهر': 1, 'سفارة': 1, 'مسائي': 2 };
+    var rank = function (x) {
+      if (x.status === 'cancelled') return 0;                                   /* ملغي لازم يتأكد */
+      if (x.courier_step === 'on_the_way' || x.courier_step === 'waiting') return 1; /* شغال فيه دلوقتي */
+      return 2;
+    };
     return list.filter(function (x) {
       if (x.status === 'with_courier') return true;
       if (x.status === 'cancelled') return !x.courier_ack_at;
       return false;
+    }).sort(function (a, b) {
+      var ra = rank(a), rb = rank(b);
+      if (ra !== rb) return ra - rb;
+      var sa = SLOT[a.slot_pref] != null ? SLOT[a.slot_pref] : 1, sb = SLOT[b.slot_pref] != null ? SLOT[b.slot_pref] : 1;
+      if (sa !== sb) return sa - sb;
+      var za = String(a.zone || ''), zb = String(b.zone || '');
+      if (za !== zb) return za < zb ? -1 : 1;
+      return String(a.created_at || '') < String(b.created_at || '') ? -1 : 1;
     });
   };
+
+  /* «في الطريق»: المندوب يختار الوقت المتوقع وبعدها يفتح واتساب للعميل برسالة جاهزة */
+  function askEtaWhatsapp(ticket) {
+    var wa = cleanWaPhone(ticket && ticket.phone);
+    if (!wa) return;
+    var old = document.getElementById('cp-eta-sheet');
+    if (old) old.remove();
+    var host = document.getElementById('courier-app') || document.body;
+    var el = document.createElement('div');
+    el.id = 'cp-eta-sheet';
+    el.style.cssText = 'position:fixed;inset:auto 0 0 0;z-index:99999;padding:14px 16px calc(14px + env(safe-area-inset-bottom));background:var(--card,#fff);color:var(--tx,#111);border-top:1px solid rgba(148,163,184,.35);box-shadow:0 -8px 30px rgba(0,0,0,.25);border-radius:18px 18px 0 0;direction:rtl;font-family:inherit';
+    var mins = [10, 20, 30, 45, 60, 90];
+    el.innerHTML = '<div style="font-weight:800;font-size:14px;margin-bottom:4px">بلّغ ' + eh(ticket.client_name) + ' إنك في الطريق</div>' +
+      '<div style="font-size:12px;color:var(--mu,#64748b);margin-bottom:10px">هتوصل خلال كام دقيقة تقريباً؟ هيفتح واتساب برسالة جاهزة.</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">' +
+      mins.map(function (m) { return '<button type="button" data-m="' + m + '" style="padding:12px;border-radius:12px;border:1px solid rgba(148,163,184,.4);background:var(--fld,#f4f4f4);color:inherit;font-weight:700;font-size:13.5px">' + m + ' د</button>'; }).join('') +
+      '</div><button type="button" data-m="" style="margin-top:8px;width:100%;padding:8px;border:0;background:none;color:var(--mu,#64748b);font-size:12px">من غير رسالة</button>';
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('button[data-m]');
+      if (!b) return;
+      var m = Number(b.getAttribute('data-m'));
+      el.remove();
+      if (!m) return;
+      var at = new Date(Date.now() + m * 60000).toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit', hour12: true });
+      var msg = 'أهلاً بحضرتك أ/ ' + (ticket.client_name || '') + '، معاك مندوب شركة تساهيل. أنا في الطريق لحضرتك دلوقتي، والوصول إن شاء الله خلال حوالي ' + m + ' دقيقة (تقريباً الساعة ' + at + '). لو في أي تغيير في العنوان ابعتلي هنا.';
+      window.open('https://wa.me/' + wa + '?text=' + encodeURIComponent(msg), '_blank', 'noopener');
+      try { logTicketContact(Number(ticket.id), 'whatsapp'); } catch (er) { /* */ }
+    });
+    host.appendChild(el);
+  }
 
   /* قراءة حالة تيكت مرتبطة بمعاملة من بوابة المندوب، بدون كشف بيانات إضافية. */
   window.tsCourierTicketStepForTx = function (tx) {
@@ -682,6 +726,7 @@
         }
         renderCourierTicketsIntoBody();
         toast('تم تحديث حالة الاستلام: ' + lbl, 'success');
+        if (evType === 'on_the_way' && item) askEtaWhatsapp(item);
       } catch (err) {
         stepBtn.disabled = false;
         toast((err && err.message) || 'تعذر تحديث الحالة — حاول تاني', 'error');
