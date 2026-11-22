@@ -1957,7 +1957,10 @@
     if (st.chat && st.tick % 4 === 0) pollMsgs(false);
     if (st.tick % 30 === 0) { loadItems(true); loadMyNotes(); loadContacts(true); sbClient.rpc('courier_v12_my_pings').then(r => { if (r && Array.isArray(r.data)) { st.urgentPings = r.data; renderTopBanners(); } }).catch(() => null); }
     if (st.tick % 90 === 0) loadLeaderboard(true);
-    if (st.tick % 60 === 0) sbClient.rpc('touch_last_seen');
+    if (st.tick % 60 === 0) {
+      sbClient.rpc('touch_last_seen');
+      if (typeof window.tsRefreshCourierTickets === 'function') window.tsRefreshCourierTickets();
+    }
     if (st.tick % 900 === 0) checkPendingReminders(false);
   }
 
