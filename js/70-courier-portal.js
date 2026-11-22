@@ -256,9 +256,6 @@
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  function isTxInRoute(tx) {
-    return st.routeTxIds.includes(String(tx));
-  }
   function routeIndexOf(tx) {
     return st.routeTxIds.indexOf(String(tx));
   }
