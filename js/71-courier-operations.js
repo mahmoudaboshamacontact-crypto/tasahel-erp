@@ -411,7 +411,7 @@
       const statusText = {
         new:'جديد', converted:'المعاملة اتعملت — تأكيد فقط', accepted:'تم قبول التيكت', call_attempt:'تم الاتصال', collecting:'جاري الاستلام', collected:'تم الاستلام',
         on_the_way:'في الطريق', waiting:'وصل عند العميل', arrived:'وصل عند العميل',
-        reschedule_pending:'طلب تأجيل', postponed:'مؤجل', cancelled:'ملغي',
+        reschedule_pending:'طلب تأجيل', postponed:'مؤجل', trip_confirmed:'تم تأكيد المشوار', cancelled:'ملغي',
         papers_received:'استلم الأوراق'
       };
       const tripDayByTx = new Map(opsItems.filter(x => x && x.transaction_id).map(x => [String(x.transaction_id).toUpperCase(), x.trip_day]));
