@@ -348,6 +348,9 @@
         '</div>' +
       '</div>';
 
+    var stageBoxHtml = isManager()
+      ? '<details class="ah-box" id="rp3-stage-box"' + (st.stageOpen ? ' open' : '') + '><summary style="cursor:pointer;font-weight:700">أزمنة مراحل المناديب (آخر 30 يوم)</summary><div id="rp3-stage-body" class="ah-sub" style="margin-top:8px">' + (st.stageHtml || 'افتح القسم لتحميل الأرقام…') + '</div></details>'
+      : '';
     var existingP4 = $('cp4-office-radar-box');
     pane.innerHTML =
       '<section class="ah-card">' +
@@ -359,6 +362,7 @@
             '<b style="font-size:13.5px">خطوط المناديب وعهدة الكاش</b>' +
             couriersHtml +
             alertsHtml +
+            stageBoxHtml +
           '</div>' +
           '<div style="display:flex;flex-direction:column;gap:12px">' +
             embHtml +
@@ -367,6 +371,44 @@
         '</div>' +
       '</section>';
     if (existingP4) pane.appendChild(existingP4);
+    var sb = $('rp3-stage-box');
+    if (sb) sb.addEventListener('toggle', function () { st.stageOpen = sb.open; if (sb.open && !st.stageHtml) loadStageTimings(); });
+  }
+
+  var STAGE_LBL = { to_accept: 'من فتح التذكرة لحد القبول', call_attempt: 'من القبول لأول اتصال', on_the_way: 'من الاتصال لـ«في الطريق»', waiting: 'من «في الطريق» لحد الوصول', papers_received: 'من الوصول لاستلام الأوراق' };
+  function fmtMin(m) {
+    m = Number(m || 0);
+    if (m < 60) return Math.round(m) + ' د';
+    if (m < 1440) return (m / 60).toFixed(1) + ' س';
+    return (m / 1440).toFixed(1) + ' يوم';
+  }
+  async function loadStageTimings() {
+    var body = $('rp3-stage-body');
+    if (!body || !sbClient) return;
+    body.textContent = 'جاري التحميل…';
+    try {
+      var r = await sbClient.rpc('courier_stage_timings', { p_days: 30 });
+      if (r.error) throw r.error;
+      var d = r.data || {}, cs = d.couriers || [];
+      var html = cs.length ? cs.map(function (c) {
+        var rows = Object.keys(STAGE_LBL).filter(function (k) { return c.stages && c.stages[k]; }).map(function (k) {
+          var x = c.stages[k];
+          return '<tr><td>' + STAGE_LBL[k] + '</td><td>' + fmtMin(x.median_min) + '</td><td>' + fmtMin(x.avg_min) + '</td><td>' + fmtMin(x.max_min) + '</td><td>' + Number(x.n) + '</td></tr>';
+        }).join('');
+        return '<div style="margin-bottom:12px"><b>' + eh(c.name) + '</b> <span class="ah-sub">(' + Number(c.tickets) + ' تذكرة)</span>' +
+          '<div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr><th style="text-align:right">المرحلة</th><th>الوسيط</th><th>المتوسط</th><th>الأطول</th><th>عدد</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+      }).join('') : 'لسه مفيش بيانات كفاية.';
+      var sl = d.slowest || [];
+      if (sl.length) {
+        html += '<div style="border-top:1px solid var(--r-line,rgba(148,163,184,.18));padding-top:8px"><b>أبطأ 5 مراحل</b>' + sl.map(function (x) {
+          return '<div class="ah-sub">• ' + eh(x.courier) + ' — ' + eh(x.client_name) + ' — ' + (STAGE_LBL[x.stage] || eh(x.stage)) + ': <b>' + fmtMin(x.minutes) + '</b></div>';
+        }).join('') + '</div>';
+      }
+      st.stageHtml = html;
+      body.innerHTML = html;
+    } catch (err) {
+      body.textContent = 'تعذر التحميل — شغّل sql/courier-stage-timings.sql (' + ((err && err.message) || '') + ')';
+    }
   }
 
   async function loadPhase3Snap(force) {
