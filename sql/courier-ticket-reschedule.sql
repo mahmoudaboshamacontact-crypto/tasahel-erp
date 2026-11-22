@@ -41,7 +41,7 @@ alter table public.pickup_ticket_reschedule_requests enable row level security;
 revoke all on table public.pickup_ticket_reschedule_requests from anon, authenticated;
 grant select on table public.pickup_ticket_reschedule_requests to authenticated;
 
-do $
+do $$
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
      and not exists (
@@ -52,7 +52,7 @@ begin
      ) then
     alter publication supabase_realtime add table public.pickup_ticket_reschedule_requests;
   end if;
-end $;
+end $$;
 
 drop policy if exists pickup_ticket_reschedule_staff_select
   on public.pickup_ticket_reschedule_requests;
