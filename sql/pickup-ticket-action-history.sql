@@ -18,6 +18,15 @@ create index if not exists pickup_ticket_action_history_ticket_idx
 create index if not exists pickup_ticket_action_history_tx_idx
   on public.pickup_ticket_action_history(transaction_id, created_at);
 
+-- ربط سجلات التواصل القديمة بالمعاملة التي نتجت عن تحويل التيكت.
+update public.courier_contact_log cl
+set transaction_id = t.converted_tx_id
+from public.pickup_tickets t
+where cl.ticket_id = t.id
+  and t.status = 'converted'
+  and t.converted_tx_id is not null
+  and cl.transaction_id is distinct from t.converted_tx_id;
+
 create unique index if not exists pickup_ticket_action_history_ticket_step_uidx
   on public.pickup_ticket_action_history(ticket_id, step);
 
