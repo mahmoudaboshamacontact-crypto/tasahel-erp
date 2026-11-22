@@ -410,7 +410,7 @@
         papers_received:'استلم الأوراق'
       };
       const ticketRows = radarTickets.map(t => ({
-        courier_id:Number(t.courier_id), courier_name:t.courier_name,
+        ticket_id:Number(t.ticket_id), courier_id:Number(t.courier_id), courier_name:t.courier_name,
         client_name:t.client_name, transaction_id:t.transaction_id || t.sd_request_id,
         status:t.radar_status || t.status_label || t.courier_step || t.status || 'new',
         at:t.status_at || t.courier_step_at || t.created_at, source:'ticket'
@@ -433,7 +433,7 @@
       };
       const svg = (n, z) => '<svg class="cpo-i" viewBox="0 0 24 24" style="width:' + (z || 16) + 'px;height:' + (z || 16) + 'px" aria-hidden="true">' + I[n] + '</svg>';
       const tm = at => { if (!at) return ''; const d = new Date(at); return isNaN(d) ? '' : d.toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' }); };
-      const ago = at => { if (!at) return 'دلوقتي'; const m = Math.round((Date.now() - new Date(at).getTime()) / 60000); return m < 1 ? 'دلوقتي' : m < 60 ? 'من ' + m + ' د' : 'من ' + Math.round(m / 60) + ' س'; };
+      const ago = at => { if (!at) return 'دلوقتي'; const stamp = new Date(at).getTime(); if (!Number.isFinite(stamp)) return 'وقت غير محدد'; const m = Math.round((Date.now() - stamp) / 60000); return m <= 0 ? 'دلوقتي' : m < 60 ? 'من ' + m + ' د' : 'من ' + Math.round(m / 60) + ' س'; };
       const onWayRows = ticketRows.filter(x => x.status === 'on_the_way');
       const radarRowKey = (courierId, courierName, tx) => (courierId ? 'id:' + Number(courierId) : 'name:' + normCourier(courierName)) + '|tx:' + String(tx || '').trim().toUpperCase();
       const knownOnWayRows = new Set(onWayRows.map(x => radarRowKey(x.courier_id, x.courier_name, x.transaction_id)));
@@ -459,7 +459,7 @@
         const rows = allRadarRows.filter(x => x.courier_id ? Number(x.courier_id) === Number(c.id) : normCourier(x.courier_name) === normCourier(c.name));
         const clients = rows.length ? '<div style="display:flex;flex-direction:column;gap:7px;margin:9px 0">' + rows.map(x => {
           const st = statusText[x.status] || statusText[x.status === 'with_courier' ? 'new' : x.status] || String(x.status || 'نشط');
-          return '<div style="padding:7px 9px;border-radius:10px;background:var(--bg);border:1px solid var(--bd)"><b>' + esc(x.client_name || 'عميل بدون اسم') + '</b><div class="cpo-lbl"><span dir="ltr">' + esc(x.transaction_id || '—') + '</span> · ' + esc(st) + ' · ' + esc(ago(x.at)) + '</div></div>';
+          return '<div style="padding:7px 9px;border-radius:10px;background:var(--bg);border:1px solid var(--bd)"><b>' + esc(x.client_name || 'عميل بدون اسم') + '</b><div class="cpo-lbl">' + (x.source === 'ticket' ? 'تيكت استلام' : 'مشوار') + ' · <span dir="ltr">' + esc(x.transaction_id || '—') + '</span> · ' + esc(st) + ' · ' + esc(ago(x.at)) + '</div></div>';
         }).join('') + '</div>' : '<div class="cpo-lbl" style="margin:8px 0">مفيش معاملات نشطة ظاهرة للمندوب ده</div>';
         const sub = le.tx ? (nameByTx[le.tx] ? '<b style="color:var(--tx)">' + esc(nameByTx[le.tx]) + '</b> · ' : '') + '<span dir="ltr" class="cpo-num">' + esc(le.tx) + (le.at ? ' · من ' + esc(tm(le.at)) : '') + '</span>' : (le.type === 'near_office' ? 'قرب من المكتب' + (le.at ? ' · ' + esc(tm(le.at)) : '') : (le.at ? 'من ' + esc(tm(le.at)) : '&nbsp;'));
         return '<div class="cpo-cc"><div class="cpo-row" style="justify-content:space-between"><b>' + esc(c.name) + '</b><span class="cpo-tag ' + t[0] + '">' + t[1] + '</span></div>' +
