@@ -39,7 +39,8 @@ begin
           'exec_amount', coalesce(r.exec_amount, 0),
           'exec_forfeit', coalesce(r.exec_forfeit, true),
           'reason', r.reason,
-          'decided_at', r.decided_at
+          'decided_at', r.decided_at,
+          'closed_at', r.closed_at
         ) order by r.decided_at desc nulls last, r.id desc
       )
       from public.line_refunds r

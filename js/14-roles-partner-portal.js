@@ -73,10 +73,14 @@
   function partnerRefundBadgeHtml(s, l) {
     const rf = partnerRefundInfo(s, l.id, l.qty);
     if (!rf) return '';
+    const closedAt = rf.list.some(r => r.closed_at) && !rf.list.some(r => !r.closed_at);
+    const reasonTxt = rf.list.map(r => r.reason).filter(Boolean).join(' / ');
+    const closedBadge = closedAt ? ' <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap" style="background:#1f2937;color:#fff;border:1px solid #374151" title="العميل استرد فلوسه والطلب اتقفل"><i class="fa-solid fa-lock"></i><span>CLOSED</span></span>' : '';
+    const reasonHtml = reasonTxt ? ' <span class="text-[10px]" style="color:var(--r-mute,#a0978e)">سبب الاسترداد: ' + String(reasonTxt).replace(/[<>&]/g, '') + '</span>' : '';
     if (rf.isFull) {
-      return '<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap" style="background:rgba(255,107,107,.16);color:var(--r-bad,#ff6b6b);border:1px solid rgba(255,107,107,.38)"><i class="fa-solid fa-rotate-left"></i><span>مسترد كليًا</span></span>';
+      return '<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap" style="background:rgba(255,107,107,.16);color:var(--r-bad,#ff6b6b);border:1px solid rgba(255,107,107,.38)"><i class="fa-solid fa-rotate-left"></i><span>مسترد كليًا</span></span>' + closedBadge + reasonHtml;
     }
-    return '<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap" style="background:rgba(255,157,108,.16);color:var(--r-acc,#ff9d6c);border:1px solid rgba(255,157,108,.38)"><i class="fa-solid fa-rotate-left"></i><span>مسترد جزئيًا (' + fmtNum(rf.qty) + ' من ' + fmtNum(rf.origQty) + ')</span></span>';
+    return '<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap" style="background:rgba(255,157,108,.16);color:var(--r-acc,#ff9d6c);border:1px solid rgba(255,157,108,.38)"><i class="fa-solid fa-rotate-left"></i><span>مسترد جزئيًا (' + fmtNum(rf.qty) + ' من ' + fmtNum(rf.origQty) + ')</span></span>' + closedBadge + reasonHtml;
   }
 
   function lineExecCost(l, sRef) {
