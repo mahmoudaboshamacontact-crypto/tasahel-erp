@@ -330,7 +330,7 @@
     syncPanelPosition();
     startRadarTimer();
     const now = Date.now();
-    if (forceLoad || !state.radarLoadedAt || (!state.radarFailed && (now - state.radarLoadedAt >= MIN_REFRESH_MS))) {
+    if (forceLoad || !state.radarLoadedAt || (now - state.radarLoadedAt >= MIN_REFRESH_MS)) {
       loadV12OfficeRadar(radarBox, !!forceLoad);
     }
     if (forceLoad || !state.managerLoadedAt || (!state.managerFailed && (now - state.managerLoadedAt >= MIN_REFRESH_MS))) {
@@ -578,7 +578,7 @@
     }
   }
   function radarTick() {
-    if (document.hidden || !isRadarVisible() || state.radarFailed) {
+    if (document.hidden || !isRadarVisible()) {
       if (!isRadarVisible()) stopRadarTimer();
       return;
     }
