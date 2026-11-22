@@ -18,6 +18,19 @@ create index if not exists pickup_ticket_action_history_ticket_idx
 create index if not exists pickup_ticket_action_history_tx_idx
   on public.pickup_ticket_action_history(transaction_id, created_at);
 
+create unique index if not exists pickup_ticket_action_history_ticket_step_uidx
+  on public.pickup_ticket_action_history(ticket_id, step);
+
+-- استعادة آخر خطوة معروفة للتيكتات القديمة فقط؛ لا نخترع خطوات سابقة غير محفوظة.
+insert into public.pickup_ticket_action_history
+  (ticket_id, courier_id, step, transaction_id, mission_id, created_at)
+select t.id, t.courier_id, t.courier_step, t.converted_tx_id, t.mission_id,
+       coalesce(t.courier_step_at, t.created_at)
+from public.pickup_tickets t
+where t.courier_id is not null
+  and t.courier_step in ('accepted','call_attempt','on_the_way','waiting','papers_received')
+on conflict (ticket_id, step) do nothing;
+
 alter table public.pickup_ticket_action_history enable row level security;
 revoke all on public.pickup_ticket_action_history from public, anon, authenticated;
 grant select on public.pickup_ticket_action_history to authenticated;
