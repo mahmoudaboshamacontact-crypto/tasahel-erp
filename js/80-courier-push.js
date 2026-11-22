@@ -210,6 +210,35 @@
     return '';
   }
 
+  /* سؤال نتيجة الاتصال (ردّ / ما ردّش) بعد الضغط على اتصال — بيتسجل في سجل التذكرة */
+  function askContactOutcome(logId) {
+    var old = document.getElementById('cp-outcome-sheet');
+    if (old) old.remove();
+    var host = document.getElementById('courier-app') || document.body;
+    var el = document.createElement('div');
+    el.id = 'cp-outcome-sheet';
+    el.style.cssText = 'position:fixed;inset:auto 0 0 0;z-index:99999;padding:14px 16px calc(14px + env(safe-area-inset-bottom));background:var(--card,#fff);color:var(--tx,#111);border-top:1px solid rgba(148,163,184,.35);box-shadow:0 -8px 30px rgba(0,0,0,.25);border-radius:18px 18px 0 0;direction:rtl;font-family:inherit';
+    var opts = [['answered', 'ردّ'], ['no_answer', 'ما ردّش'], ['wrong_number', 'رقم غلط'], ['postponed', 'طلب تأجيل']];
+    el.innerHTML = '<div style="font-weight:800;font-size:14px;margin-bottom:10px">نتيجة الاتصال بالعميل؟</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+      opts.map(function (o) {
+        return '<button type="button" data-o="' + o[0] + '" style="padding:12px;border-radius:12px;border:1px solid rgba(148,163,184,.4);background:var(--fld,#f4f4f4);color:inherit;font-weight:700;font-size:13.5px">' + o[1] + '</button>';
+      }).join('') +
+      '</div><button type="button" data-o="" style="margin-top:8px;width:100%;padding:8px;border:0;background:none;color:var(--mu,#64748b);font-size:12px">لاحقاً</button>';
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('button[data-o]');
+      if (!b) return;
+      var o = b.getAttribute('data-o');
+      el.remove();
+      if (!o) return;
+      db().rpc('courier_set_contact_outcome', { p_log_id: Number(logId), p_outcome: o }).then(function (r) {
+        if (r && r.error) toast('ما اتسجلتش النتيجة', 'error'); else toast('اتسجلت نتيجة الاتصال ✓');
+      }).catch(function () { toast('ما اتسجلتش النتيجة', 'error'); });
+    });
+    host.appendChild(el);
+  }
+  window.tsAskContactOutcome = askContactOutcome;
+
   function logCourierContact(ticketId, txId, channel) {
     if (!db() || !isCourier()) return;
     if (!ticketId && !txId) return;
@@ -219,7 +248,9 @@
       p_channel: channel,
       p_outcome: null
     }).then(function (res) {
-      if (res && res.error) toast('ما اتسجلش التواصل', 'error');
+      if (res && res.error) return toast('ما اتسجلش التواصل', 'error');
+      var id = res && res.data && res.data.id;
+      if (id && channel === 'call') askContactOutcome(id);
     }).catch(function () {
       toast('ما اتسجلش التواصل', 'error');
     });
