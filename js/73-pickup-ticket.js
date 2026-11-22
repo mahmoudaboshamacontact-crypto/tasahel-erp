@@ -116,7 +116,9 @@
       p_channel: channel,
       p_outcome: null
     }).then(function (res) {
-      if (res && res.error) toast('ما اتسجلش التواصل', 'error');
+      if (res && res.error) return toast('ما اتسجلش التواصل', 'error');
+      var id = res && res.data && res.data.id;
+      if (id && channel === 'call' && typeof window.tsAskContactOutcome === 'function') window.tsAskContactOutcome(id);
     }).catch(function () {
       toast('ما اتسجلش التواصل', 'error');
     });
