@@ -340,13 +340,15 @@
         card.insertBefore(bWrap, card.firstChild.nextSibling);
       }
 
+      /* بعد التأكيد: مفيش تحصيل ولا «العميل غير متاح» ولا تحويل لزميل — الفاتورة بس */
+      var isConfirmed = /✓\s*مؤكد/.test(rawText);
       var strip = document.createElement('div');
       strip.className = 'cp4-actions-strip';
       strip.innerHTML =
-        '<button type="button" class="cp4-act-btn pri" data-cp4-act="open-collect" data-tx="' + eh(tx) + '" data-kind="tx">تحصيل / إنستاباي</button>' +
+        (isConfirmed ? '' : '<button type="button" class="cp4-act-btn pri" data-cp4-act="open-collect" data-tx="' + eh(tx) + '" data-kind="tx">تحصيل / إنستاباي</button>') +
         '<button type="button" class="cp4-act-btn" data-cp4-act="open-invoice" data-tx="' + eh(tx) + '">فاتورة وإيصال</button>' +
-        '<button type="button" class="cp4-act-btn wn" data-cp4-act="open-zeroblame" data-tx="' + eh(tx) + '">العميل غير متاح</button>' +
-        '<button type="button" class="cp4-act-btn" data-cp4-act="open-transfer" data-tx="' + eh(tx) + '" data-kind="tx">تحويل لزميل</button>';
+        (isConfirmed ? '' : '<button type="button" class="cp4-act-btn wn" data-cp4-act="open-zeroblame" data-tx="' + eh(tx) + '">العميل غير متاح</button>' +
+        '<button type="button" class="cp4-act-btn" data-cp4-act="open-transfer" data-tx="' + eh(tx) + '" data-kind="tx">تحويل لزميل</button>');
       card.appendChild(strip);
     });
 

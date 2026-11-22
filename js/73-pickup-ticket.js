@@ -1024,7 +1024,7 @@
         if ($('rn-nm')) $('rn-nm').value = ticket.sd_request_id || '';
         var cName = courierNameById(ticket.courier_id);
         if ($('receiver') && cName !== 'غير معين') $('receiver').value = cName;
-        if ($('notes')) $('notes').value = ticket.staff_notes || '';
+        /* ملاحظة التذكرة تفضل في سجل التذكرة فقط — ما تتنسخش في ملاحظات المعاملة */
         if ($('tx-id') && !$('tx-id').value && typeof generateNewTxId === 'function') generateNewTxId(true);
         if (typeof selectPaymentMethod === 'function') selectPaymentMethod(mapPayMethod(ticket));
 
@@ -1212,7 +1212,7 @@
             '<label class="pt-chk-row"><input type="checkbox" class="pt-chk" value="تم إبلاغ العميل بمدة التنفيذ والشروط الخاصة" checked><span>تم إبلاغ العميل بالمدة والشروط (من الكتالوج)</span></label>' +
             '<label class="pt-chk-row"><input type="checkbox" class="pt-chk" value="تم تأكيد حالة الدفع وميعاد المندوب" checked><span>تم تأكيد حالة الدفع وميعاد المندوب</span></label>' +
             '<div class="pt-field-wrap">' +
-              '<label class="pt-label" for="pt-notes">ملاحظات العميل / للمندوب (بتظهر للمندوب وفي سمارت ديسك والمعاملة)</label>' +
+              '<label class="pt-label" for="pt-notes">ملاحظات العميل / للمندوب (بتظهر للمندوب وفي سجل التذكرة، ومش بتتنسخ لملاحظات المعاملة)</label>' +
               '<textarea id="pt-notes" class="pt-textarea" rows="2" maxlength="800" placeholder="مثال: العميل متواجد بعد 3 عصراً / رن على الرقم التاني عند الوصول..."></textarea>' +
             '</div>' +
             '<button type="submit" id="pt-submit-btn" class="pt-btn pt-btn-pri" style="width:100%;padding:12px">تمت المكالمة — حفظ ونسخ الكومنت</button>' +
