@@ -1839,7 +1839,7 @@
     if (st.itemsLoading) return st.itemsLoading;
     st.itemsLoading = (async () => {
       try {
-        const t = today(), r = await sbClient.rpc('courier_items', { p_from: addDays(t, -62), p_to: t });
+        const t = today(), r = await sbClient.rpc('courier_items', { p_from: monthStart(t), p_to: t });
         if (r.error) throw r.error;
         setOffline(false);
         const rawData = Array.isArray(r.data) ? r.data : []; const data = rawData.filter(x => x && (x.type === 'fee' || Number(x.lines) > 0 || (x.client_name && String(x.client_name).trim() && String(x.client_name).trim() !== 'بدون اسم'))); const sig = JSON.stringify(data);
