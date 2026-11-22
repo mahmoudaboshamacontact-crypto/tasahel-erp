@@ -575,6 +575,8 @@
   }
   window.__cpToggleBatch = v => { st.batchScan = !!v; };
   window.__cpRerender = () => { if (document.getElementById('cp-body')) renderTab(false); };
+  window.__cpGoTab = t => setTab(t);
+  window.__cpDaySummary = () => { const it = itemsOf(today()); return { total: it.length, pending: it.filter(i => !i.confirmed).length }; };
   /* قارئ بديل (BarcodeDetector + jsQR احتياطي) للموبايلات القديمة. نفس التوجيه: إيصال تسليم → شاشة التسليم، كود معاملة → تفاصيلها. */
   function openAltScanner() {
     if (typeof window.openQrScanner !== 'function') return toast('القارئ البديل مش متاح على الجهاز ده', true);

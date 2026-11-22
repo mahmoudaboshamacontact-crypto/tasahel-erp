@@ -459,6 +459,11 @@
     });
   };
 
+  window.tsPapersWithCourier = function () {
+    var list = Array.isArray(st.courierTickets) ? st.courierTickets : [];
+    return list.filter(function (x) { return x.papers_holder === 'courier'; }).length;
+  };
+
   function ticketPrimaryBtn(t) {
     var common = ' data-pt73-tid="' + Number(t.id) + '" data-pt73-sd="' + eh(t.sd_request_id) + '" data-pt73-cl="' + eh(t.client_name) + '"';
     var cs = t.courier_step || '';
