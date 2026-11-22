@@ -1331,6 +1331,11 @@
     return 1;
   }
   const workTickets = () => (typeof window.tsWorkTickets === 'function' ? window.tsWorkTickets() : []);
+  function pickupTicketReadyForTrip(it) {
+    if (!it || it.type !== 'pickup' || typeof window.tsCourierTicketStepForTx !== 'function') return false;
+    const state = window.tsCourierTicketStepForTx(it.transaction_id);
+    return !!(state && state.status === 'converted' && state.step === 'papers_received');
+  }
   function dayDots() {
     const m = {};
     st.items.forEach(it => { const d = m[it.day] || (m[it.day] = { ok: 0, no: 0 }); if (it.confirmed) d.ok++; else d.no++; });
@@ -1524,7 +1529,7 @@
         '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">' +
           '<b>' + money(it.amount) + '</b>' +
           '<button type="button" class="cp-a cp-sm" data-act="detail" data-tx="' + eh(it.transaction_id) + '">التفاصيل</button>' +
-          (!it.confirmed ? '<button type="button" class="cp-a cp-sm pri" data-act="ask-one" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(it.transaction_id) + '" data-amt="' + eh(it.amount) + '">أكّد ده بس</button>' : '<span class="cp-tag ok">✓ مؤكد</span>') +
+          (!it.confirmed ? '<button type="button" class="cp-a cp-sm pri" data-act="ask-one" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(it.transaction_id) + '" data-amt="' + eh(it.amount) + '">' + (pickupTicketReadyForTrip(it) ? 'تأكيد مشوار الاستلام' : 'أكّد ده بس') + '</button>' : '<span class="cp-tag ok">✓ مؤكد</span>') +
           '<button type="button" class="cp-a cp-sm" data-act="note" data-tx="' + eh(it.transaction_id) + '">ملاحظة</button>' +
         '</div>' +
       '</div>';
@@ -1557,7 +1562,8 @@
     const z = detectZoneAndCoords(it);
     const inRouteIdx = routeIndexOf(tx);
     const onway = it.live_state === 'on_the_way';
-    const waiting = !!st.waitingMap[tx];
+    const ticketReady = pickupTicketReadyForTrip(it);
+    const waiting = !!st.waitingMap[tx] || ticketReady;
     const called = Number(it.call_attempts || 0) > 0 || !!it.client_confirmed;
     let distTxt = '';
     if (st.myPos && window.CourierV12) {
@@ -1580,7 +1586,7 @@
     if (it.confirmed) {
       primaryBtn = '<button type="button" class="ts-cta done" data-act="detail" data-tx="' + eh(tx) + '">✓ تم التأكيد · ' + eh(timeOf(it.confirmed_at)) + '</button>';
     } else if (waiting) {
-      primaryBtn = '<button type="button" class="ts-cta done"' + slideAttrs + '>✓ تأكيد ' + eh(k.sec) + '</button>';
+      primaryBtn = '<button type="button" class="ts-cta done"' + slideAttrs + '>' + (ticketReady ? '✓ تأكيد مشوار الاستلام' : '✓ تأكيد ' + eh(k.sec)) + '</button>';
     } else if (onway) {
       primaryBtn = '<button type="button" class="ts-cta gold" data-act="v12-wait" data-tx="' + eh(tx) + '">وصلت عند العميل</button>';
     } else if (inRouteIdx !== -1) {
@@ -1951,7 +1957,10 @@
     if (st.chat && st.tick % 4 === 0) pollMsgs(false);
     if (st.tick % 30 === 0) { loadItems(true); loadMyNotes(); loadContacts(true); sbClient.rpc('courier_v12_my_pings').then(r => { if (r && Array.isArray(r.data)) { st.urgentPings = r.data; renderTopBanners(); } }).catch(() => null); }
     if (st.tick % 90 === 0) loadLeaderboard(true);
-    if (st.tick % 60 === 0) sbClient.rpc('touch_last_seen');
+    if (st.tick % 60 === 0) {
+      sbClient.rpc('touch_last_seen');
+      if (typeof window.tsRefreshCourierTickets === 'function') window.tsRefreshCourierTickets();
+    }
     if (st.tick % 900 === 0) checkPendingReminders(false);
   }
 
