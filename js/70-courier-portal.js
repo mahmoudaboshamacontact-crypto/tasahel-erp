@@ -803,6 +803,38 @@
     if (t !== 'light' && t !== 'dark') { const h = Number(new Date().toLocaleString('en-GB', { hour: '2-digit', hour12: false, timeZone: TZ })); t = (h >= 6 && h < 18) ? 'light' : 'dark'; }
     st.theme = t;
   }
+  /* سحب حقيقي لزرار التأكيد (.cpn-slide): اسحب الزرار لآخر الشريط عشان تأكد. الضغط العادي لسه شغال. */
+  function initSlideConfirm() {
+    if (window.__cpSlideInit) return; window.__cpSlideInit = true;
+    let drag = null, suppressUntil = 0;
+    document.addEventListener('pointerdown', e => {
+      const kn = e.target.closest && e.target.closest('#courier-app .cpn-slide .kn'); if (!kn) return;
+      const tr = kn.closest('.cpn-slide'), tw = tr.getBoundingClientRect().width, kw = kn.getBoundingClientRect().width;
+      drag = { tr, kn, x0: e.clientX, id: e.pointerId, dir: getComputedStyle(tr).direction === 'rtl' ? -1 : 1, max: Math.max(1, tw - kw - 10), dx: 0, moved: false };
+      try { kn.setPointerCapture(e.pointerId); } catch (err) { /* */ }
+      kn.style.transition = 'none';
+    });
+    document.addEventListener('pointermove', e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      drag.dx = Math.max(0, Math.min(drag.max, (e.clientX - drag.x0) * drag.dir));
+      if (drag.dx > 6) drag.moved = true;
+      drag.kn.style.transform = 'translateX(' + (drag.dx * drag.dir) + 'px)';
+      drag.tr.style.setProperty('--slide', Math.round(drag.dx / drag.max * 100) + '%');
+    });
+    const end = e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const d = drag; drag = null;
+      d.kn.style.transition = 'transform .2s'; d.kn.style.transform = ''; d.tr.style.removeProperty('--slide');
+      if (!d.moved) return; /* ضغطة عادية: الـ click الطبيعي يكمّل */
+      suppressUntil = Date.now() + 400; /* نمنع الـ click الطبيعي بعد السحب */
+      if (d.dx >= d.max * 0.75) { if (window.CourierV12) window.CourierV12.haptic(true); d.tr.click(); }
+    };
+    document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
+    document.addEventListener('click', e => {
+      if (e.isTrusted && Date.now() < suppressUntil && e.target.closest && e.target.closest('.cpn-slide')) { e.stopImmediatePropagation(); e.preventDefault(); }
+    }, true);
+  }
+
   function applyTheme() {
     const o = $('courier-app'); if (o) o.setAttribute('data-theme', st.theme);
     const b = $('cp-theme'); if (b) b.innerHTML = st.theme === 'dark' ? ic('sun') : ic('moon');
@@ -938,6 +970,7 @@
     if (!o) {
       o = document.createElement('div'); o.id = 'courier-app'; o.setAttribute('dir', 'rtl');
       o.addEventListener('click', onClick); o.addEventListener('keydown', onKey); o.addEventListener('input', onInput);
+      initSlideConfirm();
       document.body.appendChild(o);
     }
     o.classList.remove('hidden'); o.setAttribute('data-theme', st.theme); o.innerHTML = inner; return o;
@@ -1107,11 +1140,13 @@
 
     swapFa(b); swapFa($('cp-v12-top-banners'));
     const etaBox = $('cp-geo-route-eta');
-    if (etaBox && window.TasahelGeo && window.TasahelGeo.calcRouteEta && st.routeTxIds && st.routeTxIds.length) {
+    /* وقت الوصول الفعلي: على المحطات المختارة لخط السير، ولو مفيش فعلى كل محطات النهارده غير المؤكدة */
+    const etaIds = (st.routeTxIds && st.routeTxIds.length) ? st.routeTxIds : itemsOf(today()).filter(i => !i.confirmed).map(i => String(i.transaction_id));
+    if (etaBox && window.TasahelGeo && window.TasahelGeo.calcRouteEta && etaIds.length) {
       const wps = [];
       if (st.myPos && st.myPos.lat && st.myPos.lng) wps.push({ lat: st.myPos.lat, lng: st.myPos.lng });
       else wps.push({ lat: 30.0012, lng: 31.1765 });
-      st.routeTxIds.forEach(rtx => {
+      etaIds.forEach(rtx => {
         const rit = byTx(rtx);
         if (rit && !rit.confirmed) {
           const z = detectZoneAndCoords(rit);
