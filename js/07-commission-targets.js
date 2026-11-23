@@ -278,7 +278,7 @@
     const bounds = monthBounds(viewMonth);
     const customRange = (filterFrom && filterTo) && (filterFrom !== bounds[0] || filterTo !== bounds[1]);
     const closed = isClosed(viewMonth) && !customRange;
-    const list = profiles.filter(p => p.id && p.role !== 'partner');
+    const list = profiles.filter(p => p.id && p.role !== 'partner' && (typeof window.isOperatingStaff !== 'function' || window.isOperatingStaff(p)));
     return list.map(p => {
       const t = targets.find(x => x.user_id === p.id);
       if (closed) {
