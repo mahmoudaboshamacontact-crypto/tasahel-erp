@@ -167,7 +167,7 @@
       }
       @media (min-width: 1024px) {
         .ts-kpi-5-grid {
-          grid-template-columns: repeat(7, 1fr);
+          grid-template-columns: repeat(8, 1fr);
         }
       }
       .ts-kpi-card {
@@ -570,6 +570,7 @@
     let activeFilter = 'all'; try { activeFilter = txStatusFilter || 'all'; } catch (e) {}
 
     const cards = [
+      { id: 'all', title: 'الإجمالي', sub: 'كل الريكوستات', count: orders.length, icon: 'fa-layer-group text-sky-400', cls: activeFilter === 'all' ? 'active' : '' },
       { id: 'In Progress', title: 'In Progress', sub: 'قيد التنفيذ', count: inProg, icon: 'fa-spinner text-amber-400', cls: activeFilter === 'In Progress' ? 'active' : '' },
       { id: 'Under Review', title: 'Under Review', sub: 'قيد المراجعة', count: underRev, icon: 'fa-pause text-orange-500', cls: activeFilter === 'Under Review' ? 'active' : '' },
       { id: 'Complete', title: 'Complete', sub: 'جاهزة للتسليم', count: complete, icon: 'fa-circle-check text-teal-400', cls: activeFilter === 'Complete' ? 'active' : '' },

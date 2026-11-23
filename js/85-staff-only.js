@@ -1,10 +1,10 @@
-/* الموظفين التشغيليين فقط: المديرين والمناديب والشركاء ما يظهروش في فلتر الموظفين ولا في الأهداف/العمولات/مقارنة الأداء.
+/* الموظفين التشغيليين: المناديب والشركاء (المديرين لا) ما يظهروش في فلتر الموظفين ولا في الأهداف/العمولات/مقارنة الأداء.
    - الأدوار من user_roles (المدير بس هو اللي يقدر يقرأها)، ولو ما اتحملتش الدالة بترجّع true (مفيش إخفاء بالغلط).
    - ملف مستقل: الملفات اللي بتعرض الموظفين بتسأل window.isOperatingStaff(profile) / window.isExcludedStaffName(name). */
 (function () {
   'use strict';
   var hiddenIds = {}, hiddenNames = {}, loaded = false;
-  var HIDE = { manager: 1, courier: 1, partner: 1 };
+  var HIDE = { courier: 1, partner: 1 }; /* المديرين يفضلوا ظاهرين؛ بنخفي المناديب والشركاء بس */
 
   function norm(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
 
