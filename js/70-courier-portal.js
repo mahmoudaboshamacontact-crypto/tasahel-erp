@@ -160,12 +160,18 @@
     try { st.activeTx = localStorage.getItem('ts_cp_active_tx') || ''; } catch (e) { st.activeTx = ''; }
     try { st.pins = JSON.parse(localStorage.getItem('ts_cp_pins') || '{}') || {}; } catch (e) { st.pins = {}; }
     try { st.bagHanded = JSON.parse(localStorage.getItem('ts_cp_bag_' + today()) || '{}') || {}; } catch (e) { st.bagHanded = {}; }
+    try { st.qrStops = JSON.parse(localStorage.getItem('ts_cp_qr_stops') || '[]') || []; } catch (e) { st.qrStops = []; }
+    if (!Array.isArray(st.qrStops)) st.qrStops = [];
+    if (!st.qrMode) st.qrMode = 'deliver';
     if (!st.ledgerFrom) st.ledgerFrom = addDays(today(), -30);
     if (!st.ledgerTo) st.ledgerTo = today();
   }
   function saveRouteState() {
     try { localStorage.setItem('ts_cp_route_txs', JSON.stringify(st.routeTxIds)); } catch (e) {}
     try { localStorage.setItem('ts_cp_active_tx', st.activeTx || ''); } catch (e) {}
+  }
+  function saveQrStopsState() {
+    try { localStorage.setItem('ts_cp_qr_stops', JSON.stringify(st.qrStops || [])); } catch (e) {}
   }
   function savePinsState() {
     try { localStorage.setItem('ts_cp_pins', JSON.stringify(st.pins)); } catch (e) {}
@@ -259,15 +265,88 @@
   function routeIndexOf(tx) {
     return st.routeTxIds.indexOf(String(tx));
   }
-  /* تيكت الاستلام الشغال مع المندوب كمحطة في خط السير (قبل ما يتحول لمشوار) */
+  /* تحويل تيكت الاستلام لكائن موحّد بنفس هيكل مشوار الاستلام ليُعرض بنفس البطاقة */
+  function ticketToCardItem(t) {
+    if (!t) return null;
+    const items = Array.isArray(t.items) && t.items.length
+      ? t.items
+      : (t.service_name ? [{ service_name: t.service_name, doc_type: '', qty: t.qty || 1 }] : []);
+    const svcs = items.map(x => String(x.service_name || '').trim() + (Number(x.qty || 1) > 1 ? ' × ' + Number(x.qty) : '')).filter(Boolean).join(' + ');
+    const docs = items.map(x => String(x.doc_type || '').trim()).filter(Boolean).join(' · ');
+    const isPaid = t.payment_status === 'paid' || Number(t.collect_amount || 0) <= 0;
+    const step = String(t.courier_step || '');
+    return {
+      transaction_id: String(t.converted_tx_id || t.sd_request_id || ('TKT-' + t.id)),
+      sd_request_id: String(t.sd_request_id || ''),
+      client_name: t.client_name || 'بدون اسم',
+      phone: t.phone || '',
+      type: 'pickup',
+      confirmed: false,
+      address: [t.zone, t.address].filter(Boolean).join(' — '),
+      zone: t.zone || '',
+      services: svcs || t.service_name || '',
+      doc_types: docs,
+      cod_remaining: isPaid ? 0 : Number(t.collect_amount || 0),
+      payment_status: t.payment_status || '',
+      amount: Number(t.total || t.collect_amount || 0),
+      slot_pref: t.slot_pref || '',
+      staff_notes: t.staff_notes || '',
+      summary_comment: t.summary_comment || '',
+      courier_step: step,
+      courier_step_at: t.courier_step_at || '',
+      papers_holder: t.papers_holder || 'office',
+      papers_pending_event_id: t.papers_pending_event_id || null,
+      papers_pending_to: t.papers_pending_to || '',
+      status: t.status || 'with_courier',
+      cancel_reason: t.cancel_reason || '',
+      live_state: step === 'on_the_way' ? 'on_the_way' : (step === 'waiting' ? 'waiting' : ''),
+      call_attempts: step === 'call_attempt' || step === 'on_the_way' || step === 'waiting' || step === 'papers_received' ? 1 : 0,
+      id: null,
+      isTicket: true,
+      ticketId: Number(t.id),
+      _ticket: t
+    };
+  }
   function ticketAsRouteItem(tx) {
     const list = typeof window.tsWorkTickets === 'function' ? window.tsWorkTickets() : [];
-    const t = list.find(x => x.status === 'with_courier' && String(x.sd_request_id) === String(tx));
-    if (!t) return null;
-    return { transaction_id: String(t.sd_request_id), client_name: t.client_name, phone: t.phone, type: 'pickup', confirmed: false,
-      address: [t.zone, t.address].filter(Boolean).join(' '), services: t.service_name || '', id: null, isTicket: true, ticketId: t.id };
+    const k = String(tx || '');
+    const t = list.find(x => (x.status === 'with_courier' || x.status === 'cancelled') && (String(x.sd_request_id) === k || String(x.converted_tx_id || '') === k));
+    return ticketToCardItem(t);
   }
-  const routeItem = tx => byTx(tx) || ticketAsRouteItem(tx);
+  function qrStopAsRouteItem(tx) {
+    const k = String(tx || '').trim();
+    if (!k || !Array.isArray(st.qrStops)) return null;
+    const s = st.qrStops.find(x => String(x.transaction_id) === k);
+    if (!s) return null;
+    return {
+      transaction_id: String(s.transaction_id),
+      client_name: s.client_name || ('معاملة ' + s.transaction_id),
+      phone: s.phone || '',
+      type: 'delivery',
+      confirmed: false,
+      address: s.address || s.zone || '',
+      zone: s.zone || '',
+      services: s.lines_count ? (num(s.lines_count) + ' بند تسليم') : 'تسليم إيصال QR',
+      cod_remaining: Number(s.cod_due || 0),
+      amount: Number(s.cod_due || 0),
+      id: null,
+      isQrStop: true,
+      qrToken: s.token || '',
+      qrRaw: s.raw || (s.token ? ('https://tasahel.app/track?token=' + s.token) : '')
+    };
+  }
+  const routeItem = tx => byTx(tx) || ticketAsRouteItem(tx) || qrStopAsRouteItem(tx);
+  window.__cpEnsureTicketInRoute = tx => {
+    tx = String(tx || '');
+    if (!tx) return;
+    if (st.routeTxIds.indexOf(tx) === -1) {
+      st.routeTxIds.unshift(tx);
+      const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
+      sortRouteSelectionNearestFirst(pos.lat, pos.lng);
+      saveRouteState();
+    }
+    st.activeTx = tx;
+  };
   function sortRouteSelectionNearestFirst(startLat, startLng) {
     const validTxs = st.routeTxIds.filter(tx => routeItem(tx));
     if (validTxs.length < 2) return validTxs;
@@ -509,25 +588,68 @@
     );
   }
 
-  /* لوحة خط السير المبسطة والواضحة جداً للمندوب (تترتب أوتوماتيك بمجرد الاختيار) */
+  /* لوحة خط السير المبسطة والواضحة جداً للمندوب (شاملة محطات الـ QR الممسوحة + فتح Google Maps بدفعات 10 محطات) */
   function renderSmartRoutePanel() {
-    const picked = st.routeTxIds.map(tx => routeItem(tx)).filter(it => it && !it.confirmed);
-    const activeItems = picked.length ? picked : itemsOf(today()).filter(it => !it.confirmed);
+    const picked = st.routeTxIds.map(tx => routeItem(tx)).filter(it => it && !it.confirmed && it.status !== 'cancelled');
+    const openTks = workTickets().filter(t => t.status === 'with_courier').map(ticketToCardItem).filter(Boolean);
+    const qrFallback = (Array.isArray(st.qrStops) ? st.qrStops : []).map(s => qrStopAsRouteItem(s.transaction_id)).filter(Boolean);
+    const activeItems = picked.length ? picked : itemsOf(today()).filter(it => !it.confirmed).concat(openTks).concat(qrFallback);
     if (!activeItems.length) {
-      return '<section class="ts7b-route-sheet" style="text-align:center;color:var(--mu);font-weight:700">لا توجد محطات في خط السير</section>';
+      return '<section class="ts7b-route-sheet" style="text-align:center;color:var(--mu);font-weight:700;display:flex;flex-direction:column;gap:10px;align-items:center">' +
+        '<div>لا توجد محطات في خط السير حالياً</div>' +
+        '<button type="button" class="ts-cta" style="max-width:280px" data-act="qr-route-scan">' + ic('qr', 17) + ' امسح إيصالات بالـ QR لتجهيز خط السير</button>' +
+      '</section>';
     }
     const mapHtml = (window.CpV12 && typeof window.CpV12.renderEmbeddedMap === 'function')
       ? window.CpV12.renderEmbeddedMap(activeItems, st.myPos || null, detectZoneAndCoords)
       : '';
-    /* قائمة محطات مختصرة بالترتيب — تفاصيل المحطة الحالية وأزرارها في الرئيسية بس */
+
+    /* أزرار فتح Google Maps: لو أكتر من 10 محطات نقسمهم دفعات تلقائياً (حد جوجل مابس 10 محطات) */
+    const mapBtns = [];
+    const CHUNK = 10;
+    for (let i = 0; i < activeItems.length; i += CHUNK) {
+      const slice = activeItems.slice(i, i + CHUNK);
+      const url = buildMultiStopMapsUrl(slice, i === 0 ? (st.myPos || null) : null);
+      if (!url) continue;
+      const lbl = activeItems.length <= CHUNK
+        ? ('فتح خط السير على Google Maps (' + num(slice.length) + ' محطة)')
+        : ('Google Maps: محطة ' + num(i + 1) + ' – ' + num(i + slice.length));
+      mapBtns.push('<a class="ts-cta" style="text-decoration:none" target="_blank" rel="noopener" href="' + eh(url) + '">' + ic('nav', 16) + ' ' + lbl + '</a>');
+    }
+    const qrCount = (Array.isArray(st.qrStops) ? st.qrStops.length : 0);
+    const toolsBar = '<div style="display:flex;flex-direction:column;gap:8px">' +
+      (mapBtns.length ? '<div style="display:flex;flex-direction:column;gap:6px">' + mapBtns.join('') + '</div>' : '') +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+        '<button type="button" class="cp-a pri" style="flex:1;justify-content:center" data-act="qr-route-scan">' + ic('qr', 15) + '<span>+ مسح إيصالات لخط السير</span></button>' +
+        '<button type="button" class="cp-a" style="justify-content:center" data-act="route-autosort">' + ic('route', 15) + '<span>ترتيب للأقرب</span></button>' +
+        (qrCount ? '<button type="button" class="cp-a" style="justify-content:center;color:#e11d48" data-act="qr-stops-clear">مسح إيصالات الـ QR (' + num(qrCount) + ')</button>' : '') +
+      '</div>' +
+    '</div>';
+
+    /* قائمة المحطات بالترتيب — ومحطات الـ QR فيها زرار «تسليم الآن» مباشر بدون إعادة مسح */
     const rows = activeItems.map((it, idx) => {
       const z = detectZoneAndCoords(it);
+      if (it.isQrStop) {
+        return '<div class="cp-stop-row' + (idx === 0 ? ' cur' : '') + '" style="display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box">' +
+          '<b class="n">' + num(idx + 1) + '</b>' +
+          '<span class="t" style="flex:1;min-width:0">' +
+            '<strong>' + eh(it.client_name || 'عميل') + ' <span style="font-size:11px;font-weight:700;color:var(--ac)">· QR</span></strong>' +
+            '<small>' + eh(it.address || z.zone || '') + (Number(it.cod_remaining || 0) > 0 ? (' · تحصيل ' + money(it.cod_remaining)) : ' · خالص الدفع') + '</small>' +
+            '<small class="cp-stop-eta" data-eta-tx="' + eh(it.transaction_id) + '"></small>' +
+          '</span>' +
+          '<div style="display:flex;gap:5px;flex:none">' +
+            (it.qrRaw ? '<button type="button" class="cp-a cp-sm pri" data-act="qr-deliver-stop" data-tx="' + eh(it.transaction_id) + '">تسليم</button>' : '<button type="button" class="cp-a cp-sm" data-act="detail" data-tx="' + eh(it.transaction_id) + '">فتح</button>') +
+            '<a class="cp-a cp-sm" target="_blank" rel="noopener" href="' + eh(smartMapsUrl(it)) + '" title="خريطة">' + ic('nav', 14) + '</a>' +
+            '<button type="button" class="cp-a cp-sm" data-act="qr-stop-del" data-tx="' + eh(it.transaction_id) + '" title="إزالة">✕</button>' +
+          '</div>' +
+        '</div>';
+      }
       return '<button type="button" class="cp-stop-row' + (idx === 0 ? ' cur' : '') + '" ' + (it.isTicket ? 'data-act="tkt-open" data-tid="' + Number(it.ticketId) + '"' : 'data-act="detail" data-tx="' + eh(it.transaction_id) + '"') + '>' +
         '<b class="n">' + num(idx + 1) + '</b>' +
         '<span class="t"><strong>' + eh(it.client_name || 'عميل') + '</strong><small>' + eh(it.address || z.zone || '') + ' · ' + eh(kindLabel(it)) + '</small><small class="cp-stop-eta" data-eta-tx="' + eh(it.transaction_id) + '"></small></span>' +
       '</button>';
     }).join('');
-    return '<section style="display:flex;flex-direction:column;gap:12px">' + mapHtml +
+    return '<section style="display:flex;flex-direction:column;gap:12px">' + toolsBar + mapHtml +
       '<div id="cp-geo-route-eta"></div>' +
       '<div class="cp-stop-list">' + rows + '</div>' +
     '</section>';
@@ -597,11 +719,135 @@
   window.__cpRerender = () => { if (document.getElementById('cp-body')) renderTab(false); };
   window.__cpGoTab = t => setTab(t);
   window.__cpDaySummary = () => { const it = itemsOf(today()); return { total: it.length, pending: it.filter(i => !i.confirmed).length }; };
-  /* قارئ بديل (BarcodeDetector + jsQR احتياطي) للموبايلات القديمة. نفس التوجيه: إيصال تسليم → شاشة التسليم، كود معاملة → تفاصيلها. */
+  window.__cpOnQrDelivered = tx => {
+    const k = String(tx || '').trim();
+    if (!k) return;
+    st.qrStops = (st.qrStops || []).filter(x => String(x.transaction_id) !== k);
+    st.routeTxIds = (st.routeTxIds || []).filter(x => String(x) !== k);
+    saveQrStopsState();
+    saveRouteState();
+    renderTab(false);
+  };
+
+  let qrLastScannedRaw = '', qrLastScannedAt = 0, qrAddBusy = false;
+
+  function renderQrRouteListInModal() {
+    const bar = $('cp-qr-batch-bar');
+    if (!bar) return;
+    if (st.qrMode !== 'route') { bar.innerHTML = ''; return; }
+    const list = Array.isArray(st.qrStops) ? st.qrStops : [];
+    const itemsHtml = list.length
+      ? '<div style="max-height:145px;overflow:auto;display:flex;flex-direction:column;gap:5px;margin-top:6px">' +
+          list.map((s, idx) => {
+            const z = detectZoneAndCoords({ address: s.address || s.zone || '' });
+            return '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 9px;border-radius:10px;background:var(--card);border:1px solid var(--bd);font-size:12px">' +
+              '<div style="min-width:0;flex:1"><b>' + num(idx + 1) + '. ' + eh(s.client_name || s.transaction_id) + '</b><div style="font-size:11px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + eh(z.zone || s.address || '') + ' · <span dir="ltr">' + eh(s.transaction_id) + '</span>' + (Number(s.cod_due || 0) > 0 ? ' · تحصيل ' + money(s.cod_due) : '') + '</div></div>' +
+              '<button type="button" class="cp-a cp-sm" data-act="qr-stop-del-modal" data-tx="' + eh(s.transaction_id) + '">✕</button>' +
+            '</div>';
+          }).join('') +
+        '</div>'
+      : '<div style="font-size:12px;color:var(--mu);padding:6px 2px">امسح الإيصالات ورا بعض (مثلاً 20 إيصال خط المعادي) — الكاميرا هتفضل شغالة وتعدّهم تلقائي.</div>';
+    bar.innerHTML =
+      '<div style="padding:9px 11px;border-radius:12px;background:var(--surface-soft,rgba(3,107,41,.08));border:1px solid var(--bd);margin-bottom:8px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">' +
+          '<b style="font-size:12.5px">إيصالات خط السير الممسوحة (' + num(list.length) + ')</b>' +
+          (list.length ? '<button type="button" class="cp-a cp-sm" data-act="qr-stops-clear-modal">مسح الكل</button>' : '') +
+        '</div>' +
+        itemsHtml +
+        (list.length ? '<button type="button" class="ts-cta" style="margin-top:8px;min-height:40px" data-act="qr-route-apply">رتّب وافتح خط السير (' + num(list.length) + ' محطة) ←</button>' : '') +
+      '</div>';
+  }
+
+  async function addRawScanToRoute(raw) {
+    raw = String(raw || '').trim();
+    if (!raw || qrAddBusy) return false;
+    qrAddBusy = true;
+    try {
+      const tok = typeof window.__cp4ReceiptToken === 'function' ? window.__cp4ReceiptToken(raw) : null;
+      if (tok && sbClient) {
+        const r = await sbClient.rpc('courier_p4_preview_deliver_by_token', { p_token: tok });
+        const d = (r && !r.error && r.data) ? r.data : null;
+        if (!d || !d.ok || !d.transaction_id) {
+          if (typeof window.__cp4Beep === 'function') window.__cp4Beep(false);
+          toast((d && d.message) || (r && r.error && r.error.message) || 'الإيصال غير صالح أو متسلم قبل كده', true);
+          return false;
+        }
+        const tx = String(d.transaction_id);
+        st.qrStops = Array.isArray(st.qrStops) ? st.qrStops : [];
+        if (st.qrStops.some(x => String(x.transaction_id) === tx)) {
+          if (typeof window.__cp4Beep === 'function') window.__cp4Beep(true);
+          toast('الإيصال ده مضاف بالفعل (' + (d.client_name || tx) + ')');
+          return true;
+        }
+        const z = detectZoneAndCoords({ address: d.address || '' });
+        st.qrStops.push({
+          transaction_id: tx,
+          token: tok,
+          raw: raw,
+          client_name: d.client_name || tx,
+          address: d.address || '',
+          zone: z.zone || '',
+          cod_due: Number(d.cod_due || 0),
+          lines_count: Number(d.lines_count || 0),
+          added_at: Date.now()
+        });
+        if (st.routeTxIds.indexOf(tx) === -1) st.routeTxIds.push(tx);
+        saveQrStopsState();
+        saveRouteState();
+        if (typeof window.__cp4Beep === 'function') window.__cp4Beep(true);
+        if (window.CourierV12) window.CourierV12.haptic(true);
+        toast('✓ اتضاف لخط السير (#' + num(st.qrStops.length) + '): ' + (d.client_name || tx));
+        renderQrRouteListInModal();
+        return true;
+      }
+      /* كود معاملة عادي أو تيكت موجود محلياً */
+      const rawCode = extractTxFromScan(raw);
+      const tx = resolveLocalTx(rawCode);
+      const localIt = tx ? routeItem(tx) : null;
+      if (tx && localIt) {
+        if (st.routeTxIds.indexOf(tx) === -1) st.routeTxIds.push(tx);
+        if (!st.qrStops.some(x => String(x.transaction_id) === tx)) {
+          st.qrStops.push({
+            transaction_id: tx,
+            token: '',
+            raw: '',
+            client_name: localIt.client_name || tx,
+            address: localIt.address || '',
+            zone: detectZoneAndCoords(localIt).zone || '',
+            cod_due: Number(localIt.cod_remaining || 0),
+            lines_count: 1,
+            added_at: Date.now()
+          });
+        }
+        saveQrStopsState();
+        saveRouteState();
+        if (typeof window.__cp4Beep === 'function') window.__cp4Beep(true);
+        toast('✓ اتضاف لخط السير: ' + (localIt.client_name || tx));
+        renderQrRouteListInModal();
+        return true;
+      }
+      if (typeof window.__cp4Beep === 'function') window.__cp4Beep(false);
+      toast('الكود ده مش إيصال جاهز أو مش موجود في مشاويرك', true);
+      return false;
+    } catch (e) {
+      if (typeof window.__cp4Beep === 'function') window.__cp4Beep(false);
+      toast((e && e.message) || 'تعذر قراءة الإيصال', true);
+      return false;
+    } finally {
+      qrAddBusy = false;
+    }
+  }
+
+  /* قارئ بديل (BarcodeDetector + jsQR احتياطي) للموبايلات القديمة — يحترم الوضع المختار (تسليم أو إضافة لخط السير) */
   function openAltScanner() {
     if (typeof window.openQrScanner !== 'function') return toast('القارئ البديل مش متاح على الجهاز ده', true);
-    if (typeof window.__cp4Beep === 'function') window.__cp4Beep(true); /* فتح الصوت من ضغطة المندوب */
-    window.openQrScanner(function (raw) {
+    if (typeof window.__cp4Beep === 'function') window.__cp4Beep(true);
+    window.openQrScanner(async function (raw) {
+      if (st.qrMode === 'route') {
+        await addRawScanToRoute(raw);
+        openQrScannerModal('route');
+        return;
+      }
       if (typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(raw) && typeof window.__cp4DeliverFromRaw === 'function') {
         return window.__cp4DeliverFromRaw(raw);
       }
@@ -611,23 +857,31 @@
     });
   }
 
-  async function openQrScannerModal() {
+  async function openQrScannerModal(forcedMode) {
     stopQrCamera();
+    if (forcedMode === 'route' || forcedMode === 'deliver') st.qrMode = forcedMode;
+    const isRoute = st.qrMode === 'route';
     modal(
-      '<h3> مسح كود QR المعاملة</h3>' +
-      '<p>وجّه الكاميرا على كود الـ QR المطبوع على الإيصال أو حافظة المستندات لفتح المعاملة وتأكيدها فوراً:</p>' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><label style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cp-qr-batch-chk"' + (st.batchScan ? ' checked' : '') + ' onchange="window.__cpToggleBatch(this.checked)"> مسح متتابع (أكتر من إيصال ورا بعض)</label></div>' +
+      '<h3>مسح QR الإيصالات</h3>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">' +
+        '<button type="button" class="cp-btn' + (!isRoute ? ' cp-go' : '') + '" data-act="qr-mode" data-mode="deliver">تسليم إيصال</button>' +
+        '<button type="button" class="cp-btn' + (isRoute ? ' cp-go' : '') + '" data-act="qr-mode" data-mode="route">إضافة لخط السير (' + num((st.qrStops || []).length) + ')</button>' +
+      '</div>' +
+      '<p style="margin-top:0">' + (isRoute
+        ? 'امسح الإيصالات ورا بعض لتنزيلهم في خط سيرك وترتيبهم تلقائياً للأقرب وفتحهم على Google Maps:'
+        : 'وجّه الكاميرا على كود الـ QR المطبوع على الإيصال لتأكيد التسليم فوراً أو فتح تفاصيل المعاملة:') + '</p>' +
       '<div id="cp-qr-batch-bar"></div>' +
-      '<div id="cp-qr-box" style="position:relative;width:100%;height:220px;background:#000;border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:10px">' +
+      '<div id="cp-qr-box" style="position:relative;width:100%;height:210px;background:#000;border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:10px">' +
         '<video id="cp-qr-vid" playsinline muted style="width:100%;height:100%;object-fit:cover"></video>' +
         '<div id="cp-qr-msg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;background:rgba(0,0,0,.45);padding:12px;text-align:center">جاري تشغيل الكاميرا…</div>' +
       '</div>' +
       '<div style="display:flex;gap:6px">' +
-        '<input id="cp-qr-manual" type="text" dir="ltr" class="cp-field" placeholder="أو اكتب رقم المعاملة هنا (مثال: TX-2026-...)">' +
-        '<button type="button" class="cp-btn cp-go" data-act="qr-go">فتح</button>' +
+        '<input id="cp-qr-manual" type="text" dir="ltr" class="cp-field" placeholder="' + (isRoute ? 'أو الصق رابط الإيصال / رقم المعاملة للإضافة' : 'أو اكتب رقم المعاملة هنا (مثال: TX-2026-...)') + '">' +
+        '<button type="button" class="cp-btn cp-go" data-act="qr-go">' + (isRoute ? 'إضافة' : 'فتح') + '</button>' +
       '</div>' +
       '<div class="cp-btns"><button type="button" class="cp-btn" data-act="qr-alt">قارئ بديل</button><button type="button" class="cp-btn" data-act="qr-close">إغلاق</button></div>'
     );
+    renderQrRouteListInModal();
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no camera');
       qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -643,19 +897,23 @@
           try {
             const codes = await det.detect(vid);
             if (codes && codes.length && codes[0].rawValue) {
-              if (!st.batchScan && typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(codes[0].rawValue)) {
-                stopQrCamera(); closeModal(); window.__cp4DeliverFromRaw(codes[0].rawValue); return;
-              }
-              const rawCode = extractTxFromScan(codes[0].rawValue);
-              const tx = resolveLocalTx(rawCode);
-              if (window.CourierV12) window.CourierV12.haptic(!!tx);
-              if (tx && st.batchScan) {
-                const it = byTx(tx);
-                const bar = $('cp-qr-batch-bar');
-                if (bar) bar.innerHTML = '<div style="padding:8px 10px;border-radius:10px;background:rgba(16,185,129,.2);border:1px solid #036b29;color:#036b29;font-size:12px;font-weight:800;margin-bottom:8px">✓ اتلقط: ' + eh((it && it.client_name) || tx) + ' <button type="button" class="cp-a cp-sm pri" data-act="detail" data-tx="' + eh(tx) + '">فتح</button></div>';
-                setTimeout(() => requestAnimationFrame(scanLoop), 1100);
+              const rawVal = String(codes[0].rawValue).trim();
+              if (st.qrMode === 'route') {
+                const now = Date.now();
+                if (!qrAddBusy && !(rawVal === qrLastScannedRaw && now - qrLastScannedAt < 2000)) {
+                  qrLastScannedRaw = rawVal;
+                  qrLastScannedAt = now;
+                  await addRawScanToRoute(rawVal);
+                }
+                setTimeout(() => requestAnimationFrame(scanLoop), 550);
                 return;
               }
+              if (typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(rawVal) && typeof window.__cp4DeliverFromRaw === 'function') {
+                stopQrCamera(); closeModal(); window.__cp4DeliverFromRaw(rawVal); return;
+              }
+              const rawCode = extractTxFromScan(rawVal);
+              const tx = resolveLocalTx(rawCode);
+              if (window.CourierV12) window.CourierV12.haptic(!!tx);
               stopQrCamera();
               if (tx) { openClientDetail(tx); return; }
               toast('كود الـ QR ده مش خاص بمعاملة تساهيل', true);
@@ -1163,14 +1421,16 @@
     swapFa(b); swapFa($('cp-v12-top-banners'));
     const etaBox = $('cp-geo-route-eta');
     /* وقت الوصول الفعلي: على المحطات المختارة لخط السير، ولو مفيش فعلى كل محطات النهارده غير المؤكدة */
-    const etaIds = (st.routeTxIds && st.routeTxIds.length) ? st.routeTxIds : itemsOf(today()).filter(i => !i.confirmed).map(i => String(i.transaction_id));
+    const etaFallback = itemsOf(today()).filter(i => !i.confirmed).map(i => String(i.transaction_id))
+      .concat(workTickets().filter(t => t.status === 'with_courier' && t.sd_request_id).map(t => String(t.sd_request_id)));
+    const etaIds = (st.routeTxIds && st.routeTxIds.length) ? st.routeTxIds : etaFallback;
     if (etaBox && window.TasahelGeo && window.TasahelGeo.calcRouteEta && etaIds.length) {
       const wps = [], wpTx = [];
       if (st.myPos && st.myPos.lat && st.myPos.lng) wps.push({ lat: st.myPos.lat, lng: st.myPos.lng });
       else wps.push({ lat: 30.0012, lng: 31.1765 });
       etaIds.forEach(rtx => {
-        const rit = byTx(rtx);
-        if (rit && !rit.confirmed) {
+        const rit = routeItem(rtx);
+        if (rit && !rit.confirmed && rit.status !== 'cancelled') {
           const z = detectZoneAndCoords(rit);
           if (z && z.lat && z.lng) { wps.push({ lat: z.lat, lng: z.lng }); wpTx.push(String(rit.transaction_id)); }
         }
@@ -1223,8 +1483,10 @@
     for (const tx of st.routeTxIds) { const it = pending.find(i => String(i.transaction_id) === String(tx)); if (it) return it; }
     return pending[0] || null;
   }
-  function buildFiveStepper(doneUpTo, curIdx) {
-    const labels = ['قبول', 'اتصال', 'خط السير', 'في الطريق', 'تم'];
+  function buildFiveStepper(doneUpTo, curIdx, customLabels) {
+    const labels = Array.isArray(customLabels) && customLabels.length === 5
+      ? customLabels
+      : ['قبول', 'اتصال', 'خط السير', 'في الطريق', 'تم'];
     return '<div class="ts-stepper">' + labels.map((lbl, idx) => {
       const n = idx + 1;
       const isDone = n <= doneUpTo;
@@ -1233,54 +1495,87 @@
       return '<div class="ts-step ' + cls + '"><div class="ts-dot">' + (isDone ? '✓' : num(n)) + '</div><div class="ts-slbl">' + lbl + '</div></div>';
     }).join('') + '</div>';
   }
+  function ticketStepProgress(step) {
+    if (step === 'papers_received') return [5, 6];
+    if (step === 'waiting') return [4, 5];
+    if (step === 'on_the_way') return [3, 4];
+    if (step === 'call_attempt') return [2, 3];
+    if (step === 'accepted') return [1, 2];
+    return [0, 1];
+  }
+  function ticketNextAction(it) {
+    const step = String(it.courier_step || '');
+    const common = ' data-pt73-tid="' + Number(it.ticketId) + '" data-pt73-sd="' + eh(it.sd_request_id || it.transaction_id) + '" data-pt73-cl="' + eh(it.client_name) + '"';
+    if (it.status === 'cancelled') {
+      return { btnClass: 'ts-cta', style: 'background:#dc2626;color:#fff', attrs: ' data-pt73-ack="' + Number(it.ticketId) + '"', text: 'تأكيد الإلغاء' };
+    }
+    if (!step) return { btnClass: 'ts-cta', style: '', attrs: ' data-pt73-step="accepted" data-pt73-lbl="قبول"' + common, text: 'قبول التيكت' };
+    if (step === 'accepted') return { btnClass: 'ts-cta', style: '', attrs: ' data-pt73-step="call_attempt" data-pt73-lbl="اتصال"' + common, text: 'تم الاتصال بالعميل' };
+    if (step === 'call_attempt') return { btnClass: 'ts-cta', style: '', attrs: ' data-pt73-step="on_the_way" data-pt73-lbl="في الطريق"' + common, text: ic('nav', 15) + ' في طريقي للعميل' };
+    if (step === 'on_the_way') return { btnClass: 'ts-cta gold', style: '', attrs: ' data-pt73-step="waiting" data-pt73-lbl="وصلت"' + common, text: ic('pin', 15) + ' وصلت عند العميل' };
+    if (step === 'waiting') return { btnClass: 'ts-cta done', style: '', attrs: ' data-pt73-step="papers_received" data-pt73-lbl="استلمت الأوراق"' + common, text: '✓ استلمت الأوراق' };
+    return { btnClass: 'ts-cta done', style: '', attrs: ' disabled', text: 'تم استلام الأوراق ✓' };
+  }
   function heroCard(it, pending) {
-    const tx = String(it.transaction_id), z = detectZoneAndCoords(it), k = KIND[it.type];
-    const onway = it.live_state === 'on_the_way', waiting = !!st.waitingMap[tx];
-    const inRouteIdx = routeIndexOf(tx);
+    const tx = String(it.transaction_id), z = detectZoneAndCoords(it), k = KIND[it.type] || KIND.pickup;
+    const isTk = !!it.isTicket;
+    const onway = isTk ? it.courier_step === 'on_the_way' : it.live_state === 'on_the_way';
+    const waiting = isTk ? it.courier_step === 'waiting' : !!st.waitingMap[tx];
+    const inRouteIdx = routeIndexOf(isTk ? (it.sd_request_id || tx) : tx);
     const called = Number(it.call_attempts || 0) > 0 || !!it.client_confirmed;
     const cod = Number(it.cod_remaining || 0), dist = distTxtOf(it);
     const mates = pending.filter(x => x !== it && normAr(x.client_name || '') === normAr(it.client_name || '') && x.type === it.type).length;
 
     let doneUpTo = 1, curIdx = 2;
-    if (it.confirmed) { doneUpTo = 5; curIdx = 6; }
+    if (isTk) {
+      const pr = ticketStepProgress(it.courier_step);
+      doneUpTo = pr[0]; curIdx = pr[1];
+    } else if (it.confirmed) { doneUpTo = 5; curIdx = 6; }
     else if (waiting) { doneUpTo = 4; curIdx = 5; }
     else if (onway) { doneUpTo = 3; curIdx = 4; }
     else if (inRouteIdx !== -1) { doneUpTo = 3; curIdx = 4; }
     else if (called) { doneUpTo = 2; curIdx = 3; }
 
-    const slideAttrs = ' data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"';
+    const slideAttrs = !isTk ? (' data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"') : '';
     let primaryBtn = '';
-    if (waiting) {
+    if (isTk) {
+      const nxt = ticketNextAction(it);
+      primaryBtn = '<button type="button" class="ts-hero-cta' + (nxt.btnClass.indexOf('done') !== -1 ? ' done' : '') + '"' + (nxt.style ? ' style="' + nxt.style + '"' : '') + nxt.attrs + '>' + nxt.text + '</button>';
+    } else if (waiting) {
       primaryBtn = '<button type="button" class="ts-hero-cta done"' + slideAttrs + '>✓ تأكيد ' + eh(k.sec === 'الاستلام' ? 'الاستلام' : k.sec === 'التسليم' ? 'التسليم' : 'الرسوم') + '</button>';
     } else if (onway) {
       primaryBtn = '<button type="button" class="ts-hero-cta" data-act="v12-wait" data-tx="' + eh(tx) + '">' + ic('pin', 16) + ' وصلت</button>';
     } else {
-      primaryBtn = '<button type="button" class="ts-hero-cta" data-act="v12-wait" data-tx="' + eh(tx) + '">' + ic('pin', 16) + ' وصلت</button>';
+      primaryBtn = '<button type="button" class="ts-hero-cta" data-act="on-my-way" data-tx="' + eh(tx) + '">' + ic('nav', 16) + ' في طريقي</button>';
     }
 
+    const detailAttr = isTk ? ('data-pt73-open-detail="' + Number(it.ticketId) + '"') : ('data-act="detail" data-tx="' + eh(tx) + '"');
+    const callAttr = isTk ? ('data-pt73-contact="call" data-pt73-tid="' + Number(it.ticketId) + '"') : ('data-act="v12-call-log" data-tx="' + eh(tx) + '"');
     const eyebrowLeft = inRouteIdx !== -1 ? ('المحطة الجاية #' + num(inRouteIdx + 1)) : 'المحطة الجاية';
-    const eyebrowRight = eh(k.sec || k.label) + (dist ? ' · ' + eh(dist) : '');
+    const eyebrowRight = (isTk ? 'تيكت استلام' : eh(k.sec || k.label)) + (dist ? ' · ' + eh(dist) : '');
+    const notePreview = it.landmark_note || it.staff_notes || '';
 
     return '<section class="cpn-hero">' +
       '<div class="ts-hero-eyebrow"><span>' + eyebrowLeft + '</span><span>' + eyebrowRight + '</span></div>' +
-      '<div class="ts-hero-client" data-act="detail" data-tx="' + eh(tx) + '">' + eh(it.client_name || 'بدون اسم') + '</div>' +
+      '<div class="ts-hero-client" ' + detailAttr + '>' + eh(it.client_name || 'بدون اسم') + '</div>' +
       '<div class="ts-hero-sub">' + eh((it.services ? it.services + ' · ' : '') + (it.address || z.zone)) + '</div>' +
-      (it.landmark_note ? '<div style="margin-top:7px;padding:6px 10px;border-radius:10px;background:rgba(212,175,99,.16);font-size:11.5px;color:#FDE68A"><i class="fa-regular fa-note-sticky"></i> ' + eh(it.landmark_note) + '</div>' : '') +
+      (notePreview ? '<div style="margin-top:7px;padding:6px 10px;border-radius:10px;background:rgba(212,175,99,.16);font-size:11.5px;color:#FDE68A"><i class="fa-regular fa-note-sticky"></i> ' + eh(notePreview) + '</div>' : '') +
       '<div class="ts-hero-meta">' +
         (cod > 0 ? '<span class="ts-hero-chip gold">تحصيل ' + money(cod) + '</span>' : '<span class="ts-hero-chip ok">خالص الدفع</span>') +
         '<span class="ts-hero-chip cpn-num" dir="ltr">' + eh(tx) + '</span>' +
+        (it.slot_pref ? '<span class="ts-hero-chip">' + eh(it.slot_pref) + '</span>' : '') +
         (mates ? '<span class="ts-hero-chip">+' + num(mates) + ' طلب</span>' : '') +
         (it.office_ready ? '<span class="ts-hero-chip ok">جاهز بالمكتب</span>' : '') +
       '</div>' +
-      buildFiveStepper(doneUpTo, curIdx) +
+      buildFiveStepper(doneUpTo, curIdx, isTk ? ['قبول', 'اتصال', 'طريق', 'وصلت', 'أوراق'] : null) +
       '<div class="ts-hero-actions">' +
         primaryBtn +
-        (it.phone ? '<a class="ts-hero-icon" data-act="v12-call-log" data-tx="' + eh(tx) + '" href="' + eh(telHref(it.phone)) + '" aria-label="اتصال">' + ic('phone', 18) + '</a>' : '') +
-        '<button type="button" class="ts-hero-icon" data-act="v12-map-opts" data-tx="' + eh(tx) + '" aria-label="الخريطة">' + ic('nav', 18) + '</button>' +
+        (it.phone ? '<a class="ts-hero-icon" ' + callAttr + ' href="' + eh(telHref(it.phone)) + '" aria-label="اتصال">' + ic('phone', 18) + '</a>' : '') +
+        '<button type="button" class="ts-hero-icon" data-act="v12-map-opts" data-tx="' + eh(isTk ? (it.sd_request_id || tx) : tx) + '" aria-label="الخريطة">' + ic('nav', 18) + '</button>' +
       '</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:11.5px">' +
-        '<button type="button" style="border:0;background:none;color:rgba(245,243,238,.78);font:inherit;cursor:pointer;padding:2px 0" data-act="detail" data-tx="' + eh(tx) + '">تفاصيل وخيارات إضافية ←</button>' +
-        (!waiting ? '<button type="button" style="border:0;background:none;color:#fecdd3;font:inherit;font-weight:700;cursor:pointer;padding:2px 0"' + slideAttrs + '>تأكيد مباشر</button>' : '') +
+        '<button type="button" style="border:0;background:none;color:rgba(245,243,238,.78);font:inherit;cursor:pointer;padding:2px 0" ' + detailAttr + '>تفاصيل السكريبت والمكالمة ←</button>' +
+        (!isTk && !waiting ? '<button type="button" style="border:0;background:none;color:#fecdd3;font:inherit;font-weight:700;cursor:pointer;padding:2px 0"' + slideAttrs + '>تأكيد مباشر</button>' : '') +
       '</div>' +
     '</section>';
   }
@@ -1288,7 +1583,8 @@
   function viewToday() {
     const t = today();
     const todayItems = itemsOf(t);
-    const pending = todayItems.filter(i => !i.confirmed);
+    const openTks = workTickets().filter(x => x.status === 'with_courier').map(ticketToCardItem).filter(Boolean);
+    const pending = todayItems.filter(i => !i.confirmed).concat(openTks);
     const q = (st.homeSearch || '').trim().toLowerCase();
     const filteredPending = q
       ? pending.filter(i => [i.client_name, i.address, i.transaction_id, detectZoneAndCoords(i).zone].join(' ').toLowerCase().indexOf(q) !== -1)
@@ -1434,7 +1730,7 @@
     const tkHtml = tks.length && typeof window.tsWorkTicketRows === 'function' ? window.tsWorkTicketRows(tks, st.openKey) : '';
     const empty = (!groups.length && !tks.length)
       ? '<div class="cp-empty">' + (st.loaded ? 'مفيش حاجة مطابقة في اليوم ده' : 'جاري التحميل…') + '</div>' : '';
-    const startBtn = (isToday && all.some(i => !i.confirmed && i.type !== 'fee'))
+    const startBtn = (isToday && (all.some(i => !i.confirmed && i.type !== 'fee') || tkAll.some(t => t.status === 'with_courier')))
       ? '<button type="button" class="ts-cta" style="width:100%;margin:8px 0" data-act="start-day">' + (st.routeTxIds.length ? 'رتّب خط السير من جديد' : 'ابدأ اليوم — جهّز خط السير') + '</button>' : '';
     return calBtn + (st.calOpen ? calendarHtml() : '') + searchBar + startBtn + chips +
       '<div class="cpw-list">' + tkHtml + groups.map(workItemRow).join('') + empty + '</div>';
@@ -1594,13 +1890,16 @@
   }
 
   function singleTripCard(it) {
-    const k = KIND[it.type];
+    const isTk = !!it.isTicket;
+    const isCancel = isTk && it.status === 'cancelled';
+    const k = KIND[it.type] || KIND.pickup;
     const tx = String(it.transaction_id);
+    const routeKey = isTk ? String(it.sd_request_id || tx) : tx;
     const z = detectZoneAndCoords(it);
-    const inRouteIdx = routeIndexOf(tx);
-    const onway = it.live_state === 'on_the_way';
-    const ticketReady = pickupTicketReadyForTrip(it);
-    const waiting = !!st.waitingMap[tx] || ticketReady;
+    const inRouteIdx = routeIndexOf(routeKey);
+    const onway = isTk ? it.courier_step === 'on_the_way' : it.live_state === 'on_the_way';
+    const ticketReady = !isTk && pickupTicketReadyForTrip(it);
+    const waiting = isTk ? it.courier_step === 'waiting' : (!!st.waitingMap[tx] || ticketReady);
     const called = Number(it.call_attempts || 0) > 0 || !!it.client_confirmed;
     let distTxt = '';
     if (st.myPos && window.CourierV12) {
@@ -1608,19 +1907,25 @@
       distTxt = km < 1 ? (Math.round(km * 1000) + ' م') : (km.toFixed(1) + ' كم');
     }
     const codAmt = Number(it.cod_remaining || 0);
-    const pillCls = it.type === 'delivery' ? 'delivery' : (it.type === 'pickup' ? 'pickup' : 'fee');
-    const pillTxt = it.type === 'delivery' ? 'تسليم' : (it.type === 'pickup' ? 'استلام' : 'رسوم');
+    const pillCls = isCancel ? 'fee' : (it.type === 'delivery' ? 'delivery' : (it.type === 'pickup' ? 'pickup' : 'fee'));
+    const pillTxt = isCancel ? 'ملغي' : (isTk ? 'استلام' : (it.type === 'delivery' ? 'تسليم' : (it.type === 'pickup' ? 'استلام' : 'رسوم')));
 
     let doneUpTo = 1, curIdx = 2;
-    if (it.confirmed) { doneUpTo = 5; curIdx = 6; }
+    if (isTk) {
+      const pr = ticketStepProgress(it.courier_step);
+      doneUpTo = pr[0]; curIdx = pr[1];
+    } else if (it.confirmed) { doneUpTo = 5; curIdx = 6; }
     else if (waiting) { doneUpTo = 4; curIdx = 5; }
     else if (onway) { doneUpTo = 3; curIdx = 4; }
     else if (inRouteIdx !== -1) { doneUpTo = 3; curIdx = 4; }
     else if (called) { doneUpTo = 2; curIdx = 3; }
 
-    const slideAttrs = ' data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"';
+    const slideAttrs = !isTk ? (' data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"') : '';
     let primaryBtn = '';
-    if (it.confirmed) {
+    if (isTk) {
+      const nxt = ticketNextAction(it);
+      primaryBtn = '<button type="button" class="' + nxt.btnClass + '"' + (nxt.style ? ' style="' + nxt.style + '"' : '') + nxt.attrs + '>' + nxt.text + '</button>';
+    } else if (it.confirmed) {
       primaryBtn = '<button type="button" class="ts-cta done" data-act="detail" data-tx="' + eh(tx) + '">✓ تم التأكيد · ' + eh(timeOf(it.confirmed_at)) + '</button>';
     } else if (waiting) {
       primaryBtn = '<button type="button" class="ts-cta done"' + slideAttrs + '>' + (ticketReady ? '✓ تأكيد مشوار الاستلام' : '✓ تأكيد ' + eh(k.sec)) + '</button>';
@@ -1632,31 +1937,98 @@
       primaryBtn = '<button type="button" class="ts-cta" data-act="route-toggle" data-tx="' + eh(tx) + '">+ أضف لخط السير</button>';
     }
 
-    return '<div class="ts-card cp-v12-card ' + eh(it.type) + (inRouteIdx !== -1 && !it.confirmed ? ' in-route' : '') + '">' +
-      '<div class="ts-tc-top" data-act="detail" data-tx="' + eh(tx) + '">' +
+    const detailAttr = isTk ? ('data-pt73-open-detail="' + Number(it.ticketId) + '"') : ('data-act="detail" data-tx="' + eh(tx) + '"');
+    const callAttr = isTk ? ('data-pt73-contact="call" data-pt73-tid="' + Number(it.ticketId) + '"') : ('data-act="v12-call-log" data-tx="' + eh(tx) + '"');
+    const codLabel = codAmt > 0
+      ? (it.payment_status === 'instapay_on_arrival' ? ('إنستاباي ' + money(codAmt)) : ('تحصيل ' + money(codAmt)))
+      : 'خالص الدفع';
+    const routeToggleChip = (isTk && !isCancel)
+      ? ('<button type="button" class="ts-mchip' + (inRouteIdx !== -1 ? ' route' : '') + '" style="border:0;cursor:pointer;font-family:inherit" data-act="route-toggle" data-tx="' + eh(routeKey) + '">' + (inRouteIdx !== -1 ? 'خط السير #' + num(inRouteIdx + 1) + ' ✓' : '+ خط السير') + '</button>')
+      : (inRouteIdx !== -1 ? '<span class="ts-mchip route">خط السير #' + num(inRouteIdx + 1) + '</span>' : '');
+
+    /* تفاصيل السكريبت والمكالمة والمستندات ظاهرة مباشرة جوه البطاقة الموحدة */
+    let scriptBoxHtml = '';
+    if (isTk) {
+      const parts = [];
+      if (it.doc_types) parts.push('<div><span style="color:var(--mu);font-weight:700">المستندات:</span> <b>' + eh(it.doc_types) + '</b></div>');
+      if (it.staff_notes) parts.push('<div style="color:var(--burg,#f59e0b);font-weight:700">ملاحظة الموظف: ' + eh(it.staff_notes) + '</div>');
+      if (it.summary_comment) parts.push('<div style="white-space:pre-wrap;line-height:1.55"><span style="color:var(--mu);font-weight:700">ملخص المكالمة والسكريبت:</span><br>' + eh(it.summary_comment) + '</div>');
+      if (parts.length) {
+        scriptBoxHtml = '<div style="margin:8px 0;padding:10px 12px;border-radius:14px;background:var(--surface-soft,rgba(148,163,184,.08));border:1px solid var(--bd);font-size:12.5px;display:flex;flex-direction:column;gap:5px">' + parts.join('') + '</div>';
+      }
+    } else if (ticketReady && typeof window.tsCourierTicketDetailsHtml === 'function') {
+      scriptBoxHtml = window.tsCourierTicketDetailsHtml(tx);
+    }
+
+    const papersHtml = (isTk && it._ticket && typeof window.tsRenderCourierPapersActions === 'function')
+      ? window.tsRenderCourierPapersActions(it._ticket)
+      : '';
+    const waBtn = it.phone
+      ? (isTk
+          ? '<button type="button" class="ts-cbtn" data-pt73-eta-wa="' + Number(it.ticketId) + '" aria-label="واتساب والوقت المتوقع" title="واتساب بالوقت المتوقع"><i class="fa-brands fa-whatsapp"></i></button>'
+          : '<button type="button" class="ts-cbtn" data-act="v12-wa-tpl" data-tx="' + eh(tx) + '" aria-label="واتساب" title="واتساب"><i class="fa-brands fa-whatsapp"></i></button>')
+      : '';
+
+    return '<div class="ts-card cp-v12-card ' + eh(it.type) + (inRouteIdx !== -1 && !it.confirmed ? ' in-route' : '') + (isTk && !it.courier_step && !isCancel ? ' new-ticket' : '') + '"' + (isCancel ? ' data-cp4-decorated="1"' : '') + '>' +
+      (isCancel ? '<div class="pt-cancel-strip" style="margin-bottom:8px"><span>ملغي</span><span>' + eh(it.cancel_reason || '—') + '</span></div>' : '') +
+      '<div class="ts-tc-top" ' + detailAttr + '>' +
         '<div style="min-width:0;flex:1">' +
           '<div class="ts-tc-client">' + eh(it.client_name || 'بدون اسم') + '</div>' +
-          '<div class="ts-tc-id"><span dir="ltr">' + eh(tx) + '</span>' + (distTxt ? '<span>· ' + eh(distTxt) + '</span>' : '') + '<span>· ' + money(it.amount) + '</span></div>' +
+          '<div class="ts-tc-id"><span dir="ltr">' + eh(tx) + '</span>' + (distTxt ? '<span>· ' + eh(distTxt) + '</span>' : '') + (it.amount > 0 ? '<span>· ' + money(it.amount) + '</span>' : '') + '</div>' +
         '</div>' +
         '<span class="ts-pill ' + pillCls + '">' + pillTxt + '</span>' +
       '</div>' +
-      (it.services ? '<div class="ts-tc-svc" data-act="detail" data-tx="' + eh(tx) + '">' + eh(it.services) + '</div>' : '') +
-      '<div class="ts-tc-loc" data-act="detail" data-tx="' + eh(tx) + '">' + ic('pin', 14) + '<span>' + eh(it.address || z.zone) + '</span></div>' +
+      (it.services ? '<div class="ts-tc-svc" ' + detailAttr + '>' + eh(it.services) + '</div>' : '') +
+      '<div class="ts-tc-loc" ' + detailAttr + '>' + ic('pin', 14) + '<span>' + eh(it.address || z.zone) + '</span></div>' +
       '<div class="ts-meta-row">' +
-        (codAmt > 0 ? '<span class="ts-mchip cod">تحصيل ' + money(codAmt) + '</span>' : '<span class="ts-mchip paid">خالص الدفع</span>') +
-        (inRouteIdx !== -1 ? '<span class="ts-mchip route">خط السير #' + num(inRouteIdx + 1) + '</span>' : '') +
-        (onway ? '<span class="ts-mchip paid">في الطريق</span>' : (inRouteIdx !== -1 ? '<span class="ts-mchip">في خط السير</span>' : '')) +
+        '<span class="ts-mchip ' + (codAmt > 0 ? 'cod' : 'paid') + '">' + codLabel + '</span>' +
+        routeToggleChip +
+        (it.slot_pref ? '<span class="ts-mchip">' + eh(it.slot_pref) + '</span>' : '') +
+        (onway ? '<span class="ts-mchip paid">في الطريق</span>' : (waiting ? '<span class="ts-mchip cod">وصلت عند العميل</span>' : '')) +
         (it.office_ready ? '<span class="ts-mchip paid">جاهز بالمكتب</span>' : '') +
       '</div>' +
-      buildFiveStepper(doneUpTo, curIdx) +
-      (ticketReady && typeof window.tsCourierTicketDetailsHtml === 'function' ? window.tsCourierTicketDetailsHtml(tx) : '') +
-      '<div class="ts-actions">' +
+      (!isCancel ? buildFiveStepper(doneUpTo, curIdx, isTk ? ['قبول', 'اتصال', 'طريق', 'وصلت', 'أوراق'] : null) : '') +
+      scriptBoxHtml +
+      (papersHtml ? '<div style="margin:6px 0">' + papersHtml + '</div>' : '') +
+      '<div class="ts-actions" style="flex-direction:column;align-items:stretch;gap:8px">' +
         primaryBtn +
-        (it.phone ? '<a class="ts-cbtn call" data-act="v12-call-log" data-tx="' + eh(tx) + '" href="' + eh(telHref(it.phone)) + '" aria-label="اتصال">' + ic('phone', 17) + '</a>' : '') +
-        '<button type="button" class="ts-cbtn" data-act="v12-map-opts" data-tx="' + eh(tx) + '" aria-label="الخريطة">' + ic('nav', 17) + '</button>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+          (it.phone ? '<a class="ts-cbtn call" style="flex:1;width:auto" ' + callAttr + ' href="' + eh(telHref(it.phone)) + '" aria-label="اتصال">' + ic('phone', 17) + '</a>' : '') +
+          (waBtn ? waBtn.replace('class="ts-cbtn"', 'class="ts-cbtn" style="flex:1;width:auto"') : '') +
+          '<button type="button" class="ts-cbtn" style="flex:1;width:auto" data-act="v12-map-opts" data-tx="' + eh(routeKey) + '" aria-label="الخريطة">' + ic('nav', 17) + '</button>' +
+          '<button type="button" class="ts-cbtn" style="flex:1;width:auto" ' + detailAttr + ' aria-label="التفاصيل" title="التفاصيل"><i class="fa-solid fa-circle-info"></i></button>' +
+        '</div>' +
       '</div>' +
     '</div>';
   }
+
+  /* رسم بطاقة التيكت جوه شاشة «التيكتات» باستخدام نفس بطاقة مشوار الاستلام الموحدة (singleTripCard) */
+  window.__cpRenderTicketCard = function (t, openKey) {
+    if (!t) return '';
+    const key = 't' + Number(t.id);
+    const open = openKey === key;
+    const isCancel = t.status === 'cancelled';
+    const isConv = t.status === 'converted';
+    const pr = ticketStepProgress(t.courier_step || '');
+    const pct = isCancel ? 0 : Math.round(pr[0] / 5 * 100);
+    const stepLblMap = { accepted: 'مقبول', call_attempt: 'تم الاتصال', on_the_way: 'في الطريق', waiting: 'وصلت', papers_received: 'استلمت الأوراق' };
+    const tag = isCancel
+      ? '<span class="cpw-tag bad">ملغي</span>'
+      : (isConv
+        ? '<span class="cpw-tag ok">تم التحويل</span>'
+        : (t.courier_step
+          ? '<span class="cpw-tag">' + eh(stepLblMap[t.courier_step] || 'استلام') + '</span>'
+          : '<span class="cpw-tag new">جديد</span>'));
+    const cardItem = ticketToCardItem(t);
+    return '<div class="cpw-card' + (open ? ' open' : '') + (isCancel ? ' bad' : '') + '">' +
+      '<button type="button" class="cpw-head" data-act="trip-open" data-key="' + key + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+        '<span class="cpw-main"><strong>' + eh(t.client_name || 'بدون اسم') + (t.zone ? ' <em>· ' + eh(t.zone) + '</em>' : '') + '</strong>' +
+        '<small dir="ltr">' + eh(t.phone || '') + ' · ' + eh(t.converted_tx_id || t.sd_request_id) + '</small></span>' +
+        tag + '<span class="cpw-chev">' + ic('chev', 18) + '</span></button>' +
+      '<div class="cpw-bar"><i style="width:' + pct + '%"></i></div>' +
+      (open && cardItem ? '<div class="cpw-body">' + singleTripCard(cardItem) + '</div>' : '') +
+    '</div>';
+  };
 
   function renderLeaderboardInner(rows) {
     if (!rows || !rows.length) {
@@ -2403,7 +2775,13 @@
       case 'dprev': st.day = addDays(st.day, -1); return renderTab(false);
       case 'dnext': if (st.day < today()) { st.day = addDays(st.day, 1); renderTab(false); } return;
       case 'dset': st.day = el.dataset.day; return renderTab(true);
-      case 'detail': return openClientDetail(tx);
+      case 'detail': {
+        if (!byTx(tx)) {
+          const tk = ticketAsRouteItem(tx);
+          if (tk && typeof window.tsOpenCourierTicketDetail === 'function') return window.tsOpenCourierTicketDetail(tk.ticketId);
+        }
+        return openClientDetail(tx);
+      }
       case 'note': return askNote(tx);
       case 'nkind': st.noteKind = el.dataset.k; document.querySelectorAll('#cp-kinds button').forEach(b => b.classList.toggle('on', b === el)); return;
       case 'qnote': {
@@ -2474,7 +2852,7 @@
         return renderTab(false);
       }
       case 'v12-wa-tpl': {
-        const it = byTx(tx);
+        const it = routeItem(tx);
         if (it && it.phone && window.CourierV12) window.CourierV12.openWhatsAppTemplates(it.phone, it.client_name, tx, st.me && st.me.name, waNum);
         return;
       }
@@ -2484,7 +2862,7 @@
         return;
       }
       case 'v12-map-opts': {
-        const it = byTx(tx); if (!it) return;
+        const it = routeItem(tx); if (!it) return;
         const q = stopDestinationQuery(it);
         modal(
           '<h3><i class="fa-solid fa-route"></i> فتح الموقع على الخريطة</h3>' +
@@ -2499,7 +2877,7 @@
         return;
       }
       case 'v12-copy-pin': {
-        const it = byTx(tx);
+        const it = routeItem(tx);
         try { navigator.clipboard.writeText(stopDestinationQuery(it) || (it && it.address) || ''); toast('تم نسخ العنوان/الإحداثيات ✓'); } catch (e) {}
         return closeModal();
       }
@@ -2640,12 +3018,61 @@
         return;
       }
       case 'qr-scan': return openQrScannerModal();
+      case 'qr-route-scan': return openQrScannerModal('route');
+      case 'qr-mode': return openQrScannerModal(el.dataset.mode === 'route' ? 'route' : 'deliver');
       case 'qr-alt': stopQrCamera(); closeModal(); return openAltScanner();
       case 'qr-close': stopQrCamera(); return closeModal();
+      case 'qr-route-apply': {
+        stopQrCamera();
+        closeModal();
+        (st.qrStops || []).forEach(s => {
+          const k = String(s.transaction_id || '');
+          if (k && st.routeTxIds.indexOf(k) === -1) st.routeTxIds.push(k);
+        });
+        const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
+        sortRouteSelectionNearestFirst(pos.lat, pos.lng);
+        saveRouteState();
+        toast('✓ اترتب خط السير للأقرب (' + num(st.routeTxIds.length) + ' محطة)');
+        return setTab('route');
+      }
+      case 'qr-deliver-stop': {
+        const s = (st.qrStops || []).find(x => String(x.transaction_id) === String(tx));
+        if (s && s.qrRaw && typeof window.__cp4DeliverFromRaw === 'function') return window.__cp4DeliverFromRaw(s.qrRaw);
+        if (s && s.token && typeof window.__cp4DeliverFromRaw === 'function') return window.__cp4DeliverFromRaw('https://tasahel.app/track?token=' + s.token);
+        return openClientDetail(tx);
+      }
+      case 'qr-stop-del':
+      case 'qr-stop-del-modal': {
+        st.qrStops = (st.qrStops || []).filter(x => String(x.transaction_id) !== String(tx));
+        st.routeTxIds = (st.routeTxIds || []).filter(x => String(x) !== String(tx));
+        saveQrStopsState();
+        saveRouteState();
+        if (a === 'qr-stop-del-modal') renderQrRouteListInModal();
+        else renderTab(false);
+        return;
+      }
+      case 'qr-stops-clear':
+      case 'qr-stops-clear-modal': {
+        const rmSet = new Set((st.qrStops || []).map(x => String(x.transaction_id)));
+        st.qrStops = [];
+        st.routeTxIds = (st.routeTxIds || []).filter(x => !rmSet.has(String(x)));
+        saveQrStopsState();
+        saveRouteState();
+        toast('تم مسح إيصالات الـ QR من خط السير');
+        if (a === 'qr-stops-clear-modal') renderQrRouteListInModal();
+        else renderTab(false);
+        return;
+      }
       case 'qr-go': {
         const inp = $('cp-qr-manual');
         const rawIn = String(inp ? inp.value : '').trim();
-        if (rawIn && typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(rawIn) && typeof window.__cp4DeliverFromRaw === 'function') {
+        if (!rawIn) return toast('اكتب رقم المعاملة أو الصق الرابط الأول', true);
+        if (st.qrMode === 'route') {
+          if (inp) inp.value = '';
+          addRawScanToRoute(rawIn);
+          return;
+        }
+        if (typeof window.__cp4ReceiptToken === 'function' && window.__cp4ReceiptToken(rawIn) && typeof window.__cp4DeliverFromRaw === 'function') {
           stopQrCamera(); closeModal(); return window.__cp4DeliverFromRaw(rawIn);
         }
         const code = extractTxFromScan(rawIn);

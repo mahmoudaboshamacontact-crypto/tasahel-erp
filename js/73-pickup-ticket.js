@@ -234,7 +234,83 @@
       '#courier-app .pt-modal-box{background:var(--card);color:var(--tx);border-color:var(--bd)}',
       '@media (max-width:960px){.pt-grid2{grid-template-columns:1fr}}',
       '@media (max-width:640px){.pt-svc-row-grid{grid-template-columns:1fr 1fr}.pt-pay-pills{grid-template-columns:1fr}}',
-      '@media (max-width:520px){.pt-fgrid{grid-template-columns:1fr}}'
+      '@media (max-width:520px){.pt-fgrid{grid-template-columns:1fr}}',
+      '.pt-smart-card{border:1px solid var(--r-bd,rgba(148,163,184,.24));border-radius:16px;padding:14px 16px;background:var(--r-card,#ffffff);color:var(--r-tx,#0f172a);display:flex;flex-direction:column;gap:10px;transition:border-color .15s}',
+      '.pt-smart-card:hover{border-color:var(--r-acc,#036b29)}',
+      '.pt-smart-card.ready{border-right:4px solid #036b29}',
+      '.pt-smart-card.cancelled{border-right:4px solid #dc2626}',
+      'html.dark body:not(.is-courier-mode) .pt-smart-card{background:#090b0a;border-color:rgba(255,255,255,.11);color:#f5f4f0}',
+      '.pt-smart-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}',
+      '.pt-smart-id{display:flex;flex-wrap:wrap;align-items:center;gap:7px;min-width:0}',
+      '.pt-smart-stage{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;font-size:11.5px;font-weight:800;white-space:nowrap}',
+      '.pt-smart-stage.s-new{background:rgba(245,158,11,.15);color:#d97706}',
+      '.pt-smart-stage.s-live{background:rgba(139,92,246,.16);color:#7c3aed}',
+      '.pt-smart-stage.s-ready{background:rgba(3,107,41,.14);color:#036b29}',
+      '.pt-smart-stage.s-done{background:rgba(16,185,129,.16);color:#059669}',
+      '.pt-smart-stage.s-bad{background:rgba(220,38,38,.14);color:#dc2626}',
+      'html.dark body:not(.is-courier-mode) .pt-smart-stage.s-new{color:#fbbf24}',
+      'html.dark body:not(.is-courier-mode) .pt-smart-stage.s-live{color:#c4b5fd}',
+      'html.dark body:not(.is-courier-mode) .pt-smart-stage.s-ready{background:rgba(16,185,129,.18);color:#34d399}',
+      'html.dark body:not(.is-courier-mode) .pt-smart-stage.s-done{color:#34d399}',
+      'html.dark body:not(.is-courier-mode) .pt-smart-stage.s-bad{color:#fb7185}',
+      '.pt-smart-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12.5px;color:var(--r-mute,#64748b)}',
+      '.pt-smart-meta b{color:var(--r-tx,#0f172a)}',
+      'html.dark body:not(.is-courier-mode) .pt-smart-meta{color:#a1aba5}',
+      'html.dark body:not(.is-courier-mode) .pt-smart-meta b{color:#f5f4f0}',
+      '.pt-smart-steps{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 10px;border-radius:11px;background:var(--r-bg,rgba(148,163,184,.07));font-size:11.5px}',
+      'html.dark body:not(.is-courier-mode) .pt-smart-steps{background:#111513}',
+      '.pt-sdot{display:inline-flex;align-items:center;gap:4px;color:var(--r-mute,#64748b);font-weight:700}',
+      '.pt-sdot i{width:7px;height:7px;border-radius:50%;background:rgba(148,163,184,.45);display:inline-block}',
+      '.pt-sdot.done{color:#036b29}',
+      '.pt-sdot.done i{background:#036b29}',
+      'html.dark body:not(.is-courier-mode) .pt-sdot.done{color:#34d399}',
+      'html.dark body:not(.is-courier-mode) .pt-sdot.done i{background:#34d399}',
+      '.pt-sdot.cur{color:#7c3aed}',
+      '.pt-sdot.cur i{background:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.22)}',
+      'html.dark body:not(.is-courier-mode) .pt-sdot.cur{color:#c4b5fd}',
+      'html.dark body:not(.is-courier-mode) .pt-sdot.cur i{background:#c4b5fd}',
+      '.pt-smart-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding-top:8px;border-top:1px solid var(--r-bd,rgba(148,163,184,.16))}',
+      '.pt-smart-acts{display:flex;flex-wrap:wrap;align-items:center;gap:6px}',
+      '.pt-icon-btn{height:36px;min-width:36px;padding:0 10px;border-radius:10px;border:1px solid var(--r-bd,rgba(148,163,184,.28));background:transparent;color:var(--r-tx,#0f172a);font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;text-decoration:none;font-family:inherit}',
+      '.pt-icon-btn:hover{border-color:var(--r-acc,#036b29);color:var(--r-acc,#036b29)}',
+      'html.dark body:not(.is-courier-mode) .pt-icon-btn{border-color:rgba(255,255,255,.14);color:#e2e8f0}',
+      '.pt-more-menu{position:relative}',
+      '.pt-more-menu>summary{list-style:none;height:36px;min-width:38px;padding:0 11px;border-radius:10px;border:1px solid var(--r-bd,rgba(148,163,184,.28));background:transparent;color:var(--r-tx,#0f172a);font-size:15px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}',
+      '.pt-more-menu>summary::-webkit-details-marker{display:none}',
+      'html.dark body:not(.is-courier-mode) .pt-more-menu>summary{border-color:rgba(255,255,255,.14);color:#e2e8f0}',
+      '.pt-more-pop{position:absolute;inset-inline-end:0;top:calc(100% + 6px);min-width:190px;z-index:40;background:var(--r-card,#ffffff);border:1px solid var(--r-bd,rgba(148,163,184,.3));border-radius:12px;padding:6px;box-shadow:0 12px 28px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:4px}',
+      'html.dark body:not(.is-courier-mode) .pt-more-pop{background:#0f1311;border-color:rgba(255,255,255,.15);box-shadow:0 14px 32px rgba(0,0,0,.65)}',
+      '.pt-more-pop button{width:100%;text-align:start;border:0;border-radius:9px;padding:8px 10px;background:transparent;color:var(--r-tx,#0f172a);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}',
+      '.pt-more-pop button:hover{background:rgba(148,163,184,.14)}',
+      '.pt-more-pop button.danger{color:#dc2626}',
+      'html.dark body:not(.is-courier-mode) .pt-more-pop button{color:#f5f4f0}',
+      'html.dark body:not(.is-courier-mode) .pt-more-pop button.danger{color:#fb7185}',
+      '.pt-comment-box[hidden]{display:none!important}',
+      '#pt-detail-panel.hidden{display:none!important}',
+      '.pt-det-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}',
+      '.pt-det-col{border:1px solid var(--r-bd,rgba(148,163,184,.22));border-radius:13px;padding:12px;background:var(--r-bg,rgba(148,163,184,.04));display:flex;flex-direction:column;gap:8px}',
+      'html.dark body:not(.is-courier-mode) .pt-det-col{background:#111513;border-color:rgba(255,255,255,.1)}',
+      '.pt-wrap{padding:0 2px;box-sizing:border-box}',
+      '.pt-list-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--r-bd,rgba(148,163,184,.18))}',
+      '.pt-list-title{font-size:16px;font-weight:800;margin:0;color:var(--r-tx,#0f172a)}',
+      'html.dark body:not(.is-courier-mode) .pt-list-title{color:#f5f4f0}',
+      '.pt-smart-body{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(240px,1fr);gap:10px;align-items:stretch}',
+      '.pt-svc-box,.pt-fin-box{border:1px solid var(--r-bd,rgba(148,163,184,.18));border-radius:12px;padding:10px 12px;background:var(--r-bg,rgba(148,163,184,.04));display:flex;flex-direction:column;gap:6px}',
+      'html.dark body:not(.is-courier-mode) .pt-svc-box,html.dark body:not(.is-courier-mode) .pt-fin-box{background:#111513;border-color:rgba(255,255,255,.09)}',
+      '.pt-box-lbl{font-size:11px;font-weight:800;color:var(--r-mute,#64748b);letter-spacing:.1px}',
+      '.pt-svc-line{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;padding:5px 0;border-bottom:1px dashed var(--r-bd,rgba(148,163,184,.18));font-size:12.5px}',
+      '.pt-svc-line:last-child{border-bottom:0;padding-bottom:0}',
+      '.pt-svc-name{font-weight:700;color:var(--r-tx,#0f172a)}',
+      'html.dark body:not(.is-courier-mode) .pt-svc-name{color:#f5f4f0}',
+      '.pt-svc-doc{font-size:11.5px;color:var(--r-mute,#64748b);background:rgba(148,163,184,.12);padding:2px 8px;border-radius:8px}',
+      '.pt-svc-qty{font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(3,107,41,.12);color:#036b29;white-space:nowrap}',
+      'html.dark body:not(.is-courier-mode) .pt-svc-qty{background:rgba(16,185,129,.18);color:#34d399}',
+      '.pt-fin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}',
+      '.pt-fin-cell{display:flex;flex-direction:column;gap:2px;font-size:12px}',
+      '.pt-fin-cell span{font-size:11px;color:var(--r-mute,#64748b)}',
+      '.pt-fin-cell b{font-size:13px;font-weight:800;color:var(--r-tx,#0f172a)}',
+      'html.dark body:not(.is-courier-mode) .pt-fin-cell b{color:#f5f4f0}',
+      '@media (max-width:780px){.pt-det-grid,.pt-smart-body{grid-template-columns:1fr}}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -356,10 +432,16 @@
     });
   }
 
-  /* التيكتات بتتعرض جوه شاشة «التيكتات» الموحّدة في js/70 (قايمة واحدة مع المشاوير) — هنا بنطلب إعادة الرسم بس. */
+  /* التيكتات بتتعرض جوه شاشة «التيكتات» و«اليوم» و«خط السير» الموحّدة في js/70 — هنا بنطلب إعادة الرسم. */
   function renderCourierTicketsIntoBody() {
-    if (typeof window.__cpRerender === 'function' && currentCourierTab() === 'tickets') window.__cpRerender();
+    var tab = currentCourierTab();
+    if (typeof window.__cpRerender === 'function' && (tab === 'tickets' || tab === 'today' || tab === 'route')) window.__cpRerender();
   }
+  window.tsRenderCourierPapersActions = renderCourierPapersActionsOnly;
+  window.tsOpenCourierTicketDetail = function (tid) {
+    var item = (Array.isArray(st.courierTickets) ? st.courierTickets : []).find(function (x) { return Number(x.id) === Number(tid); });
+    if (item) openCourierTicketDetailModal(item);
+  };
 
   var STEP_DONE = { accepted: 1, call_attempt: 2, on_the_way: 3, waiting: 4, papers_received: 5 };
 
@@ -441,7 +523,7 @@
     if (t.summary_comment) rows.push(['ملخص المكالمة', '<span style="white-space:pre-wrap">' + eh(t.summary_comment) + '</span>']);
     if (t.staff_notes) rows.push(['ملاحظة', eh(t.staff_notes)]);
     if (!rows.length) return '';
-    return '<details class="cpw-body" style="margin:8px 0"><summary style="cursor:pointer;font-weight:800">تفاصيل التيكت والمكالمة</summary>' +
+    return '<details class="cpw-body" open style="margin:8px 0;border:1px solid var(--bd);border-radius:14px;background:var(--surface-soft,rgba(148,163,184,.08))"><summary style="cursor:pointer;font-weight:800">تفاصيل السكريبت والمكالمة</summary>' +
       rows.map(function (r) { return '<div class="cpw-kv"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') + '</details>';
   };
 
@@ -467,6 +549,9 @@
   }
 
   function ticketWorkRow(t, openKey) {
+    if (typeof window.__cpRenderTicketCard === 'function') {
+      return window.__cpRenderTicketCard(t, openKey);
+    }
     var key = 't' + Number(t.id), open = openKey === key;
     var done = STEP_DONE[t.courier_step || ''] || 0, pct = Math.round(done / 5 * 100);
     var isCancel = t.status === 'cancelled', isConv = t.status === 'converted';
@@ -598,6 +683,13 @@
     if (ctabBtn) {
       st.courierTab = ctabBtn.getAttribute('data-pt73-ctab') || 'new';
       renderCourierTicketsIntoBody();
+      return;
+    }
+    var etaWaBtn = t.closest('[data-pt73-eta-wa]');
+    if (etaWaBtn) {
+      var wTid = Number(etaWaBtn.getAttribute('data-pt73-eta-wa'));
+      var wItem = st.courierTickets.find(function (x) { return Number(x.id) === wTid; });
+      if (wItem) askEtaWhatsapp(wItem);
       return;
     }
     var openDetBtn = t.closest('[data-pt73-open-detail]');
@@ -739,6 +831,9 @@
         if (item) {
           item.courier_step = res.data.step || evType;
           item.courier_step_at = res.data.at || new Date().toISOString();
+        }
+        if (evType === 'on_the_way' && item && item.sd_request_id && typeof window.__cpEnsureTicketInRoute === 'function') {
+          window.__cpEnsureTicketInRoute(item.sd_request_id);
         }
         renderCourierTicketsIntoBody();
         toast('تم تحديث حالة الاستلام: ' + lbl, 'success');
@@ -1145,62 +1240,144 @@
       list.innerHTML = '<div class="pt-sub" style="text-align:center;padding:18px 0">' + emptyMsg + '</div>';
       return;
     }
-    var statusLabel = { open: 'مفتوح', with_courier: 'مع المندوب', converted: 'تم التحويل', cancelled: 'ملغي' };
+    var STEP_SEQ = [
+      ['accepted', 'قبول'],
+      ['call_attempt', 'اتصال'],
+      ['on_the_way', 'في الطريق'],
+      ['waiting', 'وصل'],
+      ['papers_received', 'استلم الأوراق']
+    ];
     list.innerHTML = filtered.map(function (t) {
       var items = mapTicketToItems(t);
-      var svcsHtml = items.map(function (it) {
-        return eh(it.service_name) + (it.doc_type ? ' (' + eh(it.doc_type) + ')' : '') + ' × ' + Number(it.qty || 1);
-      }).join(' + ');
+      var totalQty = items.reduce(function (acc, it) { return acc + Math.max(1, Number(it.qty || 1)); }, 0);
+      var svcsRowsHtml = items.map(function (it) {
+        return '<div class="pt-svc-line">' +
+          '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0">' +
+            '<span class="pt-svc-name">' + eh(it.service_name || 'خدمة') + '</span>' +
+            (it.doc_type ? '<span class="pt-svc-doc">' + eh(it.doc_type) + '</span>' : '') +
+          '</div>' +
+          '<span class="pt-svc-qty">العدد: ' + Number(it.qty || 1) + '</span>' +
+        '</div>';
+      }).join('');
       var payBadge = t.payment_status === 'cod_cash'
         ? '<span class="pt-badge pt-badge-warn">تحصيل كاش: ' + eh(money(t.collect_amount || 0)) + '</span>'
         : (t.payment_status === 'instapay_on_arrival'
-          ? '<span class="pt-badge pt-badge-pur">إنستا باي عند الاستلام: ' + eh(money(t.collect_amount || 0)) + '</span>'
-          : '<span class="pt-badge pt-badge-ok">دافع مسبقاً</span>');
+          ? '<span class="pt-badge pt-badge-pur">إنستا باي: ' + eh(money(t.collect_amount || 0)) + '</span>'
+          : '<span class="pt-badge pt-badge-ok">خالص الدفع مسبقاً</span>');
       var canAction = t.status === 'open' || t.status === 'with_courier';
       var canCancel = canAction && isManager();
-
-      var stepTxt = t.courier_step
-        ? (STEP_LABELS[t.courier_step] || t.courier_step) + (t.courier_step_at ? ' · ' + fmtStepTime(t.courier_step_at) : '')
-        : (t.status === 'with_courier' ? 'بانتظار قبول المندوب' : '');
+      var courierName = courierNameById(t.courier_id);
       var waPh = cleanWaPhone(t.phone);
-      return '<div class="pt-ticket-item" data-ticket-row="' + Number(t.id) + '">' +
-        '<div style="flex:1;min-width:250px">' +
-          '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">' +
+      var holder = t.papers_holder || 'office';
+      var isReadyConvert = canAction && !!t.courier_id && (t.courier_step === 'papers_received' || holder === 'courier');
+
+      /* شارة حالة واحدة واضحة تختصر وضع التيكت دلوقتي */
+      var stageCls = 's-live', stageTxt = '';
+      if (t.status === 'cancelled') {
+        stageCls = 's-bad'; stageTxt = 'ملغي';
+      } else if (t.status === 'converted') {
+        stageCls = 's-done'; stageTxt = 'تم التحويل' + (t.converted_tx_id ? ' · ' + t.converted_tx_id : '');
+      } else if (!t.courier_id) {
+        stageCls = 's-new'; stageTxt = 'بانتظار توجيه لمندوب';
+      } else if (t.courier_step === 'papers_received') {
+        stageCls = 's-ready'; stageTxt = 'استلم الأوراق · جاهز للتحويل';
+      } else {
+        var curLbl = t.courier_step ? (STEP_LABELS[t.courier_step] || t.courier_step) : 'بانتظار القبول';
+        stageCls = 's-live'; stageTxt = courierName + ' · ' + curLbl;
+      }
+
+      /* شريط خطوات خفيف للتيكت اللي مع المندوب */
+      var stepsStrip = '';
+      if (t.status === 'with_courier') {
+        var curRank = STEP_DONE[t.courier_step || ''] || 0;
+        stepsStrip = '<div class="pt-smart-steps">' +
+          STEP_SEQ.map(function (pair, idx) {
+            var r = idx + 1;
+            var cls = r <= curRank ? 'done' : (r === curRank + 1 ? 'cur' : '');
+            return '<span class="pt-sdot ' + cls + '"><i></i>' + pair[1] + '</span>';
+          }).join('<span style="opacity:.35">←</span>') +
+          (t.courier_step_at ? '<span class="pt-sub" style="margin-inline-start:auto">' + eh(fmtStepTime(t.courier_step_at)) + '</span>' : '') +
+        '</div>';
+      }
+
+      /* زرار قرار واحد أساسي حسب المرحلة الحالية */
+      var primaryActionBtn = '';
+      var convertInMenu = false;
+      if (isReadyConvert && isManager()) {
+        primaryActionBtn = '<button type="button" class="pt-btn pt-btn-mission" data-pt-act="convert" data-id="' + Number(t.id) + '">✓ تحويل لمهمة استلام</button>';
+      } else if (canAction && !t.courier_id) {
+        primaryActionBtn = '<button type="button" class="pt-btn pt-btn-pri" data-pt-act="detail" data-id="' + Number(t.id) + '">توجيه لمندوب / تفاصيل</button>';
+      } else if (canAction) {
+        primaryActionBtn = '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="detail" data-id="' + Number(t.id) + '">متابعة الخطوات والتفاصيل</button>';
+        convertInMenu = isManager() && !!t.courier_id;
+      } else {
+        primaryActionBtn = '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="detail" data-id="' + Number(t.id) + '">عرض التفاصيل والسجل</button>';
+      }
+
+      var menuItems = [];
+      menuItems.push('<button type="button" data-pt-act="detail" data-id="' + Number(t.id) + '">التفاصيل وسجل التواصل</button>');
+      if (t.summary_comment) menuItems.push('<button type="button" data-pt-act="copy" data-id="' + Number(t.id) + '">نسخ كومنت سمارت ديسك</button>');
+      if (convertInMenu) menuItems.push('<button type="button" data-pt-act="convert" data-id="' + Number(t.id) + '">✓ تحويل لمهمة استلام</button>');
+      if (canAction) menuItems.push('<button type="button" data-pt-act="prefill" data-id="' + Number(t.id) + '">فتح في معاملة جديدة</button>');
+      if (canCancel) menuItems.push('<button type="button" class="danger" data-pt-act="cancel" data-id="' + Number(t.id) + '">✕ إلغاء التيكت</button>');
+
+      var cardCls = 'pt-smart-card' + (isReadyConvert ? ' ready' : '') + (t.status === 'cancelled' ? ' cancelled' : '');
+      return '<div class="' + cardCls + '" data-ticket-row="' + Number(t.id) + '">' +
+        /* السطر 1: الهوية + شارة المرحلة الواحدة + أيقونة نسخ الكومنت */
+        '<div class="pt-smart-top">' +
+          '<div class="pt-smart-id">' +
+            '<b class="pt-client-cell" style="font-size:15px">' + eh(t.client_name) + '</b>' +
             '<span class="pt-badge pt-badge-org" dir="ltr">' + eh(t.sd_request_id) + '</span>' +
-            '<b class="pt-client-cell">' + eh(t.client_name) + '</b>' +
-            '<span class="pt-sub" dir="ltr">' + eh(t.phone) + '</span>' +
-            '<span class="pt-badge ' + (t.status === 'cancelled' ? 'pt-badge-cancel' : 'pt-badge-mut') + '">' + eh(statusLabel[t.status] || t.status) + '</span>' +
-            (stepTxt ? '<span class="pt-badge pt-badge-pur">' + eh(stepTxt) + '</span>' : '') +
-            payBadge +
-            '<span class="pt-badge pt-badge-mut">المندوب: ' + eh(courierNameById(t.courier_id)) + '</span>' +
-            (t.converted_tx_id ? '<span class="pt-badge pt-badge-org" dir="ltr">' + eh(t.converted_tx_id) + '</span>' : '') +
-            (t.mission_id ? '<span class="pt-badge pt-badge-pur" dir="ltr">مهمة #' + Number(t.mission_id) + '</span>' : '') +
-            '<span class="pt-badge ' + papersHolderBadgeClass(t.papers_holder || 'office') + '">الأوراق: ' + eh(PAPERS_HOLDER_LABELS[t.papers_holder || 'office'] || 'المكتب') + '</span>' +
-            (t.papers_pending_event_id ? '<span class="pt-badge pt-badge-pur">تسليم أوراق معلّق</span>' : '') +
-            (t.status === 'cancelled' && (t.papers_holder || 'office') === 'courier' ? '<span class="pt-badge pt-badge-warn">تنبيه: الأوراق مع المندوب</span>' : '') +
+            (t.phone ? '<span class="pt-sub" dir="ltr">' + eh(t.phone) + '</span>' : '') +
+            (t.zone ? '<span class="pt-badge pt-badge-mut">' + eh(t.zone) + '</span>' : '') +
           '</div>' +
-          '<div class="pt-sub" style="margin-top:5px">' + svcsHtml + ' · الإجمالي: <b>' + eh(money(t.total)) + '</b> · الميعاد: ' + eh(t.slot_pref) + (t.zone ? ' · ' + eh(t.zone) : '') + '</div>' +
-          (t.status === 'cancelled'
-            ? '<div style="margin-top:5px;padding:6px 9px;border-radius:9px;background:rgba(220,38,38,.1);color:#dc2626;font-size:12px"><b>سبب الإلغاء:</b> ' + eh(t.cancel_reason || '—') +
-              (t.cancelled_at ? ' · <b>التاريخ:</b> ' + eh(fmtStepTime(t.cancelled_at)) : '') +
-              (t.courier_id ? ' · <b>المندوب:</b> ' + (t.courier_ack_at ? 'أكّد الإلغاء (' + eh(fmtStepTime(t.courier_ack_at)) + ')' : 'بانتظار تأكيد المندوب') : '') + '</div>'
-            : '') +
-          (t.staff_notes ? '<div class="pt-sub" style="margin-top:3px;color:var(--r-acc,#036b29)"><b>ملاحظات:</b> ' + eh(t.staff_notes) + '</div>' : '') +
-          (t.summary_comment ? '<div class="pt-comment-pre">' + eh(t.summary_comment) + '</div>' : '') +
+          '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+            '<span class="pt-smart-stage ' + stageCls + '">' + eh(stageTxt) + '</span>' +
+            (t.papers_pending_event_id ? '<span class="pt-badge pt-badge-pur">تسليم أوراق معلّق</span>' : '') +
+            (t.status === 'cancelled' && holder === 'courier' ? '<span class="pt-badge pt-badge-warn">الأوراق مع المندوب</span>' : '') +
+            (t.summary_comment ? '<button type="button" class="pt-icon-btn" data-pt-act="copy" data-id="' + Number(t.id) + '" title="نسخ الكومنت لسمارت ديسك"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>نسخ</span></button>' : '') +
+          '</div>' +
         '</div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
-          (t.phone ? '<a class="pt-btn pt-btn-pri" href="tel:' + eh(t.phone) + '"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg> اتصال</a>' : '') +
-          (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> واتساب</a>' : '') +
-          '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="detail" data-id="' + Number(t.id) + '">التفاصيل والتواصل</button>' +
-          '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="copy" data-id="' + Number(t.id) + '">نسخ الكومنت</button>' +
-          (canAction && isManager()
-            ? (t.courier_id
-              ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-act="convert" data-id="' + Number(t.id) + '">تحويل لمهمة استلام</button>'
-              : '<button type="button" class="pt-btn pt-btn-sec" disabled title="لازم تعيّن مندوب قبل التحويل">تحويل لمهمة استلام</button><span class="pt-sub" style="align-self:center">عيّن مندوب أولاً للتحويل</span>')
-            : '') +
-          (canAction ? '<button type="button" class="pt-btn pt-btn-sec" data-pt-act="prefill" data-id="' + Number(t.id) + '">فتح في معاملة جديدة</button>' : '') +
-          (canCancel ? '<button type="button" class="pt-btn pt-btn-danger" data-pt-act="cancel" data-id="' + Number(t.id) + '">إلغاء التيكت</button>' : '') +
+        /* السطر 2: تقسيم نظيف (الخدمات والمستندات | الملخص المالي والميعاد) */
+        '<div class="pt-smart-body">' +
+          '<div class="pt-svc-box">' +
+            '<div class="pt-box-lbl">الخدمات والمستندات (' + totalQty + ')</div>' +
+            svcsRowsHtml +
+          '</div>' +
+          '<div class="pt-fin-box">' +
+            '<div class="pt-box-lbl">الملخص المالي والمتابعة</div>' +
+            '<div class="pt-fin-grid">' +
+              '<div class="pt-fin-cell"><span>إجمالي الطلب</span><b>' + eh(money(t.total)) + '</b></div>' +
+              '<div class="pt-fin-cell"><span>حالة التحصيل</span><div>' + payBadge + '</div></div>' +
+              '<div class="pt-fin-cell"><span>المندوب المعيّن</span><b>' + eh(courierName) + '</b></div>' +
+              '<div class="pt-fin-cell"><span>الميعاد والمنطقة</span><b>' + eh([t.slot_pref || '—', t.zone || ''].filter(Boolean).join(' · ')) + '</b></div>' +
+            '</div>' +
+            ((t.mission_id || holder !== 'office')
+              ? '<div style="display:flex;flex-wrap:wrap;gap:6px;padding-top:4px">' +
+                  (t.mission_id ? '<span class="pt-badge pt-badge-pur" dir="ltr">مهمة #' + Number(t.mission_id) + '</span>' : '') +
+                  (holder !== 'office' ? '<span class="pt-badge ' + papersHolderBadgeClass(holder) + '">الأوراق: ' + eh(PAPERS_HOLDER_LABELS[holder] || 'المكتب') + '</span>' : '') +
+                '</div>'
+              : '') +
+          '</div>' +
         '</div>' +
+        stepsStrip +
+        (t.status === 'cancelled'
+          ? '<div style="padding:7px 10px;border-radius:10px;background:rgba(220,38,38,.1);color:#dc2626;font-size:12px"><b>سبب الإلغاء:</b> ' + eh(t.cancel_reason || '—') +
+            (t.cancelled_at ? ' · ' + eh(fmtStepTime(t.cancelled_at)) : '') +
+            (t.courier_id ? ' · <b>المندوب:</b> ' + (t.courier_ack_at ? 'أكّد الإلغاء' : 'بانتظار تأكيد المندوب') : '') + '</div>'
+          : '') +
+        (t.staff_notes ? '<div class="pt-sub" style="color:var(--r-acc,#036b29)"><b>ملاحظة:</b> ' + eh(t.staff_notes) + '</div>' : '') +
+        /* السطر 3: زرار القرار الواحد + أيقونات تواصل + قائمة مدمجة لباقي الأزرار */
+        '<div class="pt-smart-foot">' +
+          '<div class="pt-smart-acts">' +
+            primaryActionBtn +
+            (t.phone ? '<a class="pt-icon-btn" href="tel:' + eh(t.phone) + '" title="اتصال بالعميل"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>اتصال</span></a>' : '') +
+            (waPh ? '<a class="pt-icon-btn" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" title="واتساب العميل"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg><span>واتساب</span></a>' : '') +
+            '<details class="pt-more-menu"><summary title="خيارات إضافية">⋯</summary><div class="pt-more-pop">' + menuItems.join('') + '</div></details>' +
+          '</div>' +
+          (t.summary_comment ? '<button type="button" class="pt-icon-btn" data-pt-toggle-comment="' + Number(t.id) + '" aria-expanded="false">عرض الكومنت ⌄</button>' : '') +
+        '</div>' +
+        (t.summary_comment ? '<div class="pt-comment-box" id="pt-cm-box-' + Number(t.id) + '" hidden><div class="pt-comment-pre" style="margin-top:0">' + eh(t.summary_comment) + '</div></div>' : '') +
       '</div>';
     }).join('');
   }
@@ -1215,20 +1392,22 @@
 
     pane.innerHTML =
       '<div class="pt-wrap">' +
-        '<section class="pt-card">' +
+        '<section class="pt-card" style="padding:16px 20px">' +
           '<div class="pt-head">' +
-            '<div>' +
-              '<h2 class="pt-title">تيكت الاستلام المبدئي (سمارت ديسك + السكريبت الحي)</h2>' +
-              '<div class="pt-sub">دعم تعدد الخدمات، حالة الدفع والتحصيل للمندوب، شروط كتالوج الخدمات، والتحويل المباشر لمعاملة رسمية.</div>' +
+            '<div style="display:flex;flex-direction:column;gap:4px">' +
+              '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+                '<h2 class="pt-title" style="font-size:18px;font-weight:800">تذاكر الاستلام المبدئية</h2>' +
+                '<span id="pt-rt-status" class="pt-badge pt-badge-mut">جاري الاتصال…</span>' +
+              '</div>' +
+              '<div class="pt-sub">سجّل بيانات العميل من سمارت ديسك، تابِع خطوات المندوب لحظياً، وحوّل التيكت لمعاملة رسمية بضغطة واحدة.</div>' +
             '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
-              '<span id="pt-rt-status" class="pt-badge pt-badge-mut">جاري الاتصال بالتحديث المباشر…</span>' +
               '<button type="button" class="pt-btn pt-btn-sec hidden" id="pt-rt-reconnect">إعادة الاتصال</button>' +
               '<button type="button" class="pt-btn pt-btn-sec" id="pt-refresh-btn">تحديث القائمة</button>' +
             '</div>' +
           '</div>' +
         '</section>' +
-        '<section id="pt-detail-panel" class="pt-card hidden" style="display:flex;flex-direction:column;gap:10px"></section>' +
+        '<section id="pt-detail-panel" class="pt-card hidden"></section>' +
 
         '<form id="pt-form" class="pt-grid2">' +
           '<section class="pt-card" style="display:flex;flex-direction:column;gap:12px">' +
@@ -1287,9 +1466,9 @@
           '</section>' +
         '</form>' +
 
-        '<section class="pt-card" style="display:flex;flex-direction:column;gap:10px">' +
-          '<div class="pt-head"><b style="font-size:14px">تذاكر الاستلام المبدئية</b><div id="pt-mgr-tabs" class="pt-tabs-bar" style="margin:0"></div></div>' +
-          '<div id="pt-list" style="display:flex;flex-direction:column;gap:10px">جاري التحميل…</div>' +
+        '<section class="pt-card" style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">' +
+          '<div class="pt-list-head"><div><h3 class="pt-list-title">قائمة التذاكر والمتابعة</h3><div class="pt-sub">كل تيكت بيعرض خطوات المندوب وزرار القرار المطلوب في مرحلته الحالية</div></div><div id="pt-mgr-tabs" class="pt-tabs-bar" style="margin:0"></div></div>' +
+          '<div id="pt-list" style="display:flex;flex-direction:column;gap:12px">جاري التحميل…</div>' +
         '</section>' +
       '</div>';
 
@@ -1476,31 +1655,54 @@
 
     panel.classList.remove('hidden');
     panel.innerHTML =
-      '<div class="pt-head">' +
-        '<div>' +
-          '<b style="font-size:14px">تفاصيل التيكت: ' + eh(t.client_name) + ' (<span dir="ltr">' + eh(t.sd_request_id) + '</span>)</b>' +
-          '<div class="pt-sub">الخطوة الحالية: <b>' + eh(stepTxt) + '</b> · المندوب: <b>' + eh(courierNameById(t.courier_id)) + '</b></div>' +
+      '<div style="display:flex;flex-direction:column;gap:12px">' +
+        '<div class="pt-head" style="padding-bottom:10px;border-bottom:1px solid var(--r-bd,rgba(148,163,184,.18))">' +
+          '<div>' +
+            '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px">' +
+              '<b style="font-size:15px">' + eh(t.client_name) + '</b>' +
+              '<span class="pt-badge pt-badge-org" dir="ltr">' + eh(t.sd_request_id) + '</span>' +
+              '<span class="pt-badge pt-badge-ok">' + eh(stepTxt) + '</span>' +
+            '</div>' +
+            '<div class="pt-sub" style="margin-top:4px">المندوب: <b>' + eh(courierNameById(t.courier_id)) + '</b>' + (t.zone ? ' · ' + eh(t.zone) : '') + (t.address ? ' — ' + eh(t.address) : '') + '</div>' +
+          '</div>' +
+          '<div class="pt-smart-acts">' +
+            (isManager() && (t.status === 'open' || t.status === 'with_courier') && t.courier_id
+              ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-act="convert" data-id="' + Number(t.id) + '">✓ تحويل لمهمة استلام</button>'
+              : '') +
+            (t.phone ? '<a class="pt-icon-btn" href="tel:' + eh(t.phone) + '">اتصال</a>' : '') +
+            (waPh ? '<a class="pt-icon-btn" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '">واتساب</a>' : '') +
+            (isManager() && (t.status === 'open' || t.status === 'with_courier')
+              ? '<button type="button" class="pt-btn pt-btn-danger" data-pt-act="cancel" data-id="' + Number(t.id) + '">إلغاء</button>'
+              : '') +
+            '<button type="button" class="pt-icon-btn" id="pt-detail-close">✕ إغلاق</button>' +
+          '</div>' +
         '</div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
-          (t.phone ? '<a class="pt-btn pt-btn-pri" href="tel:' + eh(t.phone) + '"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg> اتصال</a>' : '') +
-          (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> واتساب</a>' : '') +
-          (isManager() && (t.status === 'open' || t.status === 'with_courier')
-            ? (t.courier_id
-              ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-act="convert" data-id="' + Number(t.id) + '">تحويل لمهمة استلام</button>'
-              : '<button type="button" class="pt-btn pt-btn-sec" disabled>تحويل لمهمة استلام (بدون مندوب)</button>')
-            : '') +
-          (isManager() && (t.status === 'open' || t.status === 'with_courier')
-            ? '<button type="button" class="pt-btn pt-btn-danger" data-pt-act="cancel" data-id="' + Number(t.id) + '">إلغاء التيكت</button>'
-            : '') +
-          '<button type="button" class="pt-btn pt-btn-sec" id="pt-detail-close">إغلاق</button>' +
+        '<div class="pt-det-grid">' +
+          '<div class="pt-det-col">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+              '<b style="font-size:13px">الأوراق (عهدة المستندات)</b>' +
+              '<span class="pt-badge ' + papersHolderBadgeClass(pHolder) + '">' + eh(PAPERS_HOLDER_LABELS[pHolder] || 'المكتب') + '</span>' +
+            '</div>' +
+            (t.status === 'cancelled' && pHolder === 'courier'
+              ? '<div class="pt-papers-warn">التيكت ملغي والأوراق ما زالت مع المندوب.</div>'
+              : '') +
+            '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">' +
+              (canReqToCourier ? '<button type="button" class="pt-btn pt-btn-pri" data-pt-papers="to_courier" data-id="' + Number(t.id) + '">تسليم الأوراق للمندوب</button>' : '') +
+              (canConfirmOffice ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-papers="confirm_office" data-id="' + Number(t.id) + '" data-event-id="' + Number(pendingEv.id) + '">تأكيد استلام الأوراق بالمكتب</button>' : '') +
+              (!canReqToCourier && !canConfirmOffice ? '<span class="pt-sub">' + eh(reqCourierReason || confirmOfficeReason) + '</span>' : '') +
+            '</div>' +
+            '<div style="display:flex;flex-direction:column;gap:5px">' + pHistHtml + '</div>' +
+          '</div>' +
+          '<div class="pt-det-col">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+              '<b style="font-size:13px">سجل التواصل مع العميل</b>' +
+              '<span class="pt-sub">' + logs.length + ' مرة · ' + eh(lastAt) + '</span>' +
+            '</div>' +
+            '<div style="display:flex;flex-direction:column;gap:6px">' + logsHtml + '</div>' +
+            (t.summary_comment ? '<div class="pt-comment-pre" style="margin-top:4px">' + eh(t.summary_comment) + '</div>' : '') +
+          '</div>' +
         '</div>' +
-      '</div>' +
-      '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:12px">' +
-        '<b>سجل التواصل مع العميل</b>' +
-        '<span class="pt-sub">عدد المرات: <b>' + logs.length + '</b> · آخر تواصل: <b>' + eh(lastAt) + '</b></span>' +
-      '</div>' +
-      papersSectionHtml +
-      '<div style="display:flex;flex-direction:column;gap:6px">' + logsHtml + '</div>';
+      '</div>';
   }
 
   async function openTicketDetail(ticketId) {
@@ -1714,8 +1916,21 @@
       }
       return;
     }
+    var cmBtn = e.target && e.target.closest ? e.target.closest('[data-pt-toggle-comment]') : null;
+    if (cmBtn) {
+      var cmId = cmBtn.getAttribute('data-pt-toggle-comment');
+      var cmBox = $('pt-cm-box-' + cmId);
+      if (cmBox) {
+        cmBox.hidden = !cmBox.hidden;
+        cmBtn.setAttribute('aria-expanded', cmBox.hidden ? 'false' : 'true');
+        cmBtn.textContent = cmBox.hidden ? 'عرض الكومنت ⌄' : 'إخفاء الكومنت ⌃';
+      }
+      return;
+    }
     var b = e.target && e.target.closest ? e.target.closest('[data-pt-act]') : null;
     if (!b) return;
+    var openMenu = b.closest && b.closest('details.pt-more-menu');
+    if (openMenu) openMenu.removeAttribute('open');
     var id = Number(b.dataset.id);
     var t = st.tickets.find(function (x) { return Number(x.id) === id; });
     if (!t) return;
