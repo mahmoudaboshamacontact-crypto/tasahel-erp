@@ -207,8 +207,11 @@
     const r = await sbClient.from('tx_comments').select('id,transaction_id,author_id,author_name,body,created_at')
       .neq('author_id', uid).gte('created_at', since).order('created_at', { ascending: false }).limit(30);
     if (r.error) { if (!miss(r.error)) console.warn('p17 comments', r.error); return; }
-    cmts = r.data || [];
+    cmts = (r.data || []).filter(c => !isAutoStep(c));
   }
+  /* تعليقات خطوات المندوب التلقائية: بتفضل في سجل المعاملة لكن مش بتظهر في الجرس ولا كـ toast */
+  const AUTO_STEP_RE = /^(المندوب (استلم التذكرة|بدأ محاولة الاتصال|في الطريق للعميل|وصل وفي انتظار|استلم الأوراق)|تسجيل وصول|سجل وصول|تسجيل (اتصال|واتساب)|ملاحظة التذكرة)/;
+  function isAutoStep(c) { return !!(c && AUTO_STEP_RE.test(String(c.body || '').trim())); }
   function subscribe() {
     try { if (nCh) sbClient.removeChannel(nCh); if (cCh) sbClient.removeChannel(cCh); } catch (e) { /* */ }
     nCh = sbClient.channel('p17-notes-' + uid).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + uid }, p => {
@@ -216,7 +219,7 @@
       notes.unshift(p.new); notes = notes.slice(0, 30); renderUB();
     }).subscribe();
     cCh = sbClient.channel('p17-cmt-' + uid).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tx_comments' }, p => {
-      const c = p.new; if (!c || c.author_id === uid || cmts.some(x => x.id === c.id)) return;
+      const c = p.new; if (!c || c.author_id === uid || isAutoStep(c) || cmts.some(x => x.id === c.id)) return;
       cmts.unshift(c); cmts = cmts.slice(0, 30); renderUB();
       showToast('💬 تعليق جديد من ' + (c.author_name || 'موظف') + ' على ' + c.transaction_id, 'info', 5000);
     }).subscribe();
