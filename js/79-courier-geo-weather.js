@@ -104,7 +104,7 @@
     var wpStr = clean.slice(0, 15).map(function (w) { return Number(w.lat).toFixed(4) + ',' + Number(w.lng).toFixed(4); }).join('|');
     var cache = readJsonLS(ROUTE_CACHE_KEY, {});
     var hit = cache[wpStr];
-    if (hit && (Date.now() - hit.at) < 10 * 60 * 1000) {
+    if (hit && hit.data && hit.data.legsMin && (Date.now() - hit.at) < 10 * 60 * 1000) {
       return hit.data;
     }
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
@@ -121,7 +121,8 @@
       if (!props) return null;
       var km = Math.round((Number(props.distance) || 0) / 100) / 10;
       var min = Math.max(1, Math.round((Number(props.time) || 0) / 60));
-      var out = { km: km, min: min, stops: clean.length };
+      var legsMin = Array.isArray(props.legs) ? props.legs.map(function (lg) { return Math.max(1, Math.round((Number(lg && lg.time) || 0) / 60)); }) : [];
+      var out = { km: km, min: min, stops: clean.length, legsMin: legsMin };
       cache = {}; // نحتفظ بآخر مسار فقط عشان localStorage يفضل خفيف
       cache[wpStr] = { at: Date.now(), data: out };
       writeJsonLS(ROUTE_CACHE_KEY, cache);

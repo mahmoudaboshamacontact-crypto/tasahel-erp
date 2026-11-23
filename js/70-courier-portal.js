@@ -501,7 +501,7 @@
       const z = detectZoneAndCoords(it);
       return '<button type="button" class="cp-stop-row' + (idx === 0 ? ' cur' : '') + '" data-act="detail" data-tx="' + eh(it.transaction_id) + '">' +
         '<b class="n">' + num(idx + 1) + '</b>' +
-        '<span class="t"><strong>' + eh(it.client_name || 'عميل') + '</strong><small>' + eh(it.address || z.zone || '') + ' · ' + eh(kindLabel(it)) + '</small></span>' +
+        '<span class="t"><strong>' + eh(it.client_name || 'عميل') + '</strong><small>' + eh(it.address || z.zone || '') + ' · ' + eh(kindLabel(it)) + '</small><small class="cp-stop-eta" data-eta-tx="' + eh(it.transaction_id) + '"></small></span>' +
       '</button>';
     }).join('');
     return '<section style="display:flex;flex-direction:column;gap:12px">' + mapHtml +
@@ -1142,14 +1142,14 @@
     /* وقت الوصول الفعلي: على المحطات المختارة لخط السير، ولو مفيش فعلى كل محطات النهارده غير المؤكدة */
     const etaIds = (st.routeTxIds && st.routeTxIds.length) ? st.routeTxIds : itemsOf(today()).filter(i => !i.confirmed).map(i => String(i.transaction_id));
     if (etaBox && window.TasahelGeo && window.TasahelGeo.calcRouteEta && etaIds.length) {
-      const wps = [];
+      const wps = [], wpTx = [];
       if (st.myPos && st.myPos.lat && st.myPos.lng) wps.push({ lat: st.myPos.lat, lng: st.myPos.lng });
       else wps.push({ lat: 30.0012, lng: 31.1765 });
       etaIds.forEach(rtx => {
         const rit = byTx(rtx);
         if (rit && !rit.confirmed) {
           const z = detectZoneAndCoords(rit);
-          if (z && z.lat && z.lng) wps.push({ lat: z.lat, lng: z.lng });
+          if (z && z.lat && z.lng) { wps.push({ lat: z.lat, lng: z.lng }); wpTx.push(String(rit.transaction_id)); }
         }
       });
       if (wps.length >= 2) {
@@ -1157,6 +1157,18 @@
           const el = $('cp-geo-route-eta');
           if (info && el) {
             el.innerHTML = '<div class="cp-geo-eta"> المسار الفعلي: ' + num(info.km) + ' كم · ~' + num(info.min) + ' دقيقة <span style="opacity:.65;font-weight:500">(OSM)</span></div>';
+          }
+          /* وقت الوصول المتوقع لكل محطة: مدة كل شوط + 10 دقايق وقوف عند كل محطة سابقة */
+          if (info && Array.isArray(info.legsMin) && info.legsMin.length) {
+            const fmt = d => d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit', hour12: true });
+            let acc = 0;
+            wpTx.forEach((tx, i) => {
+              if (info.legsMin[i] == null) return;
+              acc += info.legsMin[i] + (i ? 10 : 0);
+              const from = new Date(Date.now() + acc * 60000), to = new Date(Date.now() + (acc + 15) * 60000);
+              const box = Array.from(document.querySelectorAll('[data-eta-tx]')).find(n => n.getAttribute('data-eta-tx') === tx);
+              if (box) box.textContent = 'وصول متوقع: ' + fmt(from) + ' – ' + fmt(to);
+            });
           }
         }).catch(() => null);
       }
