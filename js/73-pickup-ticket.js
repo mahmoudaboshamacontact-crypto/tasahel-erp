@@ -1260,7 +1260,7 @@
         '</div>';
       }).join('');
       var payBadge = t.payment_status === 'cod_cash'
-        ? '<span class="pt-badge pt-badge-warn">تحصيل كاش: ' + eh(money(t.collect_amount || 0)) + '</span>'
+        ? '<span class="pt-badge pt-badge-warn">تحصيل كاش ' + eh(money(t.collect_amount || 0)) + '</span>'
         : (t.payment_status === 'instapay_on_arrival'
           ? '<span class="pt-badge pt-badge-pur">إنستا باي: ' + eh(money(t.collect_amount || 0)) + '</span>'
           : '<span class="pt-badge pt-badge-ok">خالص الدفع مسبقاً</span>');
