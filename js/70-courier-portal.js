@@ -259,15 +259,66 @@
   function routeIndexOf(tx) {
     return st.routeTxIds.indexOf(String(tx));
   }
-  /* تيكت الاستلام الشغال مع المندوب كمحطة في خط السير (قبل ما يتحول لمشوار) */
+  /* تحويل تيكت الاستلام لكائن موحّد بنفس هيكل مشوار الاستلام ليُعرض بنفس البطاقة */
+  function ticketToCardItem(t) {
+    if (!t) return null;
+    const items = Array.isArray(t.items) && t.items.length
+      ? t.items
+      : (t.service_name ? [{ service_name: t.service_name, doc_type: '', qty: t.qty || 1 }] : []);
+    const svcs = items.map(x => String(x.service_name || '').trim() + (Number(x.qty || 1) > 1 ? ' × ' + Number(x.qty) : '')).filter(Boolean).join(' + ');
+    const docs = items.map(x => String(x.doc_type || '').trim()).filter(Boolean).join(' · ');
+    const isPaid = t.payment_status === 'paid' || Number(t.collect_amount || 0) <= 0;
+    const step = String(t.courier_step || '');
+    return {
+      transaction_id: String(t.converted_tx_id || t.sd_request_id || ('TKT-' + t.id)),
+      sd_request_id: String(t.sd_request_id || ''),
+      client_name: t.client_name || 'بدون اسم',
+      phone: t.phone || '',
+      type: 'pickup',
+      confirmed: false,
+      address: [t.zone, t.address].filter(Boolean).join(' — '),
+      zone: t.zone || '',
+      services: svcs || t.service_name || '',
+      doc_types: docs,
+      cod_remaining: isPaid ? 0 : Number(t.collect_amount || 0),
+      payment_status: t.payment_status || '',
+      amount: Number(t.total || t.collect_amount || 0),
+      slot_pref: t.slot_pref || '',
+      staff_notes: t.staff_notes || '',
+      summary_comment: t.summary_comment || '',
+      courier_step: step,
+      courier_step_at: t.courier_step_at || '',
+      papers_holder: t.papers_holder || 'office',
+      papers_pending_event_id: t.papers_pending_event_id || null,
+      papers_pending_to: t.papers_pending_to || '',
+      status: t.status || 'with_courier',
+      cancel_reason: t.cancel_reason || '',
+      live_state: step === 'on_the_way' ? 'on_the_way' : (step === 'waiting' ? 'waiting' : ''),
+      call_attempts: step === 'call_attempt' || step === 'on_the_way' || step === 'waiting' || step === 'papers_received' ? 1 : 0,
+      id: null,
+      isTicket: true,
+      ticketId: Number(t.id),
+      _ticket: t
+    };
+  }
   function ticketAsRouteItem(tx) {
     const list = typeof window.tsWorkTickets === 'function' ? window.tsWorkTickets() : [];
-    const t = list.find(x => x.status === 'with_courier' && String(x.sd_request_id) === String(tx));
-    if (!t) return null;
-    return { transaction_id: String(t.sd_request_id), client_name: t.client_name, phone: t.phone, type: 'pickup', confirmed: false,
-      address: [t.zone, t.address].filter(Boolean).join(' '), services: t.service_name || '', id: null, isTicket: true, ticketId: t.id };
+    const k = String(tx || '');
+    const t = list.find(x => (x.status === 'with_courier' || x.status === 'cancelled') && (String(x.sd_request_id) === k || String(x.converted_tx_id || '') === k));
+    return ticketToCardItem(t);
   }
   const routeItem = tx => byTx(tx) || ticketAsRouteItem(tx);
+  window.__cpEnsureTicketInRoute = tx => {
+    tx = String(tx || '');
+    if (!tx) return;
+    if (st.routeTxIds.indexOf(tx) === -1) {
+      st.routeTxIds.unshift(tx);
+      const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
+      sortRouteSelectionNearestFirst(pos.lat, pos.lng);
+      saveRouteState();
+    }
+    st.activeTx = tx;
+  };
   function sortRouteSelectionNearestFirst(startLat, startLng) {
     const validTxs = st.routeTxIds.filter(tx => routeItem(tx));
     if (validTxs.length < 2) return validTxs;
@@ -511,8 +562,9 @@
 
   /* لوحة خط السير المبسطة والواضحة جداً للمندوب (تترتب أوتوماتيك بمجرد الاختيار) */
   function renderSmartRoutePanel() {
-    const picked = st.routeTxIds.map(tx => routeItem(tx)).filter(it => it && !it.confirmed);
-    const activeItems = picked.length ? picked : itemsOf(today()).filter(it => !it.confirmed);
+    const picked = st.routeTxIds.map(tx => routeItem(tx)).filter(it => it && !it.confirmed && it.status !== 'cancelled');
+    const openTks = workTickets().filter(t => t.status === 'with_courier').map(ticketToCardItem).filter(Boolean);
+    const activeItems = picked.length ? picked : itemsOf(today()).filter(it => !it.confirmed).concat(openTks);
     if (!activeItems.length) {
       return '<section class="ts7b-route-sheet" style="text-align:center;color:var(--mu);font-weight:700">لا توجد محطات في خط السير</section>';
     }
@@ -1163,14 +1215,16 @@
     swapFa(b); swapFa($('cp-v12-top-banners'));
     const etaBox = $('cp-geo-route-eta');
     /* وقت الوصول الفعلي: على المحطات المختارة لخط السير، ولو مفيش فعلى كل محطات النهارده غير المؤكدة */
-    const etaIds = (st.routeTxIds && st.routeTxIds.length) ? st.routeTxIds : itemsOf(today()).filter(i => !i.confirmed).map(i => String(i.transaction_id));
+    const etaFallback = itemsOf(today()).filter(i => !i.confirmed).map(i => String(i.transaction_id))
+      .concat(workTickets().filter(t => t.status === 'with_courier' && t.sd_request_id).map(t => String(t.sd_request_id)));
+    const etaIds = (st.routeTxIds && st.routeTxIds.length) ? st.routeTxIds : etaFallback;
     if (etaBox && window.TasahelGeo && window.TasahelGeo.calcRouteEta && etaIds.length) {
       const wps = [], wpTx = [];
       if (st.myPos && st.myPos.lat && st.myPos.lng) wps.push({ lat: st.myPos.lat, lng: st.myPos.lng });
       else wps.push({ lat: 30.0012, lng: 31.1765 });
       etaIds.forEach(rtx => {
-        const rit = byTx(rtx);
-        if (rit && !rit.confirmed) {
+        const rit = routeItem(rtx);
+        if (rit && !rit.confirmed && rit.status !== 'cancelled') {
           const z = detectZoneAndCoords(rit);
           if (z && z.lat && z.lng) { wps.push({ lat: z.lat, lng: z.lng }); wpTx.push(String(rit.transaction_id)); }
         }
@@ -1223,8 +1277,10 @@
     for (const tx of st.routeTxIds) { const it = pending.find(i => String(i.transaction_id) === String(tx)); if (it) return it; }
     return pending[0] || null;
   }
-  function buildFiveStepper(doneUpTo, curIdx) {
-    const labels = ['قبول', 'اتصال', 'خط السير', 'في الطريق', 'تم'];
+  function buildFiveStepper(doneUpTo, curIdx, customLabels) {
+    const labels = Array.isArray(customLabels) && customLabels.length === 5
+      ? customLabels
+      : ['قبول', 'اتصال', 'خط السير', 'في الطريق', 'تم'];
     return '<div class="ts-stepper">' + labels.map((lbl, idx) => {
       const n = idx + 1;
       const isDone = n <= doneUpTo;
@@ -1233,54 +1289,87 @@
       return '<div class="ts-step ' + cls + '"><div class="ts-dot">' + (isDone ? '✓' : num(n)) + '</div><div class="ts-slbl">' + lbl + '</div></div>';
     }).join('') + '</div>';
   }
+  function ticketStepProgress(step) {
+    if (step === 'papers_received') return [5, 6];
+    if (step === 'waiting') return [4, 5];
+    if (step === 'on_the_way') return [3, 4];
+    if (step === 'call_attempt') return [2, 3];
+    if (step === 'accepted') return [1, 2];
+    return [0, 1];
+  }
+  function ticketNextAction(it) {
+    const step = String(it.courier_step || '');
+    const common = ' data-pt73-tid="' + Number(it.ticketId) + '" data-pt73-sd="' + eh(it.sd_request_id || it.transaction_id) + '" data-pt73-cl="' + eh(it.client_name) + '"';
+    if (it.status === 'cancelled') {
+      return { btnClass: 'ts-cta', style: 'background:#dc2626;color:#fff', attrs: ' data-pt73-ack="' + Number(it.ticketId) + '"', text: 'تأكيد الإلغاء' };
+    }
+    if (!step) return { btnClass: 'ts-cta', style: '', attrs: ' data-pt73-step="accepted" data-pt73-lbl="قبول"' + common, text: 'قبول التيكت' };
+    if (step === 'accepted') return { btnClass: 'ts-cta', style: '', attrs: ' data-pt73-step="call_attempt" data-pt73-lbl="اتصال"' + common, text: 'تم الاتصال بالعميل' };
+    if (step === 'call_attempt') return { btnClass: 'ts-cta', style: '', attrs: ' data-pt73-step="on_the_way" data-pt73-lbl="في الطريق"' + common, text: ic('nav', 15) + ' في طريقي للعميل' };
+    if (step === 'on_the_way') return { btnClass: 'ts-cta gold', style: '', attrs: ' data-pt73-step="waiting" data-pt73-lbl="وصلت"' + common, text: ic('pin', 15) + ' وصلت عند العميل' };
+    if (step === 'waiting') return { btnClass: 'ts-cta done', style: '', attrs: ' data-pt73-step="papers_received" data-pt73-lbl="استلمت الأوراق"' + common, text: '✓ استلمت الأوراق' };
+    return { btnClass: 'ts-cta done', style: '', attrs: ' disabled', text: 'تم استلام الأوراق ✓' };
+  }
   function heroCard(it, pending) {
-    const tx = String(it.transaction_id), z = detectZoneAndCoords(it), k = KIND[it.type];
-    const onway = it.live_state === 'on_the_way', waiting = !!st.waitingMap[tx];
-    const inRouteIdx = routeIndexOf(tx);
+    const tx = String(it.transaction_id), z = detectZoneAndCoords(it), k = KIND[it.type] || KIND.pickup;
+    const isTk = !!it.isTicket;
+    const onway = isTk ? it.courier_step === 'on_the_way' : it.live_state === 'on_the_way';
+    const waiting = isTk ? it.courier_step === 'waiting' : !!st.waitingMap[tx];
+    const inRouteIdx = routeIndexOf(isTk ? (it.sd_request_id || tx) : tx);
     const called = Number(it.call_attempts || 0) > 0 || !!it.client_confirmed;
     const cod = Number(it.cod_remaining || 0), dist = distTxtOf(it);
     const mates = pending.filter(x => x !== it && normAr(x.client_name || '') === normAr(it.client_name || '') && x.type === it.type).length;
 
     let doneUpTo = 1, curIdx = 2;
-    if (it.confirmed) { doneUpTo = 5; curIdx = 6; }
+    if (isTk) {
+      const pr = ticketStepProgress(it.courier_step);
+      doneUpTo = pr[0]; curIdx = pr[1];
+    } else if (it.confirmed) { doneUpTo = 5; curIdx = 6; }
     else if (waiting) { doneUpTo = 4; curIdx = 5; }
     else if (onway) { doneUpTo = 3; curIdx = 4; }
     else if (inRouteIdx !== -1) { doneUpTo = 3; curIdx = 4; }
     else if (called) { doneUpTo = 2; curIdx = 3; }
 
-    const slideAttrs = ' data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"';
+    const slideAttrs = !isTk ? (' data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"') : '';
     let primaryBtn = '';
-    if (waiting) {
+    if (isTk) {
+      const nxt = ticketNextAction(it);
+      primaryBtn = '<button type="button" class="ts-hero-cta' + (nxt.btnClass.indexOf('done') !== -1 ? ' done' : '') + '"' + (nxt.style ? ' style="' + nxt.style + '"' : '') + nxt.attrs + '>' + nxt.text + '</button>';
+    } else if (waiting) {
       primaryBtn = '<button type="button" class="ts-hero-cta done"' + slideAttrs + '>✓ تأكيد ' + eh(k.sec === 'الاستلام' ? 'الاستلام' : k.sec === 'التسليم' ? 'التسليم' : 'الرسوم') + '</button>';
     } else if (onway) {
       primaryBtn = '<button type="button" class="ts-hero-cta" data-act="v12-wait" data-tx="' + eh(tx) + '">' + ic('pin', 16) + ' وصلت</button>';
     } else {
-      primaryBtn = '<button type="button" class="ts-hero-cta" data-act="v12-wait" data-tx="' + eh(tx) + '">' + ic('pin', 16) + ' وصلت</button>';
+      primaryBtn = '<button type="button" class="ts-hero-cta" data-act="on-my-way" data-tx="' + eh(tx) + '">' + ic('nav', 16) + ' في طريقي</button>';
     }
 
+    const detailAttr = isTk ? ('data-pt73-open-detail="' + Number(it.ticketId) + '"') : ('data-act="detail" data-tx="' + eh(tx) + '"');
+    const callAttr = isTk ? ('data-pt73-contact="call" data-pt73-tid="' + Number(it.ticketId) + '"') : ('data-act="v12-call-log" data-tx="' + eh(tx) + '"');
     const eyebrowLeft = inRouteIdx !== -1 ? ('المحطة الجاية #' + num(inRouteIdx + 1)) : 'المحطة الجاية';
-    const eyebrowRight = eh(k.sec || k.label) + (dist ? ' · ' + eh(dist) : '');
+    const eyebrowRight = (isTk ? 'تيكت استلام' : eh(k.sec || k.label)) + (dist ? ' · ' + eh(dist) : '');
+    const notePreview = it.landmark_note || it.staff_notes || '';
 
     return '<section class="cpn-hero">' +
       '<div class="ts-hero-eyebrow"><span>' + eyebrowLeft + '</span><span>' + eyebrowRight + '</span></div>' +
-      '<div class="ts-hero-client" data-act="detail" data-tx="' + eh(tx) + '">' + eh(it.client_name || 'بدون اسم') + '</div>' +
+      '<div class="ts-hero-client" ' + detailAttr + '>' + eh(it.client_name || 'بدون اسم') + '</div>' +
       '<div class="ts-hero-sub">' + eh((it.services ? it.services + ' · ' : '') + (it.address || z.zone)) + '</div>' +
-      (it.landmark_note ? '<div style="margin-top:7px;padding:6px 10px;border-radius:10px;background:rgba(212,175,99,.16);font-size:11.5px;color:#FDE68A"><i class="fa-regular fa-note-sticky"></i> ' + eh(it.landmark_note) + '</div>' : '') +
+      (notePreview ? '<div style="margin-top:7px;padding:6px 10px;border-radius:10px;background:rgba(212,175,99,.16);font-size:11.5px;color:#FDE68A"><i class="fa-regular fa-note-sticky"></i> ' + eh(notePreview) + '</div>' : '') +
       '<div class="ts-hero-meta">' +
         (cod > 0 ? '<span class="ts-hero-chip gold">تحصيل ' + money(cod) + '</span>' : '<span class="ts-hero-chip ok">خالص الدفع</span>') +
         '<span class="ts-hero-chip cpn-num" dir="ltr">' + eh(tx) + '</span>' +
+        (it.slot_pref ? '<span class="ts-hero-chip">' + eh(it.slot_pref) + '</span>' : '') +
         (mates ? '<span class="ts-hero-chip">+' + num(mates) + ' طلب</span>' : '') +
         (it.office_ready ? '<span class="ts-hero-chip ok">جاهز بالمكتب</span>' : '') +
       '</div>' +
-      buildFiveStepper(doneUpTo, curIdx) +
+      buildFiveStepper(doneUpTo, curIdx, isTk ? ['قبول', 'اتصال', 'طريق', 'وصلت', 'أوراق'] : null) +
       '<div class="ts-hero-actions">' +
         primaryBtn +
-        (it.phone ? '<a class="ts-hero-icon" data-act="v12-call-log" data-tx="' + eh(tx) + '" href="' + eh(telHref(it.phone)) + '" aria-label="اتصال">' + ic('phone', 18) + '</a>' : '') +
-        '<button type="button" class="ts-hero-icon" data-act="v12-map-opts" data-tx="' + eh(tx) + '" aria-label="الخريطة">' + ic('nav', 18) + '</button>' +
+        (it.phone ? '<a class="ts-hero-icon" ' + callAttr + ' href="' + eh(telHref(it.phone)) + '" aria-label="اتصال">' + ic('phone', 18) + '</a>' : '') +
+        '<button type="button" class="ts-hero-icon" data-act="v12-map-opts" data-tx="' + eh(isTk ? (it.sd_request_id || tx) : tx) + '" aria-label="الخريطة">' + ic('nav', 18) + '</button>' +
       '</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:11.5px">' +
-        '<button type="button" style="border:0;background:none;color:rgba(245,243,238,.78);font:inherit;cursor:pointer;padding:2px 0" data-act="detail" data-tx="' + eh(tx) + '">تفاصيل وخيارات إضافية ←</button>' +
-        (!waiting ? '<button type="button" style="border:0;background:none;color:#fecdd3;font:inherit;font-weight:700;cursor:pointer;padding:2px 0"' + slideAttrs + '>تأكيد مباشر</button>' : '') +
+        '<button type="button" style="border:0;background:none;color:rgba(245,243,238,.78);font:inherit;cursor:pointer;padding:2px 0" ' + detailAttr + '>تفاصيل السكريبت والمكالمة ←</button>' +
+        (!isTk && !waiting ? '<button type="button" style="border:0;background:none;color:#fecdd3;font:inherit;font-weight:700;cursor:pointer;padding:2px 0"' + slideAttrs + '>تأكيد مباشر</button>' : '') +
       '</div>' +
     '</section>';
   }
@@ -1288,7 +1377,8 @@
   function viewToday() {
     const t = today();
     const todayItems = itemsOf(t);
-    const pending = todayItems.filter(i => !i.confirmed);
+    const openTks = workTickets().filter(x => x.status === 'with_courier').map(ticketToCardItem).filter(Boolean);
+    const pending = todayItems.filter(i => !i.confirmed).concat(openTks);
     const q = (st.homeSearch || '').trim().toLowerCase();
     const filteredPending = q
       ? pending.filter(i => [i.client_name, i.address, i.transaction_id, detectZoneAndCoords(i).zone].join(' ').toLowerCase().indexOf(q) !== -1)
@@ -1434,7 +1524,7 @@
     const tkHtml = tks.length && typeof window.tsWorkTicketRows === 'function' ? window.tsWorkTicketRows(tks, st.openKey) : '';
     const empty = (!groups.length && !tks.length)
       ? '<div class="cp-empty">' + (st.loaded ? 'مفيش حاجة مطابقة في اليوم ده' : 'جاري التحميل…') + '</div>' : '';
-    const startBtn = (isToday && all.some(i => !i.confirmed && i.type !== 'fee'))
+    const startBtn = (isToday && (all.some(i => !i.confirmed && i.type !== 'fee') || tkAll.some(t => t.status === 'with_courier')))
       ? '<button type="button" class="ts-cta" style="width:100%;margin:8px 0" data-act="start-day">' + (st.routeTxIds.length ? 'رتّب خط السير من جديد' : 'ابدأ اليوم — جهّز خط السير') + '</button>' : '';
     return calBtn + (st.calOpen ? calendarHtml() : '') + searchBar + startBtn + chips +
       '<div class="cpw-list">' + tkHtml + groups.map(workItemRow).join('') + empty + '</div>';
@@ -1594,13 +1684,16 @@
   }
 
   function singleTripCard(it) {
-    const k = KIND[it.type];
+    const isTk = !!it.isTicket;
+    const isCancel = isTk && it.status === 'cancelled';
+    const k = KIND[it.type] || KIND.pickup;
     const tx = String(it.transaction_id);
+    const routeKey = isTk ? String(it.sd_request_id || tx) : tx;
     const z = detectZoneAndCoords(it);
-    const inRouteIdx = routeIndexOf(tx);
-    const onway = it.live_state === 'on_the_way';
-    const ticketReady = pickupTicketReadyForTrip(it);
-    const waiting = !!st.waitingMap[tx] || ticketReady;
+    const inRouteIdx = routeIndexOf(routeKey);
+    const onway = isTk ? it.courier_step === 'on_the_way' : it.live_state === 'on_the_way';
+    const ticketReady = !isTk && pickupTicketReadyForTrip(it);
+    const waiting = isTk ? it.courier_step === 'waiting' : (!!st.waitingMap[tx] || ticketReady);
     const called = Number(it.call_attempts || 0) > 0 || !!it.client_confirmed;
     let distTxt = '';
     if (st.myPos && window.CourierV12) {
@@ -1608,19 +1701,25 @@
       distTxt = km < 1 ? (Math.round(km * 1000) + ' م') : (km.toFixed(1) + ' كم');
     }
     const codAmt = Number(it.cod_remaining || 0);
-    const pillCls = it.type === 'delivery' ? 'delivery' : (it.type === 'pickup' ? 'pickup' : 'fee');
-    const pillTxt = it.type === 'delivery' ? 'تسليم' : (it.type === 'pickup' ? 'استلام' : 'رسوم');
+    const pillCls = isCancel ? 'fee' : (it.type === 'delivery' ? 'delivery' : (it.type === 'pickup' ? 'pickup' : 'fee'));
+    const pillTxt = isCancel ? 'ملغي' : (isTk ? 'استلام' : (it.type === 'delivery' ? 'تسليم' : (it.type === 'pickup' ? 'استلام' : 'رسوم')));
 
     let doneUpTo = 1, curIdx = 2;
-    if (it.confirmed) { doneUpTo = 5; curIdx = 6; }
+    if (isTk) {
+      const pr = ticketStepProgress(it.courier_step);
+      doneUpTo = pr[0]; curIdx = pr[1];
+    } else if (it.confirmed) { doneUpTo = 5; curIdx = 6; }
     else if (waiting) { doneUpTo = 4; curIdx = 5; }
     else if (onway) { doneUpTo = 3; curIdx = 4; }
     else if (inRouteIdx !== -1) { doneUpTo = 3; curIdx = 4; }
     else if (called) { doneUpTo = 2; curIdx = 3; }
 
-    const slideAttrs = ' data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"';
+    const slideAttrs = !isTk ? (' data-act="v12-slide-confirm" data-type="' + eh(it.type) + '" data-ref="' + eh(itemRef(it)) + '" data-tx="' + eh(tx) + '" data-amt="' + eh(it.amount) + '"') : '';
     let primaryBtn = '';
-    if (it.confirmed) {
+    if (isTk) {
+      const nxt = ticketNextAction(it);
+      primaryBtn = '<button type="button" class="' + nxt.btnClass + '"' + (nxt.style ? ' style="' + nxt.style + '"' : '') + nxt.attrs + '>' + nxt.text + '</button>';
+    } else if (it.confirmed) {
       primaryBtn = '<button type="button" class="ts-cta done" data-act="detail" data-tx="' + eh(tx) + '">✓ تم التأكيد · ' + eh(timeOf(it.confirmed_at)) + '</button>';
     } else if (waiting) {
       primaryBtn = '<button type="button" class="ts-cta done"' + slideAttrs + '>' + (ticketReady ? '✓ تأكيد مشوار الاستلام' : '✓ تأكيد ' + eh(k.sec)) + '</button>';
@@ -1632,31 +1731,96 @@
       primaryBtn = '<button type="button" class="ts-cta" data-act="route-toggle" data-tx="' + eh(tx) + '">+ أضف لخط السير</button>';
     }
 
-    return '<div class="ts-card cp-v12-card ' + eh(it.type) + (inRouteIdx !== -1 && !it.confirmed ? ' in-route' : '') + '">' +
-      '<div class="ts-tc-top" data-act="detail" data-tx="' + eh(tx) + '">' +
+    const detailAttr = isTk ? ('data-pt73-open-detail="' + Number(it.ticketId) + '"') : ('data-act="detail" data-tx="' + eh(tx) + '"');
+    const callAttr = isTk ? ('data-pt73-contact="call" data-pt73-tid="' + Number(it.ticketId) + '"') : ('data-act="v12-call-log" data-tx="' + eh(tx) + '"');
+    const codLabel = codAmt > 0
+      ? (it.payment_status === 'instapay_on_arrival' ? ('إنستاباي ' + money(codAmt)) : ('تحصيل ' + money(codAmt)))
+      : 'خالص الدفع';
+    const routeToggleChip = (isTk && !isCancel)
+      ? ('<button type="button" class="ts-mchip' + (inRouteIdx !== -1 ? ' route' : '') + '" style="border:0;cursor:pointer;font-family:inherit" data-act="route-toggle" data-tx="' + eh(routeKey) + '">' + (inRouteIdx !== -1 ? 'خط السير #' + num(inRouteIdx + 1) + ' ✓' : '+ خط السير') + '</button>')
+      : (inRouteIdx !== -1 ? '<span class="ts-mchip route">خط السير #' + num(inRouteIdx + 1) + '</span>' : '');
+
+    /* تفاصيل السكريبت والمكالمة والمستندات ظاهرة مباشرة جوه البطاقة الموحدة */
+    let scriptBoxHtml = '';
+    if (isTk) {
+      const parts = [];
+      if (it.doc_types) parts.push('<div><span style="color:var(--mu);font-weight:700">المستندات:</span> <b>' + eh(it.doc_types) + '</b></div>');
+      if (it.staff_notes) parts.push('<div style="color:var(--burg,#f59e0b);font-weight:700">ملاحظة الموظف: ' + eh(it.staff_notes) + '</div>');
+      if (it.summary_comment) parts.push('<div style="white-space:pre-wrap;line-height:1.55"><span style="color:var(--mu);font-weight:700">ملخص المكالمة والسكريبت:</span><br>' + eh(it.summary_comment) + '</div>');
+      if (parts.length) {
+        scriptBoxHtml = '<div style="margin:8px 0;padding:10px 12px;border-radius:14px;background:var(--surface-soft,rgba(148,163,184,.08));border:1px solid var(--bd);font-size:12.5px;display:flex;flex-direction:column;gap:5px">' + parts.join('') + '</div>';
+      }
+    } else if (ticketReady && typeof window.tsCourierTicketDetailsHtml === 'function') {
+      scriptBoxHtml = window.tsCourierTicketDetailsHtml(tx);
+    }
+
+    const papersHtml = (isTk && it._ticket && typeof window.tsRenderCourierPapersActions === 'function')
+      ? window.tsRenderCourierPapersActions(it._ticket)
+      : '';
+    const waBtn = it.phone
+      ? (isTk
+          ? '<button type="button" class="ts-cbtn" data-pt73-eta-wa="' + Number(it.ticketId) + '" aria-label="واتساب والوقت المتوقع" title="واتساب بالوقت المتوقع"><i class="fa-brands fa-whatsapp"></i></button>'
+          : '<button type="button" class="ts-cbtn" data-act="v12-wa-tpl" data-tx="' + eh(tx) + '" aria-label="واتساب" title="واتساب"><i class="fa-brands fa-whatsapp"></i></button>')
+      : '';
+
+    return '<div class="ts-card cp-v12-card ' + eh(it.type) + (inRouteIdx !== -1 && !it.confirmed ? ' in-route' : '') + (isTk && !it.courier_step && !isCancel ? ' new-ticket' : '') + '"' + (isCancel ? ' data-cp4-decorated="1"' : '') + '>' +
+      (isCancel ? '<div class="pt-cancel-strip" style="margin-bottom:8px"><span>ملغي</span><span>' + eh(it.cancel_reason || '—') + '</span></div>' : '') +
+      '<div class="ts-tc-top" ' + detailAttr + '>' +
         '<div style="min-width:0;flex:1">' +
           '<div class="ts-tc-client">' + eh(it.client_name || 'بدون اسم') + '</div>' +
-          '<div class="ts-tc-id"><span dir="ltr">' + eh(tx) + '</span>' + (distTxt ? '<span>· ' + eh(distTxt) + '</span>' : '') + '<span>· ' + money(it.amount) + '</span></div>' +
+          '<div class="ts-tc-id"><span dir="ltr">' + eh(tx) + '</span>' + (distTxt ? '<span>· ' + eh(distTxt) + '</span>' : '') + (it.amount > 0 ? '<span>· ' + money(it.amount) + '</span>' : '') + '</div>' +
         '</div>' +
         '<span class="ts-pill ' + pillCls + '">' + pillTxt + '</span>' +
       '</div>' +
-      (it.services ? '<div class="ts-tc-svc" data-act="detail" data-tx="' + eh(tx) + '">' + eh(it.services) + '</div>' : '') +
-      '<div class="ts-tc-loc" data-act="detail" data-tx="' + eh(tx) + '">' + ic('pin', 14) + '<span>' + eh(it.address || z.zone) + '</span></div>' +
+      (it.services ? '<div class="ts-tc-svc" ' + detailAttr + '>' + eh(it.services) + '</div>' : '') +
+      '<div class="ts-tc-loc" ' + detailAttr + '>' + ic('pin', 14) + '<span>' + eh(it.address || z.zone) + '</span></div>' +
       '<div class="ts-meta-row">' +
-        (codAmt > 0 ? '<span class="ts-mchip cod">تحصيل ' + money(codAmt) + '</span>' : '<span class="ts-mchip paid">خالص الدفع</span>') +
-        (inRouteIdx !== -1 ? '<span class="ts-mchip route">خط السير #' + num(inRouteIdx + 1) + '</span>' : '') +
-        (onway ? '<span class="ts-mchip paid">في الطريق</span>' : (inRouteIdx !== -1 ? '<span class="ts-mchip">في خط السير</span>' : '')) +
+        '<span class="ts-mchip ' + (codAmt > 0 ? 'cod' : 'paid') + '">' + codLabel + '</span>' +
+        routeToggleChip +
+        (it.slot_pref ? '<span class="ts-mchip">' + eh(it.slot_pref) + '</span>' : '') +
+        (onway ? '<span class="ts-mchip paid">في الطريق</span>' : (waiting ? '<span class="ts-mchip cod">وصلت عند العميل</span>' : '')) +
         (it.office_ready ? '<span class="ts-mchip paid">جاهز بالمكتب</span>' : '') +
       '</div>' +
-      buildFiveStepper(doneUpTo, curIdx) +
-      (ticketReady && typeof window.tsCourierTicketDetailsHtml === 'function' ? window.tsCourierTicketDetailsHtml(tx) : '') +
+      (!isCancel ? buildFiveStepper(doneUpTo, curIdx, isTk ? ['قبول', 'اتصال', 'طريق', 'وصلت', 'أوراق'] : null) : '') +
+      scriptBoxHtml +
+      (papersHtml ? '<div style="margin:6px 0">' + papersHtml + '</div>' : '') +
       '<div class="ts-actions">' +
         primaryBtn +
-        (it.phone ? '<a class="ts-cbtn call" data-act="v12-call-log" data-tx="' + eh(tx) + '" href="' + eh(telHref(it.phone)) + '" aria-label="اتصال">' + ic('phone', 17) + '</a>' : '') +
-        '<button type="button" class="ts-cbtn" data-act="v12-map-opts" data-tx="' + eh(tx) + '" aria-label="الخريطة">' + ic('nav', 17) + '</button>' +
+        (it.phone ? '<a class="ts-cbtn call" ' + callAttr + ' href="' + eh(telHref(it.phone)) + '" aria-label="اتصال">' + ic('phone', 17) + '</a>' : '') +
+        waBtn +
+        '<button type="button" class="ts-cbtn" data-act="v12-map-opts" data-tx="' + eh(routeKey) + '" aria-label="الخريطة">' + ic('nav', 17) + '</button>' +
+        '<button type="button" class="ts-cbtn" ' + detailAttr + ' aria-label="التفاصيل" title="التفاصيل"><i class="fa-solid fa-circle-info"></i></button>' +
       '</div>' +
     '</div>';
   }
+
+  /* رسم بطاقة التيكت جوه شاشة «التيكتات» باستخدام نفس بطاقة مشوار الاستلام الموحدة (singleTripCard) */
+  window.__cpRenderTicketCard = function (t, openKey) {
+    if (!t) return '';
+    const key = 't' + Number(t.id);
+    const open = openKey === key;
+    const isCancel = t.status === 'cancelled';
+    const isConv = t.status === 'converted';
+    const pr = ticketStepProgress(t.courier_step || '');
+    const pct = isCancel ? 0 : Math.round(pr[0] / 5 * 100);
+    const stepLblMap = { accepted: 'مقبول', call_attempt: 'تم الاتصال', on_the_way: 'في الطريق', waiting: 'وصلت', papers_received: 'استلمت الأوراق' };
+    const tag = isCancel
+      ? '<span class="cpw-tag bad">ملغي</span>'
+      : (isConv
+        ? '<span class="cpw-tag ok">تم التحويل</span>'
+        : (t.courier_step
+          ? '<span class="cpw-tag">' + eh(stepLblMap[t.courier_step] || 'استلام') + '</span>'
+          : '<span class="cpw-tag new">جديد</span>'));
+    const cardItem = ticketToCardItem(t);
+    return '<div class="cpw-card' + (open ? ' open' : '') + (isCancel ? ' bad' : '') + '">' +
+      '<button type="button" class="cpw-head" data-act="trip-open" data-key="' + key + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+        '<span class="cpw-main"><strong>' + eh(t.client_name || 'بدون اسم') + (t.zone ? ' <em>· ' + eh(t.zone) + '</em>' : '') + '</strong>' +
+        '<small dir="ltr">' + eh(t.phone || '') + ' · ' + eh(t.converted_tx_id || t.sd_request_id) + '</small></span>' +
+        tag + '<span class="cpw-chev">' + ic('chev', 18) + '</span></button>' +
+      '<div class="cpw-bar"><i style="width:' + pct + '%"></i></div>' +
+      (open && cardItem ? '<div class="cpw-body">' + singleTripCard(cardItem) + '</div>' : '') +
+    '</div>';
+  };
 
   function renderLeaderboardInner(rows) {
     if (!rows || !rows.length) {
@@ -2403,7 +2567,13 @@
       case 'dprev': st.day = addDays(st.day, -1); return renderTab(false);
       case 'dnext': if (st.day < today()) { st.day = addDays(st.day, 1); renderTab(false); } return;
       case 'dset': st.day = el.dataset.day; return renderTab(true);
-      case 'detail': return openClientDetail(tx);
+      case 'detail': {
+        if (!byTx(tx)) {
+          const tk = ticketAsRouteItem(tx);
+          if (tk && typeof window.tsOpenCourierTicketDetail === 'function') return window.tsOpenCourierTicketDetail(tk.ticketId);
+        }
+        return openClientDetail(tx);
+      }
       case 'note': return askNote(tx);
       case 'nkind': st.noteKind = el.dataset.k; document.querySelectorAll('#cp-kinds button').forEach(b => b.classList.toggle('on', b === el)); return;
       case 'qnote': {
@@ -2474,7 +2644,7 @@
         return renderTab(false);
       }
       case 'v12-wa-tpl': {
-        const it = byTx(tx);
+        const it = routeItem(tx);
         if (it && it.phone && window.CourierV12) window.CourierV12.openWhatsAppTemplates(it.phone, it.client_name, tx, st.me && st.me.name, waNum);
         return;
       }
@@ -2484,7 +2654,7 @@
         return;
       }
       case 'v12-map-opts': {
-        const it = byTx(tx); if (!it) return;
+        const it = routeItem(tx); if (!it) return;
         const q = stopDestinationQuery(it);
         modal(
           '<h3><i class="fa-solid fa-route"></i> فتح الموقع على الخريطة</h3>' +
@@ -2499,7 +2669,7 @@
         return;
       }
       case 'v12-copy-pin': {
-        const it = byTx(tx);
+        const it = routeItem(tx);
         try { navigator.clipboard.writeText(stopDestinationQuery(it) || (it && it.address) || ''); toast('تم نسخ العنوان/الإحداثيات ✓'); } catch (e) {}
         return closeModal();
       }
