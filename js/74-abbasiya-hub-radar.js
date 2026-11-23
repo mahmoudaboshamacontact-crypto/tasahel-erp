@@ -25,7 +25,9 @@
 
   var st = {
     subView: 'abbasiya', // 'abbasiya' | 'live_radar' | 'pickup'
-    passFilter: 'due',   // 'due' | 'complete' | 'all'
+    passFilter: 'due',   // 'due' | 'complete' | 'all' | 'old'
+    day: '',             // يوم استلام محدد (YYYY-MM-DD) — بيتخطى باقي فلاتر الحالة
+    q: '',               // بحث باسم العميل/التليفون/رقم المعاملة
     snap: null,
     selectedIds: {},
     selectedCourierId: null,
@@ -302,14 +304,32 @@
     }
   }
 
+  /* القديمة: استلامها من أكتر من 30 يوم — بتفضل موجودة في فلتر لوحدها ومش بتزحم الباقي */
+  var OLD_DAYS = 30;
+  function recvDay(l) {
+    var d = new Date(l.received_date || l.received_at);
+    return isNaN(d) ? '' : d.toLocaleDateString('en-CA');
+  }
+  function isOldLine(l) {
+    var d = new Date(l.received_date || l.received_at);
+    return !isNaN(d) && (Date.now() - d.getTime()) > OLD_DAYS * 86400000;
+  }
+  function normQ(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+  function matchQ(l) {
+    var q = normQ(st.q);
+    if (!q) return true;
+    return normQ(l.client_name).indexOf(q) !== -1 || normQ(l.phone).indexOf(q) !== -1 || normQ(l.transaction_id).indexOf(q) !== -1;
+  }
   function filterCandidates(cands) {
-    if (st.passFilter === 'complete') {
-      return cands.filter(function (l) { return l.complete || l.status === 'Complete'; });
+    var out;
+    if (st.day) out = cands.filter(function (l) { return recvDay(l) === st.day; });
+    else if (st.passFilter === 'old') out = cands.filter(isOldLine);
+    else {
+      out = cands.filter(function (l) { return !isOldLine(l); });
+      if (st.passFilter === 'complete') out = out.filter(function (l) { return l.complete || l.status === 'Complete'; });
+      else if (st.passFilter === 'due') out = out.filter(function (l) { return l.is_due || l.complete || l.status === 'Complete'; });
     }
-    if (st.passFilter === 'due') {
-      return cands.filter(function (l) { return l.is_due || l.complete || l.status === 'Complete'; });
-    }
-    return cands;
+    return out.filter(matchQ);
   }
 
   function renderAbbasiyaPane() {
@@ -324,8 +344,10 @@
     }
 
     var allCands = Array.isArray(st.snap.candidates) ? st.snap.candidates : [];
-    var dueCount = allCands.filter(function (l) { return l.is_due || l.complete || l.status === 'Complete'; }).length;
-    var compCount = allCands.filter(function (l) { return l.complete || l.status === 'Complete'; }).length;
+    var recentCands = allCands.filter(function (l) { return !isOldLine(l); });
+    var oldCount = allCands.length - recentCands.length;
+    var dueCount = recentCands.filter(function (l) { return l.is_due || l.complete || l.status === 'Complete'; }).length;
+    var compCount = recentCands.filter(function (l) { return l.complete || l.status === 'Complete'; }).length;
     var cands = filterCandidates(allCands);
 
     var couriers = (Array.isArray(st.snap.couriers) ? st.snap.couriers : []).map(function (c) {
@@ -347,9 +369,15 @@
     var filterBarHtml =
       '<div class="ah-filter-bar">' +
         '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
-          '<button type="button" class="ah-chip' + (st.passFilter === 'due' ? ' active' : '') + '" data-ah-flt="due">المستحق اليوم (' + dueCount + ')</button>' +
-          '<button type="button" class="ah-chip' + (st.passFilter === 'complete' ? ' active' : '') + '" data-ah-flt="complete">مكتمل وجاهز (' + compCount + ')</button>' +
-          '<button type="button" class="ah-chip' + (st.passFilter === 'all' ? ' active' : '') + '" data-ah-flt="all">كل المفتوح (' + allCands.length + ')</button>' +
+          '<button type="button" class="ah-chip' + (!st.day && st.passFilter === 'due' ? ' active' : '') + '" data-ah-flt="due">المستحق اليوم (' + dueCount + ')</button>' +
+          '<button type="button" class="ah-chip' + (!st.day && st.passFilter === 'complete' ? ' active' : '') + '" data-ah-flt="complete">مكتمل وجاهز (' + compCount + ')</button>' +
+          '<button type="button" class="ah-chip' + (!st.day && st.passFilter === 'all' ? ' active' : '') + '" data-ah-flt="all">كل المفتوح (' + recentCands.length + ')</button>' +
+          '<button type="button" class="ah-chip' + (!st.day && st.passFilter === 'old' ? ' active' : '') + '" data-ah-flt="old" title="استلام من أكتر من ' + OLD_DAYS + ' يوم">قديمة (' + oldCount + ')</button>' +
+        '</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:6px">' +
+          '<input id="ah-q" class="ah-input" style="flex:1;min-width:150px" placeholder="بحث باسم العميل / التليفون / رقم المعاملة" value="' + eh(st.q) + '">' +
+          '<input id="ah-day" type="date" class="ah-input" style="min-width:150px" title="يوم الاستلام" value="' + eh(st.day) + '">' +
+          (st.day || st.q ? '<button type="button" class="ah-chip" data-ah-flt-clear="1">مسح البحث واليوم</button>' : '') +
         '</div>' +
         '<div style="display:flex;gap:6px">' +
           '<button type="button" class="ah-chip" data-ah-sel="all">تحديد الكل</button>' +
@@ -541,9 +569,15 @@
       return;
     }
 
+    if (t.closest && t.closest('[data-ah-flt-clear]')) {
+      st.q = ''; st.day = '';
+      renderAbbasiyaPane();
+      return;
+    }
     var fltBtn = t.closest ? t.closest('[data-ah-flt]') : null;
     if (fltBtn) {
       st.passFilter = fltBtn.dataset.ahFlt;
+      st.day = '';
       renderAbbasiyaPane();
       return;
     }
@@ -630,8 +664,20 @@
     if (e.target && e.target.classList && e.target.classList.contains('ah-cand-chk')) {
       st.selectedIds[Number(e.target.value)] = !!e.target.checked;
     }
+    if (e.target && e.target.id === 'ah-day') {
+      st.day = e.target.value || '';
+      renderAbbasiyaPane();
+    }
   }
   function onStaffInput(e) {
+    if (e.target && e.target.id === 'ah-q') {
+      st.q = e.target.value;
+      var pos = e.target.selectionStart;
+      renderAbbasiyaPane();
+      var el = $('ah-q');
+      if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (err) { /* */ } }
+      return;
+    }
     if (e.target && e.target.id === 'ah-win-start') st.winStart = e.target.value;
     if (e.target && e.target.id === 'ah-win-end') st.winEnd = e.target.value;
   }
