@@ -179,10 +179,16 @@
     return 'منذ ' + Math.round(mins / 60) + ' س';
   }
 
+  function staleStateOf(c) {
+    if (!c || !c.last_event_at) return null;
+    var mins = Math.floor((Date.now() - new Date(c.last_event_at).getTime()) / 60000);
+    if (!Number.isFinite(mins) || mins < 20) return null;
+    if (c.last_event_type === 'waiting' && mins >= 20) return { kind: 'stuck', mins: mins, label: 'واقف عند عميل (' + mins + ' د)' };
+    if (c.last_event_type === 'on_the_way' && mins >= 30) return { kind: 'delayed', mins: mins, label: 'متأخر في الطريق (' + mins + ' د)' };
+    return null;
+  }
   function isStaleTrip(c) {
-    if (!c.last_event_at) return false;
-    var mins = (Date.now() - new Date(c.last_event_at).getTime()) / 60000;
-    return (c.last_event_type === 'on_the_way' || c.last_event_type === 'waiting') && mins >= 120;
+    return !!staleStateOf(c);
   }
 
   function renderPane() {
@@ -232,7 +238,8 @@
       var loadBadge = load >= 7
         ? '<span class="rp3-tag-red">مضغوط (' + load + ')</span>'
         : (load >= 4 ? '<span class="rp3-tag-amb">متوازن (' + load + ')</span>' : '<span class="rp3-tag-ok">خفيف (' + load + ')</span>');
-      var staleBadge = isStaleTrip(c) ? '<span class="rp3-tag-red">متوقف +2 ساعة</span>' : '';
+      var stObj = staleStateOf(c);
+      var staleBadge = stObj ? '<span class="' + (stObj.kind === 'delayed' ? 'rp3-tag-red' : 'rp3-tag-amb') + '">' + eh(stObj.label) + '</span>' : '';
       var etaMins = load * (rushOn ? 31 : 25);
       var routesHtml = ROUTES.map(function (r) {
         var chk = Array.isArray(c.route_keys) && c.route_keys.indexOf(r.key) >= 0;
@@ -391,12 +398,18 @@
       if (r.error) throw r.error;
       var d = r.data || {}, cs = d.couriers || [];
       var html = cs.length ? cs.map(function (c) {
+        var bottleneck = null;
         var rows = Object.keys(STAGE_LBL).filter(function (k) { return c.stages && c.stages[k]; }).map(function (k) {
           var x = c.stages[k];
-          return '<tr><td>' + STAGE_LBL[k] + '</td><td>' + fmtMin(x.median_min) + '</td><td>' + fmtMin(x.avg_min) + '</td><td>' + fmtMin(x.max_min) + '</td><td>' + Number(x.n) + '</td></tr>';
+          var med = Number(x.median_min || 0);
+          var isSlow = (k === 'waiting' && med >= 20) || (k !== 'waiting' && med >= 30);
+          if (!bottleneck || med > bottleneck.med) bottleneck = { lbl: STAGE_LBL[k], med: med };
+          var medCell = isSlow ? '<b style="color:#f59e0b">' + fmtMin(med) + ' ⚠</b>' : fmtMin(med);
+          return '<tr style="border-top:1px solid var(--r-line,rgba(148,163,184,.14))"><td style="padding:5px 4px">' + STAGE_LBL[k] + '</td><td style="text-align:center;padding:5px 4px">' + medCell + '</td><td style="text-align:center;padding:5px 4px">' + fmtMin(x.avg_min) + '</td><td style="text-align:center;padding:5px 4px">' + fmtMin(x.max_min) + '</td><td style="text-align:center;padding:5px 4px">' + Number(x.n) + '</td></tr>';
         }).join('');
-        return '<div style="margin-bottom:12px"><b>' + eh(c.name) + '</b> <span class="ah-sub">(' + Number(c.tickets) + ' تذكرة)</span>' +
-          '<div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr><th style="text-align:right">المرحلة</th><th>الوسيط</th><th>المتوسط</th><th>الأطول</th><th>عدد</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+        var bnTxt = (bottleneck && bottleneck.med >= 20) ? ' · <span style="color:#f59e0b;font-weight:700">أبطأ مرحلة: ' + bottleneck.lbl + ' (' + fmtMin(bottleneck.med) + ')</span>' : '';
+        return '<div style="margin-bottom:12px"><b>' + eh(c.name) + '</b> <span class="ah-sub">(' + Number(c.tickets) + ' تذكرة)' + bnTxt + '</span>' +
+          '<div style="overflow-x:auto;margin-top:4px"><table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr><th style="text-align:right;padding:4px">المرحلة</th><th>الوسيط</th><th>المتوسط</th><th>الأطول</th><th>عدد</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
       }).join('') : 'لسه مفيش بيانات كفاية.';
       var sl = d.slowest || [];
       if (sl.length) {
