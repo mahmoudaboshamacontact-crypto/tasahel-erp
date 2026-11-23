@@ -306,6 +306,17 @@
     saveRouteState();
     renderTab(false);
   }
+  /* «ابدأ اليوم»: كل شغل النهارده غير المؤكد يدخل خط السير مرة واحدة ومترتب الأقرب فالأقرب */
+  function startDay() {
+    const open = itemsOf(today()).filter(i => !i.confirmed && i.type !== 'fee').map(i => String(i.transaction_id));
+    if (!open.length) { toast('مفيش شغل مفتوح النهارده'); return; }
+    open.forEach(tx => { if (st.routeTxIds.indexOf(tx) === -1) st.routeTxIds.push(tx); });
+    const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
+    sortRouteSelectionNearestFirst(pos.lat, pos.lng);
+    saveRouteState();
+    toast('خط سير النهارده جاهز: ' + st.routeTxIds.length + ' محطة ✓');
+    renderTab(false);
+  }
   function clearRoute() {
     st.routeTxIds = [];
     st.activeTx = '';
@@ -1411,7 +1422,9 @@
     const tkHtml = tks.length && typeof window.tsWorkTicketRows === 'function' ? window.tsWorkTicketRows(tks, st.openKey) : '';
     const empty = (!groups.length && !tks.length)
       ? '<div class="cp-empty">' + (st.loaded ? 'مفيش حاجة مطابقة في اليوم ده' : 'جاري التحميل…') + '</div>' : '';
-    return calBtn + (st.calOpen ? calendarHtml() : '') + searchBar + chips +
+    const startBtn = (isToday && all.some(i => !i.confirmed && i.type !== 'fee'))
+      ? '<button type="button" class="ts-cta" style="width:100%;margin:8px 0" data-act="start-day">' + (st.routeTxIds.length ? 'رتّب خط السير من جديد' : 'ابدأ اليوم — جهّز خط السير') + '</button>' : '';
+    return calBtn + (st.calOpen ? calendarHtml() : '') + searchBar + startBtn + chips +
       '<div class="cpw-list">' + tkHtml + groups.map(workItemRow).join('') + empty + '</div>';
   }
 
@@ -1624,6 +1637,7 @@
         (it.office_ready ? '<span class="ts-mchip paid">جاهز بالمكتب</span>' : '') +
       '</div>' +
       buildFiveStepper(doneUpTo, curIdx) +
+      (ticketReady && typeof window.tsCourierTicketDetailsHtml === 'function' ? window.tsCourierTicketDetailsHtml(tx) : '') +
       '<div class="ts-actions">' +
         primaryBtn +
         (it.phone ? '<a class="ts-cbtn call" data-act="v12-call-log" data-tx="' + eh(tx) + '" href="' + eh(telHref(it.phone)) + '" aria-label="اتصال">' + ic('phone', 17) + '</a>' : '') +
@@ -2387,6 +2401,7 @@
       }
       case 'nsend': return sendNote(tx, el);
       case 'route-toggle': return toggleRouteTx(tx);
+      case 'start-day': return startDay();
       case 'route-autosort': return autoOptimizeRoute(true);
       case 'route-clear': return clearRoute();
       case 'on-my-way': return startOnMyWay(tx);

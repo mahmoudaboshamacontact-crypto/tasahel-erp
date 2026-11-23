@@ -429,6 +429,22 @@
     return ticket ? { step: ticket.courier_step || '', status: ticket.status || '' } : null;
   };
 
+  /* تفاصيل التيكت (سكريبت المكالمة + الملاحظات) لعرضها داخل مشوار الاستلام المتحول منه */
+  window.tsCourierTicketDetailsHtml = function (tx) {
+    var key = String(tx || '').trim().toUpperCase();
+    var list = Array.isArray(st.courierTickets) ? st.courierTickets : [];
+    var t = list.find(function (x) { return String(x.converted_tx_id || '').trim().toUpperCase() === key; });
+    if (!t || t.status !== 'converted') return '';
+    var rows = [];
+    if (t.sd_request_id) rows.push(['رقم الطلب', eh(t.sd_request_id)]);
+    if (t.slot_pref) rows.push(['الميعاد', eh(t.slot_pref)]);
+    if (t.summary_comment) rows.push(['ملخص المكالمة', '<span style="white-space:pre-wrap">' + eh(t.summary_comment) + '</span>']);
+    if (t.staff_notes) rows.push(['ملاحظة', eh(t.staff_notes)]);
+    if (!rows.length) return '';
+    return '<details class="cpw-body" style="margin:8px 0"><summary style="cursor:pointer;font-weight:800">تفاصيل التيكت والمكالمة</summary>' +
+      rows.map(function (r) { return '<div class="cpw-kv"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') + '</details>';
+  };
+
   window.tsPapersWithCourier = function () {
     var list = Array.isArray(st.courierTickets) ? st.courierTickets : [];
     return list.filter(function (x) { return x.papers_holder === 'courier'; }).length;
