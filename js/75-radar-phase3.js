@@ -106,7 +106,7 @@
       'html.dark .rp3-route-chk{background:#181412;border-color:rgba(255,255,255,.07)}',
       '.rp3-alert-box{border:1px solid rgba(225,29,72,.3);background:rgba(225,29,72,.08);border-radius:14px;padding:11px 13px;font-size:12.5px;margin-bottom:12px}',
       '.rp3-courier-bcast{margin:10px 12px 0;padding:12px;border-radius:16px;border:1px solid rgba(136,19,55,.32);background:rgba(136,19,55,.08);color:var(--tx,#111C15);font-size:12.5px}',
-      '@media (max-width:860px){.rp3-brief{grid-template-columns:repeat(2,1fr)}.rp3-grid2{grid-template-columns:1fr}}'
+      '@media (max-width:860px){.rp3-brief{grid-template-columns:repeat(2,minmax(0,1fr))}.rp3-grid2{grid-template-columns:minmax(0,1fr)}}'
     ].join('\n');
     document.head.appendChild(s);
   }
