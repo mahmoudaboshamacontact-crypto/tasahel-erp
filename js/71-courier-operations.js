@@ -15,7 +15,7 @@
     ledgerFrom:'',ledgerTo:'',tab:'route',busy:false,
     managerBusy:false,managerLoadedAt:0,managerHtml:'',managerFailed:false,
     radarBusy:false,radarLoadedAt:0,radarFailed:false,radarTimer:0,
-    resolvingIssueId:null,pingTo:0,activeCase:'all',radarModalData:{}
+    resolvingIssueId:null,pingTo:0,activeCase:'all',radarModalData:{},avatarById:{},avatarByName:{},avatarsLoadedAt:0
   };
   function ensureRadarSmartCss() {
     if ($('cpo-smart-radar-css')) return;
@@ -36,7 +36,20 @@
       '#cop-radar .cpo-case-item.crit{border-inline-start:3px solid var(--er)}',
       '#cop-radar .cpo-case-item.warn{border-inline-start:3px solid var(--wn)}',
       '#cop-radar .cpo-case-item.info{border-inline-start:3px solid var(--ac)}',
-      '#cop-radar .cpo-av{width:38px;height:38px;border-radius:50%;background:var(--acsoft);border:1.5px solid var(--ac);color:var(--ac);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex:none}',
+      '#cop-radar .cpo-av{width:44px;height:44px;border-radius:50%;background:var(--acsoft);border:2px solid var(--ac);color:var(--ac);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}',
+      '#cop-radar .cpo-av img,.cpo-dd-av img{width:100%;height:100%;object-fit:cover;display:block}',
+      '.cpo-dd-av{width:44px;height:44px;border-radius:50%;background:var(--acsoft,rgba(16,185,129,.15));border:2px solid var(--ac,#10b981);color:var(--ac,#10b981);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}',
+      '#cop-radar .cpo-zpin-av{position:absolute;top:-26px;width:24px;height:24px;border-radius:50%;border:2px solid var(--ac);background:var(--s1);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:var(--ac);box-shadow:0 2px 8px rgba(0,0,0,.35)}',
+      '#cop-radar .cpo-zpin-av img{width:100%;height:100%;object-fit:cover;display:block}',
+      '#cop-radar .cpo-now-box{padding:9px 11px;border-radius:12px;background:var(--bg);border:1px solid var(--bd);display:flex;flex-direction:column;gap:4px;font-size:12px}',
+      '#cop-radar .cpo-now-row{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap}',
+      '#cop-radar .cpo-kind-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;background:var(--acsoft);color:var(--ac)}',
+      '#cop-radar .cpo-next-hint{font-size:11.5px;font-weight:700;color:var(--tx)}',
+      '#cop-radar .cpo-next-hint.office{color:var(--wn)}',
+      '.cpo-dd-next{margin-top:4px;padding:6px 9px;border-radius:9px;background:rgba(16,185,129,.11);border:1px solid rgba(16,185,129,.25);font-size:11.5px;font-weight:700;color:#059669}',
+      'html.dark .cpo-dd-next{color:#34d399}',
+      '.cpo-dd-next.office{background:rgba(245,158,11,.13);border-color:rgba(245,158,11,.35);color:#b45309}',
+      'html.dark .cpo-dd-next.office{color:#fbbf24}',
       '#cop-radar .cpo-zline{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:6px;padding:24px 8px 6px;margin:4px 0;background:var(--bg);border:1px solid var(--bd);border-radius:14px}',
       '#cop-radar .cpo-ztrack{position:absolute;top:35px;right:14%;left:14%;height:4px;border-radius:999px;background:var(--bd);z-index:0;overflow:hidden}',
       '#cop-radar .cpo-ztrack>i{display:block;height:100%;background:var(--ac);border-radius:999px}',
@@ -437,21 +450,80 @@
       let opsItems = Array.isArray(state.items) ? state.items : [];
       const radarMonthStart = new Date(); radarMonthStart.setDate(1); radarMonthStart.setHours(0,0,0,0);
       const radarMonthStartDate = [radarMonthStart.getFullYear(), String(radarMonthStart.getMonth()+1).padStart(2,'0'), '01'].join('-');
+      let ptMetaById = {};
+      let ptMetaBySd = {};
+      const normCourier = s => String(s || '').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/\s+/g, ' ').trim().toLowerCase();
       try {
-        const [ir, tr] = await Promise.all([
+        const needAvatars = !state.avatarsLoadedAt || (Date.now() - state.avatarsLoadedAt > 1800000);
+        const jobs = [
           rpc('courier_ops_items', { p_from: radarMonthStartDate, p_to: null }),
-          rpc('courier_radar_active_tickets', {})
-        ]);
-        if (!ir.error && Array.isArray(ir.data)) { opsItems = ir.data; state.items = ir.data; }
-        if (!tr.error && Array.isArray(tr.data)) radarTickets = tr.data;
+          rpc('courier_radar_active_tickets', {}),
+          sbClient.from('pickup_tickets').select('id,sd_request_id,zone,address,service_name,slot_pref,collect_amount,payment_status,status').in('status', ['open', 'with_courier', 'converted']).order('created_at', { ascending: false }).limit(120)
+        ];
+        if (needAvatars) {
+          jobs.push(sbClient.from('couriers').select('id,name,user_id').eq('active', true));
+          jobs.push(sbClient.from('profiles').select('id,full_name,avatar_path'));
+        }
+        const resAll = await Promise.all(jobs);
+        const ir = resAll[0], tr = resAll[1], ptr = resAll[2];
+        if (ir && !ir.error && Array.isArray(ir.data)) { opsItems = ir.data; state.items = ir.data; }
+        if (tr && !tr.error && Array.isArray(tr.data)) radarTickets = tr.data;
+        if (ptr && !ptr.error && Array.isArray(ptr.data)) {
+          ptr.data.forEach(p => {
+            if (p && p.id != null) ptMetaById[Number(p.id)] = p;
+            if (p && p.sd_request_id) ptMetaBySd[String(p.sd_request_id).trim().toUpperCase()] = p;
+          });
+        }
+        if (needAvatars && resAll[3] && !resAll[3].error && Array.isArray(resAll[3].data)) {
+          const cRows = resAll[3].data;
+          const pRows = (resAll[4] && !resAll[4].error && Array.isArray(resAll[4].data)) ? resAll[4].data : [];
+          const profByUid = {}, profByName = {};
+          pRows.forEach(p => {
+            if (p && p.id) profByUid[String(p.id)] = p;
+            if (p && p.full_name) profByName[normCourier(p.full_name)] = p;
+          });
+          const pathByCid = {}, pathByName = {}, paths = [];
+          cRows.forEach(cr => {
+            const p = (cr.user_id && profByUid[String(cr.user_id)]) || profByName[normCourier(cr.name)];
+            if (p && p.avatar_path) {
+              pathByCid[Number(cr.id)] = p.avatar_path;
+              pathByName[normCourier(cr.name)] = p.avatar_path;
+              if (paths.indexOf(p.avatar_path) === -1) paths.push(p.avatar_path);
+            }
+          });
+          const existingUrls = (typeof avatarUrls !== 'undefined' && avatarUrls) ? avatarUrls : (window.avatarUrls || {});
+          const missing = paths.filter(pt => !existingUrls[pt]);
+          const signedMap = Object.assign({}, existingUrls);
+          if (missing.length) {
+            try {
+              const sr = await sbClient.storage.from('avatars').createSignedUrls(missing, 43200);
+              if (sr && !sr.error && Array.isArray(sr.data)) {
+                sr.data.forEach(x => { if (x && x.path && x.signedUrl) signedMap[x.path] = x.signedUrl; });
+              }
+            } catch (e2) { /* ignore avatar error */ }
+          }
+          state.avatarById = {};
+          state.avatarByName = {};
+          Object.keys(pathByCid).forEach(cid => { if (signedMap[pathByCid[cid]]) state.avatarById[cid] = signedMap[pathByCid[cid]]; });
+          Object.keys(pathByName).forEach(nm => { if (signedMap[pathByName[nm]]) state.avatarByName[nm] = signedMap[pathByName[nm]]; });
+          state.avatarsLoadedAt = Date.now();
+        }
       } catch (e) { /* نكمل بالبيانات المتاحة */ }
-      /* استبعاد أي بيانات قديمة رجعت من كاش محلي، مع الاحتفاظ بالسجلات التي لا يوجد لها تاريخ معروف للمراجعة. */
+
+      /* استبعاد أي بيانات قديمة رجعت من كاش محلي، مع إثراء العناوين من allRequestLines لتفادي «بدون منطقة» */
       opsItems = opsItems.filter(x => { const d = x && x.trip_day ? new Date(x.trip_day).getTime() : NaN; return !Number.isFinite(d) || d >= radarMonthStart.getTime(); });
+      const rlAddrByTx = {}, rlSvcByTx = {};
+      const allLines = (typeof allRequestLines !== 'undefined' && Array.isArray(allRequestLines)) ? allRequestLines : (Array.isArray(window.allRequestLines) ? window.allRequestLines : []);
+      allLines.forEach(l => {
+        if (!l || !l.transaction_id) return;
+        const k = String(l.transaction_id).trim().toUpperCase();
+        if (l.address && !rlAddrByTx[k]) rlAddrByTx[k] = String(l.address).trim();
+        if (l.service && !rlSvcByTx[k]) rlSvcByTx[k] = String(l.service).trim();
+      });
       state.items = opsItems;
       /* اسم العميل لكل معاملة */
       const nameByTx = {};
       opsItems.forEach(x => { if (x && x.transaction_id && x.client_name) nameByTx[x.transaction_id] = String(x.client_name).trim(); });
-      const normCourier = s => String(s || '').replace(/[\u064B-\u065F\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/\s+/g, ' ').trim().toLowerCase();
       const statusText = {
         new:'جديد', converted:'المعاملة اتعملت — تأكيد فقط', accepted:'تم قبول التيكت', call_attempt:'تم الاتصال', collecting:'جاري الاستلام', collected:'تم الاستلام',
         on_the_way:'في الطريق', waiting:'وصل عند العميل', arrived:'وصل عند العميل',
@@ -466,18 +538,28 @@
         const ticketDate = linkedTripDay || t.created_at;
         const stamp = ticketDate ? new Date(ticketDate).getTime() : NaN;
         return !Number.isFinite(stamp) || stamp >= monthStartMs;
-      }).map(t => ({
-        ticket_id:Number(t.ticket_id), courier_id:Number(t.courier_id), courier_name:t.courier_name,
-        client_name:t.client_name, transaction_id:t.transaction_id || t.sd_request_id,
-        zone:t.zone || '', address:t.address || t.zone || '',
-        status:t.radar_status || t.status_label || t.courier_step || t.status || 'new',
-        at:t.status_at || t.courier_step_at || t.converted_at || t.created_at,
-        reschedule_status:t.reschedule_status || '',
-        proposed_slot:t.proposed_slot || '',
-        reschedule_reason:t.reschedule_reason || '',
-        action_history:Array.isArray(t.action_history) ? t.action_history : [],
-        source:'ticket'
-      })).filter(t => t.status !== 'delivered');
+      }).map(t => {
+        const meta = ptMetaById[Number(t.ticket_id)] || ptMetaBySd[String(t.sd_request_id || '').trim().toUpperCase()] || {};
+        const txKey = String(t.transaction_id || t.sd_request_id || '').trim().toUpperCase();
+        return {
+          ticket_id:Number(t.ticket_id), courier_id:Number(t.courier_id), courier_name:t.courier_name,
+          client_name:t.client_name, transaction_id:t.transaction_id || t.sd_request_id,
+          zone:t.zone || meta.zone || '',
+          address:t.address || meta.address || meta.zone || rlAddrByTx[txKey] || '',
+          service_name:meta.service_name || rlSvcByTx[txKey] || '',
+          slot_pref:meta.slot_pref || '',
+          collect_amount:Number(meta.collect_amount || 0),
+          payment_status:meta.payment_status || '',
+          kind:'pickup',
+          status:t.radar_status || t.status_label || t.courier_step || t.status || 'new',
+          at:t.status_at || t.courier_step_at || t.converted_at || t.created_at,
+          reschedule_status:t.reschedule_status || '',
+          proposed_slot:t.proposed_slot || '',
+          reschedule_reason:t.reschedule_reason || '',
+          action_history:Array.isArray(t.action_history) ? t.action_history : [],
+          source:'ticket'
+        };
+      }).filter(t => t.status !== 'delivered' && t.status !== 'trip_confirmed' && t.status !== 'cancelled');
       const radarTodayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
       const radarDayAgoMs = Date.now() - 24 * 3600 * 1000;
       const tripRows = opsItems.filter(x => {
@@ -485,11 +567,17 @@
         const isTodayTrip = String(x.trip_day || '').slice(0, 10) === radarTodayKey;
         const isMovingNow = ['on_the_way', 'waiting', 'arrived', 'collecting'].includes(x.operational_status) && (x.updated_at ? new Date(x.updated_at).getTime() >= radarDayAgoMs : false);
         return isTodayTrip || isMovingNow;
-      }).map(x => ({
-        courier_name:x.courier, client_name:x.client_name, transaction_id:x.transaction_id,
-        zone:x.zone || '', address:x.address || '', trip_day:x.trip_day || '',
-        status:x.operational_status || 'new', at:x.updated_at || x.trip_day, source:'trip'
-      }));
+      }).map(x => {
+        const txKey = String(x.transaction_id || '').trim().toUpperCase();
+        return {
+          courier_name:x.courier, client_name:x.client_name, transaction_id:x.transaction_id,
+          zone:x.zone || '', address:x.address || rlAddrByTx[txKey] || '',
+          service_name:x.service || rlSvcByTx[txKey] || '',
+          kind:x.kind || x.type || 'delivery',
+          trip_day:x.trip_day || '',
+          status:x.operational_status || 'new', at:x.updated_at || x.trip_day, source:'trip'
+        };
+      });
       const allRadarRows = ticketRows.concat(tripRows).sort((a,b) => new Date(b.at || 0) - new Date(a.at || 0));
       const totalToday = couriers.reduce((s, c) => s + Number(c.total_today || 0), 0);
       const confToday = couriers.reduce((s, c) => s + Number(c.confirmed_today || 0), 0);
@@ -505,14 +593,28 @@
       const svg = (n, z) => '<svg class="cpo-i" viewBox="0 0 24 24" style="width:' + (z || 16) + 'px;height:' + (z || 16) + 'px" aria-hidden="true">' + I[n] + '</svg>';
       const tm = at => { if (!at) return ''; const d = new Date(at); return isNaN(d) ? '' : d.toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' }); };
       const ago = at => { if (!at) return 'دلوقتي'; const stamp = new Date(at).getTime(); if (!Number.isFinite(stamp)) return 'وقت غير محدد'; const m = Math.round((Date.now() - stamp) / 60000); return m <= 0 ? 'دلوقتي' : m < 60 ? 'من ' + m + ' د' : 'من ' + Math.round(m / 60) + ' س'; };
-      const onWayRows = ticketRows.filter(x => x.status === 'on_the_way');
+
+      /* مربع «في الطريق»: يعرض فقط اللي فعلاً في الطريق دلوقتي — بمجرد ما المندوب يدوس «وصلت» أو يخلّص يتشال فوراً */
       const radarRowKey = (courierId, courierName, tx) => (courierId ? 'id:' + Number(courierId) : 'name:' + normCourier(courierName)) + '|tx:' + String(tx || '').trim().toUpperCase();
+      const nonMovingKeys = new Set();
+      radarTickets.forEach(t => {
+        const st0 = t.radar_status || t.status_label || t.courier_step || t.status || '';
+        if (st0 !== 'on_the_way') nonMovingKeys.add(radarRowKey(t.courier_id, t.courier_name, t.transaction_id || t.sd_request_id));
+      });
+      opsItems.forEach(x => {
+        if (x && x.operational_status && x.operational_status !== 'on_the_way') {
+          nonMovingKeys.add(radarRowKey(null, x.courier, x.transaction_id));
+        }
+      });
+      const onWayRows = allRadarRows.filter(x => x.status === 'on_the_way');
       const knownOnWayRows = new Set(onWayRows.map(x => radarRowKey(x.courier_id, x.courier_name, x.transaction_id)));
       couriers.forEach(c => {
         const le = c.last_event || {};
-        if (le.type === 'on_the_way' && le.tx && !knownOnWayRows.has(radarRowKey(c.id, c.name, le.tx))) {
-          onWayRows.push({ courier_id:Number(c.id), courier_name:c.name, client_name:nameByTx[le.tx] || '', transaction_id:le.tx, status:'on_the_way', at:le.at, source:'event' });
-        }
+        if (le.type !== 'on_the_way' || !le.tx) return;
+        const kId = radarRowKey(c.id, c.name, le.tx);
+        const kNm = radarRowKey(null, c.name, le.tx);
+        if (knownOnWayRows.has(kId) || knownOnWayRows.has(kNm) || nonMovingKeys.has(kId) || nonMovingKeys.has(kNm)) return;
+        onWayRows.push({ courier_id:Number(c.id), courier_name:c.name, client_name:nameByTx[le.tx] || '', transaction_id:le.tx, status:'on_the_way', at:le.at, source:'event' });
       });
       const onWayCount = new Set(onWayRows.map(x => x.courier_id || normCourier(x.courier_name))).size;
       const stTag = t => t === 'on_the_way' ? ['ac', 'في الطريق'] : t === 'waiting' ? ['wn', 'وصل عند العميل'] : t === 'break' ? ['mu', 'في استراحة'] : ['ok', 'متاح'];
@@ -711,39 +813,65 @@
           '</div>'
         : '<div class="cpo-ok-strip"><span>✓ كل الحالات تمام — مفيش تأخير أو وقوف طويل أو تقاطع مناطق محتاج تدخل دلوقتي.</span><span class="cpo-lbl" style="color:inherit">مشاوير اليوم: ' + confToday + '/' + totalToday + ' · في الطريق: ' + onWayCount + '/' + couriers.length + '</span></div>';
 
-      /* تجهيز بيانات المودال التفصيلي لكل مندوب بدون فرد قوايم طويلة جوه الكارت */
+      /* شرح واضح للخطوة الجاية المطلوبة لكل تيكت أو مشوار (عشان المكتب يفهم المندوب بيعمل إيه بالظبط) */
+      const describeWorkflow = x => {
+        const isTk = x.source === 'ticket';
+        const kindTxt = isTk ? 'تيكت استلام' : (x.kind === 'pickup' ? 'استلام أوراق' : (x.kind === 'fee' ? 'تحصيل رسوم' : 'تسليم للعميل'));
+        const st = String(x.status || 'new');
+        if (x.reschedule_status === 'pending') return { kindTxt, nextTxt: 'مطلوب من المكتب: الموافقة أو الرفض على طلب التأجيل', owner: 'office' };
+        if (st === 'papers_received') return { kindTxt, nextTxt: 'المندوب استلم الأوراق ✓ — مطلوب من المكتب التحويل لمعاملة رسمية', owner: 'office' };
+        if (st === 'converted') return { kindTxt, nextTxt: 'المعاملة اتعملت — مطلوب من المندوب تأكيد المشوار فقط', owner: 'courier' };
+        if (st === 'waiting' || st === 'arrived') return { kindTxt, nextTxt: isTk ? 'المندوب عند العميل الآن — الخطوة الجاية: استلام الأوراق' : 'المندوب عند العميل الآن — الخطوة الجاية: تأكيد التسليم', owner: 'courier' };
+        if (st === 'on_the_way') return { kindTxt, nextTxt: 'المندوب في الطريق للعميل — الخطوة الجاية: يدوس «وصلت عند العميل»', owner: 'courier' };
+        if (st === 'call_attempt') return { kindTxt, nextTxt: 'اتصل بالعميل — الخطوة الجاية: يتحرك ويدوس «في طريقي»', owner: 'courier' };
+        if (st === 'accepted') return { kindTxt, nextTxt: 'قبل التيكت — الخطوة الجاية: يتصل بالعميل لتأكيد الميعاد', owner: 'courier' };
+        if (st === 'collecting') return { kindTxt, nextTxt: 'جاري الاستلام من العميل — الخطوة الجاية: تأكيد الاستلام', owner: 'courier' };
+        return { kindTxt, nextTxt: isTk ? 'جديد — مطلوب من المندوب يقبل التيكت ويبدأ التواصل' : 'في خط السير — مطلوب من المندوب يبدأ التحرك للعميل', owner: 'courier' };
+      };
+      const avatarUrlOf = c => state.avatarById[String(c.id)] || state.avatarByName[normCourier(c.name)] || '';
+
+      /* تجهيز بيانات المودال التفصيلي لكل مندوب */
       state.radarModalData = {};
       const historyLabels = { accepted:'قبول التيكت', call_attempt:'تم الاتصال', on_the_way:'في الطريق', waiting:'وصل للعميل', papers_received:'استلم الأوراق', contact_call:'اتصال', contact_whatsapp:'واتساب' };
 
-      /* كارت المندوب المختصر والنظيف (نفس روح التصور: خط المحطات + آخر حركة + زرار الطلبات والتفاصيل) */
+      /* كارت المندوب بالصورة الحقيقية + خط المحطات + شرح واضح للمهمة والخطوة الجاية */
       const cc = c => {
-        const le = c.last_event || {}, t = stTag(le.type), tot = Number(c.total_today || 0), cf = Number(c.confirmed_today || 0);
+        const le = c.last_event || {}, tot = Number(c.total_today || 0), cf = Number(c.confirmed_today || 0);
         const rows = allRadarRows.filter(x => x.courier_id ? Number(x.courier_id) === Number(c.id) : normCourier(x.courier_name) === normCourier(c.name));
         const myOpsToday = opsItems.filter(x => x && normCourier(x.courier) === normCourier(c.name) && String(x.trip_day || '').slice(0, 10) === todayKey);
 
-        /* بناء خط المحطات البصري حسب مناطق المندوب (مشاوير النهارده + تيكتات الاستلام النشطة) */
+        /* حساب الحالة الحقيقية اللحظية للمندوب: لو داس «وصلت» يتنقل فوراً من «في الطريق» لـ «وصل عند العميل» */
+        const waitingRow = rows.find(x => x.status === 'waiting' || x.status === 'arrived');
+        const movingRow = rows.find(x => x.status === 'on_the_way');
+        const liveType = waitingRow ? 'waiting' : (movingRow ? 'on_the_way' : (le.type === 'break' ? 'break' : 'resume'));
+        const t = stTag(liveType);
+
+        /* بناء خط المحطات البصري بأسماء المناطق الحقيقية */
         const zoneMap = new Map();
-        const pushZoneStop = (zName, clientNm, isDone, isActive) => {
-          const clean = zName || 'بدون منطقة';
-          if (!zoneMap.has(clean)) zoneMap.set(clean, { name: clean, total: 0, done: 0, active: false, clients: [] });
+        const pushZoneStop = (zName, clientNm, kindLbl, stageLbl, isDone, isActive) => {
+          const clean = zName || 'قيد التحديد';
+          if (!zoneMap.has(clean)) zoneMap.set(clean, { name: clean, total: 0, done: 0, active: false, details: [] });
           const z = zoneMap.get(clean);
           z.total++;
           if (isDone) z.done++;
           if (isActive) z.active = true;
-          if (clientNm && z.clients.indexOf(clientNm) === -1) z.clients.push(clientNm);
+          const entry = (clientNm || 'عميل') + ' (' + kindLbl + ' · ' + stageLbl + ')';
+          if (z.details.indexOf(entry) === -1) z.details.push(entry);
         };
         myOpsToday.forEach(x => {
-          const zn = detectArea(x.zone, x.address);
+          const txKey = String(x.transaction_id || '').trim().toUpperCase();
+          const zn = detectArea(x.zone, x.address || rlAddrByTx[txKey] || '');
           const isD = x.operational_status === 'delivered' || x.operational_status === 'confirmed';
           const isA = x.operational_status === 'on_the_way' || x.operational_status === 'waiting';
-          pushZoneStop(zn, x.client_name, isD, isA);
+          const kl = (x.kind || x.type) === 'pickup' ? 'استلام' : 'تسليم';
+          pushZoneStop(zn, x.client_name, kl, statusText[x.operational_status] || 'جديد', isD, isA);
         });
         rows.forEach(x => {
           if (x.source !== 'ticket') return;
           const zn = detectArea(x.zone, x.address);
           const isD = x.status === 'papers_received' || x.status === 'trip_confirmed';
           const isA = x.status === 'on_the_way' || x.status === 'waiting' || x.status === 'arrived';
-          pushZoneStop(zn, x.client_name, isD, isA);
+          pushZoneStop(zn, x.client_name, 'استلام', statusText[x.status] || 'جديد', isD, isA);
         });
         const zList = Array.from(zoneMap.values()).slice(0, 4);
         const doneZones = zList.filter(z => z.total > 0 && z.done >= z.total).length;
@@ -752,15 +880,19 @@
           ? Math.min(100, Math.round(((activeZoneIdx >= 0 ? activeZoneIdx : doneZones) / (zList.length - 1)) * 100))
           : (doneZones ? 100 : 0);
         const avTxt = initialsOf(c.name);
+        const avUrl = avatarUrlOf(c);
+        const avHtml = avUrl
+          ? '<img src="' + esc(avUrl) + '" alt="' + esc(c.name) + '">'
+          : esc(avTxt);
         const zoneLineHtml = zList.length
           ? '<div class="cpo-zline"><div class="cpo-ztrack"><i style="width:' + zPct + '%"></i></div>' +
               zList.map((z, idx) => {
                 const isDone = z.total > 0 && z.done >= z.total;
                 const isAct = z.active || (!isDone && idx === activeZoneIdx);
                 const cls = isDone ? 'done' : (isAct ? 'active' : '');
-                const prevTxt = z.name + ' (' + z.done + '/' + z.total + '): ' + (z.clients.slice(0, 5).join(' · ') || '—');
+                const prevTxt = 'محطة ' + z.name + ' (' + z.done + '/' + z.total + '): ' + (z.details.slice(0, 5).join(' — ') || '—');
                 return '<button type="button" class="cpo-znode ' + cls + '" data-radar-zprev="' + Number(c.id) + '" data-ztxt="' + esc(prevTxt) + '">' +
-                  (isAct ? '<span class="cpo-zpin">' + esc(avTxt) + '</span>' : '') +
+                  (isAct ? '<span class="cpo-zpin-av">' + avHtml + '</span>' : '') +
                   '<span class="cpo-zdot">' + (isDone ? '✓' : (idx + 1)) + '</span>' +
                   '<span class="cpo-zname">' + esc(z.name) + '</span>' +
                   '<span class="cpo-zcnt">' + z.done + '/' + z.total + '</span>' +
@@ -771,34 +903,52 @@
 
         const first = String(c.name || '').trim().split(/\s+/)[0] || 'المندوب';
         const csText = (function () {
-          const w = rows.find(x => x.status === 'waiting' || x.status === 'arrived'), o = rows.find(x => x.status === 'on_the_way');
-          const now1 = w ? 'وصل عند العميل ' + (w.client_name || '') + ' ' + ago(w.at) : o ? 'في الطريق للعميل ' + (o.client_name || '') + ' ' + ago(o.at) : 'مفيش مشوار شغال دلوقتي';
+          const now1 = waitingRow ? 'وصل عند العميل ' + (waitingRow.client_name || '') + ' ' + ago(waitingRow.at) : movingRow ? 'في الطريق للعميل ' + (movingRow.client_name || '') + ' ' + ago(movingRow.at) : 'مفيش مشوار شغال دلوقتي';
           return 'المندوب ' + first + ' حالياً ' + now1.trim() + '. معاه ' + rows.length + ' طلب نشط النهارده، وخلّص ' + cf + ' من ' + tot + '.';
         })();
 
-        const latestRow = rows[0] || null;
-        const lastActionStr = latestRow
-          ? (statusText[latestRow.status] || latestRow.status) + ' — ' + (latestRow.client_name || latestRow.transaction_id || '') + ' · ' + ago(latestRow.at)
-          : (le.type ? (evLabels[le.type] || le.type) + (le.at ? ' · ' + ago(le.at) : '') : 'جاهز لاستلام شغل اليوم');
+        /* المهمة الحالية الأهم + إيه الخطوة الجاية بالظبط */
+        const focusRow = waitingRow || movingRow || rows[0] || null;
+        let nowBoxHtml = '<div class="cpo-last-act"><span>متاح وجاهز لاستلام شغل اليوم</span></div>';
+        if (focusRow) {
+          const wf = describeWorkflow(focusRow);
+          const fArea = detectArea(focusRow.zone, focusRow.address);
+          nowBoxHtml = '<div class="cpo-now-box">' +
+            '<div class="cpo-now-row">' +
+              '<span><span class="cpo-kind-pill">' + esc(wf.kindTxt) + '</span> <b>' + esc(focusRow.client_name || focusRow.transaction_id) + '</b>' + (fArea ? ' · <span style="color:var(--mu)">' + esc(fArea) + '</span>' : '') + '</span>' +
+              '<span class="cpo-lbl">' + esc(ago(focusRow.at)) + '</span>' +
+            '</div>' +
+            '<div class="cpo-next-hint' + (wf.owner === 'office' ? ' office' : '') + '">' + esc(wf.nextTxt) + '</div>' +
+          '</div>';
+        }
 
-        /* حفظ تفاصيل المندوب للمودال */
+        /* حفظ تفاصيل المندوب للمودال (مع الصورة ونوع المهمة والخطوة الجاية لكل طلب) */
         state.radarModalData[String(c.id)] = {
-          id: Number(c.id), name: c.name, initials: avTxt, statusTag: t,
+          id: Number(c.id), name: c.name, initials: avTxt, avatarUrl: avUrl, statusTag: t,
           done: cf, total: tot, csText: csText,
-          rows: rows.map(x => ({
-            client_name: x.client_name || 'عميل بدون اسم',
-            transaction_id: x.transaction_id || '—',
-            zone: x.zone || '',
-            source: x.source,
-            statusLabel: statusText[x.status] || String(x.status || 'نشط'),
-            atTxt: ago(x.at),
-            reschedule_status: x.reschedule_status || '',
-            proposed_slot: x.proposed_slot || '',
-            reschedule_reason: x.reschedule_reason || '',
-            historyTxt: x.source === 'ticket' && Array.isArray(x.action_history) && x.action_history.length
-              ? x.action_history.map(h => (historyLabels[h.step] || h.step) + (h.outcome ? ' (' + h.outcome + ')' : '') + ' · ' + ago(h.created_at)).join(' ← ')
-              : ''
-          }))
+          rows: rows.map(x => {
+            const wf = describeWorkflow(x);
+            const areaNm = detectArea(x.zone, x.address);
+            return {
+              client_name: x.client_name || 'عميل بدون اسم',
+              transaction_id: x.transaction_id || '—',
+              zone: areaNm || x.zone || '',
+              address: x.address || '',
+              service_name: x.service_name || '',
+              kindTxt: wf.kindTxt,
+              nextTxt: wf.nextTxt,
+              nextOwner: wf.owner,
+              source: x.source,
+              statusLabel: statusText[x.status] || String(x.status || 'نشط'),
+              atTxt: ago(x.at),
+              reschedule_status: x.reschedule_status || '',
+              proposed_slot: x.proposed_slot || '',
+              reschedule_reason: x.reschedule_reason || '',
+              historyTxt: x.source === 'ticket' && Array.isArray(x.action_history) && x.action_history.length
+                ? x.action_history.map(h => (historyLabels[h.step] || h.step) + (h.outcome ? ' (' + h.outcome + ')' : '') + ' · ' + ago(h.created_at)).join(' ← ')
+                : ''
+            };
+          })
         };
 
         const myDelay = delayedRows.filter(x => x.courier_id === Number(c.id) || normCourier(x.courier_name) === normCourier(c.name));
@@ -807,19 +957,23 @@
           ? '<div class="cpo-lbl" style="color:var(--er);font-weight:700">⏳ متأخر: ' + myDelay[0].mins + ' د من غير حركة (' + esc(myDelay[0].client_name || myDelay[0].transaction_id) + ')</div>'
           : (myStuck.length ? '<div class="cpo-lbl" style="color:var(--wn);font-weight:700">📍 واقف عند ' + esc(myStuck[0].client_name || 'عميل') + ' من ' + myStuck[0].mins + ' د</div>' : '');
         const activeCount = Math.max(rows.length, tot);
-        const doneCount = cf;
+        const doneCount = cf + rows.filter(x => x.status === 'papers_received').length;
         const pct = activeCount ? Math.min(100, Math.round(doneCount / activeCount * 100)) : 0;
-        const sub = le.tx ? (nameByTx[le.tx] ? '<b style="color:var(--tx)">' + esc(nameByTx[le.tx]) + '</b> · ' : '') + '<span dir="ltr" class="cpo-num">' + esc(le.tx) + (le.at ? ' · ' + esc(tm(le.at)) : '') + '</span>' : (le.type === 'near_office' ? 'قرب من المكتب' + (le.at ? ' · ' + esc(tm(le.at)) : '') : (le.at ? 'آخر حركة ' + esc(tm(le.at)) : 'متاح على الخط'));
+        const sub = waitingRow
+          ? ('وصل عند ' + esc(waitingRow.client_name || 'عميل') + ' · ' + esc(ago(waitingRow.at)))
+          : (movingRow
+            ? ('في الطريق لـ ' + esc(movingRow.client_name || 'عميل') + ' · ' + esc(ago(movingRow.at)))
+            : (le.at ? 'آخر حركة ' + esc(tm(le.at)) : 'متاح على الخط'));
 
         return '<div class="cpo-cc" style="' + (myDelay.length ? 'border:1px solid var(--er)' : (myStuck.length ? 'border:1px solid var(--wn)' : 'border:1px solid var(--bd)')) + '">' +
           '<div class="cpo-row" style="justify-content:space-between">' +
-            '<div class="cpo-row" style="min-width:0"><div class="cpo-av">' + esc(avTxt) + '</div><div style="min-width:0"><b>' + esc(c.name) + '</b><div style="font-size:12px;color:var(--mu)">' + sub + '</div></div></div>' +
+            '<div class="cpo-row" style="min-width:0"><div class="cpo-av">' + avHtml + '</div><div style="min-width:0"><b style="font-size:15px">' + esc(c.name) + '</b><div style="font-size:12px;color:var(--mu)">' + sub + '</div></div></div>' +
             '<span class="cpo-tag ' + t[0] + '">' + t[1] + '</span>' +
           '</div>' +
           zoneLineHtml +
           warnLine +
-          '<div class="cpo-last-act"><span style="color:var(--ac);flex:none">⚡</span><span>' + esc(lastActionStr) + '</span></div>' +
-          '<div class="cpo-row"><div class="cpo-bar" style="flex:1"><span style="width:' + pct + '%"></span></div><span class="cpo-num cpo-lbl">اليوم: ' + doneCount + '/' + activeCount + '</span></div>' +
+          nowBoxHtml +
+          '<div class="cpo-row"><div class="cpo-bar" style="flex:1"><span style="width:' + pct + '%"></span></div><span class="cpo-num cpo-lbl">الإنجاز: ' + doneCount + '/' + activeCount + '</span></div>' +
           '<div class="cpo-row" style="gap:6px;flex-wrap:wrap">' +
             '<button type="button" class="cpo-btn p" style="flex:1;min-height:36px;font-size:12.5px" data-radar-dd="' + Number(c.id) + '">الطلبات والسجل (' + rows.length + ')</button>' +
             '<button type="button" class="cpo-btn g" style="min-height:36px;font-size:12px" data-radar-cs="' + esc(csText) + '">المندوب فين</button>' +
@@ -847,7 +1001,7 @@
         '<div class="cpo-row" style="justify-content:space-between;padding:8px 0"><span style="font-size:14px">جاهز بالمكتب</span><button type="button" role="switch" aria-label="جاهز بالمكتب" class="cpo-sw" data-ready="ready_flag"><i></i></button></div>' +
         '<div class="cpo-row" style="justify-content:space-between;padding:8px 0"><span style="font-size:14px">الميعاد متأكد مع العميل</span><button type="button" role="switch" aria-label="الميعاد متأكد" class="cpo-sw" data-ready="client_confirmed"><i></i></button></div>' +
         '<div class="cpo-lbl" style="margin-top:6px">بتظهر للمندوب كعلامة على كارت المشوار</div></div>';
-      const cust = '<div class="cpo-card" style="flex:1"><b style="font-size:15.5px">اللي العميل بيشوفه</b><div class="cpo-cc" style="margin-top:10px;padding:14px;border-radius:18px">' +
+      const cust = '<div class="cpo-card" style="flex:1"><div class="cpo-row" style="justify-content:space-between"><b style="font-size:15.5px">في الطريق للعملاء الآن</b><span class="cpo-tag ' + (onWayRows.length ? 'ac' : 'mu') + ' cpo-num">' + onWayRows.length + '</span></div><div class="cpo-lbl" style="margin-top:3px">يختفي تلقائياً أول ما المندوب يدوس «وصلت» أو يخلّص.</div><div class="cpo-cc" style="margin-top:10px;padding:14px;border-radius:18px">' +
         (onWayRows.length ? onWayRows.map(x => {
           const courierFirst = String(x.courier_name || '').trim().split(/\s+/)[0] || 'المندوب';
           const clientFirst = String(x.client_name || '').trim().split(/\s+/)[0];
@@ -873,15 +1027,23 @@
     if (old) old.remove();
     const info = state.radarModalData && state.radarModalData[String(courierId)];
     if (!info) return;
+    const avHtml = info.avatarUrl
+      ? '<img src="' + esc(info.avatarUrl) + '" alt="' + esc(info.name) + '">'
+      : esc(info.initials || 'م');
     const rowsHtml = info.rows.length
       ? info.rows.map(x =>
           '<div class="cpo-dd-item">' +
             '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
-              '<b>' + esc(x.client_name) + (x.zone ? ' <span style="font-weight:600;opacity:.7">· ' + esc(x.zone) + '</span>' : '') + '</b>' +
-              '<span style="font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--acsoft,rgba(16,185,129,.15));color:var(--ac,#10b981)">' + esc(x.statusLabel) + '</span>' +
+              '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+                '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(16,185,129,.15);color:#059669">' + esc(x.kindTxt || 'مهمة') + '</span>' +
+                '<b style="font-size:14px">' + esc(x.client_name) + '</b>' +
+                (x.zone ? '<span style="font-size:12px;font-weight:700;opacity:.75">· ' + esc(x.zone) + '</span>' : '') +
+              '</div>' +
+              '<span style="font-size:11.5px;font-weight:800;padding:3px 10px;border-radius:999px;background:rgba(148,163,184,.16)">' + esc(x.statusLabel) + '</span>' +
             '</div>' +
-            '<div style="font-size:12px;opacity:.75">' + (x.source === 'ticket' ? 'تيكت استلام' : 'مشوار') + ' · <span dir="ltr">' + esc(x.transaction_id) + '</span> · ' + esc(x.atTxt) + '</div>' +
-            (x.historyTxt ? '<div style="font-size:11.5px;opacity:.85;margin-top:2px">سجل الخطوات: ' + esc(x.historyTxt) + '</div>' : '') +
+            '<div style="font-size:12px;opacity:.78"><span dir="ltr">' + esc(x.transaction_id) + '</span>' + (x.service_name ? ' · ' + esc(x.service_name) : '') + (x.address ? ' · ' + esc(x.address) : '') + ' · ' + esc(x.atTxt) + '</div>' +
+            (x.nextTxt ? '<div class="cpo-dd-next' + (x.nextOwner === 'office' ? ' office' : '') + '">' + esc(x.nextTxt) + '</div>' : '') +
+            (x.historyTxt ? '<div style="font-size:11.5px;opacity:.85;margin-top:3px">سجل الخطوات: ' + esc(x.historyTxt) + '</div>' : '') +
             (x.reschedule_status === 'pending' ? '<div style="font-size:12px;color:#f59e0b;font-weight:700">طلب تأجيل معلّق · ' + esc(x.proposed_slot || '') + (x.reschedule_reason ? ' · ' + esc(x.reschedule_reason) : '') + '</div>' : '') +
           '</div>'
         ).join('')
@@ -892,8 +1054,8 @@
     wrap.dir = 'rtl';
     wrap.innerHTML =
       '<div class="cpo-dd-box" role="dialog" aria-modal="true">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--bd,rgba(148,163,184,.2));padding-bottom:10px">' +
-          '<div><b style="font-size:16px">' + esc(info.name) + ' — طلبات اليوم وسجل الحركات</b><div style="font-size:12px;opacity:.7">نشط النهارده: ' + info.rows.length + ' · مؤكد: ' + info.done + '/' + info.total + '</div></div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--bd,rgba(148,163,184,.2));padding-bottom:10px">' +
+          '<div style="display:flex;align-items:center;gap:10px"><div class="cpo-dd-av">' + avHtml + '</div><div><b style="font-size:16px">' + esc(info.name) + ' — خط السير والمطلوب اليوم</b><div style="font-size:12px;opacity:.75">نشط النهارده: ' + info.rows.length + ' · مؤكد: ' + info.done + '/' + info.total + ' · الحالة: ' + esc((info.statusTag && info.statusTag[1]) || 'متاح') + '</div></div></div>' +
           '<div style="display:flex;gap:6px"><button type="button" class="cpo-btn g" id="cop-dd-copy" style="min-height:36px;font-size:12px">نسخ ملخص خدمة العملاء</button><button type="button" class="cpo-btn g" id="cop-dd-close" style="min-height:36px">إغلاق ✕</button></div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px">' + rowsHtml + '</div>' +

@@ -672,9 +672,11 @@
         return;
       }
       qrDeliverBeep(true);
+      var deliveredTx = d.transaction_id || cur.transaction_id || '';
       st.qrDeliver = null;
       closeP4Dialog();
-      toast('تم تسليم المعاملة ' + (d.transaction_id || '') + ' باسم: ' + (d.recipient || recipient));
+      toast('تم تسليم المعاملة ' + deliveredTx + ' باسم: ' + (d.recipient || recipient));
+      if (deliveredTx && typeof window.__cpOnQrDelivered === 'function') window.__cpOnQrDelivered(deliveredTx);
       loadMyP4State(true);
     } catch (e) {
       qrDeliverBeep(false);

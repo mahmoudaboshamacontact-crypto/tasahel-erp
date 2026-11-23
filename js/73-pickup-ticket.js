@@ -290,7 +290,27 @@
       '.pt-det-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}',
       '.pt-det-col{border:1px solid var(--r-bd,rgba(148,163,184,.22));border-radius:13px;padding:12px;background:var(--r-bg,rgba(148,163,184,.04));display:flex;flex-direction:column;gap:8px}',
       'html.dark body:not(.is-courier-mode) .pt-det-col{background:#111513;border-color:rgba(255,255,255,.1)}',
-      '@media (max-width:780px){.pt-det-grid{grid-template-columns:1fr}}'
+      '.pt-wrap{padding:0 2px;box-sizing:border-box}',
+      '.pt-list-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--r-bd,rgba(148,163,184,.18))}',
+      '.pt-list-title{font-size:16px;font-weight:800;margin:0;color:var(--r-tx,#0f172a)}',
+      'html.dark body:not(.is-courier-mode) .pt-list-title{color:#f5f4f0}',
+      '.pt-smart-body{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(240px,1fr);gap:10px;align-items:stretch}',
+      '.pt-svc-box,.pt-fin-box{border:1px solid var(--r-bd,rgba(148,163,184,.18));border-radius:12px;padding:10px 12px;background:var(--r-bg,rgba(148,163,184,.04));display:flex;flex-direction:column;gap:6px}',
+      'html.dark body:not(.is-courier-mode) .pt-svc-box,html.dark body:not(.is-courier-mode) .pt-fin-box{background:#111513;border-color:rgba(255,255,255,.09)}',
+      '.pt-box-lbl{font-size:11px;font-weight:800;color:var(--r-mute,#64748b);letter-spacing:.1px}',
+      '.pt-svc-line{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;padding:5px 0;border-bottom:1px dashed var(--r-bd,rgba(148,163,184,.18));font-size:12.5px}',
+      '.pt-svc-line:last-child{border-bottom:0;padding-bottom:0}',
+      '.pt-svc-name{font-weight:700;color:var(--r-tx,#0f172a)}',
+      'html.dark body:not(.is-courier-mode) .pt-svc-name{color:#f5f4f0}',
+      '.pt-svc-doc{font-size:11.5px;color:var(--r-mute,#64748b);background:rgba(148,163,184,.12);padding:2px 8px;border-radius:8px}',
+      '.pt-svc-qty{font-size:11.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(3,107,41,.12);color:#036b29;white-space:nowrap}',
+      'html.dark body:not(.is-courier-mode) .pt-svc-qty{background:rgba(16,185,129,.18);color:#34d399}',
+      '.pt-fin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}',
+      '.pt-fin-cell{display:flex;flex-direction:column;gap:2px;font-size:12px}',
+      '.pt-fin-cell span{font-size:11px;color:var(--r-mute,#64748b)}',
+      '.pt-fin-cell b{font-size:13px;font-weight:800;color:var(--r-tx,#0f172a)}',
+      'html.dark body:not(.is-courier-mode) .pt-fin-cell b{color:#f5f4f0}',
+      '@media (max-width:780px){.pt-det-grid,.pt-smart-body{grid-template-columns:1fr}}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -1229,14 +1249,21 @@
     ];
     list.innerHTML = filtered.map(function (t) {
       var items = mapTicketToItems(t);
-      var svcsHtml = items.map(function (it) {
-        return eh(it.service_name) + (it.doc_type ? ' (' + eh(it.doc_type) + ')' : '') + ' × ' + Number(it.qty || 1);
-      }).join(' + ');
+      var totalQty = items.reduce(function (acc, it) { return acc + Math.max(1, Number(it.qty || 1)); }, 0);
+      var svcsRowsHtml = items.map(function (it) {
+        return '<div class="pt-svc-line">' +
+          '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0">' +
+            '<span class="pt-svc-name">' + eh(it.service_name || 'خدمة') + '</span>' +
+            (it.doc_type ? '<span class="pt-svc-doc">' + eh(it.doc_type) + '</span>' : '') +
+          '</div>' +
+          '<span class="pt-svc-qty">العدد: ' + Number(it.qty || 1) + '</span>' +
+        '</div>';
+      }).join('');
       var payBadge = t.payment_status === 'cod_cash'
         ? '<span class="pt-badge pt-badge-warn">تحصيل كاش ' + eh(money(t.collect_amount || 0)) + '</span>'
         : (t.payment_status === 'instapay_on_arrival'
-          ? '<span class="pt-badge pt-badge-pur">إنستا باي ' + eh(money(t.collect_amount || 0)) + '</span>'
-          : '<span class="pt-badge pt-badge-ok">دافع مسبقاً</span>');
+          ? '<span class="pt-badge pt-badge-pur">إنستا باي: ' + eh(money(t.collect_amount || 0)) + '</span>'
+          : '<span class="pt-badge pt-badge-ok">خالص الدفع مسبقاً</span>');
       var canAction = t.status === 'open' || t.status === 'with_courier';
       var canCancel = canAction && isManager();
       var courierName = courierNameById(t.courier_id);
@@ -1311,14 +1338,27 @@
             (t.summary_comment ? '<button type="button" class="pt-icon-btn" data-pt-act="copy" data-id="' + Number(t.id) + '" title="نسخ الكومنت لسمارت ديسك"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>نسخ</span></button>' : '') +
           '</div>' +
         '</div>' +
-        /* السطر 2: الخلاصة المالية والخدمة + شريط خطوات المندوب */
-        '<div class="pt-smart-meta">' +
-          '<span>' + svcsHtml + '</span>' +
-          '<span>· الإجمالي: <b>' + eh(money(t.total)) + '</b></span>' +
-          payBadge +
-          (t.slot_pref ? '<span>· ' + eh(t.slot_pref) + '</span>' : '') +
-          (t.mission_id ? '<span class="pt-badge pt-badge-pur" dir="ltr">مهمة #' + Number(t.mission_id) + '</span>' : '') +
-          (holder !== 'office' ? '<span class="pt-badge ' + papersHolderBadgeClass(holder) + '">الأوراق: ' + eh(PAPERS_HOLDER_LABELS[holder] || 'المكتب') + '</span>' : '') +
+        /* السطر 2: تقسيم نظيف (الخدمات والمستندات | الملخص المالي والميعاد) */
+        '<div class="pt-smart-body">' +
+          '<div class="pt-svc-box">' +
+            '<div class="pt-box-lbl">الخدمات والمستندات (' + totalQty + ')</div>' +
+            svcsRowsHtml +
+          '</div>' +
+          '<div class="pt-fin-box">' +
+            '<div class="pt-box-lbl">الملخص المالي والمتابعة</div>' +
+            '<div class="pt-fin-grid">' +
+              '<div class="pt-fin-cell"><span>إجمالي الطلب</span><b>' + eh(money(t.total)) + '</b></div>' +
+              '<div class="pt-fin-cell"><span>حالة التحصيل</span><div>' + payBadge + '</div></div>' +
+              '<div class="pt-fin-cell"><span>المندوب المعيّن</span><b>' + eh(courierName) + '</b></div>' +
+              '<div class="pt-fin-cell"><span>الميعاد والمنطقة</span><b>' + eh([t.slot_pref || '—', t.zone || ''].filter(Boolean).join(' · ')) + '</b></div>' +
+            '</div>' +
+            ((t.mission_id || holder !== 'office')
+              ? '<div style="display:flex;flex-wrap:wrap;gap:6px;padding-top:4px">' +
+                  (t.mission_id ? '<span class="pt-badge pt-badge-pur" dir="ltr">مهمة #' + Number(t.mission_id) + '</span>' : '') +
+                  (holder !== 'office' ? '<span class="pt-badge ' + papersHolderBadgeClass(holder) + '">الأوراق: ' + eh(PAPERS_HOLDER_LABELS[holder] || 'المكتب') + '</span>' : '') +
+                '</div>'
+              : '') +
+          '</div>' +
         '</div>' +
         stepsStrip +
         (t.status === 'cancelled'
@@ -1352,14 +1392,16 @@
 
     pane.innerHTML =
       '<div class="pt-wrap">' +
-        '<section class="pt-card">' +
+        '<section class="pt-card" style="padding:16px 20px">' +
           '<div class="pt-head">' +
-            '<div>' +
-              '<h2 class="pt-title">تيكت الاستلام المبدئي (سمارت ديسك + السكريبت الحي)</h2>' +
-              '<div class="pt-sub">دعم تعدد الخدمات، حالة الدفع والتحصيل للمندوب، شروط كتالوج الخدمات، والتحويل المباشر لمعاملة رسمية.</div>' +
+            '<div style="display:flex;flex-direction:column;gap:4px">' +
+              '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+                '<h2 class="pt-title" style="font-size:18px;font-weight:800">تذاكر الاستلام المبدئية</h2>' +
+                '<span id="pt-rt-status" class="pt-badge pt-badge-mut">جاري الاتصال…</span>' +
+              '</div>' +
+              '<div class="pt-sub">سجّل بيانات العميل من سمارت ديسك، تابِع خطوات المندوب لحظياً، وحوّل التيكت لمعاملة رسمية بضغطة واحدة.</div>' +
             '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
-              '<span id="pt-rt-status" class="pt-badge pt-badge-mut">جاري الاتصال بالتحديث المباشر…</span>' +
               '<button type="button" class="pt-btn pt-btn-sec hidden" id="pt-rt-reconnect">إعادة الاتصال</button>' +
               '<button type="button" class="pt-btn pt-btn-sec" id="pt-refresh-btn">تحديث القائمة</button>' +
             '</div>' +
@@ -1424,9 +1466,9 @@
           '</section>' +
         '</form>' +
 
-        '<section class="pt-card" style="display:flex;flex-direction:column;gap:10px">' +
-          '<div class="pt-head"><b style="font-size:14px">تذاكر الاستلام المبدئية</b><div id="pt-mgr-tabs" class="pt-tabs-bar" style="margin:0"></div></div>' +
-          '<div id="pt-list" style="display:flex;flex-direction:column;gap:10px">جاري التحميل…</div>' +
+        '<section class="pt-card" style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">' +
+          '<div class="pt-list-head"><div><h3 class="pt-list-title">قائمة التذاكر والمتابعة</h3><div class="pt-sub">كل تيكت بيعرض خطوات المندوب وزرار القرار المطلوب في مرحلته الحالية</div></div><div id="pt-mgr-tabs" class="pt-tabs-bar" style="margin:0"></div></div>' +
+          '<div id="pt-list" style="display:flex;flex-direction:column;gap:12px">جاري التحميل…</div>' +
         '</section>' +
       '</div>';
 
