@@ -472,6 +472,23 @@
         '<div class="cpo-card"><div class="cpo-lbl">اتأكدت من المناديب</div><div class="cpo-big cpo-num" style="color:var(--ok)">' + confToday + '</div></div>' +
         '<div class="cpo-card" style="background:var(--wnsoft)"><div class="cpo-lbl" style="color:var(--wn)">طلبات بانتظار موافقتك</div><div class="cpo-big cpo-num" style="color:var(--wn)">' + pending.length + '</div></div>' +
         '<div class="cpo-card"><div class="cpo-lbl">مناديب في الطريق</div><div class="cpo-big cpo-num" style="color:var(--ac)">' + onWayCount + '<span style="font-size:16px;color:var(--mu)"> / ' + couriers.length + '</span></div></div></div>';
+      const STALE_MIN = 30;
+      const staleMin = at => { const t0 = at ? new Date(at).getTime() : NaN; return Number.isFinite(t0) ? Math.floor((Date.now() - t0) / 60000) : 0; };
+      /* مشاوير راكدة: في الطريق / وصل / اتصال، من أكتر من 30 دقيقة من غير حركة */
+      const staleRows = ticketRows.filter(x => ['on_the_way', 'waiting', 'call_attempt'].includes(x.status) && staleMin(x.at) >= STALE_MIN)
+        .sort((a, b) => staleMin(b.at) - staleMin(a.at));
+      /* تقاطع المناطق: نفس الحي عند أكتر من مندوب النهارده (من عنوان المشوار) */
+      const AREAS = ['الدقي', 'المهندسين', 'الزمالك', 'الجيزة', 'فيصل', 'الهرم', 'أكتوبر', 'الشيخ زايد', 'المعادي', 'حلوان', 'المقطم', 'المنيل', 'السيدة زينب', 'مدينة نصر', 'مصر الجديدة', 'شبرا', 'وسط البلد', 'رمسيس', 'عين شمس', 'المرج', 'المطرية', 'الزيتون', 'حدائق القبة', 'التجمع', 'القاهرة الجديدة', 'الرحاب', 'مدينتي', 'الشروق', 'بدر', 'العبور', 'القطامية'];
+      const normA = x => String(x || '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+      const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
+      const byArea = {};
+      opsItems.filter(x => x && x.courier && x.address && String(x.trip_day || '').slice(0, 10) === todayKey && !['delivered', 'confirmed', 'cancelled'].includes(x.operational_status)).forEach(x => {
+        const a = normA(x.address);
+        const hit = AREAS.find(k => a.includes(normA(k)));
+        if (!hit) return;
+        (byArea[hit] = byArea[hit] || {})[x.courier] = (byArea[hit][x.courier] || 0) + 1;
+      });
+      const overlaps = Object.keys(byArea).filter(k => Object.keys(byArea[k]).length >= 2).map(k => ({ area: k, couriers: byArea[k] }));
       const cc = c => {
         const le = c.last_event || {}, t = stTag(le.type), tot = Number(c.total_today || 0), cf = Number(c.confirmed_today || 0);
         const rows = allRadarRows.filter(x => x.courier_id ? Number(x.courier_id) === Number(c.id) : normCourier(x.courier_name) === normCourier(c.name));
@@ -490,11 +507,21 @@
           }).join('');
           return '<div style="border:1px solid var(--bd);border-radius:10px;overflow:hidden"><button type="button" class="cpo-btn g" data-radar-group="' + esc(groupKey) + '" aria-expanded="false" style="width:100%;justify-content:space-between;border:0;border-radius:0"><span>' + esc(st) + '</span><span class="cpo-num">' + g.rows.length + ' طلبات　⌄</span></button><div data-radar-panel="' + esc(groupKey) + '" hidden style="padding:7px">' + cards + '</div></div>';
         }).join('') + '</div>' : '<div class="cpo-lbl" style="margin:8px 0">مفيش معاملات نشطة ظاهرة للمندوب ده</div>';
+        const active = rows.filter(x => ['on_the_way', 'waiting'].includes(x.status));
+        const first = String(c.name || '').trim().split(/\s+/)[0] || 'المندوب';
+        const csText = (function () {
+          const w = rows.find(x => x.status === 'waiting'), o = rows.find(x => x.status === 'on_the_way');
+          const now1 = w ? 'وصل عند العميل ' + (w.client_name || '') + ' ' + ago(w.at) : o ? 'في الطريق للعميل ' + (o.client_name || '') + ' ' + ago(o.at) : 'مفيش مشوار شغال دلوقتي';
+          return 'المندوب ' + first + ' حالياً ' + now1.trim() + '. معاه ' + rows.length + ' طلب نشط، وخلّص ' + cf + ' من ' + tot + ' النهارده.';
+        })();
+        const staleN = active.filter(x => staleMin(x.at) >= STALE_MIN).length;
         const sub = le.tx ? (nameByTx[le.tx] ? '<b style="color:var(--tx)">' + esc(nameByTx[le.tx]) + '</b> · ' : '') + '<span dir="ltr" class="cpo-num">' + esc(le.tx) + (le.at ? ' · من ' + esc(tm(le.at)) : '') + '</span>' : (le.type === 'near_office' ? 'قرب من المكتب' + (le.at ? ' · ' + esc(tm(le.at)) : '') : (le.at ? 'من ' + esc(tm(le.at)) : '&nbsp;'));
         return '<div class="cpo-cc"><div class="cpo-row" style="justify-content:space-between"><b>' + esc(c.name) + '</b><span class="cpo-tag ' + t[0] + '">' + t[1] + '</span></div>' +
           '<div style="font-size:12.5px;color:var(--mu)">' + sub + '</div>' + clients +
           '<div class="cpo-row"><div class="cpo-bar" style="flex:1"><span style="width:' + (tot ? Math.round(cf / tot * 100) : 0) + '%"></span></div><span class="cpo-num cpo-lbl">' + cf + '/' + tot + '</span></div>' +
-          '<button type="button" class="cpo-btn g" style="align-self:flex-start" data-v12ping="' + Number(c.id) + '" data-cname="' + esc(c.name) + '">' + svg('warn') + 'تنبيه عاجل</button></div>';
+          (staleN ? '<div class="cpo-lbl" style="color:var(--wn)">⏳ ' + staleN + ' راكد أكتر من ' + STALE_MIN + ' د</div>' : '') +
+          '<div class="cpo-row" style="gap:6px;flex-wrap:wrap"><button type="button" class="cpo-btn g" data-radar-cs="' + esc(csText) + '">نسخ «المندوب فين»</button>' +
+          '<button type="button" class="cpo-btn g" style="align-self:flex-start" data-v12ping="' + Number(c.id) + '" data-cname="' + esc(c.name) + '">' + svg('warn') + 'تنبيه عاجل</button></div></div>';
       };
       const composer = '<div id="cop-ping-box" class="cpo-ping" style="display:none"><span id="cop-ping-to" class="cpo-lbl"></span>' +
         '<input id="cop-ping-msg" type="text" maxlength="200" placeholder="اكتب رسالة التنبيه العاجل" aria-label="رسالة التنبيه"><button type="button" class="cpo-btn p" style="min-height:44px" data-ping-send="1">أرسل</button><button type="button" class="cpo-btn g" style="min-height:44px" data-ping-cancel="1">إلغاء</button></div>';
@@ -515,16 +542,22 @@
         '<div class="cpo-row" style="justify-content:space-between;padding:8px 0"><span style="font-size:14px">جاهز بالمكتب</span><button type="button" role="switch" aria-label="جاهز بالمكتب" class="cpo-sw" data-ready="ready_flag"><i></i></button></div>' +
         '<div class="cpo-row" style="justify-content:space-between;padding:8px 0"><span style="font-size:14px">الميعاد متأكد مع العميل</span><button type="button" role="switch" aria-label="الميعاد متأكد" class="cpo-sw" data-ready="client_confirmed"><i></i></button></div>' +
         '<div class="cpo-lbl" style="margin-top:6px">بتظهر للمندوب كعلامة على كارت المشوار</div></div>';
+      const alertsCard = (staleRows.length || overlaps.length)
+        ? '<div class="cpo-card" style="border:1px solid var(--wn)"><b style="font-size:16px">تنبيهات التشغيل</b><div style="margin-top:8px;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.5">' +
+          staleRows.slice(0, 6).map(x => '<div>⏳ <b>' + esc(x.courier_name) + '</b> — ' + esc(x.client_name || '') + ' — ' + esc(statusText[x.status] || x.status) + ' من <b>' + staleMin(x.at) + ' د</b> <button type="button" class="cpo-btn g" data-v12ping="' + Number(x.courier_id || 0) + '" data-cname="' + esc(x.courier_name) + '">تنبيه</button></div>').join('') +
+          overlaps.slice(0, 4).map(o => '<div>🔀 <b>' + esc(o.area) + '</b>: ' + Object.keys(o.couriers).map(n => esc(n) + ' (' + o.couriers[n] + ')').join(' و ') + ' — الاتنين نازلين نفس الحي، ممكن تضمهم لواحد وتوفر مشوار.</div>').join('') +
+          '</div></div>'
+        : '';
       const cust = '<div class="cpo-card" style="flex:1"><b style="font-size:16px">اللي العميل بيشوفه</b><div class="cpo-cc" style="margin-top:10px;padding:14px;border-radius:18px">' +
         (onWayRows.length ? onWayRows.map(x => {
           const courierFirst = String(x.courier_name || '').trim().split(/\s+/)[0] || 'المندوب';
           const clientFirst = String(x.client_name || '').trim().split(/\s+/)[0];
-          return '<div class="cpo-row" style="gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)"><div class="cpo-ico">' + svg('truck', 20) + '</div><div><b>' + esc(courierFirst) + ' في الطريق' + (clientFirst ? ' لـ ' + esc(clientFirst) : '') + '</b><div class="cpo-lbl">المندوب في طريقه للعميل</div></div></div>';
+          return '<div class="cpo-row" style="gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)"><div class="cpo-ico">' + svg('truck', 20) + '</div><div><b>' + esc(courierFirst) + ' في الطريق' + (clientFirst ? ' لـ ' + esc(clientFirst) : '') + '</b><div class="cpo-lbl">المندوب في طريقه للعميل · ' + esc(ago(x.at)) + '</div></div></div>';
         }).join('') : '<div class="cpo-lbl">مفيش مندوب في الطريق دلوقتي.</div>') + '</div>' +
         '<div class="cpo-lbl" style="margin-top:10px;line-height:1.5">الاسم الأول للمندوب والعميل فقط، من غير رقم أو عنوان.</div></div>';
       state.radarFailed = false;
       state.radarLoadedAt = Date.now();
-      target.innerHTML = '<div class="cpo-wrap">' + head + pulse + '<div class="cpo-cols"><div class="cpo-main">' + couriersCard + apCard + '</div><div class="cpo-side">' + feed + ready + cust + '</div></div></div>';
+      target.innerHTML = '<div class="cpo-wrap">' + head + pulse + '<div class="cpo-cols"><div class="cpo-main">' + couriersCard + apCard + '</div><div class="cpo-side">' + alertsCard + feed + ready + cust + '</div></div></div>';
       target.onclick = radarClick;
     } catch (e) {
       state.radarFailed = true;
@@ -544,6 +577,12 @@
       const key = t.dataset.radarGroup;
       const panel = Array.from(el.querySelectorAll('[data-radar-panel]')).find(node => node.dataset.radarPanel === key);
       if (panel) { panel.hidden = !panel.hidden; t.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true'); }
+      return;
+    }
+    if (t.dataset.radarCs) {
+      const txt = t.dataset.radarCs;
+      try { await navigator.clipboard.writeText(txt); toast('اتنسخ — ابعته لخدمة العملاء'); }
+      catch (e) { window.prompt('انسخ الملخص:', txt); }
       return;
     }
     if (t.dataset.radarRetry) return loadV12OfficeRadar(el, true);
