@@ -405,8 +405,37 @@
     const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
     sortRouteSelectionNearestFirst(pos.lat, pos.lng);
     saveRouteState();
+    try { localStorage.setItem('ts_cp_day_started', today()); } catch (e) { /* */ }
     toast('خط سير النهارده جاهز: ' + st.routeTxIds.length + ' محطة ✓');
     renderTab(false);
+  }
+  /* بعد «ابدأ اليوم»: أي شغل جديد ينزل للمندوب النهارده يدخل خط السير لوحده ويتعاد الترتيب (من غير ما يفرض حاجة لو المندوب ما بدأش اليوم) */
+  function syncDayRoute() {
+    try {
+      if (localStorage.getItem('ts_cp_day_started') !== today()) return;
+      const fresh = itemsOf(today()).filter(i => !i.confirmed && i.type !== 'fee').map(i => String(i.transaction_id))
+        .filter(tx => st.routeTxIds.indexOf(tx) === -1 && !(st.routeSeen || {})[tx]);
+      if (!fresh.length) return;
+      st.routeSeen = st.routeSeen || {};
+      fresh.forEach(tx => { st.routeSeen[tx] = 1; st.routeTxIds.push(tx); });
+      const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
+      sortRouteSelectionNearestFirst(pos.lat, pos.lng);
+      saveRouteState();
+      toast('اتضاف ' + fresh.length + ' شغل جديد لخط السير وانرتّب ✓');
+    } catch (e) { /* مش أساسي */ }
+  }
+  /* ملخص اليوم للمندوب: خلّص إيه، فاضل إيه */
+  function daySummaryHtml() {
+    const all = itemsOf(today()).filter(i => i.type !== 'fee');
+    if (!all.length) return '';
+    const done = all.filter(i => i.confirmed).length;
+    const left = all.length - done;
+    const hour = new Date().getHours();
+    if (left > 0 && hour < 16) return '';
+    const leftTx = all.filter(i => !i.confirmed).slice(0, 5).map(i => '<li>' + eh(i.client_name || i.transaction_id) + '</li>').join('');
+    return '<div class="cp-card" style="margin:8px 0;padding:12px"><b>ملخص النهارده</b>' +
+      '<div style="margin-top:6px">خلّصت <b>' + done + '</b> من <b>' + all.length + '</b>' + (left ? ' · فاضل <b>' + left + '</b>' : ' — يوم ممتاز ✓') + '</div>' +
+      (left ? '<ul style="margin:6px 18px 0;font-size:13px">' + leftTx + '</ul>' : '') + '</div>';
   }
   function clearRoute() {
     st.routeTxIds = [];
@@ -1732,7 +1761,7 @@
       ? '<div class="cp-empty">' + (st.loaded ? 'مفيش حاجة مطابقة في اليوم ده' : 'جاري التحميل…') + '</div>' : '';
     const startBtn = (isToday && (all.some(i => !i.confirmed && i.type !== 'fee') || tkAll.some(t => t.status === 'with_courier')))
       ? '<button type="button" class="ts-cta" style="width:100%;margin:8px 0" data-act="start-day">' + (st.routeTxIds.length ? 'رتّب خط السير من جديد' : 'ابدأ اليوم — جهّز خط السير') + '</button>' : '';
-    return calBtn + (st.calOpen ? calendarHtml() : '') + searchBar + startBtn + chips +
+    return calBtn + (st.calOpen ? calendarHtml() : '') + searchBar + startBtn + (isToday ? daySummaryHtml() : '') + chips +
       '<div class="cpw-list">' + tkHtml + groups.map(workItemRow).join('') + empty + '</div>';
   }
 
@@ -2261,7 +2290,7 @@
         const rawData = Array.isArray(r.data) ? r.data : []; const data = rawData.filter(x => x && (x.type === 'fee' || Number(x.lines) > 0 || (x.client_name && String(x.client_name).trim() && String(x.client_name).trim() !== 'بدون اسم'))); const sig = JSON.stringify(data);
         st.loaded = true;
         st.lastSync = Date.now();
-        if (sig !== st.sig) { st.sig = sig; st.items = data; renderNav(); if (st.tab !== 'chat') renderTab(false); }
+        if (sig !== st.sig) { st.sig = sig; st.items = data; syncDayRoute(); renderNav(); if (st.tab !== 'chat') renderTab(false); }
         return true;
       } catch (e) {
         if (!navigator.onLine) setOffline(true);
