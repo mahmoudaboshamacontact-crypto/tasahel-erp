@@ -27,8 +27,21 @@
       var changed = JSON.stringify(next) !== JSON.stringify(cache);
       cache = next;
       if (changed && typeof window.reloadLineRefunds === 'function') window.reloadLineRefunds(false);
+      if (changed && typeof window.renderRecentRequests === 'function') window.renderRecentRequests();
     } catch (e) { /* مش أساسي */ }
   }
+
+  /* حالة الريكوست من ناحية الاسترداد: '' | 'refunded' (فيه استرداد معتمد/معلّق) | 'closed' (كل بنود الاسترداد اتقفلت) */
+  window.getTxRefundState = function (o) {
+    var any = false, allClosed = true;
+    ((o && o.lines) || []).forEach(function (l) {
+      var e = cache[String(l.id)];
+      var s = typeof window.getLineRefundSummary === 'function' ? window.getLineRefundSummary(l.id) : null;
+      var closed = !!(e && e.closed.length && !e.open.length);
+      if (closed || (s && (s.approvedCount > 0 || s.hasPending))) { any = true; if (!closed) allClosed = false; }
+    });
+    return !any ? '' : (allClosed ? 'closed' : 'refunded');
+  };
 
   window.closeLineRefund = async function (lineId) {
     var e = cache[String(lineId)];

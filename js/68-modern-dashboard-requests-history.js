@@ -167,7 +167,7 @@
       }
       @media (min-width: 1024px) {
         .ts-kpi-5-grid {
-          grid-template-columns: repeat(5, 1fr);
+          grid-template-columns: repeat(7, 1fr);
         }
       }
       .ts-kpi-card {
@@ -550,10 +550,14 @@
       }
     }
 
-    const orders = G() || [];
-    let inProg = 0, underRev = 0, complete = 0, delivered = 0, late = 0;
+    /* الأرقام بتتحسب من نتيجة كل الفلاتر (موظف/بحث/تاريخ) ما عدا فلتر الحالة نفسه */
+    const orders = Array.isArray(window.__txKpiBase) ? window.__txKpiBase : (G() || []);
+    let inProg = 0, underRev = 0, complete = 0, delivered = 0, late = 0, refunded = 0, closed = 0;
 
     orders.forEach(o => {
+      const rs = typeof window.getTxRefundState === 'function' ? window.getTxRefundState(o) : '';
+      if (rs === 'closed') { closed++; return; }
+      if (rs === 'refunded') { refunded++; return; }
       const st = calcOrderStatus(o);
       if (st === 'In Progress') inProg++;
       else if (st === 'Under Review') underRev++;
@@ -570,6 +574,8 @@
       { id: 'Under Review', title: 'Under Review', sub: 'قيد المراجعة', count: underRev, icon: 'fa-pause text-orange-500', cls: activeFilter === 'Under Review' ? 'active' : '' },
       { id: 'Complete', title: 'Complete', sub: 'جاهزة للتسليم', count: complete, icon: 'fa-circle-check text-teal-400', cls: activeFilter === 'Complete' ? 'active' : '' },
       { id: 'Delivered', title: 'Delivered', sub: 'تم التسليم', count: delivered, icon: 'fa-truck-fast text-emerald-400', cls: activeFilter === 'Delivered' ? 'active' : '' },
+      { id: 'Refunded', title: 'مسترد', sub: 'فيه استرداد', count: refunded, icon: 'fa-rotate-left text-violet-400', cls: activeFilter === 'Refunded' ? 'active' : '' },
+      { id: 'Closed', title: 'Closed', sub: 'استرداد مقفول', count: closed, icon: 'fa-lock text-slate-400', cls: activeFilter === 'Closed' ? 'active' : '' },
       { id: 'late', title: 'Late', sub: 'متأخرة', count: late, icon: 'fa-triangle-exclamation text-rose-500', cls: activeFilter === 'late' ? 'active' : '' }
     ];
 
@@ -608,7 +614,7 @@
     }
 
     const empMap = new Map();
-    const add = n => { n = String(n || '').trim(); if (n) { const k = norm(n); if (!empMap.has(k)) empMap.set(k, n); } };
+    const add = n => { n = String(n || '').trim(); if (n && typeof window.isExcludedStaffName === 'function' && window.isExcludedStaffName(n)) return; if (n) { const k = norm(n); if (!empMap.has(k)) empMap.set(k, n); } };
     P().forEach(p => add(p.full_name));
     G().forEach(o => { add(o.employee); (o.lines || []).forEach(l => add(l.employee)); });
     const names = Array.from(empMap.values()).sort((a, b) => a.localeCompare(b, 'ar'));
@@ -700,10 +706,10 @@
     });
   }
 
+  window.renderTxStatusKpiCards = renderTxStatusKpiCards;
   const origRenderRecent = window.renderRecentRequests;
   if (typeof origRenderRecent === 'function') {
     window.renderRecentRequests = function () {
-      renderTxStatusKpiCards();
       origRenderRecent.apply(this, arguments);
       formatSeparatedColumns();
       injectCompactEmployeeAndQrFilter();

@@ -980,13 +980,19 @@ function renderRecentRequests(){
 
   const q=(($('recent-q')&&$('recent-q').value)||'').trim().toLowerCase();
   let list=recentMode==='today'?td:groupedOrders;
-  if(txStatusFilter&&txStatusFilter!=='all'){
-    if(txStatusFilter==='open')list=list.filter(o=>getOrderStatus(o)!=='Delivered');
-    else if(txStatusFilter==='late')list=list.filter(o=>isOrderLate(o));
-    else list=list.filter(o=>getOrderStatus(o)===txStatusFilter);
-  }
+  /* القاعدة: كل الفلاتر (موظف/بحث/تاريخ) تتطبق الأول، والمربعات اللي فوق بتتعد من النتيجة دي، وبعدين فلتر الحالة */
   if(q)list=list.filter(o=>(o.client_name||'').toLowerCase().includes(q)||(o.phone||'').includes(q)||String(o.transaction_id).toLowerCase().includes(q)||(o.lines||[]).some(l=>(l.service||'').toLowerCase().includes(q)||String(l.service_ref||'').toLowerCase().includes(q))||(typeof window.getRequestPeopleNamesText==='function'&&window.getRequestPeopleNamesText(o.transaction_id).toLowerCase().includes(q)));
   if(window.__recentFilter)list=window.__recentFilter(list);
+  window.__txKpiBase=list;
+  if(txStatusFilter&&txStatusFilter!=='all'){
+    const rs=o=>typeof window.getTxRefundState==='function'?window.getTxRefundState(o):'';
+    if(txStatusFilter==='open')list=list.filter(o=>getOrderStatus(o)!=='Delivered');
+    else if(txStatusFilter==='late')list=list.filter(o=>isOrderLate(o));
+    else if(txStatusFilter==='Refunded')list=list.filter(o=>rs(o)==='refunded');
+    else if(txStatusFilter==='Closed')list=list.filter(o=>rs(o)==='closed');
+    else list=list.filter(o=>getOrderStatus(o)===txStatusFilter&&!rs(o));
+  }
+  if(typeof window.renderTxStatusKpiCards==='function')try{window.renderTxStatusKpiCards();}catch(e){}
 
   const on='rounded-lg px-2.5 py-1 text-xs font-semibold bg-white dark:bg-violet-600 text-brand-700 dark:text-white shadow-xs',off='rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-500';
   if($('rm-all'))$('rm-all').className=recentMode==='all'?on:off;
