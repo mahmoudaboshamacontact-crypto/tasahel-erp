@@ -1624,6 +1624,7 @@
         (it.office_ready ? '<span class="ts-mchip paid">جاهز بالمكتب</span>' : '') +
       '</div>' +
       buildFiveStepper(doneUpTo, curIdx) +
+      (ticketReady && typeof window.tsCourierTicketDetailsHtml === 'function' ? window.tsCourierTicketDetailsHtml(tx) : '') +
       '<div class="ts-actions">' +
         primaryBtn +
         (it.phone ? '<a class="ts-cbtn call" data-act="v12-call-log" data-tx="' + eh(tx) + '" href="' + eh(telHref(it.phone)) + '" aria-label="اتصال">' + ic('phone', 17) + '</a>' : '') +
