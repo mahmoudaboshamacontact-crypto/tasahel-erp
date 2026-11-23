@@ -183,6 +183,28 @@
     const unpaid=Math.max(0,closed-paid);
     return '<form id="cop-ledger-range" class="cp-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><label class="cp-sub" style="flex:1;min-width:125px">من تاريخ<input class="cp-field" type="date" name="from" value="'+esc(state.ledgerFrom)+'" required></label><label class="cp-sub" style="flex:1;min-width:125px">إلى تاريخ<input class="cp-field" type="date" name="to" value="'+esc(state.ledgerTo)+'" required></label><button class="cp-btn cp-go" type="submit">عرض الفترة</button></form><p class="cp-sub">اختر أي فترة تاريخية لعرض كشف حسابك.</p><div class="cp-grid"><div class="cp-kpi"><small>إجمالي المؤكد</small><b>'+money(total)+'</b></div><div class="cp-kpi"><small>دخل التقفيل</small><b>'+money(closed)+'</b></div><div class="cp-kpi"><small>تم تسجيل صرفه</small><b>'+money(paid)+'</b></div><div class="cp-kpi"><small>دخل التقفيل ولم يُصرف</small><b>'+money(unpaid)+'</b></div><div class="cp-kpi"><small>مؤكد لم يدخل التقفيل</small><b>'+money(total-closed)+'</b></div></div><div style="overflow:auto"><table class="cp-table" style="width:100%;font-size:11px"><thead><tr><th>التاريخ</th><th>المعاملة</th><th>النوع</th><th>العمولة</th><th>التأكيد</th><th>تاريخ التأكيد</th><th>حالة التقفيل</th><th>تاريخ الصرف</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="cp-sub">«تم تسجيل صرفه» تعني أن الإدارة سجلت الصرف في النظام، وليست إثباتًا بنكيًا.</p>';
   }
+  /* المعتاد لكل مرحلة (وسيط مرجّح بعدد التذاكر) من آخر 30 يوم؛ بيتخزن 10 دقايق، ولو مفيش بيانات كفاية (أقل من 5) ما بنتوقعش */
+  var stageMedCache = { at: 0, med: null };
+  async function ensureStageMedians() {
+    if (Date.now() - stageMedCache.at < 600000) return stageMedCache.med;
+    stageMedCache.at = Date.now();
+    try {
+      const c = (typeof sbClient !== 'undefined') ? sbClient : null;
+      if (!c || window.__role !== 'manager') return (stageMedCache.med = null);
+      const r = await c.rpc('courier_stage_timings', { p_days: 30 });
+      if (r.error || !r.data) return (stageMedCache.med = null);
+      const acc = {};
+      (r.data.couriers || []).forEach(cr => Object.keys(cr.stages || {}).forEach(k => {
+        const s = cr.stages[k], n = Number(s.n || 0);
+        const a = acc[k] || (acc[k] = { w: 0, n: 0 });
+        a.w += Number(s.median_min || 0) * n; a.n += n;
+      }));
+      const out = {};
+      Object.keys(acc).forEach(k => { if (acc[k].n >= 5) out[k] = acc[k].w / acc[k].n; });
+      return (stageMedCache.med = Object.keys(out).length ? out : null);
+    } catch (e) { return (stageMedCache.med = null); }
+  }
+
   async function render() {
     const c=$('cop-content'); if(!c)return; tabButtons(); c.innerHTML='<div class="cp-empty">جاري تحميل البيانات…</div>';
     try {
@@ -675,6 +697,26 @@
       });
       delayedRows.sort((a, b) => b.mins - a.mins);
 
+      /* 1.5) توقع التأخير: المرحلة الحالية عدّت 1.5× المعتاد (من أزمنة آخر 30 يوم) لكن لسه ما وصلتش 30 د */
+      const soonRows = [];
+      const med = await ensureStageMedians();
+      if (med) {
+        const NEXT = { new: 'to_accept', accepted: 'call_attempt', call_attempt: 'on_the_way', on_the_way: 'waiting', waiting: 'papers_received' };
+        const soonSeen = new Set();
+        allRadarRows.forEach(x => {
+          const stage = NEXT[x.status];
+          const typical = stage && med[stage];
+          if (!typical) return;
+          const m = staleMin(x.at);
+          if (m >= STALE_MIN || m < Math.max(8, Math.round(typical * 1.5))) return;
+          const k = radarRowKey(x.courier_id, x.courier_name, x.transaction_id);
+          if (delayedSeen.has(k) || soonSeen.has(k)) return;
+          soonSeen.add(k);
+          soonRows.push({ courier_id: Number(x.courier_id || courierIdByName(x.courier_name)), courier_name: x.courier_name || 'مندوب', client_name: x.client_name || '', transaction_id: x.transaction_id || '', status: x.status, mins: m, typical: Math.round(typical) });
+        });
+        soonRows.sort((a, b) => (b.mins / b.typical) - (a.mins / a.typical));
+      }
+
       /* 2) واقف كتير عند عميل: في حالة وصل عند العميل >= 20 دقيقة */
       const stuckSeen = new Set();
       const stuckRows = [];
@@ -762,6 +804,13 @@
             '<div class="cpo-row"><button type="button" class="cpo-btn g" data-v12ping="' + Number(x.courier_id || 0) + '" data-cname="' + esc(x.courier_name) + '" data-ping-prefill="إيه الأخبار في مشوار ' + esc(x.client_name || x.transaction_id) + '؟ بقى له ' + x.mins + ' دقيقة">تنبيه المندوب</button></div></div>');
         });
       }
+      if (activeCase === 'all' || activeCase === 'delayed') {
+        soonRows.slice(0, 4).forEach(x => {
+          caseRowsHtml.push('<div class="cpo-case-item warn"><div style="flex:1;min-width:200px"><b>🔮 قرب يتأخر · ' + esc(x.courier_name) + '</b> — ' + esc(x.client_name || x.transaction_id || 'مشوار') +
+            '<div class="cpo-lbl">' + esc(statusText[x.status] || x.status) + ' من <b>' + x.mins + ' د</b> والمعتاد حوالي ' + x.typical + ' د' + (x.transaction_id ? ' · <span dir="ltr">' + esc(x.transaction_id) + '</span>' : '') + '</div></div>' +
+            '<div class="cpo-row"><button type="button" class="cpo-btn g" data-v12ping="' + Number(x.courier_id || 0) + '" data-cname="' + esc(x.courier_name) + '" data-ping-prefill="إيه الأخبار في مشوار ' + esc(x.client_name || x.transaction_id) + '؟">اطمّن</button></div></div>');
+        });
+      }
       if (activeCase === 'all' || activeCase === 'stuck') {
         stuckRows.slice(0, 6).forEach(x => {
           caseRowsHtml.push('<div class="cpo-case-item warn"><div style="flex:1;min-width:200px"><b>📍 واقف عند عميل · ' + esc(x.courier_name) + '</b> — ' + esc(x.client_name || x.transaction_id || 'عميل') +
@@ -799,6 +848,11 @@
             '<button type="button" class="cpo-btn g" data-v12ping="' + Number(x.courier_id || 0) + '" data-cname="' + esc(x.courier_name) + '" data-ping-prefill="في تيكت استلام للعميل ' + esc(x.client_name || '') + ' بقاله ' + staleMin(x.at) + ' دقيقة لسه متقبلش">تذكير المندوب</button></div>');
         });
       }
+
+      /* ترتيب الأولوية: قرار مطلوب منك أولاً، بعدين المتأخر، الواقف، قرب يتأخر، التقاطع */
+      const PRIO = ['🔔', '📅', '🕒', '⏳', '📍', '🔮', '🔀'];
+      const prioOf = h => { const i = PRIO.findIndex(m => h.indexOf('<b>' + m) !== -1); return i === -1 ? 99 : i; };
+      caseRowsHtml.map((h, i) => ({ h, i })).sort((a, b) => prioOf(a.h) - prioOf(b.h) || a.i - b.i).forEach((o, i) => { caseRowsHtml[i] = o.h; });
 
       const casesBoard = caseRowsHtml.length
         ? '<div class="cpo-case-board">' +
