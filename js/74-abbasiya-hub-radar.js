@@ -109,7 +109,9 @@
       '.ah-eta-card.active{border-color:var(--r-acc,#036b29);background:rgba(200,162,82,.08)}',
       'html.dark .ah-eta-card.active{border-color:#ff7a3d;background:rgba(255,122,61,.12)}',
       '.ah-courier-hub{margin:10px 12px 0;padding:13px;border-radius:16px;border:1px solid rgba(3,107,41,.32);background:rgba(3,107,41,.08);color:var(--tx,#111C15);font-size:12.5px}',
-      '@media (max-width:860px){.ah-grid{grid-template-columns:1fr}}'
+      /* موبايل: الأعمدة ما تتمددش بمحتواها (minmax(0,1fr)) عشان الكروت ما تتقطعش من الشمال */
+      '@media (max-width:860px){.ah-grid{grid-template-columns:minmax(0,1fr)}.ah-grid>*,.rp3-grid2>*{min-width:0;max-width:100%}.ah-card,.ah-box{min-width:0;max-width:100%;box-sizing:border-box}}',
+      '@media (max-width:600px){.ah-card{padding:14px 12px;border-radius:18px}.ah-box{padding:12px 10px}.ah-input{min-width:0;max-width:100%;box-sizing:border-box}.ah-chk-lbl{min-width:0}.ah-row{padding:9px 10px}.ah-card :where(div,span,label,section,details,summary,p,b){min-width:0}.ah-card :where(select,input,textarea,button){max-width:100%;box-sizing:border-box}.ah-card table{display:block;max-width:100%;overflow-x:auto}.ah-card{overflow-wrap:anywhere}.ah-head{gap:8px}.ah-filter-bar{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}.ah-chip{white-space:nowrap;flex:0 0 auto}}'
     ].join('\n');
     document.head.appendChild(s);
   }
