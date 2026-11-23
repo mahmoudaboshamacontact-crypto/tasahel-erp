@@ -1217,6 +1217,13 @@
         '<form id="pt-form" class="pt-grid2">' +
           '<section class="pt-card" style="display:flex;flex-direction:column;gap:12px">' +
             '<b style="font-size:14px">1) بيانات العميل والخدمات (من سمارت ديسك)</b>' +
+            '<details style="border:1px dashed var(--r-line,rgba(148,163,184,.4));border-radius:12px;padding:8px 10px">' +
+              '<summary style="cursor:pointer;font-weight:700;font-size:12.5px">⚡ لصق ذكي من سمارت ديسك (يملا الخانات لوحده)</summary>' +
+              '<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">' +
+                '<textarea id="pt-sd-paste" class="pt-textarea" rows="4" placeholder="انسخ صفحة الطلب من سمارت ديسك وألصقها هنا…"></textarea>' +
+                '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" id="pt-sd-fill" class="pt-btn pt-btn-sec" style="padding:6px 12px;font-size:12px">املا الخانات</button><span id="pt-sd-msg" class="pt-sub"></span></div>' +
+              '</div>' +
+            '</details>' +
             '<div class="pt-fgrid">' +
               '<div class="pt-field-wrap"><label class="pt-label" for="pt-client">اسم العميل *</label><input id="pt-client" class="pt-input" required maxlength="160" placeholder="الاسم الكامل"></div>' +
               '<div class="pt-field-wrap"><label class="pt-label" for="pt-phone">رقم الموبايل *</label><input id="pt-phone" class="pt-input" required dir="ltr" maxlength="30" placeholder="01xxxxxxxxx"></div>' +
