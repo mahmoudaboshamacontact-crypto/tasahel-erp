@@ -259,11 +259,20 @@
   function routeIndexOf(tx) {
     return st.routeTxIds.indexOf(String(tx));
   }
+  /* تيكت الاستلام الشغال مع المندوب كمحطة في خط السير (قبل ما يتحول لمشوار) */
+  function ticketAsRouteItem(tx) {
+    const list = typeof window.tsWorkTickets === 'function' ? window.tsWorkTickets() : [];
+    const t = list.find(x => x.status === 'with_courier' && String(x.sd_request_id) === String(tx));
+    if (!t) return null;
+    return { transaction_id: String(t.sd_request_id), client_name: t.client_name, phone: t.phone, type: 'pickup', confirmed: false,
+      address: [t.zone, t.address].filter(Boolean).join(' '), services: t.service_name || '', id: null, isTicket: true, ticketId: t.id };
+  }
+  const routeItem = tx => byTx(tx) || ticketAsRouteItem(tx);
   function sortRouteSelectionNearestFirst(startLat, startLng) {
-    const validTxs = st.routeTxIds.filter(tx => byTx(tx));
+    const validTxs = st.routeTxIds.filter(tx => routeItem(tx));
     if (validTxs.length < 2) return validTxs;
     const pool = validTxs.map(tx => {
-      const item = byTx(tx);
+      const item = routeItem(tx);
       const z = detectZoneAndCoords(item);
       return { tx: tx, item: item, lat: z.lat, lng: z.lng, zone: z.zone };
     });
@@ -309,8 +318,11 @@
   /* «ابدأ اليوم»: كل شغل النهارده غير المؤكد يدخل خط السير مرة واحدة ومترتب الأقرب فالأقرب */
   function startDay() {
     const open = itemsOf(today()).filter(i => !i.confirmed && i.type !== 'fee').map(i => String(i.transaction_id));
-    if (!open.length) { toast('مفيش شغل مفتوح النهارده'); return; }
-    open.forEach(tx => { if (st.routeTxIds.indexOf(tx) === -1) st.routeTxIds.push(tx); });
+    const hasTk = (typeof window.tsWorkTickets === 'function' ? window.tsWorkTickets() : []).some(t => t.status === 'with_courier');
+    if (!open.length && !hasTk) { toast('مفيش شغل مفتوح النهارده'); return; }
+    const tk = (typeof window.tsWorkTickets === 'function' ? window.tsWorkTickets() : [])
+      .filter(t => t.status === 'with_courier' && t.sd_request_id).map(t => String(t.sd_request_id));
+    open.concat(tk).forEach(tx => { if (st.routeTxIds.indexOf(tx) === -1) st.routeTxIds.push(tx); });
     const pos = st.myPos || { lat: 30.0012, lng: 31.1765 };
     sortRouteSelectionNearestFirst(pos.lat, pos.lng);
     saveRouteState();
@@ -363,7 +375,7 @@
   }
 
   function autoOptimizeRoute(openMapAfter) {
-    const validTxs = st.routeTxIds.filter(tx => byTx(tx));
+    const validTxs = st.routeTxIds.filter(tx => routeItem(tx));
     if (!validTxs.length) {
       toast('اضغط «+ خط السير» على العملاء اللي نازلهم الأول', true);
       return;
@@ -373,7 +385,7 @@
     saveRouteState();
     renderTab(false);
     if (openMapAfter) {
-      const itemsList = st.routeTxIds.map(tx => byTx(tx)).filter(Boolean);
+      const itemsList = st.routeTxIds.map(tx => routeItem(tx)).filter(Boolean);
       const url = buildMultiStopMapsUrl(itemsList, st.myPos || null);
       if (url) window.open(url, '_blank', 'noopener');
       refreshMyPosQuiet();
@@ -499,7 +511,7 @@
 
   /* لوحة خط السير المبسطة والواضحة جداً للمندوب (تترتب أوتوماتيك بمجرد الاختيار) */
   function renderSmartRoutePanel() {
-    const picked = st.routeTxIds.map(tx => byTx(tx)).filter(it => it && !it.confirmed);
+    const picked = st.routeTxIds.map(tx => routeItem(tx)).filter(it => it && !it.confirmed);
     const activeItems = picked.length ? picked : itemsOf(today()).filter(it => !it.confirmed);
     if (!activeItems.length) {
       return '<section class="ts7b-route-sheet" style="text-align:center;color:var(--mu);font-weight:700">لا توجد محطات في خط السير</section>';
@@ -510,7 +522,7 @@
     /* قائمة محطات مختصرة بالترتيب — تفاصيل المحطة الحالية وأزرارها في الرئيسية بس */
     const rows = activeItems.map((it, idx) => {
       const z = detectZoneAndCoords(it);
-      return '<button type="button" class="cp-stop-row' + (idx === 0 ? ' cur' : '') + '" data-act="detail" data-tx="' + eh(it.transaction_id) + '">' +
+      return '<button type="button" class="cp-stop-row' + (idx === 0 ? ' cur' : '') + '" ' + (it.isTicket ? 'data-act="tkt-open" data-tid="' + Number(it.ticketId) + '"' : 'data-act="detail" data-tx="' + eh(it.transaction_id) + '"') + '>' +
         '<b class="n">' + num(idx + 1) + '</b>' +
         '<span class="t"><strong>' + eh(it.client_name || 'عميل') + '</strong><small>' + eh(it.address || z.zone || '') + ' · ' + eh(kindLabel(it)) + '</small><small class="cp-stop-eta" data-eta-tx="' + eh(it.transaction_id) + '"></small></span>' +
       '</button>';
@@ -2402,6 +2414,7 @@
       case 'nsend': return sendNote(tx, el);
       case 'route-toggle': return toggleRouteTx(tx);
       case 'start-day': return startDay();
+      case 'tkt-open': st.openKey = 't' + el.dataset.tid; return setTab('tickets');
       case 'route-autosort': return autoOptimizeRoute(true);
       case 'route-clear': return clearRoute();
       case 'on-my-way': return startOnMyWay(tx);
