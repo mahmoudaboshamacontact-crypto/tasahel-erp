@@ -285,8 +285,12 @@
       '.pt-more-pop button.danger{color:#dc2626}',
       'html.dark body:not(.is-courier-mode) .pt-more-pop button{color:#f5f4f0}',
       'html.dark body:not(.is-courier-mode) .pt-more-pop button.danger{color:#fb7185}',
-      '.pt-comment-toggle{font-size:11.5px;color:var(--r-mute,#64748b)}',
-      '.pt-comment-toggle>summary{cursor:pointer;font-weight:700;display:inline-flex;align-items:center;gap:4px;user-select:none}'
+      '.pt-comment-box[hidden]{display:none!important}',
+      '#pt-detail-panel.hidden{display:none!important}',
+      '.pt-det-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}',
+      '.pt-det-col{border:1px solid var(--r-bd,rgba(148,163,184,.22));border-radius:13px;padding:12px;background:var(--r-bg,rgba(148,163,184,.04));display:flex;flex-direction:column;gap:8px}',
+      'html.dark body:not(.is-courier-mode) .pt-det-col{background:#111513;border-color:rgba(255,255,255,.1)}',
+      '@media (max-width:780px){.pt-det-grid{grid-template-columns:1fr}}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -1331,8 +1335,9 @@
             (waPh ? '<a class="pt-icon-btn" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '" title="واتساب العميل"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg><span>واتساب</span></a>' : '') +
             '<details class="pt-more-menu"><summary title="خيارات إضافية">⋯</summary><div class="pt-more-pop">' + menuItems.join('') + '</div></details>' +
           '</div>' +
-          (t.summary_comment ? '<details class="pt-comment-toggle"><summary>عرض الكومنت</summary><div class="pt-comment-pre">' + eh(t.summary_comment) + '</div></details>' : '') +
+          (t.summary_comment ? '<button type="button" class="pt-icon-btn" data-pt-toggle-comment="' + Number(t.id) + '" aria-expanded="false">عرض الكومنت ⌄</button>' : '') +
         '</div>' +
+        (t.summary_comment ? '<div class="pt-comment-box" id="pt-cm-box-' + Number(t.id) + '" hidden><div class="pt-comment-pre" style="margin-top:0">' + eh(t.summary_comment) + '</div></div>' : '') +
       '</div>';
     }).join('');
   }
@@ -1360,7 +1365,7 @@
             '</div>' +
           '</div>' +
         '</section>' +
-        '<section id="pt-detail-panel" class="pt-card hidden" style="display:flex;flex-direction:column;gap:10px"></section>' +
+        '<section id="pt-detail-panel" class="pt-card hidden"></section>' +
 
         '<form id="pt-form" class="pt-grid2">' +
           '<section class="pt-card" style="display:flex;flex-direction:column;gap:12px">' +
@@ -1608,31 +1613,54 @@
 
     panel.classList.remove('hidden');
     panel.innerHTML =
-      '<div class="pt-head">' +
-        '<div>' +
-          '<b style="font-size:14px">تفاصيل التيكت: ' + eh(t.client_name) + ' (<span dir="ltr">' + eh(t.sd_request_id) + '</span>)</b>' +
-          '<div class="pt-sub">الخطوة الحالية: <b>' + eh(stepTxt) + '</b> · المندوب: <b>' + eh(courierNameById(t.courier_id)) + '</b></div>' +
+      '<div style="display:flex;flex-direction:column;gap:12px">' +
+        '<div class="pt-head" style="padding-bottom:10px;border-bottom:1px solid var(--r-bd,rgba(148,163,184,.18))">' +
+          '<div>' +
+            '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px">' +
+              '<b style="font-size:15px">' + eh(t.client_name) + '</b>' +
+              '<span class="pt-badge pt-badge-org" dir="ltr">' + eh(t.sd_request_id) + '</span>' +
+              '<span class="pt-badge pt-badge-ok">' + eh(stepTxt) + '</span>' +
+            '</div>' +
+            '<div class="pt-sub" style="margin-top:4px">المندوب: <b>' + eh(courierNameById(t.courier_id)) + '</b>' + (t.zone ? ' · ' + eh(t.zone) : '') + (t.address ? ' — ' + eh(t.address) : '') + '</div>' +
+          '</div>' +
+          '<div class="pt-smart-acts">' +
+            (isManager() && (t.status === 'open' || t.status === 'with_courier') && t.courier_id
+              ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-act="convert" data-id="' + Number(t.id) + '">✓ تحويل لمهمة استلام</button>'
+              : '') +
+            (t.phone ? '<a class="pt-icon-btn" href="tel:' + eh(t.phone) + '">اتصال</a>' : '') +
+            (waPh ? '<a class="pt-icon-btn" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '">واتساب</a>' : '') +
+            (isManager() && (t.status === 'open' || t.status === 'with_courier')
+              ? '<button type="button" class="pt-btn pt-btn-danger" data-pt-act="cancel" data-id="' + Number(t.id) + '">إلغاء</button>'
+              : '') +
+            '<button type="button" class="pt-icon-btn" id="pt-detail-close">✕ إغلاق</button>' +
+          '</div>' +
         '</div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
-          (t.phone ? '<a class="pt-btn pt-btn-pri" href="tel:' + eh(t.phone) + '"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg> اتصال</a>' : '') +
-          (waPh ? '<a class="pt-btn pt-btn-sec" target="_blank" rel="noopener" href="https://wa.me/' + eh(waPh) + '"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> واتساب</a>' : '') +
-          (isManager() && (t.status === 'open' || t.status === 'with_courier')
-            ? (t.courier_id
-              ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-act="convert" data-id="' + Number(t.id) + '">تحويل لمهمة استلام</button>'
-              : '<button type="button" class="pt-btn pt-btn-sec" disabled>تحويل لمهمة استلام (بدون مندوب)</button>')
-            : '') +
-          (isManager() && (t.status === 'open' || t.status === 'with_courier')
-            ? '<button type="button" class="pt-btn pt-btn-danger" data-pt-act="cancel" data-id="' + Number(t.id) + '">إلغاء التيكت</button>'
-            : '') +
-          '<button type="button" class="pt-btn pt-btn-sec" id="pt-detail-close">إغلاق</button>' +
+        '<div class="pt-det-grid">' +
+          '<div class="pt-det-col">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+              '<b style="font-size:13px">الأوراق (عهدة المستندات)</b>' +
+              '<span class="pt-badge ' + papersHolderBadgeClass(pHolder) + '">' + eh(PAPERS_HOLDER_LABELS[pHolder] || 'المكتب') + '</span>' +
+            '</div>' +
+            (t.status === 'cancelled' && pHolder === 'courier'
+              ? '<div class="pt-papers-warn">التيكت ملغي والأوراق ما زالت مع المندوب.</div>'
+              : '') +
+            '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">' +
+              (canReqToCourier ? '<button type="button" class="pt-btn pt-btn-pri" data-pt-papers="to_courier" data-id="' + Number(t.id) + '">تسليم الأوراق للمندوب</button>' : '') +
+              (canConfirmOffice ? '<button type="button" class="pt-btn pt-btn-mission" data-pt-papers="confirm_office" data-id="' + Number(t.id) + '" data-event-id="' + Number(pendingEv.id) + '">تأكيد استلام الأوراق بالمكتب</button>' : '') +
+              (!canReqToCourier && !canConfirmOffice ? '<span class="pt-sub">' + eh(reqCourierReason || confirmOfficeReason) + '</span>' : '') +
+            '</div>' +
+            '<div style="display:flex;flex-direction:column;gap:5px">' + pHistHtml + '</div>' +
+          '</div>' +
+          '<div class="pt-det-col">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">' +
+              '<b style="font-size:13px">سجل التواصل مع العميل</b>' +
+              '<span class="pt-sub">' + logs.length + ' مرة · ' + eh(lastAt) + '</span>' +
+            '</div>' +
+            '<div style="display:flex;flex-direction:column;gap:6px">' + logsHtml + '</div>' +
+            (t.summary_comment ? '<div class="pt-comment-pre" style="margin-top:4px">' + eh(t.summary_comment) + '</div>' : '') +
+          '</div>' +
         '</div>' +
-      '</div>' +
-      '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:12px">' +
-        '<b>سجل التواصل مع العميل</b>' +
-        '<span class="pt-sub">عدد المرات: <b>' + logs.length + '</b> · آخر تواصل: <b>' + eh(lastAt) + '</b></span>' +
-      '</div>' +
-      papersSectionHtml +
-      '<div style="display:flex;flex-direction:column;gap:6px">' + logsHtml + '</div>';
+      '</div>';
   }
 
   async function openTicketDetail(ticketId) {
@@ -1843,6 +1871,17 @@
         toast('تم التحديث ✓');
       } catch (err) {
         toast((err && err.message) || 'تعذر التحديث', 'error');
+      }
+      return;
+    }
+    var cmBtn = e.target && e.target.closest ? e.target.closest('[data-pt-toggle-comment]') : null;
+    if (cmBtn) {
+      var cmId = cmBtn.getAttribute('data-pt-toggle-comment');
+      var cmBox = $('pt-cm-box-' + cmId);
+      if (cmBox) {
+        cmBox.hidden = !cmBox.hidden;
+        cmBtn.setAttribute('aria-expanded', cmBox.hidden ? 'false' : 'true');
+        cmBtn.textContent = cmBox.hidden ? 'عرض الكومنت ⌄' : 'إخفاء الكومنت ⌃';
       }
       return;
     }

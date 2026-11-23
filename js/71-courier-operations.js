@@ -15,7 +15,7 @@
     ledgerFrom:'',ledgerTo:'',tab:'route',busy:false,
     managerBusy:false,managerLoadedAt:0,managerHtml:'',managerFailed:false,
     radarBusy:false,radarLoadedAt:0,radarFailed:false,radarTimer:0,
-    resolvingIssueId:null,pingTo:0,activeCase:'all'
+    resolvingIssueId:null,pingTo:0,activeCase:'all',radarModalData:{}
   };
   function ensureRadarSmartCss() {
     if ($('cpo-smart-radar-css')) return;
@@ -48,6 +48,14 @@
       '#cop-radar .cpo-zname{font-size:11.5px;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '#cop-radar .cpo-zcnt{font-size:10.5px;color:var(--mu);font-variant-numeric:tabular-nums}',
       '#cop-radar .cpo-zpreview{font-size:12px;color:var(--tx);padding:7px 10px;border-radius:10px;background:var(--bg);border:1px dashed var(--bd)}',
+      '#cop-radar [hidden]{display:none!important}',
+      '#cop-radar .cpo-last-act{display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:11px;background:var(--bg);border:1px solid var(--bd);font-size:12px;color:var(--mu);min-width:0}',
+      '#cop-radar .cpo-last-act span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '#cop-radar .cpo-ok-strip{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-radius:14px;background:var(--oksoft);border:1px solid var(--ok);font-size:13px;font-weight:700;color:var(--ok)}',
+      '.cpo-dd-backdrop{position:fixed;inset:0;z-index:100050;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:14px}',
+      '.cpo-dd-box{width:100%;max-width:760px;max-height:86vh;overflow:auto;border-radius:22px;background:var(--s1,#111513);color:var(--tx,#f5f4f0);border:1px solid var(--bd,rgba(255,255,255,.12));padding:18px;display:flex;flex-direction:column;gap:12px;box-shadow:0 24px 60px rgba(0,0,0,.55)}',
+      'html:not(.dark) .cpo-dd-box{background:#ffffff;color:#1a211d;border-color:rgba(44,59,50,.16)}',
+      '.cpo-dd-item{padding:10px 12px;border-radius:14px;background:var(--s2,rgba(148,163,184,.08));border:1px solid var(--bd,rgba(148,163,184,.2));display:flex;flex-direction:column;gap:4px;font-size:12.5px}',
       '@media (max-width:900px){#cop-radar .cpo-cases-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}'
     ].join('\n');
     document.head.appendChild(s);
@@ -470,7 +478,14 @@
         action_history:Array.isArray(t.action_history) ? t.action_history : [],
         source:'ticket'
       })).filter(t => t.status !== 'delivered');
-      const tripRows = opsItems.filter(x => x && x.operational_status !== 'delivered').map(x => ({
+      const radarTodayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
+      const radarDayAgoMs = Date.now() - 24 * 3600 * 1000;
+      const tripRows = opsItems.filter(x => {
+        if (!x || x.operational_status === 'delivered' || x.operational_status === 'confirmed' || x.operational_status === 'cancelled') return false;
+        const isTodayTrip = String(x.trip_day || '').slice(0, 10) === radarTodayKey;
+        const isMovingNow = ['on_the_way', 'waiting', 'arrived', 'collecting'].includes(x.operational_status) && (x.updated_at ? new Date(x.updated_at).getTime() >= radarDayAgoMs : false);
+        return isTodayTrip || isMovingNow;
+      }).map(x => ({
         courier_name:x.courier, client_name:x.client_name, transaction_id:x.transaction_id,
         zone:x.zone || '', address:x.address || '', trip_day:x.trip_day || '',
         status:x.operational_status || 'new', at:x.updated_at || x.trip_day, source:'trip'
@@ -683,31 +698,35 @@
         });
       }
 
-      const casesBoard = '<div class="cpo-case-board">' +
-        '<div class="cpo-row" style="justify-content:space-between;flex-wrap:wrap">' +
-          '<div class="cpo-row"><b style="font-size:15.5px">حالات تحتاج قرار الآن</b><span class="cpo-tag ' + (totalCases ? 'wn' : 'ok') + ' cpo-num">' + totalCases + '</span></div>' +
-          '<div class="cpo-row" style="gap:6px;flex-wrap:wrap">' +
-            '<span class="cpo-lbl">مشاوير اليوم: <b style="color:var(--tx)">' + confToday + '/' + totalToday + '</b> · في الطريق: <b style="color:var(--ac)">' + onWayCount + '/' + couriers.length + '</b></span>' +
-            (activeCase !== 'all' ? '<button type="button" class="cpo-btn g" style="min-height:32px;font-size:12px" data-radar-case="all">عرض كل الحالات</button>' : '') +
-          '</div>' +
-        '</div>' +
-        (caseRowsHtml.length
-          ? caseRowsHtml.join('')
-          : '<div class="cpo-lbl" style="padding:8px 2px;color:var(--ok)">✓ كل الحالات تمام — مفيش أي تأخير أو وقوف طويل أو تقاطع مناطق محتاج تدخل المكتب دلوقتي.</div>') +
-      '</div>';
+      const casesBoard = caseRowsHtml.length
+        ? '<div class="cpo-case-board">' +
+            '<div class="cpo-row" style="justify-content:space-between;flex-wrap:wrap">' +
+              '<div class="cpo-row"><b style="font-size:15px">حالات تحتاج قرار الآن</b><span class="cpo-tag wn cpo-num">' + caseRowsHtml.length + '</span></div>' +
+              '<div class="cpo-row" style="gap:6px;flex-wrap:wrap">' +
+                '<span class="cpo-lbl">مشاوير اليوم: <b style="color:var(--tx)">' + confToday + '/' + totalToday + '</b> · في الطريق: <b style="color:var(--ac)">' + onWayCount + '/' + couriers.length + '</b></span>' +
+                (activeCase !== 'all' ? '<button type="button" class="cpo-btn g" style="min-height:32px;font-size:12px" data-radar-case="all">عرض الكل</button>' : '') +
+              '</div>' +
+            '</div>' +
+            caseRowsHtml.join('') +
+          '</div>'
+        : '<div class="cpo-ok-strip"><span>✓ كل الحالات تمام — مفيش تأخير أو وقوف طويل أو تقاطع مناطق محتاج تدخل دلوقتي.</span><span class="cpo-lbl" style="color:inherit">مشاوير اليوم: ' + confToday + '/' + totalToday + ' · في الطريق: ' + onWayCount + '/' + couriers.length + '</span></div>';
 
-      /* كارت المندوب مع خط المحطات البصري للمناطق + سجل الأكشنات الداخلي */
+      /* تجهيز بيانات المودال التفصيلي لكل مندوب بدون فرد قوايم طويلة جوه الكارت */
+      state.radarModalData = {};
+      const historyLabels = { accepted:'قبول التيكت', call_attempt:'تم الاتصال', on_the_way:'في الطريق', waiting:'وصل للعميل', papers_received:'استلم الأوراق', contact_call:'اتصال', contact_whatsapp:'واتساب' };
+
+      /* كارت المندوب المختصر والنظيف (نفس روح التصور: خط المحطات + آخر حركة + زرار الطلبات والتفاصيل) */
       const cc = c => {
         const le = c.last_event || {}, t = stTag(le.type), tot = Number(c.total_today || 0), cf = Number(c.confirmed_today || 0);
         const rows = allRadarRows.filter(x => x.courier_id ? Number(x.courier_id) === Number(c.id) : normCourier(x.courier_name) === normCourier(c.name));
         const myOpsToday = opsItems.filter(x => x && normCourier(x.courier) === normCourier(c.name) && String(x.trip_day || '').slice(0, 10) === todayKey);
 
-        /* بناء خط المحطات البصري حسب مناطق المندوب */
+        /* بناء خط المحطات البصري حسب مناطق المندوب (مشاوير النهارده + تيكتات الاستلام النشطة) */
         const zoneMap = new Map();
         const pushZoneStop = (zName, clientNm, isDone, isActive) => {
-          if (!zName) return;
-          if (!zoneMap.has(zName)) zoneMap.set(zName, { name: zName, total: 0, done: 0, active: false, clients: [] });
-          const z = zoneMap.get(zName);
+          const clean = zName || 'بدون منطقة';
+          if (!zoneMap.has(clean)) zoneMap.set(clean, { name: clean, total: 0, done: 0, active: false, clients: [] });
+          const z = zoneMap.get(clean);
           z.total++;
           if (isDone) z.done++;
           if (isActive) z.active = true;
@@ -748,36 +767,50 @@
                 '</button>';
               }).join('') +
             '</div><div id="cop-zprev-' + Number(c.id) + '" class="cpo-zpreview" hidden></div>'
-          : '';
-
-        const statusOrder = ['on_the_way','waiting','arrived','call_attempt','accepted','collecting','collected','new','reschedule_pending','postponed','papers_received','cancelled'];
-        const grouped = statusOrder.map(status => ({status, rows:rows.filter(x => x.status === status)})).filter(g => g.rows.length);
-        rows.filter(x => !statusOrder.includes(x.status)).forEach(x => { const key=String(x.status||'new'); let g=grouped.find(v=>v.status===key); if(!g){g={status:key,rows:[]};grouped.push(g);} g.rows.push(x); });
-        const clients = rows.length ? '<div style="display:flex;flex-direction:column;gap:7px;margin:6px 0">' + grouped.map(g => {
-          const groupKey = Number(c.id) + '-' + String(g.status).replace(/[^a-z0-9_-]/gi,'');
-          const st = statusText[g.status] || String(g.status || 'نشط');
-          const cards = g.rows.map(x => {
-            const historyLabels = {accepted:'قبول التيكت',call_attempt:'تم الاتصال',on_the_way:'في الطريق',waiting:'وصل للعميل',papers_received:'استلم الأوراق',contact_call:'اتصال',contact_whatsapp:'واتساب'};
-            const history = x.source === 'ticket' && x.action_history.length
-              ? '<div class="cpo-lbl" style="margin-top:5px">سجل الخطوات: ' + x.action_history.map(h => esc(historyLabels[h.step] || h.step) + (h.outcome ? ' (' + esc(h.outcome) + ')' : '') + ' · ' + esc(ago(h.created_at))).join(' ← ') + '</div>'
-              : '';
-            return '<div style="padding:7px 9px;border-radius:10px;background:var(--bg);border:1px solid var(--bd)"><b>' + esc(x.client_name || 'عميل بدون اسم') + '</b><div class="cpo-lbl">' + (x.source === 'ticket' ? 'تيكت استلام' : 'مشوار') + ' · <span dir="ltr">' + esc(x.transaction_id || '—') + '</span> · ' + esc(ago(x.at)) + '</div>' + history + (x.source === 'ticket' && x.reschedule_status === 'pending' ? '<div class="cpo-lbl" style="color:var(--wn)">طلب تأجيل معلّق · الموعد المقترح: ' + esc(x.proposed_slot || 'غير محدد') + (x.reschedule_reason ? ' · ' + esc(x.reschedule_reason) : '') + '</div>' : '') + (x.source === 'ticket' && x.reschedule_status === 'approved' ? '<div class="cpo-lbl">تمت الموافقة على التأجيل · ' + esc(x.proposed_slot || '') + '</div>' : '') + '</div>';
-          }).join('');
-          return '<div style="border:1px solid var(--bd);border-radius:10px;overflow:hidden"><button type="button" class="cpo-btn g" data-radar-group="' + esc(groupKey) + '" aria-expanded="false" style="width:100%;justify-content:space-between;border:0;border-radius:0"><span>' + esc(st) + '</span><span class="cpo-num">' + g.rows.length + ' ⌄</span></button><div data-radar-panel="' + esc(groupKey) + '" hidden style="padding:7px;display:flex;flex-direction:column;gap:6px">' + cards + '</div></div>';
-        }).join('') + '</div>' : '<div class="cpo-lbl" style="margin:6px 0">مفيش معاملات نشطة ظاهرة للمندوب ده</div>';
+          : '<div class="cpo-last-act"><span>مفيش محطات مفتوحة للمندوب النهارده</span></div>';
 
         const first = String(c.name || '').trim().split(/\s+/)[0] || 'المندوب';
         const csText = (function () {
           const w = rows.find(x => x.status === 'waiting' || x.status === 'arrived'), o = rows.find(x => x.status === 'on_the_way');
           const now1 = w ? 'وصل عند العميل ' + (w.client_name || '') + ' ' + ago(w.at) : o ? 'في الطريق للعميل ' + (o.client_name || '') + ' ' + ago(o.at) : 'مفيش مشوار شغال دلوقتي';
-          return 'المندوب ' + first + ' حالياً ' + now1.trim() + '. معاه ' + rows.length + ' طلب نشط، وخلّص ' + cf + ' من ' + tot + ' النهارده.';
+          return 'المندوب ' + first + ' حالياً ' + now1.trim() + '. معاه ' + rows.length + ' طلب نشط النهارده، وخلّص ' + cf + ' من ' + tot + '.';
         })();
+
+        const latestRow = rows[0] || null;
+        const lastActionStr = latestRow
+          ? (statusText[latestRow.status] || latestRow.status) + ' — ' + (latestRow.client_name || latestRow.transaction_id || '') + ' · ' + ago(latestRow.at)
+          : (le.type ? (evLabels[le.type] || le.type) + (le.at ? ' · ' + ago(le.at) : '') : 'جاهز لاستلام شغل اليوم');
+
+        /* حفظ تفاصيل المندوب للمودال */
+        state.radarModalData[String(c.id)] = {
+          id: Number(c.id), name: c.name, initials: avTxt, statusTag: t,
+          done: cf, total: tot, csText: csText,
+          rows: rows.map(x => ({
+            client_name: x.client_name || 'عميل بدون اسم',
+            transaction_id: x.transaction_id || '—',
+            zone: x.zone || '',
+            source: x.source,
+            statusLabel: statusText[x.status] || String(x.status || 'نشط'),
+            atTxt: ago(x.at),
+            reschedule_status: x.reschedule_status || '',
+            proposed_slot: x.proposed_slot || '',
+            reschedule_reason: x.reschedule_reason || '',
+            historyTxt: x.source === 'ticket' && Array.isArray(x.action_history) && x.action_history.length
+              ? x.action_history.map(h => (historyLabels[h.step] || h.step) + (h.outcome ? ' (' + h.outcome + ')' : '') + ' · ' + ago(h.created_at)).join(' ← ')
+              : ''
+          }))
+        };
+
         const myDelay = delayedRows.filter(x => x.courier_id === Number(c.id) || normCourier(x.courier_name) === normCourier(c.name));
         const myStuck = stuckRows.filter(x => x.courier_id === Number(c.id) || normCourier(x.courier_name) === normCourier(c.name));
         const warnLine = myDelay.length
-          ? '<div class="cpo-lbl" style="color:var(--er)">⏳ متأخر: ' + myDelay[0].mins + ' د من غير حركة</div>'
-          : (myStuck.length ? '<div class="cpo-lbl" style="color:var(--wn)">📍 واقف عند ' + esc(myStuck[0].client_name || 'عميل') + ' من ' + myStuck[0].mins + ' د</div>' : '');
-        const sub = le.tx ? (nameByTx[le.tx] ? '<b style="color:var(--tx)">' + esc(nameByTx[le.tx]) + '</b> · ' : '') + '<span dir="ltr" class="cpo-num">' + esc(le.tx) + (le.at ? ' · ' + esc(tm(le.at)) : '') + '</span>' : (le.type === 'near_office' ? 'قرب من المكتب' + (le.at ? ' · ' + esc(tm(le.at)) : '') : (le.at ? 'آخر حركة ' + esc(tm(le.at)) : '&nbsp;'));
+          ? '<div class="cpo-lbl" style="color:var(--er);font-weight:700">⏳ متأخر: ' + myDelay[0].mins + ' د من غير حركة (' + esc(myDelay[0].client_name || myDelay[0].transaction_id) + ')</div>'
+          : (myStuck.length ? '<div class="cpo-lbl" style="color:var(--wn);font-weight:700">📍 واقف عند ' + esc(myStuck[0].client_name || 'عميل') + ' من ' + myStuck[0].mins + ' د</div>' : '');
+        const activeCount = Math.max(rows.length, tot);
+        const doneCount = cf;
+        const pct = activeCount ? Math.min(100, Math.round(doneCount / activeCount * 100)) : 0;
+        const sub = le.tx ? (nameByTx[le.tx] ? '<b style="color:var(--tx)">' + esc(nameByTx[le.tx]) + '</b> · ' : '') + '<span dir="ltr" class="cpo-num">' + esc(le.tx) + (le.at ? ' · ' + esc(tm(le.at)) : '') + '</span>' : (le.type === 'near_office' ? 'قرب من المكتب' + (le.at ? ' · ' + esc(tm(le.at)) : '') : (le.at ? 'آخر حركة ' + esc(tm(le.at)) : 'متاح على الخط'));
+
         return '<div class="cpo-cc" style="' + (myDelay.length ? 'border:1px solid var(--er)' : (myStuck.length ? 'border:1px solid var(--wn)' : 'border:1px solid var(--bd)')) + '">' +
           '<div class="cpo-row" style="justify-content:space-between">' +
             '<div class="cpo-row" style="min-width:0"><div class="cpo-av">' + esc(avTxt) + '</div><div style="min-width:0"><b>' + esc(c.name) + '</b><div style="font-size:12px;color:var(--mu)">' + sub + '</div></div></div>' +
@@ -785,10 +818,14 @@
           '</div>' +
           zoneLineHtml +
           warnLine +
-          clients +
-          '<div class="cpo-row"><div class="cpo-bar" style="flex:1"><span style="width:' + (tot ? Math.round(cf / tot * 100) : 0) + '%"></span></div><span class="cpo-num cpo-lbl">' + cf + '/' + tot + '</span></div>' +
-          '<div class="cpo-row" style="gap:6px;flex-wrap:wrap"><button type="button" class="cpo-btn g" data-radar-cs="' + esc(csText) + '">نسخ «المندوب فين»</button>' +
-          '<button type="button" class="cpo-btn g" style="align-self:flex-start" data-v12ping="' + Number(c.id) + '" data-cname="' + esc(c.name) + '">' + svg('warn') + 'تنبيه عاجل</button></div></div>';
+          '<div class="cpo-last-act"><span style="color:var(--ac);flex:none">⚡</span><span>' + esc(lastActionStr) + '</span></div>' +
+          '<div class="cpo-row"><div class="cpo-bar" style="flex:1"><span style="width:' + pct + '%"></span></div><span class="cpo-num cpo-lbl">اليوم: ' + doneCount + '/' + activeCount + '</span></div>' +
+          '<div class="cpo-row" style="gap:6px;flex-wrap:wrap">' +
+            '<button type="button" class="cpo-btn p" style="flex:1;min-height:36px;font-size:12.5px" data-radar-dd="' + Number(c.id) + '">الطلبات والسجل (' + rows.length + ')</button>' +
+            '<button type="button" class="cpo-btn g" style="min-height:36px;font-size:12px" data-radar-cs="' + esc(csText) + '">المندوب فين</button>' +
+            '<button type="button" class="cpo-btn g" style="min-height:36px;padding:0 10px" data-v12ping="' + Number(c.id) + '" data-cname="' + esc(c.name) + '" title="تنبيه عاجل">' + svg('warn') + '</button>' +
+          '</div>' +
+        '</div>';
       };
       const composer = '<div id="cop-ping-box" class="cpo-ping" style="display:none"><span id="cop-ping-to" class="cpo-lbl"></span>' +
         '<input id="cop-ping-msg" type="text" maxlength="200" placeholder="اكتب رسالة التنبيه العاجل" aria-label="رسالة التنبيه"><button type="button" class="cpo-btn p" style="min-height:44px" data-ping-send="1">أرسل</button><button type="button" class="cpo-btn g" style="min-height:44px" data-ping-cancel="1">إلغاء</button></div>';
@@ -831,9 +868,51 @@
       target.onclick = radarClick;
     } finally { state.radarBusy = false; }
   }
+  function openCourierRadarModal(courierId) {
+    const old = $('cop-courier-dd-modal');
+    if (old) old.remove();
+    const info = state.radarModalData && state.radarModalData[String(courierId)];
+    if (!info) return;
+    const rowsHtml = info.rows.length
+      ? info.rows.map(x =>
+          '<div class="cpo-dd-item">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
+              '<b>' + esc(x.client_name) + (x.zone ? ' <span style="font-weight:600;opacity:.7">· ' + esc(x.zone) + '</span>' : '') + '</b>' +
+              '<span style="font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--acsoft,rgba(16,185,129,.15));color:var(--ac,#10b981)">' + esc(x.statusLabel) + '</span>' +
+            '</div>' +
+            '<div style="font-size:12px;opacity:.75">' + (x.source === 'ticket' ? 'تيكت استلام' : 'مشوار') + ' · <span dir="ltr">' + esc(x.transaction_id) + '</span> · ' + esc(x.atTxt) + '</div>' +
+            (x.historyTxt ? '<div style="font-size:11.5px;opacity:.85;margin-top:2px">سجل الخطوات: ' + esc(x.historyTxt) + '</div>' : '') +
+            (x.reschedule_status === 'pending' ? '<div style="font-size:12px;color:#f59e0b;font-weight:700">طلب تأجيل معلّق · ' + esc(x.proposed_slot || '') + (x.reschedule_reason ? ' · ' + esc(x.reschedule_reason) : '') + '</div>' : '') +
+          '</div>'
+        ).join('')
+      : '<div style="padding:18px;text-align:center;opacity:.7;font-size:13px">مفيش طلبات نشطة للمندوب ده النهارده.</div>';
+    const wrap = document.createElement('div');
+    wrap.id = 'cop-courier-dd-modal';
+    wrap.className = 'cpo-dd-backdrop';
+    wrap.dir = 'rtl';
+    wrap.innerHTML =
+      '<div class="cpo-dd-box" role="dialog" aria-modal="true">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--bd,rgba(148,163,184,.2));padding-bottom:10px">' +
+          '<div><b style="font-size:16px">' + esc(info.name) + ' — طلبات اليوم وسجل الحركات</b><div style="font-size:12px;opacity:.7">نشط النهارده: ' + info.rows.length + ' · مؤكد: ' + info.done + '/' + info.total + '</div></div>' +
+          '<div style="display:flex;gap:6px"><button type="button" class="cpo-btn g" id="cop-dd-copy" style="min-height:36px;font-size:12px">نسخ ملخص خدمة العملاء</button><button type="button" class="cpo-btn g" id="cop-dd-close" style="min-height:36px">إغلاق ✕</button></div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px">' + rowsHtml + '</div>' +
+      '</div>';
+    wrap.addEventListener('click', e => {
+      if (e.target === wrap || (e.target.closest && e.target.closest('#cop-dd-close'))) wrap.remove();
+      if (e.target.closest && e.target.closest('#cop-dd-copy')) {
+        try { navigator.clipboard.writeText(info.csText); toast('اتنسخ ملخص خدمة العملاء ✓'); } catch (er) { window.prompt('انسخ الملخص:', info.csText); }
+      }
+    });
+    document.body.appendChild(wrap);
+  }
   async function radarClick(ev) {
     const t = ev.target.closest && ev.target.closest('button'); if (!t) return;
     const el = radarBox || $('cop-radar');
+    if (t.dataset.radarDd) {
+      openCourierRadarModal(t.dataset.radarDd);
+      return;
+    }
     if (t.dataset.radarCase) {
       const nextCase = t.dataset.radarCase;
       state.activeCase = (state.activeCase === nextCase && nextCase !== 'all') ? 'all' : nextCase;
