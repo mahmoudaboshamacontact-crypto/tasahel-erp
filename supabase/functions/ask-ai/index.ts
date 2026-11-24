@@ -5,11 +5,22 @@
 // Secrets: GEMINI_API_KEY، و GEMINI_MODEL (اختياري، الافتراضي gemini-3.8-flash). gemini-2.5-flash اتوقف للمستخدمين الجداد.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } });
+const ALLOWED_ORIGINS = new Set([
+  'https://system-erp-v3.vercel.app',
+  'https://system-erp-v3-git-courier-tickets-v1-mahmoud-978b.vercel.app',
+]);
+function corsFor(req: Request) {
+  const origin = req.headers.get('Origin') || '';
+  const isPreview = /^https:\/\/system-erp-v3-[a-z0-9-]+\.vercel\.app$/i.test(origin);
+  const allow = (ALLOWED_ORIGINS.has(origin) || isPreview) ? origin : 'https://system-erp-v3.vercel.app';
+  return {
+    'Access-Control-Allow-Origin': allow,
+    'Vary': 'Origin',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
+const json = (req: Request, o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...corsFor(req), 'Content-Type': 'application/json' } });
 
 const RULES = `إنت مساعد تحليل أرقام لشركة "تساهيل | قسم الخدمات الحكومية". هترد بالعامية المصرية باختصار ووضوح.
 - المبالغ بالجنيه المصري. اذكر الشهر أو الفترة اللي بتتكلم عنها.
@@ -96,27 +107,27 @@ async function gemini(key: string, model: string, body: Record<string, unknown>)
 const textOf = (c: any) => ((c && c.parts) || []).map((p: any) => p.text || '').join('').trim();
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsFor(req) });
   try {
     const auth = req.headers.get('Authorization') || '';
     const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: auth } } });
     const { data: role, error } = await sb.rpc('my_role');
-    if (error || role !== 'manager') return json({ error: 'الميزة دي للمدير فقط' }, 403);
+    if (error || role !== 'manager') return json(req, { error: 'الميزة دي للمدير فقط' }, 403);
 
     const key = Deno.env.get('GEMINI_API_KEY');
-    if (!key) return json({ error: 'GEMINI_API_KEY مش متضاف في Secrets' }, 500);
+    if (!key) return json(req, { error: 'GEMINI_API_KEY مش متضاف في Secrets' }, 500);
     const model = Deno.env.get('GEMINI_MODEL') || MODEL_DEFAULT;
     const gen: Record<string, unknown> = { maxOutputTokens: 1200 };
 
     const body = await req.json();
     const question = String(body.question || '').slice(0, 500).trim();
-    if (!question) return json({ error: 'اكتب سؤال' }, 400);
+    if (!question) return json(req, { error: 'اكتب سؤال' }, 400);
     const history = (Array.isArray(body.history) ? body.history : []).slice(-6).map((h: any) => ({
       role: h.role === 'model' ? 'model' : 'user', parts: [{ text: String(h.text || '').slice(0, 1500) }],
     }));
 
     // الوضع القديم (إرسال context جاهز من المتصفح) اتلغى: كان بيبعت أي JSON للنموذج من غير قائمة حقول مسموحة.
-    if (body.context) return json({ error: 'النسخة دي من الواجهة قديمة. حدّث الصفحة (Ctrl+F5).' }, 400);
+    if (body.context) return json(req, { error: 'النسخة دي من الواجهة قديمة. حدّث الصفحة (Ctrl+F5).' }, 400);
 
     // ---- الوضع الجديد: أدوات ----
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date());
@@ -128,7 +139,7 @@ Deno.serve(async (req) => {
       const j = await gemini(key, model, { systemInstruction: system, contents, ...(last ? {} : { tools: TOOLS }), generationConfig: gen });
       const content = j.candidates?.[0]?.content;
       const fcs = ((content && content.parts) || []).filter((p: any) => p.functionCall);
-      if (!fcs.length || last) return json({ answer: textOf(content) || 'مفيش رد من النموذج، جرّب صياغة تانية.', tool_calls: calls });
+      if (!fcs.length || last) return json(req, { answer: textOf(content) || 'مفيش رد من النموذج، جرّب صياغة تانية.', tool_calls: calls });
       contents.push(content); // بنرجّع رد النموذج كما هو (بما فيه أي thought signature)
       const parts: any[] = [];
       for (const p of fcs.slice(0, 2)) {
@@ -138,9 +149,9 @@ Deno.serve(async (req) => {
       }
       contents.push({ role: 'user', parts });
     }
-    return json({ answer: 'معرفتش أوصل لإجابة، جرّب سؤال أبسط.' });
+    return json(req, { answer: 'معرفتش أوصل لإجابة، جرّب سؤال أبسط.' });
   } catch (e) {
-    if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') return json({ error: 'النموذج تأخر في الرد. جرّب تاني.' }, 504);
-    return json({ error: String((e as Error).message || e) }, (e as any).status === 429 ? 429 : 500);
+    if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') return json(req, { error: 'النموذج تأخر في الرد. جرّب تاني.' }, 504);
+    return json(req, { error: String((e as Error).message || e) }, (e as any).status === 429 ? 429 : 500);
   }
 });
