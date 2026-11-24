@@ -47,6 +47,8 @@
   const sod = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const money = v => formatCurrency(v);
   const pc = (a, b) => b ? Math.round(a / b * 100) : 0;
+  const netS = l => window.Money ? window.Money.lineNet(l).sales : num(l.total);
+  const netC = l => window.Money ? window.Money.lineNet(l).cost : execCostOf(l);
   const stOf = l => l.status || 'In Progress';
   const STG = { 'In Progress': '245,158,11', 'Under Review': '244,63,94', 'Complete': '14,165,233', 'Delivered': '16,185,129' };
   const PAL = ['13,148,136', '37,99,235', '139,92,246', '245,158,11', '236,72,153', '100,116,139', '16,185,129', '244,63,94'];
@@ -74,7 +76,7 @@
   function agg(rs) {
     const tx = new Set(); let sales = 0, cost = 0, disc = 0, cash = 0, items = 0, qty = 0;
     rs.forEach(x => {
-      const l = x.l, v = num(l.total); sales += v; cost += execCostOf(l); disc += discOf(l); items++; qty += num(l.qty) || 0;
+      const l = x.l, v = netS(l); sales += v; cost += netC(l); disc += discOf(l); items++; qty += num(l.qty) || 0;
       if (l.transaction_id) tx.add(l.transaction_id);
       if ((l.payment_method || 'كاش').trim() === 'كاش') cash += v;
     });
@@ -82,7 +84,7 @@
   }
   function group(rs, kf, vf) {
     const m = new Map();
-    rs.forEach(x => { const k = kf(x); if (k == null || k === '') return; const g = m.get(k) || { k, v: 0, n: 0, tx: new Set(), rs: [] }; g.v += vf ? vf(x) : num(x.l.total); g.n++; if (x.l.transaction_id) g.tx.add(x.l.transaction_id); g.rs.push(x); m.set(k, g); });
+    rs.forEach(x => { const k = kf(x); if (k == null || k === '') return; const g = m.get(k) || { k, v: 0, n: 0, tx: new Set(), rs: [] }; g.v += vf ? vf(x) : netS(x.l); g.n++; if (x.l.transaction_id) g.tx.add(x.l.transaction_id); g.rs.push(x); m.set(k, g); });
     return [...m.values()].sort((a, b) => b.v - a.v);
   }
   const delta = (c, p) => !p ? '' : (function () { const d = Math.round((c - p) / Math.abs(p) * 100); return (d >= 0 ? '▲ ' : '▼ ') + Math.abs(d) + '%'; })();
@@ -177,10 +179,10 @@
     return o.join('');
   }
   function todayCard(X) {
-    const T = X.T, byDay = new Map(); X.all.forEach(x => { const k = dayKey(x.t); byDay.set(k, (byDay.get(k) || 0) + num(x.l.total)); });
+    const T = X.T, byDay = new Map(); X.all.forEach(x => { const k = dayKey(x.t); byDay.set(k, (byDay.get(k) || 0) + netS(x.l)); });
     const tk = dayKey(X.now); byDay.delete(tk);
     const days = [...byDay.values()].filter(v => v > 0), avgDay = days.length ? days.reduce((a, b) => a + b, 0) / days.length : 0;
-    const same = []; X.all.forEach(x => { if (x.t.getDay() === X.now.getDay() && dayKey(x.t) !== tk) same.push(num(x.l.total)); });
+    const same = []; X.all.forEach(x => { if (x.t.getDay() === X.now.getDay() && dayKey(x.t) !== tk) same.push(netS(x.l)); });
     const ratio = avgDay ? T.sales / avgDay * 100 : 0;
     const last = X.today.length ? X.today.reduce((m, x) => x.t > m ? x.t : m, X.today[0].t) : null;
     const mins = last ? Math.max(0, Math.round((X.now - last) / 6e4)) : null;
@@ -218,18 +220,18 @@
   function pipeline(X) {
     const order = ['In Progress', 'Under Review', 'Complete', 'Delivered'];
     const cols = order.map(s => {
-      const rs = (s === 'Delivered' ? X.cur : X.all).filter(x => stOf(x.l) === s), v = rs.reduce((a, x) => a + num(x.l.total), 0);
+      const rs = (s === 'Delivered' ? X.cur : X.all).filter(x => stOf(x.l) === s), v = rs.reduce((a, x) => a + netS(x.l), 0);
       const ages = rs.map(x => (X.now - x.t) / DAY), avg = ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : 0, old = ages.length ? Math.max.apply(null, ages) : 0;
       return '<div class="dx-stage" style="--c:' + STG[s] + '"><div class="l">' + eh(statusLabel(s)) + (s === 'Delivered' ? ' (' + X.W.label + ')' : '') + '</div><div class="n">' + rs.length + '</div>' +
         '<div class="m">' + money(v) + (s !== 'Delivered' && rs.length ? '<br>متوسط العمر ' + avg.toFixed(1) + ' يوم · الأقدم ' + Math.floor(old) + ' يوم' : '') + '</div></div>';
     }).join('');
-    const openV = X.open.reduce((a, x) => a + num(x.l.total), 0);
+    const openV = X.open.reduce((a, x) => a + netS(x.l), 0);
     return card('خط سير الشغل (الحالة الحالية)', 'fa-diagram-project', '13,148,136', '<div class="dx-pipe">' + cols + '</div>', 'قيمة الشغل المفتوح ' + money(openV), 'dx-span2');
   }
   function services(X) {
-    const g = group(X.cur, x => (x.l.service || '').trim(), x => num(x.l.total)).slice(0, 8); if (!g.length) return card('الخدمات والربحية', 'fa-sack-dollar', '139,92,246', none(), '', '');
+    const g = group(X.cur, x => (x.l.service || '').trim(), x => netS(x.l)).slice(0, 8); if (!g.length) return card('الخدمات والربحية', 'fa-sack-dollar', '139,92,246', none(), '', '');
     const max = g[0].v || 1;
-    const rows = g.map((s, i) => { const cost = s.rs.reduce((a, x) => a + execCostOf(x.l), 0), m = s.v - cost, mp = pc(m, s.v); const c = mp < 10 ? '244,63,94' : mp < 30 ? '245,158,11' : '16,185,129';
+    const rows = g.map((s, i) => { const cost = s.rs.reduce((a, x) => a + netC(x.l), 0), m = s.v - cost, mp = pc(m, s.v); const c = mp < 10 ? '244,63,94' : mp < 30 ? '245,158,11' : '16,185,129';
       return '<div class="dx-row"><div class="top"><span class="a">' + eh(s.k) + '</span><span class="b">' + money(s.v) + '</span></div>' + bar(s.v / max * 100, PAL[i % PAL.length], i) +
         '<div class="dx-sub">' + s.n + ' بند · هامش <b style="color:rgb(' + c + ')">' + mp + '%</b> (' + money(m) + ')</div></div>'; }).join('');
     return card('الخدمات والربحية', 'fa-sack-dollar', '139,92,246', '<div class="dx-rows">' + rows + '</div>', X.W.label, '');
@@ -274,7 +276,7 @@
   function rhythm(X) {
     const m = X.month; if (!m.length) return card('إيقاع الشغل', 'fa-wave-square', '99,102,241', none(), '', 'dx-span2');
     const hrs = new Array(24).fill(0), wd = new Array(7).fill(0), wdDays = new Array(7).fill(0), dayV = new Map();
-    m.forEach(x => { const v = num(x.l.total); hrs[x.t.getHours()] += v; wd[x.t.getDay()] += v; dayV.set(x.t.getDate(), (dayV.get(x.t.getDate()) || 0) + v); });
+    m.forEach(x => { const v = netS(x.l); hrs[x.t.getHours()] += v; wd[x.t.getDay()] += v; dayV.set(x.t.getDate(), (dayV.get(x.t.getDate()) || 0) + v); });
     const seenD = new Set(); m.forEach(x => { const k = dayKey(x.t); if (!seenD.has(k)) { seenD.add(k); wdDays[x.t.getDay()]++; } });
     let mn = 24, mx = -1; hrs.forEach((v, h) => { if (v > 0) { mn = Math.min(mn, h); mx = Math.max(mx, h); } });
     const hl = []; for (let h = mn; h <= mx; h++) hl.push(h);
