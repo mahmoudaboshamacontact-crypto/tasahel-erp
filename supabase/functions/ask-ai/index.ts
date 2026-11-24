@@ -1,8 +1,4 @@
-// Edge Function: ask-ai (v9) — للمدير فقط. بتجاوب بأرقام مجمّعة (من غير أسماء عملاء ولا تليفونات).
-// وضعين:
-//  1) الجديد (الافتراضي): الـ AI بينادي أدوات get_report / get_late_orders → دوال SQL للمدير بس (sql/part-l-ai-tools.sql).
-//  2) الوضع القديم (context من المتصفح) اتلغى لأسباب الخصوصية.
-// Secrets: GEMINI_API_KEY، و GEMINI_MODEL (اختياري، الافتراضي gemini-3.8-flash). gemini-2.5-flash اتوقف للمستخدمين الجداد.
+// Edge Function: ask-ai (v15) — للمدير فقط. بتجاوب بأرقام مجمّعة (من غير أسماء عملاء ولا تليفونات).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const ALLOWED_ORIGINS = new Set([
@@ -22,15 +18,18 @@ function corsFor(req: Request) {
 }
 const json = (req: Request, o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...corsFor(req), 'Content-Type': 'application/json' } });
 
-const RULES = `إنت مساعد تحليل أرقام لشركة "تساهيل | قسم الخدمات الحكومية". هترد بالعامية المصرية باختصار ووضوح.
+const RULES = `إنت مساعد تحليل أرقام وتشغيل لشركة "تساهيل | قسم الخدمات الحكومية". هترد بالعامية المصرية باختصار ووضوح.
 - المبالغ بالجنيه المصري. اذكر الشهر أو الفترة اللي بتتكلم عنها.
 - لو السؤال محتاج مقارنة أو حساب، اعمله وبيّن الأرقام اللي استخدمتها.
 - ممنوع تطلب أو تذكر بيانات عملاء شخصية (مفيش أصلاً). أسماء الموظفين مجهولة (موظف 1، موظف 2…) ومتحاولش تعرف مين هو.`;
 
 const systemTools = (today: string) => RULES + `
 - النهارده ${today} (بتوقيت القاهرة). لو الفترة مش محددة في السؤال افترض الشهر الحالي وقول كده.
-- لازم تجيب أي رقم من الأدوات: get_report (مبيعات وتكلفة وهامش تقديري وعمولة وعدد المعاملات، مجمّعة حسب شهر/يوم/خدمة/موظف/طريقة دفع/حالة) و get_late_orders (البنود المتأخرة حسب خدمة أو موظف). ممنوع تخمّن أو تخترع رقم.
-- للمقارنة بين فترتين نادي get_report مرتين (مرة لكل فترة). حدّد from_date و to_date بصيغة YYYY-MM-DD لأول وآخر يوم في الفترة (الحد الأقصى 400 يوم).
+- لازم تجيب أي رقم من الأدوات:
+  1) get_report: مبيعات وتكلفة وهامش تقديري وعمولة وعدد المعاملات (حسب month/day/service/employee/payment/status).
+  2) get_late_orders: البنود المتأخرة حالياً حسب خدمة أو موظف.
+  3) get_ops_snapshot: ملخص الاستردادات، تيكتات الاستلام وعهدة الورق، مشاوير المناديب، المهام، آخر تقفيل كاش، ومستحقات الشريك الخارجي.
+- ممنوع تخمّن أو تخترع رقم. للمقارنة بين فترتين نادي get_report مرتين (مرة لكل فترة، الحد الأقصى 400 يوم).
 - لو الأداة رجّعت rows فاضية قول مفيش بيانات للفترة دي. الهامش التقديري = المبيعات - تكلفة التنفيذ.`;
 
 const TOOLS = [{
@@ -62,6 +61,14 @@ const TOOLS = [{
         required: ['group_by'],
       },
     },
+    {
+      name: 'get_ops_snapshot',
+      description: 'ملخص التشغيل الحالي: الاستردادات، تيكتات الاستلام وعهدة الورق، مشاوير المناديب، المهام المفتوحة والمتأخرة، آخر تقفيل كاش، والشريك الخارجي.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {},
+      },
+    },
   ],
 }];
 
@@ -69,7 +76,6 @@ const isDate = (s: unknown) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.te
 const str = (s: unknown, n = 120) => (typeof s === 'string' && s.trim() ? s.trim().slice(0, n) : null);
 const int = (s: unknown) => (Number.isFinite(Number(s)) ? Math.trunc(Number(s)) : null);
 
-// بتنفّذ أداة واحدة بصلاحيات المدير (JWT بتاع المتصل) — الـ SQL بيرفض أي حد غير مدير.
 async function runTool(sb: any, name: string, a: Record<string, unknown>) {
   let r;
   if (name === 'get_report') {
@@ -81,6 +87,8 @@ async function runTool(sb: any, name: string, a: Record<string, unknown>) {
     });
   } else if (name === 'get_late_orders') {
     r = await sb.rpc('ai_late_orders', { p_group: String(a.group_by || ''), p_limit: int(a.limit) });
+  } else if (name === 'get_ops_snapshot') {
+    r = await sb.rpc('ai_ops_snapshot');
   } else {
     return { error: 'أداة غير معروفة' };
   }
@@ -117,7 +125,7 @@ Deno.serve(async (req) => {
     const key = Deno.env.get('GEMINI_API_KEY');
     if (!key) return json(req, { error: 'GEMINI_API_KEY مش متضاف في Secrets' }, 500);
     const model = Deno.env.get('GEMINI_MODEL') || MODEL_DEFAULT;
-    const gen: Record<string, unknown> = { maxOutputTokens: 1200 };
+    const gen: Record<string, unknown> = { maxOutputTokens: 1400 };
 
     const body = await req.json();
     const question = String(body.question || '').slice(0, 500).trim();
@@ -125,22 +133,35 @@ Deno.serve(async (req) => {
     const history = (Array.isArray(body.history) ? body.history : []).slice(-6).map((h: any) => ({
       role: h.role === 'model' ? 'model' : 'user', parts: [{ text: String(h.text || '').slice(0, 1500) }],
     }));
-
-    // الوضع القديم (إرسال context جاهز من المتصفح) اتلغى: كان بيبعت أي JSON للنموذج من غير قائمة حقول مسموحة.
     if (body.context) return json(req, { error: 'النسخة دي من الواجهة قديمة. حدّث الصفحة (Ctrl+F5).' }, 400);
 
-    // ---- الوضع الجديد: أدوات ----
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date());
     const contents: any[] = [...history, { role: 'user', parts: [{ text: question }] }];
     const system = { parts: [{ text: systemTools(today) }] };
     let calls = 0;
+    let promptTokens = 0;
+    let outputTokens = 0;
+    let totalTokens = 0;
+
     for (let round = 0; round < 3; round++) {
-      const last = round === 2; // آخر دورة من غير أدوات عشان يرد
+      const last = round === 2;
       const j = await gemini(key, model, { systemInstruction: system, contents, ...(last ? {} : { tools: TOOLS }), generationConfig: gen });
+      const um = j.usageMetadata || {};
+      promptTokens += Number(um.promptTokenCount || 0);
+      outputTokens += Number(um.candidatesTokenCount || 0);
+      totalTokens += Number(um.totalTokenCount || 0);
+
       const content = j.candidates?.[0]?.content;
       const fcs = ((content && content.parts) || []).filter((p: any) => p.functionCall);
-      if (!fcs.length || last) return json(req, { answer: textOf(content) || 'مفيش رد من النموذج، جرّب صياغة تانية.', tool_calls: calls });
-      contents.push(content); // بنرجّع رد النموذج كما هو (بما فيه أي thought signature)
+      if (!fcs.length || last) {
+        return json(req, {
+          answer: textOf(content) || 'مفيش رد من النموذج، جرّب صياغة تانية.',
+          tool_calls: calls,
+          model,
+          usage: { prompt_tokens: promptTokens, output_tokens: outputTokens, total_tokens: totalTokens },
+        });
+      }
+      contents.push(content);
       const parts: any[] = [];
       for (const p of fcs.slice(0, 2)) {
         calls++;
