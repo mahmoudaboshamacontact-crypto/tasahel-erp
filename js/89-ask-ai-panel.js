@@ -1,10 +1,9 @@
 /* =====================================================================
    js/89-ask-ai-panel.js
-   مساعد تساهيل AI (للمدير فقط):
-   - زر دائري مميز بنفس حضور زر الشات بتدرج Gemini + شعار واضح.
-   - نافذة زجاجية (Liquid Glass) بحواف Gemini الدوارة عند التفاعل والتفكير.
-   - مؤشر تفكير 3 خطوط متحركة (Waveform) بدل النص الثابت.
-   - عدادات الليمت والتوكنات داخل أيقونة الترس (⚙).
+   مساعد تساهيل الذكي (للمدير فقط):
+   - تصميم Liquid Glass مستوحى من Dribbble: شاشة ترحيب بـ AI Orb + بطاقات 2×2.
+   - إطار ألوان Gemini دوّار على الحواف عند التفاعل والتفكير.
+   - مؤشر تفكير 3 خطوط متحركة (Waveform) + إدخال صوتي عربي (Mic) + درج الليمت داخل الترس (⚙).
    ===================================================================== */
 (function () {
   'use strict';
@@ -23,6 +22,8 @@
   var busy = false;
   var resetTimer = null;
   var glowTimer = null;
+  var recog = null;
+  var listening = false;
 
   function gemSvg(size) {
     return '<svg viewBox="0 0 24 24" width="' + size + '" height="' + size + '" fill="none" aria-hidden="true" style="flex:none;display:block"><path d="M12 2C12.7 7.2 16.8 11.3 22 12C16.8 12.7 12.7 16.8 12 22C11.3 16.8 7.2 12.7 2 12C7.2 11.3 11.3 7.2 12 2Z" fill="currentColor"/></svg>';
@@ -33,6 +34,12 @@
     if (window.__role !== 'manager') return false;
     if (document.body && (document.body.classList.contains('is-courier-mode') || document.body.classList.contains('is-partner-mode'))) return false;
     return true;
+  }
+  function mgrFirstName() {
+    try {
+      var n = (typeof myProfile !== 'undefined' && myProfile && myProfile.full_name) ? String(myProfile.full_name).trim() : '';
+      return n ? n.split(/\s+/)[0] : 'مدير';
+    } catch (e) { return 'مدير'; }
   }
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -99,9 +106,7 @@
     renderUsageDrawer();
   }
 
-  function barColor(pct) {
-    return pct >= 85 ? '#ef4444' : (pct >= 60 ? '#f59e0b' : '#22c55e');
-  }
+  function barColor(pct) { return pct >= 85 ? '#ef4444' : (pct >= 60 ? '#f59e0b' : '#22c55e'); }
   function meterRow(label, used, limit, rightText, subText) {
     var pct = Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
     var col = barColor(pct);
@@ -115,14 +120,13 @@
       '</div>' +
     '</div>';
   }
-
   function renderUsageDrawer() {
     var box = $('ts-ai-usage');
     if (!box) return;
     var u = loadUsage();
     var msgsUsed = Math.floor(history.length / 2);
     box.innerHTML =
-      '<div class="ts-ai-uhdr"><span>استهلاك الذكاء الاصطناعي والليمت</span><span class="ts-ai-umodel">' + esc(u.model || 'gemini-3.5-flash-lite') + '</span></div>' +
+      '<div class="ts-ai-uhdr"><span>الليمت واستهلاك التوكنات</span><span class="ts-ai-umodel">' + esc(u.model || 'gemini-3.5-flash-lite') + '</span></div>' +
       meterRow('المحادثة الحالية', msgsUsed, 6, nf(sessionTokens) + ' tok', msgsUsed + ' / 6 رسائل سياق') +
       meterRow('الاستهلاك اليومي', u.day_req, DAILY_REQ_LIMIT, dailyResetInfo(), nf(u.day_req) + ' طلب · ' + nf(u.day_tok) + ' tok') +
       meterRow('الاستهلاك الأسبوعي', u.week_req, WEEKLY_REQ_LIMIT, weeklyResetInfo(), nf(u.week_req) + ' طلب · ' + nf(u.week_tok) + ' tok') +
@@ -136,7 +140,7 @@
     clearTimeout(glowTimer);
     if (ms) {
       glowTimer = setTimeout(function () {
-        if (!busy && win) win.classList.remove('is-glow');
+        if (!busy && !listening && win) win.classList.remove('is-glow');
       }, ms);
     }
   }
@@ -150,38 +154,37 @@
       '@keyframes tsAiSpin{to{--ts-ai-a:360deg}}' +
       '@keyframes tsAiWave{0%,100%{transform:scaleY(.35);opacity:.45}50%{transform:scaleY(1);opacity:1}}' +
 
-      /* زر AI الدائري المميز بنفس حضور زر الشات */
+      /* زر AI الدائري المميز */
       '#ts-ai-btn{position:fixed;left:20px;bottom:24px;z-index:96;width:54px;height:54px;border-radius:999px;border:2px solid rgba(255,255,255,.85);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#ffffff;background:linear-gradient(135deg,#2563eb 0%,#7c3aed 52%,#ec4899 100%);box-shadow:0 12px 30px -4px rgba(124,58,237,.65),0 0 0 4px rgba(139,92,246,.18);font-family:inherit;transition:transform .18s,box-shadow .18s}' +
       'html.dark #ts-ai-btn{border-color:rgba(255,255,255,.35);box-shadow:0 12px 32px -4px rgba(139,92,246,.75),0 0 0 4px rgba(139,92,246,.22)}' +
-      '#ts-ai-btn:hover{transform:translateY(-2px) scale(1.04);box-shadow:0 16px 36px -4px rgba(124,58,237,.8),0 0 0 6px rgba(139,92,246,.25)}' +
+      '#ts-ai-btn:hover{transform:translateY(-2px) scale(1.05)}' +
       '#ts-ai-btn .ts-ai-tag{position:absolute;top:-5px;right:-5px;background:#0f172a;color:#fff;font-size:9px;font-weight:800;letter-spacing:.4px;padding:2px 5px;border-radius:999px;border:1.5px solid #fff;line-height:1}' +
 
-      /* النافذة الزجاجية (Liquid Glass) */
-      '#ts-ai-win{position:fixed;left:22px;bottom:22px;z-index:160;width:460px;max-width:calc(100vw - 24px);height:610px;max-height:calc(100vh - 36px);display:none;flex-direction:column;border-radius:24px;background:linear-gradient(160deg,rgba(255,255,255,.88) 0%,rgba(245,243,255,.84) 100%);color:#0f172a;backdrop-filter:blur(28px) saturate(195%);-webkit-backdrop-filter:blur(28px) saturate(195%);border:1px solid rgba(255,255,255,.7);box-shadow:0 24px 64px -14px rgba(15,23,42,.28),inset 0 1px 0 rgba(255,255,255,.85)}' +
-      'html.dark #ts-ai-win{background:linear-gradient(160deg,rgba(15,23,42,.86) 0%,rgba(24,24,48,.84) 100%);color:#f1f5f9;border-color:rgba(255,255,255,.15);box-shadow:0 28px 72px -14px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.1)}' +
+      /* النافذة الزجاجية العائمة (Liquid Glass Dribbble Style) */
+      '#ts-ai-win{position:fixed;left:22px;bottom:22px;z-index:160;width:440px;max-width:calc(100vw - 24px);height:640px;max-height:calc(100vh - 34px);display:none;flex-direction:column;border-radius:28px;background:radial-gradient(120% 80% at 50% 0%,rgba(139,92,246,.16) 0%,rgba(255,255,255,.88) 46%,rgba(248,250,252,.92) 100%);color:#0f172a;backdrop-filter:blur(30px) saturate(200%);-webkit-backdrop-filter:blur(30px) saturate(200%);border:1px solid rgba(255,255,255,.78);box-shadow:0 28px 70px -14px rgba(15,23,42,.28),inset 0 1px 0 rgba(255,255,255,.9)}' +
+      'html.dark #ts-ai-win{background:radial-gradient(120% 70% at 50% 0%,rgba(124,58,237,.28) 0%,rgba(11,15,28,.90) 48%,rgba(8,11,22,.94) 100%);color:#f1f5f9;border-color:rgba(255,255,255,.14);box-shadow:0 30px 80px -14px rgba(0,0,0,.78),inset 0 1px 0 rgba(255,255,255,.12)}' +
       '#ts-ai-win.open{display:flex}' +
       '#ts-ai-win.min{height:auto!important;width:300px!important}' +
       '#ts-ai-win.min .ts-ai-body{display:none}' +
 
       /* إضاءة حواف Gemini الدوارة عند التفاعل والتفكير */
-      '#ts-ai-win::before{content:"";position:absolute;inset:-2px;border-radius:26px;padding:2.5px;background:conic-gradient(from var(--ts-ai-a),#4285f4,#8b5cf6,#ec4899,#38bdf8,#4285f4);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:0;pointer-events:none;transition:opacity .28s ease}' +
-      '#ts-ai-win.is-glow::before{opacity:1;animation:tsAiSpin 2.4s linear infinite}' +
+      '#ts-ai-win::before{content:"";position:absolute;inset:-2.5px;border-radius:30px;padding:2.5px;background:conic-gradient(from var(--ts-ai-a),#4285f4,#8b5cf6,#ec4899,#38bdf8,#4285f4);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:0;pointer-events:none;transition:opacity .28s ease}' +
+      '#ts-ai-win.is-glow::before{opacity:1;animation:tsAiSpin 2.2s linear infinite}' +
       '@media(prefers-reduced-motion:reduce){#ts-ai-win.is-glow::before{animation:none}}' +
 
-      '.ts-ai-hdr{position:relative;display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid rgba(15,23,42,.07);cursor:move;user-select:none}' +
-      'html.dark .ts-ai-hdr{border-bottom-color:rgba(255,255,255,.08)}' +
-      '.ts-ai-ico{display:flex;width:34px;height:34px;align-items:center;justify-content:center;border-radius:12px;color:#fff;background:linear-gradient(135deg,#2563eb 0%,#7c3aed 55%,#ec4899 100%);box-shadow:0 6px 16px -4px rgba(124,58,237,.55)}' +
-      '.ts-ai-title{font-weight:800;font-size:14px;background:linear-gradient(90deg,#2563eb,#7c3aed,#db2777);-webkit-background-clip:text;-webkit-text-fill-color:transparent}' +
-      'html.dark .ts-ai-title{background:linear-gradient(90deg,#60a5fa,#c084fc,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}' +
-      '.ts-ai-hbtn{border:0;background:transparent;color:inherit;opacity:.68;width:30px;height:30px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;transition:background .15s,opacity .15s}' +
-      '.ts-ai-hbtn:hover,.ts-ai-hbtn.on{opacity:1;background:rgba(124,58,237,.12);color:#7c3aed}' +
-      'html.dark .ts-ai-hbtn:hover,html.dark .ts-ai-hbtn.on{background:rgba(167,139,250,.18);color:#c4b5fd}' +
+      /* الهيدر النظيف */
+      '.ts-ai-hdr{position:relative;display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:move;user-select:none;flex:none}' +
+      '.ts-ai-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;color:#fff;background:linear-gradient(135deg,#2563eb 0%,#7c3aed 55%,#ec4899 100%);box-shadow:0 6px 18px -5px rgba(124,58,237,.6)}' +
+      '.ts-ai-hbtn{border:1px solid rgba(15,23,42,.08);background:rgba(255,255,255,.65);color:inherit;width:32px;height:32px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:12.5px;transition:background .15s,border-color .15s,color .15s}' +
+      'html.dark .ts-ai-hbtn{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.06)}' +
+      '.ts-ai-hbtn:hover,.ts-ai-hbtn.on{border-color:#8b5cf6;background:rgba(124,58,237,.14);color:#7c3aed}' +
+      'html.dark .ts-ai-hbtn:hover,html.dark .ts-ai-hbtn.on{color:#c4b5fd}' +
 
-      '.ts-ai-body{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;border-radius:0 0 24px 24px}' +
+      '.ts-ai-body{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;border-radius:0 0 28px 28px}' +
 
       /* درج الليمت داخل الترس */
-      '#ts-ai-usage{display:none;flex-direction:column;gap:8px;padding:12px 15px;border-bottom:1px solid rgba(15,23,42,.08);background:rgba(248,250,252,.82);backdrop-filter:blur(16px)}' +
-      'html.dark #ts-ai-usage{border-bottom-color:rgba(255,255,255,.08);background:rgba(15,23,42,.72)}' +
+      '#ts-ai-usage{display:none;flex-direction:column;gap:8px;margin:0 14px 8px;padding:12px 14px;border-radius:18px;border:1px solid rgba(15,23,42,.08);background:rgba(255,255,255,.78);backdrop-filter:blur(16px)}' +
+      'html.dark #ts-ai-usage{border-color:rgba(255,255,255,.1);background:rgba(15,23,42,.72)}' +
       '#ts-ai-usage.open{display:flex}' +
       '.ts-ai-uhdr{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;opacity:.85}' +
       '.ts-ai-umodel{font-family:Consolas,monospace;font-size:10px;padding:2px 8px;border-radius:999px;background:rgba(124,58,237,.12);color:#6d28d9}' +
@@ -196,18 +199,34 @@
       '.ts-ai-pct{font-family:Consolas,monospace;font-weight:700;font-size:10.5px;direction:ltr;min-width:30px;text-align:end}' +
       '.ts-ai-rt{font-family:Consolas,monospace;font-size:10px;opacity:.7;white-space:nowrap}' +
 
-      /* مساحة المحادثة المميزة */
-      '#ts-ai-msgs{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:12px}' +
+      /* شاشة الترحيب (Dribbble Hero + 2x2 Cards) */
+      '#ts-ai-hero{flex:1;overflow-y:auto;padding:10px 18px 14px;display:flex;flex-direction:column;justify-content:center;gap:14px}' +
+      '#ts-ai-hero.hide{display:none}' +
+      '.ts-ai-orb{width:62px;height:62px;margin:0 auto;border-radius:999px;display:flex;align-items:center;justify-content:center;color:#fff;background:radial-gradient(circle at 30% 30%,#60a5fa 0%,#7c3aed 52%,#ec4899 100%);box-shadow:0 0 0 8px rgba(124,58,237,.12),0 16px 36px -6px rgba(124,58,237,.6)}' +
+      '.ts-ai-htxt{text-align:center}' +
+      '.ts-ai-htxt h3{margin:0;font-size:19px;font-weight:800;letter-spacing:-.2px}' +
+      '.ts-ai-htxt p{margin:4px 0 0;font-size:12.5px;opacity:.68}' +
+      '.ts-ai-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px}' +
+      '.ts-ai-card{text-align:right;border:1px solid rgba(15,23,42,.08);background:rgba(255,255,255,.72);border-radius:18px;padding:12px;cursor:pointer;font-family:inherit;color:inherit;display:flex;flex-direction:column;gap:7px;transition:transform .16s,border-color .16s,background .16s}' +
+      'html.dark .ts-ai-card{border-color:rgba(255,255,255,.1);background:rgba(255,255,255,.05)}' +
+      '.ts-ai-card:hover{transform:translateY(-2px);border-color:#8b5cf6;background:rgba(139,92,246,.09)}' +
+      '.ts-ai-cico{width:32px;height:32px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:14px}' +
+      '.ts-ai-card b{font-size:12.5px;font-weight:700;display:block}' +
+      '.ts-ai-card span{font-size:10.5px;opacity:.65;line-height:1.45;display:block}' +
+
+      /* ساحة المحادثة */
+      '#ts-ai-msgs{flex:1;overflow-y:auto;padding:8px 14px 12px;display:none;flex-direction:column;gap:12px}' +
+      '#ts-ai-msgs.show{display:flex}' +
       '.ts-ai-row{display:flex;width:100%;align-items:flex-start;gap:8px}' +
       '.ts-ai-row.u{justify-content:flex-start}' +
       '.ts-ai-row.m{justify-content:flex-end}' +
-      '.ts-ai-av{width:24px;height:24px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;background:linear-gradient(135deg,#2563eb,#7c3aed,#ec4899);margin-top:3px;box-shadow:0 3px 10px -2px rgba(124,58,237,.45)}' +
+      '.ts-ai-av{width:26px;height:26px;border-radius:999px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;background:linear-gradient(135deg,#2563eb,#7c3aed,#ec4899);margin-top:2px;box-shadow:0 4px 12px -2px rgba(124,58,237,.5)}' +
       '.ts-ai-bbl{max-width:84%;border-radius:18px;padding:10px 14px;font-size:13px;line-height:1.72;white-space:pre-wrap;word-break:break-word}' +
-      '.ts-ai-row.u .ts-ai-bbl{background:linear-gradient(135deg,#2563eb 0%,#6d28d9 100%);color:#ffffff;border-start-start-radius:5px;box-shadow:0 6px 18px -6px rgba(109,40,217,.5)}' +
-      '.ts-ai-row.m .ts-ai-bbl{background:rgba(255,255,255,.78);color:#0f172a;border-end-end-radius:5px;border:1px solid rgba(124,58,237,.12);box-shadow:0 4px 16px -8px rgba(15,23,42,.12)}' +
-      'html.dark .ts-ai-row.m .ts-ai-bbl{background:rgba(30,41,59,.78);color:#f1f5f9;border-color:rgba(167,139,250,.18)}' +
-      '.ts-ai-row.err .ts-ai-bbl{background:rgba(254,242,242,.9);color:#b91c1c;border-color:#fecaca}' +
-      'html.dark .ts-ai-row.err .ts-ai-bbl{background:rgba(69,10,10,.78);color:#fecaca;border-color:#991b1b}' +
+      '.ts-ai-row.u .ts-ai-bbl{background:linear-gradient(135deg,#2563eb 0%,#7c3aed 100%);color:#ffffff;border-start-start-radius:5px;box-shadow:0 8px 20px -8px rgba(109,40,217,.55)}' +
+      '.ts-ai-row.m .ts-ai-bbl{background:rgba(255,255,255,.82);color:#0f172a;border-end-end-radius:5px;border:1px solid rgba(15,23,42,.08)}' +
+      'html.dark .ts-ai-row.m .ts-ai-bbl{background:rgba(30,41,59,.78);color:#f1f5f9;border-color:rgba(255,255,255,.1)}' +
+      '.ts-ai-row.err .ts-ai-bbl{background:rgba(254,242,242,.92);color:#b91c1c;border-color:#fecaca}' +
+      'html.dark .ts-ai-row.err .ts-ai-bbl{background:rgba(69,10,10,.82);color:#fecaca;border-color:#991b1b}' +
 
       /* مؤشر التفكير (3 شرط متحركة) */
       '.ts-ai-wave{display:inline-flex;align-items:center;gap:4px;height:18px;padding:2px 4px}' +
@@ -215,27 +234,32 @@
       '.ts-ai-wave i:nth-child(2){animation-delay:.16s}' +
       '.ts-ai-wave i:nth-child(3){animation-delay:.32s}' +
 
-      /* اقتراحات سريعة اختيارية في شريط هادئ فوق خانة الكتابة */
-      '.ts-ai-chips{display:flex;gap:6px;padding:6px 12px 2px;overflow-x:auto;scrollbar-width:none;flex:none}' +
-      '.ts-ai-chips::-webkit-scrollbar{display:none}' +
-      '.ts-ai-chip{flex:none;border:1px solid rgba(124,58,237,.18);background:rgba(255,255,255,.65);color:#334155;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;transition:border-color .15s,background .15s}' +
-      'html.dark .ts-ai-chip{border-color:rgba(167,139,250,.22);background:rgba(255,255,255,.06);color:#e2e8f0}' +
-      '.ts-ai-chip:hover{border-color:#8b5cf6;background:rgba(139,92,246,.12)}' +
-
-      '.ts-ai-ft{display:flex;align-items:center;gap:8px;padding:8px 12px 12px}' +
-      '#ts-ai-inp{flex:1;border:1.5px solid rgba(124,58,237,.2);background:rgba(255,255,255,.82);color:#0f172a;border-radius:14px;padding:10px 13px;font-size:13px;outline:none;font-family:inherit;transition:border-color .18s,box-shadow .18s}' +
-      'html.dark #ts-ai-inp{border-color:rgba(167,139,250,.25);background:rgba(15,23,42,.72);color:#f8fafc}' +
-      '#ts-ai-inp:focus{border-color:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,.18)}' +
-      '#ts-ai-send{border:0;border-radius:14px;width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;background:linear-gradient(135deg,#2563eb,#7c3aed,#ec4899);flex:none;box-shadow:0 6px 16px -4px rgba(124,58,237,.55)}' +
+      /* كارت الكتابة العائم (Dribbble Composer) */
+      '.ts-ai-comp-wrap{padding:8px 14px 14px;flex:none}' +
+      '.ts-ai-comp{border-radius:20px;border:1px solid rgba(15,23,42,.1);background:rgba(255,255,255,.88);padding:8px 10px 8px 8px;display:flex;flex-direction:column;gap:6px;box-shadow:0 8px 24px -10px rgba(15,23,42,.14);transition:border-color .18s,box-shadow .18s}' +
+      'html.dark .ts-ai-comp{border-color:rgba(255,255,255,.12);background:rgba(15,23,42,.82)}' +
+      '.ts-ai-comp:focus-within{border-color:#8b5cf6;box-shadow:0 0 0 3px rgba(139,92,246,.16)}' +
+      '#ts-ai-inp{width:100%;border:0;background:transparent;color:inherit;font-size:13.5px;padding:4px 6px;outline:none;font-family:inherit}' +
+      '.ts-ai-comp-bar{display:flex;align-items:center;justify-content:space-between;gap:6px}' +
+      '.ts-ai-comp-tools{display:flex;align-items:center;gap:4px}' +
+      '.ts-ai-tbtn{border:1px solid rgba(15,23,42,.08);background:rgba(15,23,42,.04);color:inherit;height:30px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit;opacity:.8;transition:opacity .15s,border-color .15s}' +
+      'html.dark .ts-ai-tbtn{border-color:rgba(255,255,255,.1);background:rgba(255,255,255,.06)}' +
+      '.ts-ai-tbtn:hover{opacity:1;border-color:#8b5cf6}' +
+      '.ts-ai-comp-act{display:flex;align-items:center;gap:6px}' +
+      '#ts-ai-mic{border:1px solid rgba(15,23,42,.1);background:rgba(15,23,42,.04);color:inherit;width:34px;height:34px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px}' +
+      'html.dark #ts-ai-mic{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.07)}' +
+      '#ts-ai-mic.rec{background:#ef4444;color:#fff;border-color:#ef4444}' +
+      '#ts-ai-send{border:0;border-radius:999px;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;background:linear-gradient(135deg,#2563eb,#7c3aed,#ec4899);box-shadow:0 6px 16px -4px rgba(124,58,237,.6);font-size:14px}' +
       '#ts-ai-send:disabled{opacity:.5;cursor:default}' +
 
-      '@media(max-width:640px){#ts-ai-btn{bottom:78px;left:16px}#ts-ai-win{left:0!important;right:0!important;bottom:0!important;top:auto!important;width:100%!important;max-width:100%!important;height:86vh;max-height:88vh;border-radius:24px 24px 0 0}#ts-ai-win::before{border-radius:26px 26px 0 0}.ts-ai-hdr{cursor:default}}';
+      '@media(max-width:640px){#ts-ai-btn{bottom:78px;left:16px}#ts-ai-win{left:0!important;right:0!important;bottom:0!important;top:auto!important;width:100%!important;max-width:100%!important;height:88vh;max-height:90vh;border-radius:26px 26px 0 0}#ts-ai-win::before{border-radius:28px 28px 0 0}.ts-ai-hdr{cursor:default}}';
     document.head.appendChild(st);
   }
 
   function removeUI() {
     if (resetTimer) { clearInterval(resetTimer); resetTimer = null; }
     clearTimeout(glowTimer);
+    if (recog && listening) { try { recog.stop(); } catch (e) {} }
     var b = $('ts-ai-btn'), w = $('ts-ai-win');
     if (b) b.remove();
     if (w) w.remove();
@@ -283,6 +307,40 @@
     });
   }
 
+  function showChatView() {
+    var hero = $('ts-ai-hero'), msgs = $('ts-ai-msgs');
+    if (hero) hero.classList.add('hide');
+    if (msgs) msgs.classList.add('show');
+  }
+  function showHeroView() {
+    var hero = $('ts-ai-hero'), msgs = $('ts-ai-msgs');
+    if (hero) hero.classList.remove('hide');
+    if (msgs) msgs.classList.remove('show');
+  }
+
+  function setupVoice() {
+    var micBtn = $('ts-ai-mic');
+    if (!micBtn) return;
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { micBtn.style.display = 'none'; return; }
+    micBtn.onclick = function () {
+      if (listening && recog) { recog.stop(); return; }
+      try {
+        recog = new SR();
+        recog.lang = 'ar-EG';
+        recog.interimResults = false;
+        recog.onstart = function () { listening = true; micBtn.classList.add('rec'); pulseGlow(0); };
+        recog.onresult = function (ev) {
+          var txt = ev.results && ev.results[0] && ev.results[0][0] && ev.results[0][0].transcript;
+          if (txt && $('ts-ai-inp')) { $('ts-ai-inp').value = txt; $('ts-ai-inp').focus(); }
+        };
+        recog.onerror = function () {};
+        recog.onend = function () { listening = false; micBtn.classList.remove('rec'); pulseGlow(800); };
+        recog.start();
+      } catch (e) {}
+    };
+  }
+
   function openWin() {
     if (!isMgr()) return;
     injectStyles();
@@ -313,36 +371,62 @@
 
     win.innerHTML =
       '<div class="ts-ai-hdr" id="ts-ai-drag">' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-          '<span class="ts-ai-ico">' + gemSvg(18) + '</span>' +
-          '<div><div class="ts-ai-title">مساعد تساهيل الذكي</div><div style="font-size:10.5px;opacity:.65">اسأل أي سؤال حر · أرقام مجمّعة فقط</div></div>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:2px">' +
+        '<div class="ts-ai-pill">' + gemSvg(14) + '<span>تساهيل AI</span></div>' +
+        '<div style="display:flex;align-items:center;gap:5px">' +
           '<button type="button" id="ts-ai-gear" class="ts-ai-hbtn" title="الليمت والاستهلاك" aria-label="الليمت والاستهلاك"><i class="fa-solid fa-gear"></i></button>' +
-          '<button type="button" id="ts-ai-min" class="ts-ai-hbtn" title="تصغير / تكبير"><i class="fa-solid fa-minus"></i></button>' +
-          '<button type="button" id="ts-ai-clear" class="ts-ai-hbtn" title="محادثة جديدة"><i class="fa-solid fa-rotate-right"></i></button>' +
-          '<button type="button" id="ts-ai-close" class="ts-ai-hbtn" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button>' +
+          '<button type="button" id="ts-ai-clear" class="ts-ai-hbtn" title="محادثة جديدة" aria-label="محادثة جديدة"><i class="fa-solid fa-rotate-right"></i></button>' +
+          '<button type="button" id="ts-ai-min" class="ts-ai-hbtn" title="تصغير" aria-label="تصغير"><i class="fa-solid fa-minus"></i></button>' +
+          '<button type="button" id="ts-ai-close" class="ts-ai-hbtn" title="إغلاق" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button>' +
         '</div>' +
       '</div>' +
       '<div class="ts-ai-body">' +
         '<div id="ts-ai-usage"></div>' +
-        '<div id="ts-ai-msgs">' +
-          '<div class="ts-ai-row m"><div class="ts-ai-bbl">أهلاً يا مدير! اكتبلي أي سؤال ييجي في دماغك عن المبيعات، الأرباح، التأخيرات، المناديب، التيكتات، الكاش أو الاستردادات.</div><span class="ts-ai-av">' + gemSvg(13) + '</span></div>' +
+        '<div id="ts-ai-hero">' +
+          '<div class="ts-ai-orb">' + gemSvg(28) + '</div>' +
+          '<div class="ts-ai-htxt">' +
+            '<h3>أهلاً، ' + esc(mgrFirstName()) + '</h3>' +
+            '<p>جاهز نتابع كل تفاصيل تساهيل النهارده؟</p>' +
+          '</div>' +
+          '<div class="ts-ai-cards">' +
+            '<button type="button" class="ts-ai-card" data-q="اديني ملخص شامل للمبيعات والأرباح والطلبات النهارده والشهر ده">' +
+              '<span class="ts-ai-cico" style="background:rgba(16,185,129,.14);color:#10b981"><i class="fa-solid fa-chart-line"></i></span>' +
+              '<b>المبيعات والأرباح</b><span>ملخص اليوم والشهر والهامش</span>' +
+            '</button>' +
+            '<button type="button" class="ts-ai-card" data-q="مين من الموظفين بصم حضور النهارده ومين مبصمش ومين في إجازة؟">' +
+              '<span class="ts-ai-cico" style="background:rgba(59,130,246,.14);color:#3b82f6"><i class="fa-solid fa-user-check"></i></span>' +
+              '<b>الحضور والفريق</b><span>البصمة والإجازات والغياب</span>' +
+            '</button>' +
+            '<button type="button" class="ts-ai-card" data-q="إيه وضع المناديب والمشاوير والتيكتات وعهدة الورق النهارده؟">' +
+              '<span class="ts-ai-cico" style="background:rgba(139,92,246,.14);color:#8b5cf6"><i class="fa-solid fa-motorcycle"></i></span>' +
+              '<b>المناديب والتيكتات</b><span>المشاوير والرادار والعهدة</span>' +
+            '</button>' +
+            '<button type="button" class="ts-ai-card" data-q="إيه وضع الكاش والاستردادات والخصومات والمحافظ والمنفذين؟">' +
+              '<span class="ts-ai-cico" style="background:rgba(245,158,11,.14);color:#f59e0b"><i class="fa-solid fa-wallet"></i></span>' +
+              '<b>الكاش والمالية</b><span>الاسترداد والمحافظ والأهداف</span>' +
+            '</button>' +
+          '</div>' +
         '</div>' +
-        '<div class="ts-ai-chips">' +
-          '<button type="button" class="ts-ai-chip">ملخص مبيعات الشهر ده</button>' +
-          '<button type="button" class="ts-ai-chip">كام طلب النهارده؟</button>' +
-          '<button type="button" class="ts-ai-chip">وضع الاستردادات والكاش</button>' +
-          '<button type="button" class="ts-ai-chip">إيه البنود المتأخرة؟</button>' +
+        '<div id="ts-ai-msgs"></div>' +
+        '<div class="ts-ai-comp-wrap">' +
+          '<form id="ts-ai-form" class="ts-ai-comp">' +
+            '<input id="ts-ai-inp" type="text" maxlength="500" placeholder="اسألني عن أي حاجة في السيستم...">' +
+            '<div class="ts-ai-comp-bar">' +
+              '<div class="ts-ai-comp-tools">' +
+                '<button type="button" id="ts-ai-home-t" class="ts-ai-tbtn" title="البطاقات السريعة"><i class="fa-solid fa-grid-2"></i><span>الأقسام</span></button>' +
+                '<button type="button" id="ts-ai-late-t" class="ts-ai-tbtn" title="المتأخرات"><i class="fa-solid fa-clock"></i><span>المتأخرات</span></button>' +
+              '</div>' +
+              '<div class="ts-ai-comp-act">' +
+                '<button type="button" id="ts-ai-mic" title="تحدث بالصوت" aria-label="تحدث بالصوت"><i class="fa-solid fa-microphone"></i></button>' +
+                '<button id="ts-ai-send" type="submit" aria-label="إرسال"><i class="fa-solid fa-arrow-up"></i></button>' +
+              '</div>' +
+            '</div>' +
+          '</form>' +
         '</div>' +
-        '<form id="ts-ai-form" class="ts-ai-ft">' +
-          '<input id="ts-ai-inp" type="text" maxlength="500" placeholder="اسأل أي حاجة تيجي في دماغك...">' +
-          '<button id="ts-ai-send" type="submit" aria-label="إرسال">' + gemSvg(18) + '</button>' +
-        '</form>' +
       '</div>';
 
     document.body.appendChild(win);
     makeDraggable(win, $('ts-ai-drag'));
+    setupVoice();
     renderUsageDrawer();
     pulseGlow(1800);
     if (!resetTimer) resetTimer = setInterval(renderUsageDrawer, 60000);
@@ -363,10 +447,17 @@
       history = [];
       sessionTokens = 0;
       renderUsageDrawer();
-      $('ts-ai-msgs').innerHTML = '<div class="ts-ai-row m"><div class="ts-ai-bbl">تم بدء محادثة جديدة — اسألني أي سؤال!</div><span class="ts-ai-av">' + gemSvg(13) + '</span></div>';
+      $('ts-ai-msgs').innerHTML = '';
+      showHeroView();
     };
-    Array.prototype.forEach.call(win.querySelectorAll('.ts-ai-chip'), function (c) {
-      c.onclick = function () { $('ts-ai-inp').value = c.textContent; ask(c.textContent); };
+    $('ts-ai-home-t').onclick = function () {
+      var h = $('ts-ai-hero');
+      if (h && h.classList.contains('hide')) showHeroView(); else if ($('ts-ai-msgs').children.length) showChatView();
+    };
+    $('ts-ai-late-t').onclick = function () { ask('إيه البنود المتأخرة حاليًا وأكتر خدمات فيها تأخير؟'); };
+
+    Array.prototype.forEach.call(win.querySelectorAll('.ts-ai-card'), function (c) {
+      c.onclick = function () { ask(c.getAttribute('data-q')); };
     });
     $('ts-ai-form').onsubmit = function (e) {
       e.preventDefault();
@@ -384,6 +475,7 @@
   }
 
   function appendMsg(role, text, isErr) {
+    showChatView();
     var box = $('ts-ai-msgs');
     if (!box) return null;
     var wrap = document.createElement('div');
@@ -404,6 +496,7 @@
   }
 
   function appendThinking() {
+    showChatView();
     var box = $('ts-ai-msgs');
     if (!box) return null;
     var wrap = document.createElement('div');
@@ -421,8 +514,8 @@
 
     busy = true;
     pulseGlow(0);
-    $('ts-ai-inp').value = '';
-    $('ts-ai-send').disabled = true;
+    if ($('ts-ai-inp')) $('ts-ai-inp').value = '';
+    if ($('ts-ai-send')) $('ts-ai-send').disabled = true;
     appendMsg('user', question, false);
     var waitEl = appendThinking();
 

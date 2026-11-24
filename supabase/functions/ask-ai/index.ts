@@ -1,4 +1,4 @@
-// Edge Function: ask-ai (v17) — للمدير فقط. بتجاوب بأرقام مجمّعة + Fallback تلقائي لو الموديل عليه ضغط.
+// Edge Function: ask-ai (v18) — للمدير فقط. يغطي السيستم بالكامل (مبيعات، تأخيرات، تشغيل، HR وحضور، مناديب، مالية) بدون أي بيانات عملاء.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const ALLOWED_ORIGINS = new Set([
@@ -18,59 +18,92 @@ function corsFor(req: Request) {
 }
 const json = (req: Request, o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...corsFor(req), 'Content-Type': 'application/json' } });
 
-const RULES = `إنت مساعد ذكي لتحليل الأرقام والتشغيل لشركة "تساهيل | قسم الخدمات الحكومية". هترد بالعامية المصرية باختصار ووضوح وذكاء.
-- المبالغ بالجنيه المصري. اذكر الشهر أو الفترة اللي بتتكلم عنها.
+const RULES = `إنت المساعد الذكي الشامل لإدارة شركة "تساهيل | قسم الخدمات الحكومية". هترد بالعامية المصرية باختصار ووضوح وذكاء عملي.
+- المبالغ بالجنيه المصري. اذكر اليوم أو الشهر اللي بتتكلم عنه.
 - لو السؤال محتاج مقارنة أو حساب أو استنتاج عملي، اعمله وبيّن الأرقام اللي استخدمتها.
-- ممكن المدير يسألك أي سؤال حر عن الشغل أو يطلب نصيحة إدارية بناءً على الأرقام — جاوبه بطبيعية وذكاء.
-- ممنوع تطلب أو تذكر بيانات عملاء شخصية (مفيش أصلاً). أسماء الموظفين مجهولة (موظف 1، موظف 2…) ومتحاولش تعرف مين هو.`;
+- تقدر تذكر أسماء الموظفين والمناديب الداخليين لما المدير يسأل عن الحضور أو الإجازات أو المشاوير أو الأهداف.
+- ممنوع تماماً طلب أو ذكر أي بيانات عملاء (أسماء عملاء أو تليفونات أو عناوين — مفيش أصلاً في الأدوات).`;
 
 const systemTools = (today: string) => RULES + `
-- النهارده ${today} (بتوقيت القاهرة). لو الفترة مش محددة في السؤال افترض الشهر الحالي وقول كده.
-- أي رقم عن الشركة لازم تجيبه من الأدوات دي:
-  1) get_report: مبيعات وتكلفة وهامش تقديري وعمولة وعدد المعاملات والبنود (حسب month/day/service/employee/payment/status). لسؤال عن النهارده فقط حط from_date=${today} و to_date=${today}.
+- النهارده ${today} (بتوقيت القاهرة). لو الفترة مش محددة افترض اليوم أو الشهر الحالي حسب سياق السؤال وقول كده.
+- عندك 6 أدوات بتغطي السيستم كله — استخدم الأداة المناسبة (أو أكتر من أداة مع بعض) قبل ما ترد:
+  1) get_report: مبيعات وتكلفة وهامش تقديري وعمولة وعدد المعاملات والبنود (حسب month/day/service/employee/payment/status). لسؤال عن النهارده حط from_date=${today} و to_date=${today}.
   2) get_late_orders: البنود المتأخرة حالياً حسب خدمة أو موظف.
   3) get_ops_snapshot: ملخص الاستردادات، تيكتات الاستلام وعهدة الورق، مشاوير المناديب، المهام، آخر تقفيل كاش، ومستحقات الشريك الخارجي.
-- ممنوع تخمّن أو تخترع رقم. للمقارنة بين فترتين نادي get_report مرتين (مرة لكل فترة، الحد الأقصى 400 يوم).
-- لو الأداة رجّعت rows فاضية قول مفيش بيانات للفترة دي. الهامش التقديري = المبيعات - تكلفة التنفيذ.`;
+  4) get_hr_snapshot: الحضور والانصراف النهارده (أو أي يوم YYYY-MM-DD)، مين بصم ومين مبصمش، الإجازات الموافق عليها والمعلقة، والخصومات/السلف الشهرية.
+  5) get_couriers_snapshot: تفاصيل كل مندوب (مشاوير النهارده، الرسوم، غير المؤكد، التيكتات المفتوحة)، تسليمات الكاش المعلقة، قرارات الرادار المعلقة، والتقفيلات غير المدفوعة.
+  6) get_finance_snapshot: أهداف الموظفين الشهرية (targets)، طلبات الخصم، مدفوعات المنفذين، مطابقة المحافظ، أخطاء السيستم، وعدد الخدمات في الكتالوج.
+- ممنوع تخمّن أو تخترع أي رقم. الهامش التقديري = المبيعات - تكلفة التنفيذ.`;
 
 const TOOLS = [{
   functionDeclarations: [
     {
       name: 'get_report',
-      description: 'تقرير مجمّع للمبيعات والطلبات من بنود المعاملات: المبيعات، تكلفة التنفيذ، الهامش التقديري، العمولة، عدد البنود والمعاملات والكمية حسب الفترة أو الحالة (Delivered/Complete/In Progress/Under Review).',
+      description: 'تقرير مجمّع للمبيعات والطلبات: المبيعات، التكلفة، الهامش التقديري، العمولة، عدد البنود والمعاملات حسب الفترة أو الحالة.',
       parameters: {
         type: 'OBJECT',
         properties: {
-          group_by: { type: 'STRING', enum: ['month', 'day', 'service', 'employee', 'payment', 'status'], description: 'التجميع حسب إيه' },
-          from_date: { type: 'STRING', description: 'بداية الفترة YYYY-MM-DD (اختياري، الافتراضي أول الشهر الحالي)' },
-          to_date: { type: 'STRING', description: 'نهاية الفترة YYYY-MM-DD شاملة (اختياري، الافتراضي النهارده)' },
-          service: { type: 'STRING', description: 'اسم خدمة بالظبط للفلترة (اختياري)' },
-          limit: { type: 'INTEGER', description: 'أقصى عدد صفوف (1-50، الافتراضي 20)' },
+          group_by: { type: 'STRING', enum: ['month', 'day', 'service', 'employee', 'payment', 'status'] },
+          from_date: { type: 'STRING', description: 'YYYY-MM-DD' },
+          to_date: { type: 'STRING', description: 'YYYY-MM-DD' },
+          service: { type: 'STRING' },
+          limit: { type: 'INTEGER' },
         },
         required: ['group_by'],
       },
     },
     {
       name: 'get_late_orders',
-      description: 'البنود المتأخرة حالياً عن موعد تسليمها (غير مكتملة ولا مسلّمة)، مجمّعة حسب خدمة أو موظف مع عدد البنود وأقصى وأوسط تأخير بالأيام.',
+      description: 'البنود المتأخرة حالياً عن موعد تسليمها حسب خدمة أو موظف.',
       parameters: {
         type: 'OBJECT',
         properties: {
           group_by: { type: 'STRING', enum: ['service', 'employee'] },
-          limit: { type: 'INTEGER', description: 'أقصى عدد صفوف (1-50، الافتراضي 15)' },
+          limit: { type: 'INTEGER' },
         },
         required: ['group_by'],
       },
     },
     {
       name: 'get_ops_snapshot',
-      description: 'ملخص التشغيل الحالي: الاستردادات، تيكتات الاستلام وعهدة الورق، مشاوير المناديب، المهام المفتوحة والمتأخرة، آخر تقفيل كاش، والشريك الخارجي.',
+      description: 'ملخص التشغيل العام: الاستردادات، التيكتات، عهدة الورق، المهام، آخر تقفيل كاش، ومستحقات الشريك الخارجي.',
       parameters: { type: 'OBJECT', properties: {} },
+    },
+    {
+      name: 'get_hr_snapshot',
+      description: 'الموارد البشرية والحضور: مين بصم حضور ومين مبصمش، الإجازات النهارده والمعلقة، وتعديلات/سلف الشهر.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          day: { type: 'STRING', description: 'تاريخ اليوم YYYY-MM-DD (اختياري، الافتراضي النهارده)' },
+        },
+      },
+    },
+    {
+      name: 'get_couriers_snapshot',
+      description: 'المناديب بالتفصيل: مشاوير ورسوم وتيكتات كل مندوب، تسليمات الكاش المعلقة، قرارات الرادار، وتقفيلات المناديب غير المدفوعة.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          day: { type: 'STRING', description: 'تاريخ اليوم YYYY-MM-DD (اختياري، الافتراضي النهارده)' },
+        },
+      },
+    },
+    {
+      name: 'get_finance_snapshot',
+      description: 'المالية والأهداف: أهداف الموظفين (targets)، طلبات الخصومات، مدفوعات المنفذين، مطابقة المحافظ، أخطاء السيستم، وكتالوج الخدمات.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          month: { type: 'STRING', description: 'الشهر بصيغة YYYY-MM (اختياري، الافتراضي الشهر الحالي)' },
+        },
+      },
     },
   ],
 }];
 
 const isDate = (s: unknown) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+const isMonth = (s: unknown) => typeof s === 'string' && /^\d{4}-\d{2}$/.test(s);
 const str = (s: unknown, n = 120) => (typeof s === 'string' && s.trim() ? s.trim().slice(0, n) : null);
 const int = (s: unknown) => (Number.isFinite(Number(s)) ? Math.trunc(Number(s)) : null);
 
@@ -87,12 +120,18 @@ async function runTool(sb: any, name: string, a: Record<string, unknown>) {
     r = await sb.rpc('ai_late_orders', { p_group: String(a.group_by || ''), p_limit: int(a.limit) });
   } else if (name === 'get_ops_snapshot') {
     r = await sb.rpc('ai_ops_snapshot');
+  } else if (name === 'get_hr_snapshot') {
+    r = await sb.rpc('ai_hr_snapshot', { p_day: isDate(a.day) ? a.day : null });
+  } else if (name === 'get_couriers_snapshot') {
+    r = await sb.rpc('ai_couriers_snapshot', { p_day: isDate(a.day) ? a.day : null });
+  } else if (name === 'get_finance_snapshot') {
+    r = await sb.rpc('ai_finance_snapshot', { p_month: isMonth(a.month) ? a.month : null });
   } else {
     return { error: 'أداة غير معروفة' };
   }
   if (r.error) return { error: String(r.error.message || 'خطأ في الاستعلام').slice(0, 200) };
   const out = r.data ?? {};
-  if (JSON.stringify(out).length > 14000) return { error: 'النتيجة كبيرة، قلّل الفترة أو limit' };
+  if (JSON.stringify(out).length > 18000) return { error: 'النتيجة كبيرة، قلّل الفترة أو limit' };
   return out;
 }
 
@@ -110,8 +149,7 @@ async function callGeminiOnce(key: string, model: string, body: Record<string, u
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
-    const err = Object.assign(new Error((j.error && j.error.message) || 'خطأ من Gemini'), { status: r.status });
-    throw err;
+    throw Object.assign(new Error((j.error && j.error.message) || 'خطأ من Gemini'), { status: r.status });
   }
   return { data: j, usedModel: model };
 }
@@ -146,7 +184,7 @@ Deno.serve(async (req) => {
     if (!key) return json(req, { error: 'GEMINI_API_KEY مش متضاف في Secrets' }, 500);
     const primaryModel = Deno.env.get('GEMINI_MODEL') || MODEL_DEFAULT;
     let activeModel = primaryModel;
-    const gen: Record<string, unknown> = { maxOutputTokens: 1400 };
+    const gen: Record<string, unknown> = { maxOutputTokens: 1600 };
 
     const body = await req.json();
     const question = String(body.question || '').slice(0, 500).trim();
@@ -159,13 +197,10 @@ Deno.serve(async (req) => {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date());
     const contents: any[] = [...history, { role: 'user', parts: [{ text: question }] }];
     const system = { parts: [{ text: systemTools(today) }] };
-    let calls = 0;
-    let promptTokens = 0;
-    let outputTokens = 0;
-    let totalTokens = 0;
+    let calls = 0, promptTokens = 0, outputTokens = 0, totalTokens = 0;
 
-    for (let round = 0; round < 3; round++) {
-      const last = round === 2;
+    for (let round = 0; round < 4; round++) {
+      const last = round === 3;
       const res = await geminiWithFallback(key, activeModel, { systemInstruction: system, contents, ...(last ? {} : { tools: TOOLS }), generationConfig: gen });
       activeModel = res.usedModel;
       const j = res.data;
@@ -186,7 +221,7 @@ Deno.serve(async (req) => {
       }
       contents.push(content);
       const parts: any[] = [];
-      for (const p of fcs.slice(0, 2)) {
+      for (const p of fcs.slice(0, 3)) {
         calls++;
         const out = await runTool(sb, p.functionCall.name, p.functionCall.args || {});
         parts.push({ functionResponse: { name: p.functionCall.name, response: { result: out } } });

@@ -151,7 +151,7 @@
 
 ### ج. Edge Functions (`supabase/functions/`)
 
-1. **`ask-ai/index.ts`**: مساعد تحليلي للمدير فقط (`my_role() === 'manager'`). يستخدم Gemini API (`gemini-3.5-flash-lite`) مع 3 أدوات مقيدة (`ai_report`, `ai_late_orders`, `ai_ops_snapshot` في `sql/part-l-ai-ops-snapshot.sql`) بدون كشف أسماء عملاء أو موظفين حقيقيين.
+1. **`ask-ai/index.ts`**: مساعد تحليلي للمدير فقط (`my_role() === 'manager'`). يستخدم Gemini API (`gemini-3.5-flash-lite`) مع 6 أدوات مقيدة تغطي السيستم بالكامل بدون بيانات عملاء (`ai_report`, `ai_late_orders`, `ai_ops_snapshot`, `ai_hr_snapshot`, `ai_couriers_snapshot`, `ai_finance_snapshot` في `sql/part-l-ai-full-system.sql`) بدون كشف أسماء عملاء أو موظفين حقيقيين.
 
 2. **`send-push/index.ts`**: يرسل إشعارات Web Push عبر `web-push` عند استدعائه من Trigger `notify_push` باستخدام `x-cron-secret` المخزن في `push_config`.
 
