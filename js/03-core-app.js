@@ -2601,7 +2601,7 @@ function computeHomeOperationalMetrics(){
   const curYm=new Date().toLocaleDateString('en-CA').slice(0,7);
   const tgtMap=window.__homeTargetsMap||{};
   const monthLines=allRequestLines.filter(l=>dayKey(lineDate(l)).slice(0,7)===curYm);
-  const monthSales=monthLines.reduce((s,l)=>s+(Number(l.total)||0),0);
+  const monthSales=monthLines.reduce((s,l)=>s+(window.Money?window.Money.lineNet(l).sales:(Number(l.total)||0)),0);
   const monthTxSet=new Set(monthLines.map(l=>l.transaction_id).filter(Boolean));
   const monthUnits=monthLines.reduce((s,l)=>s+(Math.max(1,Number(l.qty)||1)),0);
 
@@ -2631,8 +2631,9 @@ function computeHomeOperationalMetrics(){
       byEmp.set(key,{p:p,name:l.employee.trim(),sales:0,units:0,txSet:new Set(),openCnt:0,lateCnt:0,target:0,svcTarget:0});
     }
     const rec=byEmp.get(key);
-    rec.sales+=Number(l.total)||0;
-    rec.units+=Math.max(1,Number(l.qty)||1);
+    const _m=window.Money?window.Money.lineNet(l):null;
+    rec.sales+=_m?_m.sales:(Number(l.total)||0);
+    rec.units+=_m?_m.qty:Math.max(1,Number(l.qty)||1);
     if(l.transaction_id)rec.txSet.add(l.transaction_id);
   });
 

@@ -90,8 +90,9 @@
     // fallback حسابي محلي إذا لم تكن دوال الـ SQL قد شُغلت بعد
     if (!stats) {
       var lines = getAllLines().filter(function (l) { return !l.deleted_at; });
-      var rev = lines.reduce(function (s, l) { return s + (Number(l.total) || 0); }, 0);
-      var cost = lines.reduce(function (s, l) { return s + ((Number(l.exec_unit_cost) || 0) * (Number(l.qty) || 1)); }, 0);
+      var mt = window.Money ? window.Money.sum(lines) : null;
+      var rev = mt ? mt.sales : lines.reduce(function (s, l) { return s + (Number(l.total) || 0); }, 0);
+      var cost = mt ? mt.cost : lines.reduce(function (s, l) { return s + ((Number(l.exec_unit_cost) || 0) * (Number(l.qty) || 1)); }, 0);
       var prof = rev - cost;
       stats = {
         overall: {
