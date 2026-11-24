@@ -1,8 +1,4 @@
-// Edge Function: ask-ai (v9) — للمدير فقط. بتجاوب بأرقام مجمّعة (من غير أسماء عملاء ولا تليفونات).
-// وضعين:
-//  1) الجديد (الافتراضي): الـ AI بينادي أدوات get_report / get_late_orders → دوال SQL للمدير بس (sql/part-l-ai-tools.sql).
-//  2) الوضع القديم (context من المتصفح) اتلغى لأسباب الخصوصية.
-// Secrets: GEMINI_API_KEY، و GEMINI_MODEL (اختياري، الافتراضي gemini-3.8-flash). gemini-2.5-flash اتوقف للمستخدمين الجداد.
+// Edge Function: ask-ai (v18) — للمدير فقط. يغطي السيستم بالكامل (مبيعات، تأخيرات، تشغيل، HR وحضور، مناديب، مالية) بدون أي بيانات عملاء.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const ALLOWED_ORIGINS = new Set([
@@ -22,54 +18,95 @@ function corsFor(req: Request) {
 }
 const json = (req: Request, o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...corsFor(req), 'Content-Type': 'application/json' } });
 
-const RULES = `إنت مساعد تحليل أرقام لشركة "تساهيل | قسم الخدمات الحكومية". هترد بالعامية المصرية باختصار ووضوح.
-- المبالغ بالجنيه المصري. اذكر الشهر أو الفترة اللي بتتكلم عنها.
-- لو السؤال محتاج مقارنة أو حساب، اعمله وبيّن الأرقام اللي استخدمتها.
-- ممنوع تطلب أو تذكر بيانات عملاء شخصية (مفيش أصلاً). أسماء الموظفين مجهولة (موظف 1، موظف 2…) ومتحاولش تعرف مين هو.`;
+const RULES = `إنت المساعد الذكي الشامل لإدارة شركة "تساهيل | قسم الخدمات الحكومية". هترد بالعامية المصرية باختصار ووضوح وذكاء عملي.
+- المبالغ بالجنيه المصري. اذكر اليوم أو الشهر اللي بتتكلم عنه.
+- لو السؤال محتاج مقارنة أو حساب أو استنتاج عملي، اعمله وبيّن الأرقام اللي استخدمتها.
+- تقدر تذكر أسماء الموظفين والمناديب الداخليين لما المدير يسأل عن الحضور أو الإجازات أو المشاوير أو الأهداف.
+- ممنوع تماماً طلب أو ذكر أي بيانات عملاء (أسماء عملاء أو تليفونات أو عناوين — مفيش أصلاً في الأدوات).`;
 
 const systemTools = (today: string) => RULES + `
-- النهارده ${today} (بتوقيت القاهرة). لو الفترة مش محددة في السؤال افترض الشهر الحالي وقول كده.
-- لازم تجيب أي رقم من الأدوات: get_report (مبيعات وتكلفة وهامش تقديري وعمولة وعدد المعاملات، مجمّعة حسب شهر/يوم/خدمة/موظف/طريقة دفع/حالة) و get_late_orders (البنود المتأخرة حسب خدمة أو موظف). ممنوع تخمّن أو تخترع رقم.
-- للمقارنة بين فترتين نادي get_report مرتين (مرة لكل فترة). حدّد from_date و to_date بصيغة YYYY-MM-DD لأول وآخر يوم في الفترة (الحد الأقصى 400 يوم).
-- لو الأداة رجّعت rows فاضية قول مفيش بيانات للفترة دي. الهامش التقديري = المبيعات - تكلفة التنفيذ.`;
+- النهارده ${today} (بتوقيت القاهرة). لو الفترة مش محددة افترض اليوم أو الشهر الحالي حسب سياق السؤال وقول كده.
+- عندك 6 أدوات بتغطي السيستم كله — استخدم الأداة المناسبة (أو أكتر من أداة مع بعض) قبل ما ترد:
+  1) get_report: مبيعات وتكلفة وهامش تقديري وعمولة وعدد المعاملات والبنود (حسب month/day/service/employee/payment/status). لسؤال عن النهارده حط from_date=${today} و to_date=${today}.
+  2) get_late_orders: البنود المتأخرة حالياً حسب خدمة أو موظف.
+  3) get_ops_snapshot: ملخص الاستردادات، تيكتات الاستلام وعهدة الورق، مشاوير المناديب، المهام، آخر تقفيل كاش، ومستحقات الشريك الخارجي.
+  4) get_hr_snapshot: الحضور والانصراف النهارده (أو أي يوم YYYY-MM-DD)، مين بصم ومين مبصمش، الإجازات الموافق عليها والمعلقة، والخصومات/السلف الشهرية.
+  5) get_couriers_snapshot: تفاصيل كل مندوب (مشاوير النهارده، الرسوم، غير المؤكد، التيكتات المفتوحة)، تسليمات الكاش المعلقة، قرارات الرادار المعلقة، والتقفيلات غير المدفوعة.
+  6) get_finance_snapshot: أهداف الموظفين الشهرية (targets)، طلبات الخصم، مدفوعات المنفذين، مطابقة المحافظ، أخطاء السيستم، وعدد الخدمات في الكتالوج.
+- ممنوع تخمّن أو تخترع أي رقم. الهامش التقديري = المبيعات - تكلفة التنفيذ.`;
 
 const TOOLS = [{
   functionDeclarations: [
     {
       name: 'get_report',
-      description: 'تقرير مجمّع للمبيعات من بنود الطلبات: المبيعات، تكلفة التنفيذ، الهامش التقديري، العمولة، عدد البنود والمعاملات والكمية. للمدير فقط.',
+      description: 'تقرير مجمّع للمبيعات والطلبات: المبيعات، التكلفة، الهامش التقديري، العمولة، عدد البنود والمعاملات حسب الفترة أو الحالة.',
       parameters: {
         type: 'OBJECT',
         properties: {
-          group_by: { type: 'STRING', enum: ['month', 'day', 'service', 'employee', 'payment', 'status'], description: 'التجميع حسب إيه' },
-          from_date: { type: 'STRING', description: 'بداية الفترة YYYY-MM-DD (اختياري، الافتراضي أول الشهر الحالي)' },
-          to_date: { type: 'STRING', description: 'نهاية الفترة YYYY-MM-DD شاملة (اختياري، الافتراضي النهارده)' },
-          service: { type: 'STRING', description: 'اسم خدمة بالظبط للفلترة (اختياري)' },
-          limit: { type: 'INTEGER', description: 'أقصى عدد صفوف (1-50، الافتراضي 20)' },
+          group_by: { type: 'STRING', enum: ['month', 'day', 'service', 'employee', 'payment', 'status'] },
+          from_date: { type: 'STRING', description: 'YYYY-MM-DD' },
+          to_date: { type: 'STRING', description: 'YYYY-MM-DD' },
+          service: { type: 'STRING' },
+          limit: { type: 'INTEGER' },
         },
         required: ['group_by'],
       },
     },
     {
       name: 'get_late_orders',
-      description: 'البنود المتأخرة حالياً عن موعد تسليمها (غير مكتملة ولا مسلّمة)، مجمّعة حسب خدمة أو موظف مع عدد البنود وأقصى وأوسط تأخير بالأيام.',
+      description: 'البنود المتأخرة حالياً عن موعد تسليمها حسب خدمة أو موظف.',
       parameters: {
         type: 'OBJECT',
         properties: {
           group_by: { type: 'STRING', enum: ['service', 'employee'] },
-          limit: { type: 'INTEGER', description: 'أقصى عدد صفوف (1-50، الافتراضي 15)' },
+          limit: { type: 'INTEGER' },
         },
         required: ['group_by'],
+      },
+    },
+    {
+      name: 'get_ops_snapshot',
+      description: 'ملخص التشغيل العام: الاستردادات، التيكتات، عهدة الورق، المهام، آخر تقفيل كاش، ومستحقات الشريك الخارجي.',
+      parameters: { type: 'OBJECT', properties: {} },
+    },
+    {
+      name: 'get_hr_snapshot',
+      description: 'الموارد البشرية والحضور: مين بصم حضور ومين مبصمش، الإجازات النهارده والمعلقة، وتعديلات/سلف الشهر.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          day: { type: 'STRING', description: 'تاريخ اليوم YYYY-MM-DD (اختياري، الافتراضي النهارده)' },
+        },
+      },
+    },
+    {
+      name: 'get_couriers_snapshot',
+      description: 'المناديب بالتفصيل: مشاوير ورسوم وتيكتات كل مندوب، تسليمات الكاش المعلقة، قرارات الرادار، وتقفيلات المناديب غير المدفوعة.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          day: { type: 'STRING', description: 'تاريخ اليوم YYYY-MM-DD (اختياري، الافتراضي النهارده)' },
+        },
+      },
+    },
+    {
+      name: 'get_finance_snapshot',
+      description: 'المالية والأهداف: أهداف الموظفين (targets)، طلبات الخصومات، مدفوعات المنفذين، مطابقة المحافظ، أخطاء السيستم، وكتالوج الخدمات.',
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          month: { type: 'STRING', description: 'الشهر بصيغة YYYY-MM (اختياري، الافتراضي الشهر الحالي)' },
+        },
       },
     },
   ],
 }];
 
 const isDate = (s: unknown) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+const isMonth = (s: unknown) => typeof s === 'string' && /^\d{4}-\d{2}$/.test(s);
 const str = (s: unknown, n = 120) => (typeof s === 'string' && s.trim() ? s.trim().slice(0, n) : null);
 const int = (s: unknown) => (Number.isFinite(Number(s)) ? Math.trunc(Number(s)) : null);
 
-// بتنفّذ أداة واحدة بصلاحيات المدير (JWT بتاع المتصل) — الـ SQL بيرفض أي حد غير مدير.
 async function runTool(sb: any, name: string, a: Record<string, unknown>) {
   let r;
   if (name === 'get_report') {
@@ -81,17 +118,27 @@ async function runTool(sb: any, name: string, a: Record<string, unknown>) {
     });
   } else if (name === 'get_late_orders') {
     r = await sb.rpc('ai_late_orders', { p_group: String(a.group_by || ''), p_limit: int(a.limit) });
+  } else if (name === 'get_ops_snapshot') {
+    r = await sb.rpc('ai_ops_snapshot');
+  } else if (name === 'get_hr_snapshot') {
+    r = await sb.rpc('ai_hr_snapshot', { p_day: isDate(a.day) ? a.day : null });
+  } else if (name === 'get_couriers_snapshot') {
+    r = await sb.rpc('ai_couriers_snapshot', { p_day: isDate(a.day) ? a.day : null });
+  } else if (name === 'get_finance_snapshot') {
+    r = await sb.rpc('ai_finance_snapshot', { p_month: isMonth(a.month) ? a.month : null });
   } else {
     return { error: 'أداة غير معروفة' };
   }
   if (r.error) return { error: String(r.error.message || 'خطأ في الاستعلام').slice(0, 200) };
   const out = r.data ?? {};
-  if (JSON.stringify(out).length > 14000) return { error: 'النتيجة كبيرة، قلّل الفترة أو limit' };
+  if (JSON.stringify(out).length > 18000) return { error: 'النتيجة كبيرة، قلّل الفترة أو limit' };
   return out;
 }
 
 const MODEL_DEFAULT = 'gemini-3.5-flash-lite';
-async function gemini(key: string, model: string, body: Record<string, unknown>) {
+const FALLBACK_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash'];
+
+async function callGeminiOnce(key: string, model: string, body: Record<string, unknown>) {
   const gen = { ...((body.generationConfig as Record<string, unknown>) || {}) };
   if (/gemini-2/.test(model)) gen.temperature = 0.2; else delete gen.temperature;
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -100,10 +147,29 @@ async function gemini(key: string, model: string, body: Record<string, unknown>)
     body: JSON.stringify({ ...body, generationConfig: gen }),
     signal: AbortSignal.timeout(15000),
   });
-  const j = await r.json();
-  if (!r.ok) throw Object.assign(new Error((j.error && j.error.message) || 'خطأ من Gemini'), { status: r.status });
-  return j;
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    throw Object.assign(new Error((j.error && j.error.message) || 'خطأ من Gemini'), { status: r.status });
+  }
+  return { data: j, usedModel: model };
 }
+
+async function geminiWithFallback(key: string, primaryModel: string, body: Record<string, unknown>) {
+  const candidates = [primaryModel, ...FALLBACK_MODELS.filter((m) => m !== primaryModel)];
+  let lastErr: any = null;
+  for (const m of candidates) {
+    try {
+      return await callGeminiOnce(key, m, body);
+    } catch (e: any) {
+      lastErr = e;
+      const st = e && e.status;
+      if (st === 503 || st === 429 || st === 500 || st === 404) continue;
+      throw e;
+    }
+  }
+  throw lastErr || new Error('كل النماذج مشغولة حالياً');
+}
+
 const textOf = (c: any) => ((c && c.parts) || []).map((p: any) => p.text || '').join('').trim();
 
 Deno.serve(async (req) => {
@@ -116,8 +182,9 @@ Deno.serve(async (req) => {
 
     const key = Deno.env.get('GEMINI_API_KEY');
     if (!key) return json(req, { error: 'GEMINI_API_KEY مش متضاف في Secrets' }, 500);
-    const model = Deno.env.get('GEMINI_MODEL') || MODEL_DEFAULT;
-    const gen: Record<string, unknown> = { maxOutputTokens: 1200 };
+    const primaryModel = Deno.env.get('GEMINI_MODEL') || MODEL_DEFAULT;
+    let activeModel = primaryModel;
+    const gen: Record<string, unknown> = { maxOutputTokens: 1600 };
 
     const body = await req.json();
     const question = String(body.question || '').slice(0, 500).trim();
@@ -125,24 +192,36 @@ Deno.serve(async (req) => {
     const history = (Array.isArray(body.history) ? body.history : []).slice(-6).map((h: any) => ({
       role: h.role === 'model' ? 'model' : 'user', parts: [{ text: String(h.text || '').slice(0, 1500) }],
     }));
-
-    // الوضع القديم (إرسال context جاهز من المتصفح) اتلغى: كان بيبعت أي JSON للنموذج من غير قائمة حقول مسموحة.
     if (body.context) return json(req, { error: 'النسخة دي من الواجهة قديمة. حدّث الصفحة (Ctrl+F5).' }, 400);
 
-    // ---- الوضع الجديد: أدوات ----
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date());
     const contents: any[] = [...history, { role: 'user', parts: [{ text: question }] }];
     const system = { parts: [{ text: systemTools(today) }] };
-    let calls = 0;
-    for (let round = 0; round < 3; round++) {
-      const last = round === 2; // آخر دورة من غير أدوات عشان يرد
-      const j = await gemini(key, model, { systemInstruction: system, contents, ...(last ? {} : { tools: TOOLS }), generationConfig: gen });
+    let calls = 0, promptTokens = 0, outputTokens = 0, totalTokens = 0;
+
+    for (let round = 0; round < 4; round++) {
+      const last = round === 3;
+      const res = await geminiWithFallback(key, activeModel, { systemInstruction: system, contents, ...(last ? {} : { tools: TOOLS }), generationConfig: gen });
+      activeModel = res.usedModel;
+      const j = res.data;
+      const um = j.usageMetadata || {};
+      promptTokens += Number(um.promptTokenCount || 0);
+      outputTokens += Number(um.candidatesTokenCount || 0);
+      totalTokens += Number(um.totalTokenCount || 0);
+
       const content = j.candidates?.[0]?.content;
       const fcs = ((content && content.parts) || []).filter((p: any) => p.functionCall);
-      if (!fcs.length || last) return json(req, { answer: textOf(content) || 'مفيش رد من النموذج، جرّب صياغة تانية.', tool_calls: calls });
-      contents.push(content); // بنرجّع رد النموذج كما هو (بما فيه أي thought signature)
+      if (!fcs.length || last) {
+        return json(req, {
+          answer: textOf(content) || 'مفيش رد من النموذج، جرّب صياغة تانية.',
+          tool_calls: calls,
+          model: activeModel,
+          usage: { prompt_tokens: promptTokens, output_tokens: outputTokens, total_tokens: totalTokens },
+        });
+      }
+      contents.push(content);
       const parts: any[] = [];
-      for (const p of fcs.slice(0, 2)) {
+      for (const p of fcs.slice(0, 3)) {
         calls++;
         const out = await runTool(sb, p.functionCall.name, p.functionCall.args || {});
         parts.push({ functionResponse: { name: p.functionCall.name, response: { result: out } } });
@@ -151,7 +230,9 @@ Deno.serve(async (req) => {
     }
     return json(req, { answer: 'معرفتش أوصل لإجابة، جرّب سؤال أبسط.' });
   } catch (e) {
-    if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') return json(req, { error: 'النموذج تأخر في الرد. جرّب تاني.' }, 504);
-    return json(req, { error: String((e as Error).message || e) }, (e as any).status === 429 ? 429 : 500);
+    const st = (e as any).status;
+    if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') return json(req, { error: 'السيرفر اتأخر شوية في الرد، جرّب تبعت السؤال تاني.' }, 504);
+    if (st === 503 || st === 429) return json(req, { error: 'فيه ضغط لحظي على سيرفرات Gemini دلوقتي، استنى ثواني وجرّب تاني.' }, st);
+    return json(req, { error: String((e as Error).message || e) }, 500);
   }
 });
