@@ -30,7 +30,7 @@
          ▼                 ▼                 ▼                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    Vercel Static Hosting + Edge Headers                 │
-│           (HSTS, X-Frame-Options, nosniff, CSP-Report-Only, sw.js)      │
+│           (HSTS, X-Frame-Options, nosniff, CSP Enforcing, sw.js)      │
 └────────┬───────────────────────────────────┬────────────────────────────┘
          │ HTTPS / WSS (JWT + Anon Key)      │ External Free APIs
          ▼                                   ▼
