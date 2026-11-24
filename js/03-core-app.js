@@ -1890,8 +1890,9 @@ function getFilteredDashboardLines(){
 function drawChart(key,id,cfg){const el=$(id);if(!el||typeof Chart==='undefined')return;if(chartInstances[key])chartInstances[key].destroy();chartInstances[key]=new Chart(el,cfg);}
 function renderDashboardMetrics(){
   const ls=getFilteredDashboardLines();
-  const rev=ls.reduce((s,l)=>s+(Number(l.total)||0),0),cost=ls.reduce((s,l)=>s+execCostOf(l),0);
-  const txs=new Set(ls.map(l=>l.transaction_id).filter(Boolean)).size;
+  const mt=window.Money?window.Money.sum(ls):null;
+  const rev=mt?mt.sales:ls.reduce((s,l)=>s+(Number(l.total)||0),0),cost=mt?mt.cost:ls.reduce((s,l)=>s+execCostOf(l),0);
+  const txs=mt?mt.orders:new Set(ls.map(l=>l.transaction_id).filter(Boolean)).size;
   if($('d-total-revenue'))$('d-total-revenue').textContent=formatCurrency(rev);
   if($('d-total-cost'))$('d-total-cost').textContent=formatCurrency(cost);
   if($('d-net-margin'))$('d-net-margin').textContent=formatCurrency(rev-cost);
