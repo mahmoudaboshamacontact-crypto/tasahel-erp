@@ -128,7 +128,7 @@
   function destroy(k) { if (charts[k]) { charts[k].destroy(); delete charts[k]; } }
   function spark(id, data, color) {
     destroy(id); const el = $(id); if (!el || typeof Chart === 'undefined') return;
-    charts[id] = new Chart(el, { type: 'line', data: { labels: data.map((_, i) => i), datasets: [{ data: data, borderColor: color, backgroundColor: color + '22', fill: true, tension: .4, borderWidth: 2, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: AN() }, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } } } });
+    charts[id] = new Chart(el, { type: 'line', data: { labels: data.map((_, i) => i), datasets: [{ data: data, borderColor: color, backgroundColor: color + '14', fill: true, tension: .25, borderWidth: 1.5, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: AN() }, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } } } });
   }
 
 
@@ -138,16 +138,17 @@
     const to = Number(el.dataset.raw) || 0, isCur = el.dataset.cur === '1', dur = 750, t0 = performance.now();
     function frame(t) {
       const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
-      el.textContent = isCur ? formatCurrency(to * e) : fmtNum(Math.round(to * e));
-      if (p < 1) requestAnimationFrame(frame); else el.textContent = isCur ? formatCurrency(to) : fmtNum(Math.round(to));
+      el.textContent = isCur ? kMoney(to * e) : kNum(Math.round(to * e));
+      if (p < 1) requestAnimationFrame(frame); else el.textContent = isCur ? kMoney(to) : kNum(Math.round(to));
     }
     requestAnimationFrame(frame);
   }
 
+  const kMoney = n => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(n) || 0) + ' ج.م', kNum = n => new Intl.NumberFormat('en-US').format(Number(n) || 0);
   function renderKpis(cur, prv) {
-    const defs = [['المبيعات', formatCurrency(cur.sales), cur.sales, prv.sales, cur.bs, '#0d9488', 'fa-coins'], ['المعاملات', String(cur.tx), cur.tx, prv.tx, cur.btx, '#2563eb', 'fa-folder-open'], ['متوسط المعاملة', formatCurrency(cur.avg), cur.avg, prv.avg, cur.bavg, '#8b5cf6', 'fa-receipt'], ['صافي الهامش', formatCurrency(cur.net), cur.net, prv.net, cur.bnet, '#059669', 'fa-chart-line']];
+    const defs = [['المبيعات', kMoney(cur.sales), cur.sales, prv.sales, cur.bs, '#0d9488', 'fa-coins'], ['المعاملات', kNum(cur.tx), cur.tx, prv.tx, cur.btx, '#2563eb', 'fa-folder-open'], ['متوسط المعاملة', kMoney(cur.avg), cur.avg, prv.avg, cur.bavg, '#8b5cf6', 'fa-receipt'], ['صافي الهامش', kMoney(cur.net), cur.net, prv.net, cur.bnet, '#059669', 'fa-chart-line']];
     $('dsh-kpis').innerHTML = defs.map((d, i) => '<div class="card p-5 overflow-hidden dash-in" style="animation-delay:' + (i * 0.09) + 's"><div class="flex items-center justify-between"><div class="flex items-center gap-2 text-xs text-slate-500"><span class="flex h-8 w-8 items-center justify-center rounded-lg text-white" style="background:' + d[5] + '"><i class="fa-solid ' + d[6] + ' text-xs"></i></span>' + d[0] + '</div>' + chip(d[2], d[3]) + '</div><div class="mt-3 text-2xl font-bold font-mono text-ink dark:text-white" id="dkpi-' + i + '" data-raw="' + d[2] + '" data-cur="' + (d[0] === 'المعاملات' ? 0 : 1) + '">' + d[1] + '</div><div class="h-12 mt-2 -mx-1"><canvas id="dsp-' + i + '"></canvas></div></div>').join('');
-    defs.forEach((d, i) => spark('dsp-' + i, d[4], d[5]));
+    defs.forEach((d, i) => spark('dsp-' + i, d[4], '#0d9488'));
     defs.forEach((d, i) => countUp($('dkpi-' + i)));
   }
 

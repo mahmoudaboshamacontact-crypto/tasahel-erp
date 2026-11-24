@@ -37,6 +37,7 @@
 <link rel="stylesheet" href="css/part-d-couriers-executors.css?v=1">
 <link rel="stylesheet" href="css/part-e-clients-growth.css?v=1">
 <link rel="stylesheet" href="css/part-h-morale.css?v=1">
+<link rel="stylesheet" href="css/dash-calm.css?v=3">
 <link rel="manifest" href="manifest.webmanifest?v=3">
 <meta name="theme-color" content="#0d0b14">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -542,7 +543,7 @@
 <button id="dash-btn-week" onclick="setDashboardRange('week')" class="rounded-lg px-3 py-1 font-semibold">آخر 7 أيام</button>
 <button id="dash-btn-month" onclick="setDashboardRange('month')" class="rounded-lg px-3 py-1 font-semibold">الشهر الحالي</button>
 </div>
-<label class="inline-flex items-center gap-1.5 rounded-xl bg-white/10 px-2.5 py-1 text-xs font-semibold"><i class="fa-regular fa-calendar"></i><input id="dsh-month" type="month" onchange="setDashboardMonth(this.value)" class="bg-transparent text-xs outline-none text-white [color-scheme:dark]" title="اختار شهر"></label>
+<select id="dsh-month" onchange="setDashboardMonth(this.value)" class="dsh-select" title="اختار شهر"><option value="">شهر آخر…</option></select>
 <button onclick="dashRefresh()" class="rounded-xl bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs font-semibold" title="تحديث"><i class="fa-solid fa-rotate-right"></i></button>
 </div></div></div>
 <div id="dsh-kpis" class="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4"></div>
@@ -625,7 +626,7 @@
 <script src="js/05-chat-improvements.js?v=20261040"></script>
 <script src="js/06-cash-pdf-comments.js?v=p1c1"></script>
 <script src="js/07-commission-targets.js?v=20261041"></script>
-<script src="js/08-dashboard.js?v=20261124a"></script>
+<script src="js/08-dashboard.js?v=20261124b"></script>
 <script src="js/09-receipt-and-print.js?v=20261040"></script>
 <script src="js/10-audit-backup-pwa.js?v=p3"></script>
 <script src="js/11-tasks-notifications.js?v=20261104"></script>
@@ -707,6 +708,6 @@
 <script src="js/85-staff-only.js?v=2" defer></script>
 <script src="js/86-money-core.js?v=1" defer></script>
 <script src="js/87-error-relay.js?v=1" defer></script>
-<script src="js/88-ops-dashboard.js?v=1" defer></script>
+<script src="js/88-ops-dashboard.js?v=2" defer></script>
 </body>
 </html>
