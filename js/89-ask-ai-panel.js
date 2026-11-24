@@ -558,30 +558,14 @@
     }
   }
 
-  var _li = window.loadInitialData;
-  if (typeof _li === 'function') {
-    window.loadInitialData = async function () {
-      var r = await _li.apply(this, arguments);
-      setTimeout(ensureUI, 800);
-      return r;
-    };
-  }
-  var _sw = window.switchTab;
-  if (typeof _sw === 'function') {
-    window.switchTab = function () {
-      var r = _sw.apply(this, arguments);
-      setTimeout(ensureUI, 200);
-      return r;
-    };
-  }
-  var _lo = window.handleLogout;
-  if (typeof _lo === 'function') {
-    window.handleLogout = async function () {
+  if (window.TasahelBus && typeof window.TasahelBus.on === 'function') {
+    window.TasahelBus.on('app:ready', function () { setTimeout(ensureUI, 800); });
+    window.TasahelBus.on('tab:change', function () { setTimeout(ensureUI, 200); });
+    window.TasahelBus.on('auth:logout', function () {
       history = [];
       sessionTokens = 0;
       removeUI();
-      return _lo.apply(this, arguments);
-    };
+    });
   }
   setTimeout(ensureUI, 1800);
 })();

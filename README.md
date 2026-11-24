@@ -80,6 +80,7 @@
 | `js/01-assets-images.js` | ثوابت الصور والأيقونات المضمنة. | 
 | `js/02-login-brand.js` | هوية شاشة الدخول (ملف محمي). | 
 | `js/03-core-app.js` | **النواة الرئيسية** (2,977 سطر): تهيئة `sbClient`، المصادقة، تحميل `allRequestLines` و`allServices`، إدارة المعاملات، الشات الداخلي، أدوات `escapeHtml` و`formatCurrency`. | 
+| `js/03b-event-bus.js` | **نظام Event Bus المركزي** (`window.TasahelBus`): بث الأحداث الأساسية (`app:ready`, `tab:change`, `tx:open`, `auth:logout`) بعزل `try/catch` بدل الـ Monkey-Patching. |
 | `js/05-chat-improvements.js` | تحسينات الشات الداخلي والإشعارات الصوتية. | 
 | `js/06-cash-pdf-comments.js` | الكاش وتصدير PDF وتعليقات المعاملات. | 
 | `js/07-commission-targets.js` | حساب العمولات والأهداف الشهرية (`emp_targets`). | 
