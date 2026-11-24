@@ -1,0 +1,8 @@
+/* راحة للعين في الداش بورد: اختيار الشهر + ألوان هادية */
+#tab-dash .dsh-select { appearance: none; -webkit-appearance: none; border-radius: 12px; padding: 6px 28px 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%2394a3b8' stroke-width='1.6'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: left 10px center; }
+html:not(.dark) #tab-dash .dsh-select { background-color: rgba(255,255,255,.8); color: #3a2f27; border: 1px solid rgba(58,47,39,.12); }
+html.dark #tab-dash .dsh-select { background-color: rgba(255,255,255,.08); color: #e2e8f0; border: 1px solid rgba(255,255,255,.14); color-scheme: dark; }
+#tab-dash .dsh-select option { color: #1e293b; background: #fff; }
+html.dark #tab-dash .dsh-select option { color: #e2e8f0; background: #0f172a; }

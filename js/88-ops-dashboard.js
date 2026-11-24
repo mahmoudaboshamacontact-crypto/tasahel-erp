@@ -87,9 +87,15 @@
   }
 
   function wrap(name, fn, before) { var o = window[name]; if (typeof o === 'function') window[name] = function () { if (before) { try { fn.apply(this, arguments); } catch (e) { /* */ } } var x = o.apply(this, arguments); if (!before) { try { fn.apply(this, arguments); } catch (e) { /* */ } } return x; }; }
+  function fillMonths() {
+    var sel = $('dsh-month'); if (!sel || sel.options.length > 1) return;
+    var n = new Date(), f = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { month: 'long', year: 'numeric' });
+    for (var i = 0; i < 12; i++) { var d = new Date(n.getFullYear(), n.getMonth() - i, 1), o = document.createElement('option'); o.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); o.textContent = f.format(d); sel.appendChild(o); }
+  }
   function boot() {
     wrap('setDashboardRange', function (r) { range = r; if (r !== 'pick') pickM = ''; }, true);
     wrap('setDashboardMonth', function (m) { if (/^\d{4}-\d{2}$/.test(m || '')) { range = 'pick'; pickM = m; } else { range = 'month'; pickM = ''; } }, true);
+    fillMonths();
     wrap('renderDashboardMetrics', function () { render(); });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
