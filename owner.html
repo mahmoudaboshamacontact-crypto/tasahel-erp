@@ -114,7 +114,7 @@ async function run(){
     tiles('المناديب والتيكتات',[
       ['مناديب نشطين',nf(c.active),'',''],
       ['مشاوير النهارده',nf(c.trips_today),'acc',''],
-      ['مشاوير مستنية تأكيد',nf(c.unconfirmed),bad(c.unconfirmed,5),'لسه ما اتأكدتش'],
+      ['مشاوير مستنية تأكيد',nf(c.unconfirmed),bad(c.unconfirmed,5),'آخر 7 أيام'],
       ['تيكتات مع المناديب',nf(c.tickets_open),'',''],
       ['تيكتات من غير مندوب',nf(c.tickets_unassigned),bad(c.tickets_unassigned,1),'محتاجة توزيع'],
       ['ملغية مستنية إقرار',nf(c.tickets_cancelled_unack),bad(c.tickets_cancelled_unack,3),''],

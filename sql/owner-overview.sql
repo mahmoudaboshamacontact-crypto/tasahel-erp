@@ -35,7 +35,7 @@ begin
     'couriers', jsonb_build_object(
       'active',          (select count(*) from couriers where active),
       'trips_today',     (select count(*) from courier_trips where trip_day = v_today),
-      'unconfirmed',     (select count(*) from courier_trips where courier_confirmed_at is null and trip_day <= v_today),
+      'unconfirmed',     (select count(*) from courier_trips where courier_confirmed_at is null and trip_day between v_today - 7 and v_today),
       'tickets_open',    (select count(*) from pickup_tickets where status = 'with_courier'),
       'tickets_unassigned', (select count(*) from pickup_tickets where status = 'open' and courier_id is null),
       'tickets_cancelled_unack', (select count(*) from pickup_tickets where status = 'cancelled' and courier_id is not null and courier_ack_at is null),
