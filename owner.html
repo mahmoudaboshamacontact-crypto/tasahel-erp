@@ -24,6 +24,11 @@ svg{width:100%;max-width:210px;overflow:visible}.val{font-size:1.45rem;font-weig
 .chk b{display:block;font-size:.85rem;color:var(--text)}.chk span{font-size:.75rem;color:var(--mute);line-height:1.6}.list{font-size:.78rem;color:var(--mute);text-align:start;line-height:1.7}
 .tag{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:1px 7px;margin:2px;font-size:.72rem}
 .msg{padding:2rem;text-align:center;color:var(--mute)}.link{color:var(--acc)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:start;border-inline-start:4px solid var(--line)}
+.tile.ok{border-inline-start-color:var(--ok)}.tile.warn{border-inline-start-color:var(--warn)}.tile.bad{border-inline-start-color:var(--bad)}.tile.acc{border-inline-start-color:var(--acc)}
+.tl2{font-size:.74rem;color:var(--mute);line-height:1.4;min-height:2.1em}.tv{font-size:1.35rem;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;text-align:start}.th{font-size:.7rem;color:var(--mute);margin-top:2px}
+.spark{display:flex;gap:8px;align-items:flex-end;justify-content:space-around;min-height:120px}.sb{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1}.sb i{display:block;width:70%;max-width:34px;background:var(--acc);border-radius:6px 6px 2px 2px}.sb span{font-size:.75rem;font-weight:700}.sb small{font-size:.65rem;color:var(--mute)}
 </style></head><body>
 <div class="bar"><div><h1>عدادات المالك</h1><div class="sub" id="upd">—</div></div><div><button id="rf">تحديث</button> <a class="btn" href="/">النظام</a></div></div>
 <div id="root"><div class="msg">جارٍ التحميل…</div></div>
@@ -83,7 +88,52 @@ async function run(){
   G.ld.set(load,Math.min(100,load/30),load<1500?'var(--ok)':load<3500?'var(--warn)':'var(--bad)','الصفحة دي');
   G.sec.set(sc,sc,col(sc),'من 100');
   G.td.set(d.lines_today,Math.min(100,d.lines_today),'var(--acc)','إجمالي البنود: '+d.lines_total);
+  var ov=await sb.rpc('owner_overview');
   var tl=document.getElementById('tl');tl.innerHTML='';var rootSave=root;root=tl;
+  /* ===== نظرة شاملة على الشغل (من owner_overview) ===== */
+  function nf(x){return Number(x||0).toLocaleString('en-US')}
+  function tiles(title,arr){root.appendChild($('div','sec',title));var g2=$('div','tiles');
+    arr.forEach(function(a){var t=$('div','tile'),tone=a[2]||'';if(tone)t.className+=' '+tone;t.appendChild($('div','tl2',a[0]));var v=$('div','tv',a[1]);v.dir='ltr';t.appendChild(v);if(a[3])t.appendChild($('div','th',a[3]));g2.appendChild(t)});root.appendChild(g2)}
+  function bad(n,warnAt){return n>0?(n>=(warnAt||1)?'bad':'warn'):'ok'}
+  if(ov.error||!ov.data){root.appendChild($('div','sec','نظرة شاملة على الشغل'));root.appendChild($('div','card list','شغّل ملف sql/owner-overview.sql في Supabase عشان تظهر الأقسام دي. ('+((ov.error&&ov.error.message)||'')+')'))}
+  else{var o=ov.data,w=o.work||{},c=o.couriers||{},rf=o.refunds||{},tm=o.team||{},bs=w.by_status||{};
+    var net=Number(w.sales_month||0)-Number(w.refunded_month||0);
+    tiles('الشغل',[
+      ['بنود النهارده',nf(w.lines_today),'acc',nf(w.orders_today)+' معاملة'],
+      ['بنود الشهر',nf(w.lines_month),'',nf(w.orders_month)+' معاملة'],
+      ['مبيعات الشهر (قبل المسترد)',nf(w.sales_month)+' ج','',''],
+      ['صافي بعد المسترد المعتمد',nf(net)+' ج','ok','مسترد: '+nf(w.refunded_month)+' ج'],
+      ['In Progress',nf(bs['In Progress']),'','آخر 90 يوم'],
+      ['Under Review',nf(bs['Under Review']),bs['Under Review']>0?'warn':'ok','موقوفة بقرار'],
+      ['Complete (مستني تسليم)',nf(bs['Complete']),'',''],
+      ['Delivered',nf(bs['Delivered']),'ok',''],
+      ['مفتوحة من أكتر من 14 يوم',nf(w.stale_open),bad(w.stale_open,10),'محتاجة متابعة']]);
+    var dl=(w.daily_7||[]),mx=Math.max.apply(null,dl.map(function(x){return x.n}).concat([1]));
+    root.appendChild($('div','sec','حركة آخر 7 أيام (بنود)'));var sp=$('div','card spark');
+    dl.forEach(function(x){var b=$('div','sb'),bar=$('i');bar.style.height=Math.max(4,Math.round(x.n/mx*70))+'px';b.appendChild(bar);b.appendChild($('span',null,String(x.n)));b.appendChild($('small',null,x.d.slice(5)));sp.appendChild(b)});root.appendChild(sp);
+    tiles('المناديب والتيكتات',[
+      ['مناديب نشطين',nf(c.active),'',''],
+      ['مشاوير النهارده',nf(c.trips_today),'acc',''],
+      ['مشاوير مستنية تأكيد',nf(c.unconfirmed),bad(c.unconfirmed,5),'لسه ما اتأكدتش'],
+      ['تيكتات مع المناديب',nf(c.tickets_open),'',''],
+      ['تيكتات من غير مندوب',nf(c.tickets_unassigned),bad(c.tickets_unassigned,1),'محتاجة توزيع'],
+      ['ملغية مستنية إقرار',nf(c.tickets_cancelled_unack),bad(c.tickets_cancelled_unack,3),''],
+      ['اتحولت لمشوار النهارده',nf(c.tickets_converted_today),'ok',''],
+      ['طلبات مستنية قرارك',nf(c.dispatch_pending),bad(c.dispatch_pending,1),'تأجيل / مصروف / تسليم عهدة']]);
+    tiles('الاستردادات',[
+      ['معتمدة ومش مقفولة',nf(rf.approved_open),rf.approved_open>0?'warn':'ok','محتاجة Closed'],
+      ['Closed',nf(rf.closed),'',''],
+      ['طلبات استرداد معلّقة',nf(rf.pending),bad(rf.pending,1),''],
+      ['مبلغ المسترد المفتوح',nf(rf.open_amount)+' ج','','']]);
+    tiles('الفريق والنظام',[
+      ['موظفين نشطين (24 ساعة)',nf(tm.active_24h),'',nf(tm.actions_24h)+' إجراء'],
+      ['مهام مفتوحة',nf(tm.tasks_open),'',''],
+      ['مهام متأخرة',nf(tm.tasks_late),bad(tm.tasks_late,1),''],
+      ['إشعارات غير مقروءة',nf(tm.notif_unread),Number(tm.notif_unread)>100?'warn':'','من '+nf(tm.notif_total)],
+      ['آخر تقفيل كاش',tm.last_cash_day||'—','',tm.last_cash_diff==null?'':('الفرق: '+nf(tm.last_cash_diff)+' ج')],
+      ['عند الشريك الخارجي (غير مسوّى)',nf(tm.partner_unsettled),'',nf(tm.partner_unsettled_total)+' ج']]);
+    if((w.top_staff_month||[]).length){root.appendChild($('div','sec','أكتر الموظفين شغلاً (الشهر)'));var ts=$('div','card list');w.top_staff_month.forEach(function(s){ts.appendChild($('div',null,s.name+' — '+s.n+' بند'))});root.appendChild(ts)}
+  }
 
   function block(t,arr,empty){root.appendChild($('div','sec',t));var b=$('div','card list');if(!arr.length)b.textContent=empty;else arr.forEach(function(x){b.appendChild($('span','tag',x))});root.appendChild(b)}
   (function(){var c=d.checks||{},rows=[];
