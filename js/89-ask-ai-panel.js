@@ -1,8 +1,7 @@
 /* =====================================================================
    js/89-ask-ai-panel.js
-   واجهة "اسأل AI" العائمة للمدير فقط — تتصل بـ Edge Function ask-ai.
-   - شعار Gemini AI، نافذة عائمة قابلة للسحب، عداد التوكنات (جلسة/يومي/أسبوعي/شهري) + وقت التجديد.
-   - ملف مستقل تماماً لا يلمس js/16-ask-ai.js أو أي ملف مقفول.
+   واجهة "اسأل AI" العائمة للمدير فقط — ألوان Gemini Gradient + أشرطة ليمت رشيقة.
+   ملف مستقل تماماً لا يلمس js/16-ask-ai.js أو أي ملف مقفول.
    ===================================================================== */
 (function () {
   'use strict';
@@ -13,7 +12,9 @@
   var USAGE_KEY = 'ts_ai_usage_v1';
   var POS_KEY = 'ts_ai_win_pos_v1';
   var TZ = 'Africa/Cairo';
-  var DAILY_REQ_SOFT_LIMIT = 500;
+  var DAILY_REQ_LIMIT = 500;
+  var WEEKLY_REQ_LIMIT = 3500;
+  var MONTHLY_REQ_LIMIT = 15000;
   var history = [];
   var sessionTokens = 0;
   var busy = false;
@@ -37,7 +38,6 @@
   }
   function nf(n) { return Number(n || 0).toLocaleString('en-US'); }
 
-  /* ---------- حساب فترات القاهرة (يوم / أسبوع / شهر + عداد التجديد) ---------- */
   function cairoParts(d) {
     var s = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d || new Date());
     return { day: s, month: s.slice(0, 7) };
@@ -45,18 +45,30 @@
   function cairoWeekKey(d) {
     var p = cairoParts(d).day.split('-');
     var dt = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
-    var dow = (dt.getUTCDay() + 1) % 7; // السبت = 0
+    var dow = (dt.getUTCDay() + 1) % 7;
     dt.setUTCDate(dt.getUTCDate() - dow);
     return dt.toISOString().slice(0, 10);
   }
-  function nextResetCountdown() {
-    // الحصة اليومية لـ Google AI Studio تتجدد عند منتصف الليل بتوقيت المحيط الهادئ (08:00 UTC = 10:00 ص القاهرة شتاءً)
+  function dailyResetInfo() {
     var now = new Date();
     var target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 8, 0, 0));
     if (now.getTime() >= target.getTime()) target = new Date(target.getTime() + 86400000);
-    var diffMin = Math.max(1, Math.round((target.getTime() - now.getTime()) / 60000));
-    var h = Math.floor(diffMin / 60), m = diffMin % 60;
-    return h + ' س ' + m + ' د (10:00 ص)';
+    var mins = Math.max(1, Math.round((target.getTime() - now.getTime()) / 60000));
+    var h = Math.floor(mins / 60), m = mins % 60;
+    return h + 'س ' + m + 'د (10:00 ص)';
+  }
+  function weeklyResetInfo() {
+    var p = cairoParts().day.split('-');
+    var now = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+    var dow = (now.getUTCDay() + 1) % 7;
+    var daysLeft = 7 - dow;
+    return daysLeft + 'ي';
+  }
+  function monthlyResetInfo() {
+    var p = cairoParts().day.split('-');
+    var daysInMonth = new Date(Date.UTC(+p[0], +p[1], 0)).getUTCDate();
+    var left = Math.max(1, daysInMonth - (+p[2]) + 1);
+    return left + 'ي';
   }
 
   function loadUsage() {
@@ -92,18 +104,31 @@
     renderUsageBar();
   }
 
+  function barColor(pct) {
+    return pct >= 85 ? '#ef4444' : (pct >= 60 ? '#f59e0b' : '#22c55e');
+  }
+  function meterItem(label, used, limit, rightText, title) {
+    var pct = Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
+    var col = barColor(pct);
+    var fillW = used > 0 ? Math.max(4, pct) : 0;
+    return '<div class="ts-ai-m" title="' + esc(title) + '">' +
+      '<span class="ts-ai-ml">' + esc(label) + '</span>' +
+      '<span class="ts-ai-track"><i class="ts-ai-fill" style="width:' + fillW + '%;background:' + col + '"></i></span>' +
+      '<span class="ts-ai-pct" style="color:' + col + '">' + pct + '%</span>' +
+      '<span class="ts-ai-rt">' + esc(rightText) + '</span>' +
+    '</div>';
+  }
+
   function renderUsageBar() {
     var bar = $('ts-ai-usage');
     if (!bar) return;
     var u = loadUsage();
-    var msgsLeft = Math.max(0, 6 - Math.floor(history.length / 2));
+    var msgsUsed = Math.floor(history.length / 2);
     bar.innerHTML =
-      '<div class="ts-ai-uitem"><span>الجلسة</span><b>' + nf(sessionTokens) + ' tok</b></div>' +
-      '<div class="ts-ai-uitem"><span>اليوم</span><b>' + nf(u.day_req) + '/' + DAILY_REQ_SOFT_LIMIT + ' · ' + nf(u.day_tok) + ' tok</b></div>' +
-      '<div class="ts-ai-uitem"><span>الأسبوع</span><b>' + nf(u.week_req) + ' طلب · ' + nf(u.week_tok) + ' tok</b></div>' +
-      '<div class="ts-ai-uitem"><span>الشهر</span><b>' + nf(u.month_req) + ' طلب · ' + nf(u.month_tok) + ' tok</b></div>' +
-      '<div class="ts-ai-uitem"><span>التجديد</span><b>' + esc(nextResetCountdown()) + '</b></div>' +
-      '<div class="ts-ai-uitem"><span>سياق المحادثة</span><b>' + msgsLeft + '/6 متبقي</b></div>';
+      meterItem('المحادثة', msgsUsed, 6, nf(sessionTokens) + ' tok', 'سياق المحادثة الحالي والتوكنات المستهلكة') +
+      meterItem('اليومي', u.day_req, DAILY_REQ_LIMIT, dailyResetInfo(), u.day_req + ' طلب · ' + nf(u.day_tok) + ' توكن اليوم') +
+      meterItem('الأسبوعي', u.week_req, WEEKLY_REQ_LIMIT, weeklyResetInfo(), u.week_req + ' طلب · ' + nf(u.week_tok) + ' توكن الأسبوع ده') +
+      meterItem('الشهري', u.month_req, MONTHLY_REQ_LIMIT, monthlyResetInfo(), u.month_req + ' طلب · ' + nf(u.month_tok) + ' توكن الشهر ده');
   }
 
   function injectStyles() {
@@ -111,47 +136,53 @@
     var st = document.createElement('style');
     st.id = 'ts-ai-style';
     st.textContent =
-      '#ts-ai-btn{position:fixed;left:18px;bottom:42px;z-index:95;height:46px;padding:0 16px;border-radius:999px;border:0;cursor:pointer;display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#fff;background:linear-gradient(135deg,#0f766e,#1d4ed8);box-shadow:0 10px 26px -6px rgba(29,78,216,.55);font-family:inherit}' +
-      '#ts-ai-win{position:fixed;left:22px;bottom:22px;z-index:160;width:540px;max-width:calc(100vw - 24px);height:620px;max-height:calc(100vh - 36px);display:none;flex-direction:column;border-radius:22px;overflow:hidden;background:#ffffff;color:#0f172a;border:1px solid #cbd5e1;box-shadow:0 24px 60px -12px rgba(15,23,42,.42)}' +
+      '#ts-ai-btn{position:fixed;left:18px;bottom:42px;z-index:95;height:44px;padding:0 16px;border-radius:999px;border:0;cursor:pointer;display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;color:#fff;background:linear-gradient(135deg,#4285f4 0%,#8b5cf6 52%,#d96570 100%);box-shadow:0 10px 26px -6px rgba(139,92,246,.6);font-family:inherit;transition:transform .15s}' +
+      '#ts-ai-btn:hover{transform:translateY(-1px)}' +
+      '#ts-ai-win{position:fixed;left:22px;bottom:22px;z-index:160;width:540px;max-width:calc(100vw - 24px);height:610px;max-height:calc(100vh - 36px);display:none;flex-direction:column;border-radius:20px;overflow:hidden;background:#ffffff;color:#0f172a;border:1px solid #e2e8f0;box-shadow:0 24px 60px -12px rgba(15,23,42,.38)}' +
       '#ts-ai-win.open{display:flex}' +
-      '#ts-ai-win.min{height:auto!important;width:320px!important}' +
+      '#ts-ai-win.min{height:auto!important;width:300px!important}' +
       '#ts-ai-win.min .ts-ai-body{display:none}' +
       'html.dark #ts-ai-win{background:#0f172a;color:#f1f5f9;border-color:#334155}' +
-      '.ts-ai-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e2e8f0;cursor:move;user-select:none;background:linear-gradient(135deg,rgba(15,118,110,.08),rgba(29,78,216,.08))}' +
-      'html.dark .ts-ai-hdr{border-bottom-color:#1e293b;background:linear-gradient(135deg,rgba(15,118,110,.22),rgba(29,78,216,.18))}' +
+      '.ts-ai-topband{height:3px;width:100%;background:linear-gradient(90deg,#4285f4,#8b5cf6,#d96570);flex:none}' +
+      '.ts-ai-hdr{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid #f1f5f9;cursor:move;user-select:none}' +
+      'html.dark .ts-ai-hdr{border-bottom-color:#1e293b}' +
+      '.ts-ai-logo{display:flex;width:32px;height:32px;align-items:center;justify-content:center;border-radius:10px;color:#fff;background:linear-gradient(135deg,#4285f4 0%,#8b5cf6 52%,#d96570 100%);box-shadow:0 4px 12px -3px rgba(139,92,246,.5)}' +
       '.ts-ai-body{display:flex;flex-direction:column;flex:1;min-height:0}' +
-      '.ts-ai-usage{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:8px 12px;border-bottom:1px solid #e2e8f0;background:#f8fafc;font-size:10.5px}' +
+      '.ts-ai-usage{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;padding:8px 16px;border-bottom:1px solid #f1f5f9;background:#fafafa;font-size:11px}' +
       'html.dark .ts-ai-usage{border-bottom-color:#1e293b;background:#111827}' +
-      '.ts-ai-uitem{display:flex;flex-direction:column;gap:1px;padding:4px 7px;border-radius:8px;background:#ffffff;border:1px solid #e2e8f0}' +
-      'html.dark .ts-ai-uitem{background:#1e293b;border-color:#334155}' +
-      '.ts-ai-uitem span{color:#64748b;font-size:9.5px;font-weight:600}' +
-      'html.dark .ts-ai-uitem span{color:#94a3b8}' +
-      '.ts-ai-uitem b{font-family:Consolas,monospace;font-size:10.5px;color:#0f172a;direction:ltr;text-align:right}' +
-      'html.dark .ts-ai-uitem b{color:#f8fafc}' +
-      '.ts-ai-chips{display:flex;flex-wrap:wrap;gap:5px;padding:8px 12px;border-bottom:1px solid #e2e8f0;background:#f8fafc}' +
-      'html.dark .ts-ai-chips{border-bottom-color:#1e293b;background:#1e293b}' +
-      '.ts-ai-chip{border:1px solid #cbd5e1;background:#ffffff;color:#1e293b;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}' +
-      'html.dark .ts-ai-chip{border-color:#475569;background:#0f172a;color:#e2e8f0}' +
-      '.ts-ai-chip:hover{border-color:#0f766e}' +
-      '#ts-ai-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:#ffffff}' +
-      'html.dark #ts-ai-msgs{background:#0f172a}' +
+      '.ts-ai-m{display:flex;align-items:center;gap:7px;min-width:0}' +
+      '.ts-ai-ml{color:#64748b;font-weight:600;white-space:nowrap;font-size:11px}' +
+      'html.dark .ts-ai-ml{color:#94a3b8}' +
+      '.ts-ai-track{position:relative;flex:1;height:5px;border-radius:999px;background:#e5e7eb;overflow:hidden;min-width:44px}' +
+      'html.dark .ts-ai-track{background:#334155}' +
+      '.ts-ai-fill{display:block;height:100%;border-radius:999px;position:relative}' +
+      '.ts-ai-pct{font-family:Consolas,monospace;font-weight:700;font-size:11px;white-space:nowrap;direction:ltr}' +
+      '.ts-ai-rt{color:#64748b;font-size:10.5px;white-space:nowrap;font-family:Consolas,monospace}' +
+      'html.dark .ts-ai-rt{color:#94a3b8}' +
+      '.ts-ai-chips{display:flex;flex-wrap:wrap;gap:5px;padding:8px 14px;border-bottom:1px solid #f1f5f9}' +
+      'html.dark .ts-ai-chips{border-bottom-color:#1e293b}' +
+      '.ts-ai-chip{border:1px solid #e2e8f0;background:#f8fafc;color:#334155;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:border-color .15s}' +
+      'html.dark .ts-ai-chip{border-color:#334155;background:#1e293b;color:#e2e8f0}' +
+      '.ts-ai-chip:hover{border-color:#8b5cf6;color:#6d28d9}' +
+      'html.dark .ts-ai-chip:hover{border-color:#8b5cf6;color:#c4b5fd}' +
+      '#ts-ai-msgs{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px}' +
       '.ts-ai-row{display:flex;width:100%}' +
       '.ts-ai-row.u{justify-content:flex-start}' +
       '.ts-ai-row.m{justify-content:flex-end}' +
-      '.ts-ai-bbl{max-width:88%;border-radius:16px;padding:10px 13px;font-size:12.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word}' +
-      '.ts-ai-row.u .ts-ai-bbl{background:linear-gradient(135deg,#0f766e,#1d4ed8);color:#ffffff;border-start-start-radius:4px}' +
+      '.ts-ai-bbl{max-width:88%;border-radius:16px;padding:10px 14px;font-size:12.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word}' +
+      '.ts-ai-row.u .ts-ai-bbl{background:linear-gradient(135deg,#4285f4 0%,#8b5cf6 58%,#d96570 100%);color:#ffffff;border-start-start-radius:4px}' +
       '.ts-ai-row.m .ts-ai-bbl{background:#f1f5f9;color:#0f172a;border-end-end-radius:4px}' +
       'html.dark .ts-ai-row.m .ts-ai-bbl{background:#1e293b;color:#f1f5f9}' +
       '.ts-ai-row.err .ts-ai-bbl{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}' +
       'html.dark .ts-ai-row.err .ts-ai-bbl{background:#450a0a;color:#fecaca;border-color:#991b1b}' +
-      '.ts-ai-ft{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid #e2e8f0;background:#ffffff}' +
-      'html.dark .ts-ai-ft{border-top-color:#1e293b;background:#0f172a}' +
-      '#ts-ai-inp{flex:1;border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:12px;padding:9px 12px;font-size:13px;outline:none;font-family:inherit}' +
+      '.ts-ai-ft{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid #f1f5f9}' +
+      'html.dark .ts-ai-ft{border-top-color:#1e293b}' +
+      '#ts-ai-inp{flex:1;border:1px solid #e2e8f0;background:#f8fafc;color:#0f172a;border-radius:12px;padding:9px 13px;font-size:13px;outline:none;font-family:inherit}' +
       'html.dark #ts-ai-inp{border-color:#334155;background:#1e293b;color:#f8fafc}' +
-      '#ts-ai-inp:focus{border-color:#0f766e}' +
-      '#ts-ai-send{border:0;border-radius:12px;padding:9px 16px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;background:linear-gradient(135deg,#0f766e,#1d4ed8);font-family:inherit}' +
+      '#ts-ai-inp:focus{border-color:#8b5cf6}' +
+      '#ts-ai-send{border:0;border-radius:12px;padding:9px 18px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;background:linear-gradient(135deg,#4285f4 0%,#8b5cf6 55%,#d96570 100%);font-family:inherit}' +
       '#ts-ai-send:disabled{opacity:.55;cursor:default}' +
-      '@media(max-width:640px){#ts-ai-win{left:0!important;right:0!important;bottom:0!important;top:auto!important;width:100%!important;max-width:100%!important;height:88vh;max-height:90vh;border-radius:22px 22px 0 0}.ts-ai-hdr{cursor:default}.ts-ai-usage{grid-template-columns:repeat(2,minmax(0,1fr))}}';
+      '@media(max-width:640px){#ts-ai-win{left:0!important;right:0!important;bottom:0!important;top:auto!important;width:100%!important;max-width:100%!important;height:88vh;max-height:90vh;border-radius:20px 20px 0 0}.ts-ai-hdr{cursor:default}.ts-ai-usage{grid-template-columns:1fr}}';
     document.head.appendChild(st);
   }
 
@@ -170,7 +201,7 @@
     var btn = document.createElement('button');
     btn.id = 'ts-ai-btn';
     btn.type = 'button';
-    btn.title = 'اسأل الذكاء الاصطناعي (للمدير)';
+    btn.title = 'اسأل Gemini AI (للمدير)';
     btn.setAttribute('aria-label', 'اسأل AI');
     btn.innerHTML = GEMINI_SVG + '<span>AI</span>';
     btn.onclick = openWin;
@@ -232,15 +263,16 @@
     } catch (e) {}
 
     win.innerHTML =
+      '<div class="ts-ai-topband"></div>' +
       '<div class="ts-ai-hdr" id="ts-ai-drag">' +
-        '<div style="display:flex;align-items:center;gap:9px">' +
-          '<span style="display:flex;width:32px;height:32px;align-items:center;justify-content:center;border-radius:10px;color:#fff;background:linear-gradient(135deg,#0f766e,#1d4ed8)">' + GEMINI_SVG + '</span>' +
-          '<div><div style="font-weight:700;font-size:13.5px">مساعد تساهيل AI</div><div style="font-size:10.5px;opacity:.72">اسحب لتحريك النافذة · أرقام مجمّعة فقط</div></div>' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<span class="ts-ai-logo">' + GEMINI_SVG + '</span>' +
+          '<div><div style="font-weight:700;font-size:13.5px">مساعد تساهيل AI</div><div style="font-size:10.5px;opacity:.68">اسحب للتحريك · أرقام مجمّعة فقط</div></div>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:4px">' +
-          '<button type="button" id="ts-ai-min" title="تصغير / تكبير" style="border:0;background:transparent;color:inherit;opacity:.75;padding:5px 8px;border-radius:8px;cursor:pointer"><i class="fa-solid fa-window-minimize"></i></button>' +
-          '<button type="button" id="ts-ai-clear" title="محادثة جديدة" style="border:0;background:transparent;color:inherit;opacity:.75;padding:5px 8px;border-radius:8px;cursor:pointer"><i class="fa-solid fa-rotate-right"></i></button>' +
-          '<button type="button" id="ts-ai-close" aria-label="إغلاق" style="border:0;background:transparent;color:inherit;opacity:.85;padding:5px 8px;border-radius:8px;cursor:pointer;font-size:15px"><i class="fa-solid fa-xmark"></i></button>' +
+          '<button type="button" id="ts-ai-min" title="تصغير / تكبير" style="border:0;background:transparent;color:inherit;opacity:.7;padding:5px 8px;border-radius:8px;cursor:pointer"><i class="fa-solid fa-window-minimize"></i></button>' +
+          '<button type="button" id="ts-ai-clear" title="محادثة جديدة" style="border:0;background:transparent;color:inherit;opacity:.7;padding:5px 8px;border-radius:8px;cursor:pointer"><i class="fa-solid fa-rotate-right"></i></button>' +
+          '<button type="button" id="ts-ai-close" aria-label="إغلاق" style="border:0;background:transparent;color:inherit;opacity:.8;padding:5px 8px;border-radius:8px;cursor:pointer;font-size:15px"><i class="fa-solid fa-xmark"></i></button>' +
         '</div>' +
       '</div>' +
       '<div class="ts-ai-body">' +
