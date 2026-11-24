@@ -12,7 +12,7 @@ begin
 end $$;
 revoke all on function public.trg_line_status_history() from public, anon, authenticated;
 drop trigger if exists line_status_history_trg on public.request_lines;
-create trigger line_status_history_trg after update of status on public.request_lines
+create trigger line_status_history_trg after update of complete, delivered, under_review, deleted_at on public.request_lines
   for each row execute function public.trg_line_status_history();
 
 create or replace function public.ops_dashboard(p_from date, p_to date)
