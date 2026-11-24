@@ -5,7 +5,7 @@
   window.__phase5 = true;
   const eh = escapeHtml, MGR = 'mahmoud.aboshama@tasahel.com.eg';
   const isMgr = () => window.__role ? window.__role === 'manager' : !!(currentUser && ['mahmoud.aboshama@tasahel.com.eg','mahmoud.aboshama.contact@gmail.com'].includes(String(currentUser.email || '').toLowerCase()));
-  let range = 'month', cache = {}, charts = {}, seq = 0;
+  let range = 'month', cache = {}, charts = {}, seq = 0, selMonth = '';
   const pad = n => String(n).padStart(2, '0');
   const mk = d => d.getFullYear() + '-' + pad(d.getMonth() + 1);
   const addM = (m, k) => { const a = m.split('-').map(Number); return mk(new Date(a[0], a[1] - 1 + k, 1)); };
@@ -94,6 +94,13 @@
     const now = new Date(), t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()), end = new Date(t0.getTime() + 864e5);
     if (range === 'today') { const y = new Date(t0.getTime() - 864e5); return { start: t0, end: end, pstart: y, pend: t0, unit: 'hour', n: 24, label: 'اليوم', plabel: 'أمس', title: 'أداء اليوم' }; }
     if (range === 'week') { const s = new Date(t0.getTime() - 6 * 864e5); return { start: s, end: end, pstart: new Date(s.getTime() - 7 * 864e5), pend: s, unit: 'day', n: 7, label: 'آخر 7 أيام', plabel: 'الـ7 أيام السابقة', title: 'أداء آخر 7 أيام' }; }
+    if (range === 'pick' && /^\d{4}-\d{2}$/.test(selMonth)) {
+      const y = +selMonth.slice(0, 4), mo = +selMonth.slice(5, 7) - 1, ms = new Date(y, mo, 1), me = new Date(y, mo + 1, 1), mps = new Date(y, mo - 1, 1);
+      const isCur = ms.getFullYear() === now.getFullYear() && ms.getMonth() === now.getMonth();
+      const days = isCur ? now.getDate() : Math.round((me - ms) / 864e5);
+      let mpe = new Date(mps.getFullYear(), mps.getMonth(), days + 1); if (mpe > ms) mpe = ms;
+      return { start: ms, end: isCur ? end : me, pstart: mps, pend: mpe, unit: 'day', n: days, label: 'الشهر ده', plabel: 'الشهر اللي قبله', title: 'أداء ' + new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(ms) };
+    }
     const s = new Date(now.getFullYear(), now.getMonth(), 1), ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     let pend = new Date(ps.getFullYear(), ps.getMonth(), now.getDate() + 1); if (pend > s) pend = s;
     return { start: s, end: end, pstart: ps, pend: pend, unit: 'day', n: now.getDate(), label: 'هذا الشهر', plabel: 'نفس الفترة من الشهر السابق', title: 'أداء ' + new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(now) };
@@ -247,7 +254,14 @@
   window.styleDashButtons = function () {
     ['today', 'week', 'month'].forEach(r => { const b = $('dash-btn-' + r); if (b) b.className = 'rounded-lg px-3.5 py-1.5 font-semibold transition ' + (r === range ? 'bg-white text-ink shadow' : 'text-white/80 hover:text-white'); });
   };
-  window.setDashboardRange = function (r) { range = r; styleDashButtons(); renderDashboardMetrics(); };
+  window.setDashboardRange = function (r) { range = r; if (r !== 'pick') { selMonth = ''; const i = $('dsh-month'); if (i) i.value = ''; } styleDashButtons(); renderDashboardMetrics(); };
+  window.setDashboardMonth = function (m) { if (!/^\d{4}-\d{2}$/.test(m || '')) { window.setDashboardRange('month'); return; } selMonth = m; range = 'pick'; styleDashButtons(); renderDashboardMetrics(); };
+  window.toggleDashLate = function () {
+    const b = $('dsh-late'), c = $('dsh-late-chev'); if (!b) return;
+    const open = b.classList.toggle('hidden') === false;
+    if (c) c.style.transform = open ? 'rotate(180deg)' : '';
+    try { localStorage.setItem('dsh_late_open', open ? '1' : '0'); } catch (e) { /* */ }
+  };
   window.dashRefresh = function () { cache = {}; refCache = {}; renderDashboardMetrics(); };
   window.renderDashboardMetrics = async function () {
     if (!sbClient || !$('dsh-kpis')) return;
@@ -257,12 +271,13 @@
     $('dsh-sub').textContent = 'مقارنة مع ' + P.plabel;
     if (typeof Chart !== 'undefined') { Chart.defaults.font.family = '"IBM Plex Sans Arabic",Tahoma,sans-serif'; Chart.defaults.color = dark ? '#94a3b8' : '#64748b'; }
     try {
-      const cm = mk(new Date()), pm = addM(cm, -1), all = (await loadMonth(pm)).concat(await loadMonth(cm));
+      const cm = (range === 'pick' && selMonth) ? selMonth : mk(new Date()), pm = addM(cm, -1), all = (await loadMonth(pm)).concat(await loadMonth(cm));
       if (my !== seq) return;
       const cl = inRange(all, P.start, P.end), cur = stats(all, P.start, P.end, P.n, P.unit), prv = stats(all, P.pstart, P.pend, P.n, P.unit);
       renderKpis(cur, prv); renderMain(P, cur, prv, dark); renderPay(cl, dark); renderEmps(cl); renderSvcs(cl);
       renderHeat(await loadMonth(cm));
       renderTargets(); renderLate();
+      if (!window.__lateInit) { window.__lateInit = 1; try { if (localStorage.getItem('dsh_late_open') === '1') window.toggleDashLate(); } catch (e) { /* */ } }
     } catch (err) { showError('تعذّر تحميل الداش بورد', err); }
   };
   /* تبديل ليلي/نهاري: نغيّر ألوان الرسومات بس من غير ما نعيد تحميل أو نبني الداشبورد من الأول */
