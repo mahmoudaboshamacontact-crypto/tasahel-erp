@@ -88,32 +88,12 @@
 
   /* حساب صافي البند بعد أي استرداد معتمد */
   function netLineMetrics(l) {
-    var q = Math.max(0, num(l.qty) || 1);
-    var sales = num(l.total);
-    var cost = typeof execCostOf === 'function' ? execCostOf(l) : (num(l.exec_unit_cost) * q);
-    var unitComm = 0;
-    if (typeof window.lineComm === 'function') {
-      unitComm = q > 0 ? (window.lineComm(l) / q) : 0;
-    } else {
-      unitComm = num(l.commission_per_unit);
-    }
-
-    if (typeof window.getLineRefundSummary === 'function') {
-      var rf = window.getLineRefundSummary(l.id);
-      if (rf && rf.approvedCount > 0) {
-        if (rf.isFull) return { qty: 0, sales: 0, cost: 0, comm: 0, discAmt: 0, refunded: num(l.total) };
-        q = Math.max(0, rf.remQty);
-        sales = Math.max(0, rf.remSales);
-        cost = Math.max(0, cost - (rf.exec_forfeited || 0));
-      }
-    }
-
-    var comm = unitComm * q;
+    var m = window.Money ? window.Money.lineNet(l) : null;
+    if (!m) return { qty: num(l.qty) || 1, sales: num(l.total), cost: typeof execCostOf === 'function' ? execCostOf(l) : 0, comm: 0, discAmt: 0, refunded: 0 };
     var discPct = num(l.discount_pct);
     var listPr = num(l.list_price) > 0 ? num(l.list_price) : num(l.unit_price);
-    var discAmt = discPct > 0 ? Math.max(0, listPr * q - sales) : 0;
-
-    return { qty: q, sales: sales, cost: cost, comm: comm, discAmt: discAmt, refunded: 0 };
+    var discAmt = discPct > 0 && !m.full ? Math.max(0, listPr * m.qty - m.sales) : 0;
+    return { qty: m.qty, sales: m.sales, cost: m.cost, comm: m.comm, discAmt: discAmt, refunded: m.refunded };
   }
 
   function getAvailableMonths() {
