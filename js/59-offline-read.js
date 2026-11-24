@@ -1,8 +1,8 @@
 /* ================================================================
  * 59. OFFLINE READ (قراءة فقط) — آخر نسخة محفوظة من الخدمات والمعاملات
- * - بعد كل تحميل ناجح بنحفظ نسخة في IndexedDB على الجهاز.
+ * - بعد كل تحميل ناجح بنحفظ نسخة في IndexedDB على الجهاز بمدة صلاحية 12 ساعة (TTL).
+ * - بنشيل tracking_token من النسخة المخزنة محليًا، وبنمسح الكاش تلقائيًا عند الخروج أو انتهاء الجلسة.
  * - لو النت مقطوع أو التحميل فشل، بنعرض النسخة المحفوظة + شريط "آخر تحديث".
- * - مفيش إنشاء أو تعديل بدون نت (ده مش جزء من الميزة).
  * بيعتمد على: loadServices / loadRecentRequests / refreshLineViews (js/03-core-app.js)
  * ================================================================ */
 (function () {
@@ -10,6 +10,7 @@
 
   var DB_NAME = 'tasahel-offline', STORE = 'kv';
   var KEY_LINES = 'lines', KEY_SERVICES = 'services';
+  var CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 ساعة كحد أقصى
   function scope() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.id) ? String(currentUser.id) : null; }
   function scopedKey(key) { var userId = scope(); return userId ? key + ':' + userId : null; }
   var SAVE_DELAY_MS = 3000;
@@ -36,6 +37,15 @@
       });
     });
   }
+  function idbDel(key) {
+    return db().then(function (d) {
+      return new Promise(function (res) {
+        var tx = d.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).delete(key);
+        tx.oncomplete = tx.onerror = function () { res(); };
+      });
+    }).catch(function () {});
+  }
   function clearOfflineCache() {
     if (!('indexedDB' in window)) return Promise.resolve();
     dbPromise = null;
@@ -51,6 +61,18 @@
         var r = d.transaction(STORE, 'readonly').objectStore(STORE).get(key);
         r.onsuccess = function () { res(r.result || null); }; r.onerror = function () { rej(r.error); };
       });
+    });
+  }
+  function isExpired(snap) {
+    return !snap || !snap.ts || (Date.now() - Number(snap.ts)) > CACHE_TTL_MS;
+  }
+  function sanitizeLinesForCache(rows) {
+    return (rows || []).map(function (r) {
+      if (!r || typeof r !== 'object') return r;
+      if (!('tracking_token' in r)) return r;
+      var copy = Object.assign({}, r);
+      delete copy.tracking_token;
+      return copy;
     });
   }
 
@@ -79,7 +101,7 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
       var userId = scope(); if (!userId || !allRequestLines || !allRequestLines.length) return;
-      idbSet(scopedKey(KEY_LINES), { ts: Date.now(), user_id: userId, rows: allRequestLines }).catch(function () {});
+      idbSet(scopedKey(KEY_LINES), { ts: Date.now(), user_id: userId, rows: sanitizeLinesForCache(allRequestLines) }).catch(function () {});
     }, SAVE_DELAY_MS);
   }
   function saveServices() {
@@ -91,8 +113,10 @@
   var lastLinesTs = null;
   function restoreLines() {
     var userId = scope(); if (!userId) return Promise.resolve(false);
-    return idbGet(scopedKey(KEY_LINES)).then(function (snap) {
+    var key = scopedKey(KEY_LINES);
+    return idbGet(key).then(function (snap) {
       if (!snap || snap.user_id !== userId || !snap.rows || !snap.rows.length) return false;
+      if (isExpired(snap)) { idbDel(key); return false; }
       allRequestLines = snap.rows;
       lastLinesTs = snap.ts;
       if (typeof archiveState !== 'undefined') { archiveState.done = true; archiveState.loading = false; archiveState.failed = false; }
@@ -103,8 +127,10 @@
   }
   function restoreServices() {
     var userId = scope(); if (!userId) return Promise.resolve(false);
-    return idbGet(scopedKey(KEY_SERVICES)).then(function (snap) {
+    var key = scopedKey(KEY_SERVICES);
+    return idbGet(key).then(function (snap) {
       if (!snap || snap.user_id !== userId || !snap.rows || !snap.rows.length) return false;
+      if (isExpired(snap)) { idbDel(key); return false; }
       allServices = snap.rows;
       var dl = document.getElementById('svc-datalist');
       if (dl) dl.innerHTML = snap.rows.map(function (s) {
@@ -141,6 +167,16 @@
       var r = origRefresh.apply(this, arguments);
       if (navigator.onLine) scheduleSaveLines();
       return r;
+    };
+  }
+
+  /* مسح الكاش المحلي تلقائياً لو ظهرت شاشة الدخول (انتهاء الجلسة) */
+  var origShowLogin = window.showLoginScreen;
+  if (typeof origShowLogin === 'function') {
+    window.showLoginScreen = function () {
+      clearTimeout(saveTimer);
+      clearOfflineCache().catch(function () {});
+      return origShowLogin.apply(this, arguments);
     };
   }
 
