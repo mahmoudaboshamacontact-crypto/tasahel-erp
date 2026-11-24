@@ -10,7 +10,7 @@
 | **بيئة الإنتاج (Production)** | `https://system-erp-v3.vercel.app/` | 
 | **قاعدة البيانات (Supabase)** | Project Ref: `avehvjqifswsyayckpvx` (PostgreSQL + RLS + `pg_cron` + `pg_net`) | 
 | **الواجهة الأمامية (Frontend)** | Vanilla JS (IIFE Modules `00`–`88`), Tailwind CSS (Prebuilt), Font Awesome 6.5.1, IBM Plex Sans Arabic | 
-| **الخدمات السحابية (Backend)** | Supabase PostgREST / RPCs + Deno Edge Functions (`ask-ai`, `send-push`) | 
+| **الخدمات السحابية (Backend)** | Supabase PostgREST / RPCs + Deno Edge Functions (`ask-ai`, `send-push`, `geo-proxy`) | 
 | **الاختبارات (CI/CD)** | GitHub Actions (`node --test tests/*.test.js` على Node 22) | 
 
 ## 2. المعمارية العامة للنظام (System Architecture)
@@ -154,6 +154,7 @@
 1. **`ask-ai/index.ts`**: مساعد تحليلي للمدير فقط (`my_role() === 'manager'`). يستخدم Gemini API (`gemini-3.5-flash-lite`) مع 6 أدوات مقيدة تغطي السيستم بالكامل بدون بيانات عملاء (`ai_report`, `ai_late_orders`, `ai_ops_snapshot`, `ai_hr_snapshot`, `ai_couriers_snapshot`, `ai_finance_snapshot` في `sql/part-l-ai-full-system.sql`) بدون كشف أسماء عملاء أو موظفين حقيقيين.
 
 2. **`send-push/index.ts`**: يرسل إشعارات Web Push عبر `web-push` عند استدعائه من Trigger `notify_push` باستخدام `x-cron-secret` المخزن في `push_config`.
+3. **`geo-proxy/index.ts`**: بروكسي آمن لـ Geoapify (توجيه خط السير وتحويل GPS لعناوين) يحفظ `GEOAPIFY_KEY` في Supabase Secrets ويتحقق من JWT وCORS.
 
 ## 6. الأدوار والصلاحيات (RBAC)
 

@@ -9,7 +9,7 @@
   'use strict';
   if (window.TasahelGeo) return;
 
-  var GEOAPIFY_KEY = '4d922dd45aad4da7b64323d0ebd44a24';
+  var GEO_PROXY_PATH = '/functions/v1/geo-proxy';
   var TZ = 'Africa/Cairo';
   var USAGE_KEY = 'ts_api_usage_v1';
   var REV_CACHE_KEY = 'ts_geo_rev_cache_v1';
@@ -44,6 +44,31 @@
     return u;
   }
 
+  async function callGeoProxy(payload, ms) {
+    if (typeof sbClient === 'undefined' || !sbClient || !sbClient.auth) return null;
+    var ses = await sbClient.auth.getSession();
+    var token = ses && ses.data && ses.data.session && ses.data.session.access_token;
+    if (!token) return null;
+    var sbUrl = (typeof DEFAULT_SB_URL !== 'undefined' ? DEFAULT_SB_URL : null) || localStorage.getItem('sb_url') || 'https://avehvjqifswsyayckpvx.supabase.co';
+    var sbKey = localStorage.getItem('sb_key') || '';
+    var headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+    if (sbKey) headers['apikey'] = sbKey;
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, ms || 6000) : null;
+    try {
+      var res = await fetch(sbUrl.replace(/\/$/, '') + GEO_PROXY_PATH, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(payload),
+        signal: ctrl ? ctrl.signal : undefined
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   function fetchWithTimeout(url, ms) {
     var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     var timer = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, ms || 5500) : null;
@@ -70,12 +95,9 @@
     }
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return '';
     try {
-      var url = 'https://api.geoapify.com/v1/geocode/reverse?lat=' + encodeURIComponent(la) +
-        '&lon=' + encodeURIComponent(ln) + '&lang=ar&apiKey=' + encodeURIComponent(GEOAPIFY_KEY);
-      var res = await fetchWithTimeout(url, 5500);
+      var data = await callGeoProxy({ action: 'reverse', lat: la, lon: ln }, 6000);
       bumpUsage('geoapify_reverse', 1);
-      if (!res.ok) return '';
-      var data = await res.json();
+      if (!data) return '';
       var feat = data && data.features && data.features[0];
       var p = feat && feat.properties;
       if (!p) return '';
@@ -109,13 +131,10 @@
     }
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
     try {
-      var url = 'https://api.geoapify.com/v1/routing?waypoints=' + encodeURIComponent(wpStr) +
-        '&mode=drive&apiKey=' + encodeURIComponent(GEOAPIFY_KEY);
-      var res = await fetchWithTimeout(url, 6500);
+      var data = await callGeoProxy({ action: 'route', waypoints: wpStr }, 7000);
       var legs = Math.max(1, clean.slice(0, 15).length - 1);
       bumpUsage('geoapify_routing', legs);
-      if (!res.ok) return null;
-      var data = await res.json();
+      if (!data) return null;
       var feat = data && data.features && data.features[0];
       var props = feat && feat.properties;
       if (!props) return null;
