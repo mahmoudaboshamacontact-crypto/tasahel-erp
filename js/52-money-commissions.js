@@ -104,7 +104,7 @@
         if (rf.isFull) return { qty: 0, sales: 0, cost: 0, comm: 0, discAmt: 0, refunded: num(l.total) };
         q = Math.max(0, rf.remQty);
         sales = Math.max(0, rf.remSales);
-        cost = Math.max(0, cost - (rf.execForfeited || 0));
+        cost = Math.max(0, cost - (rf.exec_forfeited || 0));
       }
     }
 

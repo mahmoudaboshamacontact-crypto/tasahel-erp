@@ -353,7 +353,7 @@
         var rf = window.getLineRefundSummary(l.id);
         if (rf && rf.approvedCount > 0) {
           isFullRefund = !!rf.isFull;
-          rfForfeit = num(rf.execForfeited);
+          rfForfeit = num(rf.exec_forfeited);
           q = Math.max(0, rf.remQty);
         }
       }
