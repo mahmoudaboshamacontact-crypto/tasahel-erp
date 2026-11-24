@@ -132,6 +132,10 @@ async function run(){
       ['إشعارات غير مقروءة',nf(tm.notif_unread),Number(tm.notif_unread)>100?'warn':'','من '+nf(tm.notif_total)],
       ['آخر تقفيل كاش',tm.last_cash_day||'—','',tm.last_cash_diff==null?'':('الفرق: '+nf(tm.last_cash_diff)+' ج')],
       ['عند الشريك الخارجي (غير مسوّى)',nf(tm.partner_unsettled),'',nf(tm.partner_unsettled_total)+' ج']]);
+    var er=await sb.rpc('owner_errors',{p_days:7});
+    if(er.error||!er.data){root.appendChild($('div','sec','أخطاء السيستم'));root.appendChild($('div','card list','شغّل ملف sql/error-monitor.sql في Supabase عشان تظهر الأخطاء هنا.'))}
+    else{var e=er.data;tiles('أخطاء السيستم (آخر 7 أيام)',[['أخطاء آخر 24 ساعة',nf(e.today),bad(e.today,10),''],['إجمالي الأخطاء',nf(e.total),bad(e.total,30),''],['مستخدمين اتأثروا',nf(e.users),'','']]);
+      if((e.top||[]).length){var eb=$('div','card list');e.top.forEach(function(x){eb.appendChild($('div',null,x.msg+' — '+x.tab+' ('+x.role+') × '+x.n+' · '+x.users+' مستخدم'))});root.appendChild(eb)}}
     if((w.top_staff_month||[]).length){root.appendChild($('div','sec','أكتر الموظفين شغلاً (الشهر)'));var ts=$('div','card list');w.top_staff_month.forEach(function(s){ts.appendChild($('div',null,s.name+' — '+s.n+' بند'))});root.appendChild(ts)}
   }
 
