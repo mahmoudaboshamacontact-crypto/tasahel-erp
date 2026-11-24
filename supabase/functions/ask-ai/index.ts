@@ -1,4 +1,4 @@
-// Edge Function: ask-ai (v15) — للمدير فقط. بتجاوب بأرقام مجمّعة (من غير أسماء عملاء ولا تليفونات).
+// Edge Function: ask-ai (v17) — للمدير فقط. بتجاوب بأرقام مجمّعة + Fallback تلقائي لو الموديل عليه ضغط.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const ALLOWED_ORIGINS = new Set([
@@ -18,15 +18,16 @@ function corsFor(req: Request) {
 }
 const json = (req: Request, o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...corsFor(req), 'Content-Type': 'application/json' } });
 
-const RULES = `إنت مساعد تحليل أرقام وتشغيل لشركة "تساهيل | قسم الخدمات الحكومية". هترد بالعامية المصرية باختصار ووضوح.
+const RULES = `إنت مساعد ذكي لتحليل الأرقام والتشغيل لشركة "تساهيل | قسم الخدمات الحكومية". هترد بالعامية المصرية باختصار ووضوح وذكاء.
 - المبالغ بالجنيه المصري. اذكر الشهر أو الفترة اللي بتتكلم عنها.
-- لو السؤال محتاج مقارنة أو حساب، اعمله وبيّن الأرقام اللي استخدمتها.
+- لو السؤال محتاج مقارنة أو حساب أو استنتاج عملي، اعمله وبيّن الأرقام اللي استخدمتها.
+- ممكن المدير يسألك أي سؤال حر عن الشغل أو يطلب نصيحة إدارية بناءً على الأرقام — جاوبه بطبيعية وذكاء.
 - ممنوع تطلب أو تذكر بيانات عملاء شخصية (مفيش أصلاً). أسماء الموظفين مجهولة (موظف 1، موظف 2…) ومتحاولش تعرف مين هو.`;
 
 const systemTools = (today: string) => RULES + `
 - النهارده ${today} (بتوقيت القاهرة). لو الفترة مش محددة في السؤال افترض الشهر الحالي وقول كده.
-- لازم تجيب أي رقم من الأدوات:
-  1) get_report: مبيعات وتكلفة وهامش تقديري وعمولة وعدد المعاملات (حسب month/day/service/employee/payment/status).
+- أي رقم عن الشركة لازم تجيبه من الأدوات دي:
+  1) get_report: مبيعات وتكلفة وهامش تقديري وعمولة وعدد المعاملات والبنود (حسب month/day/service/employee/payment/status). لسؤال عن النهارده فقط حط from_date=${today} و to_date=${today}.
   2) get_late_orders: البنود المتأخرة حالياً حسب خدمة أو موظف.
   3) get_ops_snapshot: ملخص الاستردادات، تيكتات الاستلام وعهدة الورق، مشاوير المناديب، المهام، آخر تقفيل كاش، ومستحقات الشريك الخارجي.
 - ممنوع تخمّن أو تخترع رقم. للمقارنة بين فترتين نادي get_report مرتين (مرة لكل فترة، الحد الأقصى 400 يوم).
@@ -36,7 +37,7 @@ const TOOLS = [{
   functionDeclarations: [
     {
       name: 'get_report',
-      description: 'تقرير مجمّع للمبيعات من بنود الطلبات: المبيعات، تكلفة التنفيذ، الهامش التقديري، العمولة، عدد البنود والمعاملات والكمية. للمدير فقط.',
+      description: 'تقرير مجمّع للمبيعات والطلبات من بنود المعاملات: المبيعات، تكلفة التنفيذ، الهامش التقديري، العمولة، عدد البنود والمعاملات والكمية حسب الفترة أو الحالة (Delivered/Complete/In Progress/Under Review).',
       parameters: {
         type: 'OBJECT',
         properties: {
@@ -64,10 +65,7 @@ const TOOLS = [{
     {
       name: 'get_ops_snapshot',
       description: 'ملخص التشغيل الحالي: الاستردادات، تيكتات الاستلام وعهدة الورق، مشاوير المناديب، المهام المفتوحة والمتأخرة، آخر تقفيل كاش، والشريك الخارجي.',
-      parameters: {
-        type: 'OBJECT',
-        properties: {},
-      },
+      parameters: { type: 'OBJECT', properties: {} },
     },
   ],
 }];
@@ -99,7 +97,9 @@ async function runTool(sb: any, name: string, a: Record<string, unknown>) {
 }
 
 const MODEL_DEFAULT = 'gemini-3.5-flash-lite';
-async function gemini(key: string, model: string, body: Record<string, unknown>) {
+const FALLBACK_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash'];
+
+async function callGeminiOnce(key: string, model: string, body: Record<string, unknown>) {
   const gen = { ...((body.generationConfig as Record<string, unknown>) || {}) };
   if (/gemini-2/.test(model)) gen.temperature = 0.2; else delete gen.temperature;
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -108,10 +108,30 @@ async function gemini(key: string, model: string, body: Record<string, unknown>)
     body: JSON.stringify({ ...body, generationConfig: gen }),
     signal: AbortSignal.timeout(15000),
   });
-  const j = await r.json();
-  if (!r.ok) throw Object.assign(new Error((j.error && j.error.message) || 'خطأ من Gemini'), { status: r.status });
-  return j;
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const err = Object.assign(new Error((j.error && j.error.message) || 'خطأ من Gemini'), { status: r.status });
+    throw err;
+  }
+  return { data: j, usedModel: model };
 }
+
+async function geminiWithFallback(key: string, primaryModel: string, body: Record<string, unknown>) {
+  const candidates = [primaryModel, ...FALLBACK_MODELS.filter((m) => m !== primaryModel)];
+  let lastErr: any = null;
+  for (const m of candidates) {
+    try {
+      return await callGeminiOnce(key, m, body);
+    } catch (e: any) {
+      lastErr = e;
+      const st = e && e.status;
+      if (st === 503 || st === 429 || st === 500 || st === 404) continue;
+      throw e;
+    }
+  }
+  throw lastErr || new Error('كل النماذج مشغولة حالياً');
+}
+
 const textOf = (c: any) => ((c && c.parts) || []).map((p: any) => p.text || '').join('').trim();
 
 Deno.serve(async (req) => {
@@ -124,7 +144,8 @@ Deno.serve(async (req) => {
 
     const key = Deno.env.get('GEMINI_API_KEY');
     if (!key) return json(req, { error: 'GEMINI_API_KEY مش متضاف في Secrets' }, 500);
-    const model = Deno.env.get('GEMINI_MODEL') || MODEL_DEFAULT;
+    const primaryModel = Deno.env.get('GEMINI_MODEL') || MODEL_DEFAULT;
+    let activeModel = primaryModel;
     const gen: Record<string, unknown> = { maxOutputTokens: 1400 };
 
     const body = await req.json();
@@ -145,7 +166,9 @@ Deno.serve(async (req) => {
 
     for (let round = 0; round < 3; round++) {
       const last = round === 2;
-      const j = await gemini(key, model, { systemInstruction: system, contents, ...(last ? {} : { tools: TOOLS }), generationConfig: gen });
+      const res = await geminiWithFallback(key, activeModel, { systemInstruction: system, contents, ...(last ? {} : { tools: TOOLS }), generationConfig: gen });
+      activeModel = res.usedModel;
+      const j = res.data;
       const um = j.usageMetadata || {};
       promptTokens += Number(um.promptTokenCount || 0);
       outputTokens += Number(um.candidatesTokenCount || 0);
@@ -157,7 +180,7 @@ Deno.serve(async (req) => {
         return json(req, {
           answer: textOf(content) || 'مفيش رد من النموذج، جرّب صياغة تانية.',
           tool_calls: calls,
-          model,
+          model: activeModel,
           usage: { prompt_tokens: promptTokens, output_tokens: outputTokens, total_tokens: totalTokens },
         });
       }
@@ -172,7 +195,9 @@ Deno.serve(async (req) => {
     }
     return json(req, { answer: 'معرفتش أوصل لإجابة، جرّب سؤال أبسط.' });
   } catch (e) {
-    if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') return json(req, { error: 'النموذج تأخر في الرد. جرّب تاني.' }, 504);
-    return json(req, { error: String((e as Error).message || e) }, (e as any).status === 429 ? 429 : 500);
+    const st = (e as any).status;
+    if ((e as Error).name === 'TimeoutError' || (e as Error).name === 'AbortError') return json(req, { error: 'السيرفر اتأخر شوية في الرد، جرّب تبعت السؤال تاني.' }, 504);
+    if (st === 503 || st === 429) return json(req, { error: 'فيه ضغط لحظي على سيرفرات Gemini دلوقتي، استنى ثواني وجرّب تاني.' }, st);
+    return json(req, { error: String((e as Error).message || e) }, 500);
   }
 });
