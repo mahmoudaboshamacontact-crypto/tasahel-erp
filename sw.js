@@ -3,7 +3,7 @@
 // - مكتبات الـ CDN (supabase / chart.js / خطوط / أيقونات): من الكاش فوراً وتتحدث في الخلفية.
 // - Supabase وأي API تاني: مش بنكاشه.
 
-const CACHE = 'tasahel-shell-v20261124-dash-pro-1';
+const CACHE = 'tasahel-shell-v20261125-login-1';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'css/style.css?v=p1b1', 'css/phase17.css?v=20261040', 'css/phase18.css?v=20261040', 'css/phase19.css?v=20261040', 'css/phase21.css?v=1', 'css/tailwind.css?v=20261040'];
 const CDN = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
@@ -32,7 +32,7 @@ function networkFirst(req) {
 }
 function staleWhileRevalidate(req) {
   return caches.open(CACHE).then(cache => cache.match(req).then(hit => {
-    const net = fetch(req).then(res => { if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone()).catch(() => {}); return res; }).catch(() => hit);
+    const net = fetch(req).then(res => { if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone()).catch(() => {}); return res; }).catch(() => hit || Response.error());
     return hit || net;
   }));
 }
