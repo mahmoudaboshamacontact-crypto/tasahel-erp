@@ -125,7 +125,7 @@
 | `js/87-error-relay.js` | ترحيل أخطاء المندوب إلى `error_log` مع تنقية بيانات العملاء (`scrub`). | 
 | `js/88-ops-dashboard.js` | لوحة متابعة التشغيل والـ Aging للمدير (`ops_dashboard` RPC). |
 | `js/89-ask-ai-panel.js` | واجهة "اسأل AI" للمدير فقط (تتصل بـ Edge Function `ask-ai` بدون المساس بـ `js/16`). | 
-| `js/zones.js`, `js/help-modal.js`, `js/home-stable.js`, `js/login-lamp.js` | خريطة الـ 55 منطقة في 5 قطاعات، نافذة المساعدة، استقرار الرئيسية، أنيميشن مصباح الدخول. | 
+| `js/zones.js`, `js/help-modal.js`, `js/home-stable.js`, `js/login-redesign.js` | خريطة الـ 55 منطقة في 5 قطاعات، نافذة المساعدة، استقرار الرئيسية، شاشة الدخول الجديدة وحماية المحاولات (`login-redesign.css` + `login-emblem.png`). | 
 | `js/vendor/*` | مكتبات محلية: `supabase-js-2.119.0`, `chart-4.4.1`, `exceljs-4.4.0`, `html2canvas-1.4.1`, `jspdf-2.5.1`, `jsqr-1.4.0`. | 
 
 ## 5. قاعدة البيانات (`sql/` & `supabase/`)
