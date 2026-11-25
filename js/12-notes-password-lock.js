@@ -92,7 +92,6 @@
     if (r.error) return showToast('تعذّر الإرسال: ' + r.error.message, 'error', 7000);
     showToast('لو الإيميل مسجل هيوصله رابط تغيير كلمة المرور', 'info', 8000);
   };
-  const fp = document.querySelector('#login form');
   let recovery = /type=recovery/.test(location.hash);
   const _is = window.initSupabase;
   window.initSupabase = function () {

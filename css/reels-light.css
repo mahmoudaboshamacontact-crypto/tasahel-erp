@@ -122,16 +122,6 @@ html:not(.dark) body.reels .tx-flt-chip.on { background: linear-gradient(135deg,
 html:not(.dark) body.reels .ts-brand-box a { color: var(--r-mute) !important; }
 html:not(.dark) body.reels .ts-brand-sub .font-mono { color: var(--r-acc) !important; }
 
-/* ==========================================================================
-   تسجيل الدخول: لوجو واحد نظيف بدل اللوجوهين (الأيقونة + اللوجو الأخضر)
-   ========================================================================== */
-body.reels #tasahel-3d-overlay .t3d-logos { margin-bottom: 14px; }
-body.reels #tasahel-3d-overlay .t3d-logos > :nth-child(n+2) { display: none !important; }
-body.reels #tasahel-3d-overlay .t3d-logo-box {
-  width: auto !important; height: auto !important; background: transparent !important; border: 0 !important;
-  box-shadow: none !important; padding: 0 !important; border-radius: 0 !important;
-}
-body.reels #tasahel-3d-overlay .t3d-logo-box img { height: 54px; width: auto; max-width: 220px; border-radius: 0 !important; }
 
 /* ==========================================================================
    الموبايل (≤767px): هيدر صف واحد + دوك سفلي + أزرار عائمة هادية
@@ -174,7 +164,6 @@ body.reels #tasahel-3d-overlay .t3d-logo-box img { height: 54px; width: auto; ma
   html:not(.dark) body.reels #tab-home .hm-hero h1 { font-size: 1.7rem !important; }
   html:not(.dark) body.reels .tx-flt-chip { padding: .35rem .8rem; font-size: .78rem; }
 }
-body.reels #tasahel-3d-overlay .t3d-title { display: none !important; }  /* اللوجو فيه الاسم */
 @media (max-width: 767px) { body.reels #app > footer { display: none !important; } }
 
 /* ==========================================================================
