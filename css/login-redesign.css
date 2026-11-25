@@ -1,3 +1,15 @@
+/* Suppress legacy purple/pink blobs from style.css and hide chat FAB while login is active */
+#login::before,
+#login::after {
+  display: none !important;
+  content: none !important;
+}
+
+body:has(#login:not(.hidden)) #ai-fab,
+body:has(#login:not(.hidden)) .ai-fab {
+  display: none !important;
+}
+
 /* Tasahel ERP — Clean Login Screen (Desktop + Mobile) */
 #login:not(.hidden) {
   display: grid !important;
@@ -12,9 +24,9 @@
 }
 
 #login .login-shell {
-  width: 100%;
-  max-width: 980px;
-  min-height: 580px;
+  width: min(1180px, 92vw);
+  max-width: 1180px;
+  min-height: min(720px, 84vh);
   background: #FFFFFF;
   border-radius: 18px;
   box-shadow: 0 24px 60px rgba(16, 24, 40, 0.07);
@@ -31,7 +43,7 @@
 }
 
 #login .login-hero-logo {
-  width: 340px;
+  width: 390px;
   max-width: 100%;
   height: auto;
   object-fit: contain;
@@ -49,7 +61,7 @@
 
 #login .login-form-inner {
   width: 100%;
-  max-width: 330px;
+  max-width: 360px;
   text-align: center;
 }
 
