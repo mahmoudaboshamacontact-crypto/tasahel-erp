@@ -36,7 +36,7 @@
 <link rel="stylesheet" href="css/part-d-couriers-executors.css?v=1">
 <link rel="stylesheet" href="css/part-e-clients-growth.css?v=1">
 <link rel="stylesheet" href="css/part-h-morale.css?v=1">
-<link rel="stylesheet" href="css/dash-redesign.css?v=2">
+<link rel="stylesheet" href="css/dash-redesign.css?v=3">
 <link rel="manifest" href="manifest.webmanifest?v=3">
 <meta name="theme-color" content="#0d0b14">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -571,12 +571,13 @@
       <p id="dsh-sub">جاري تحميل البيانات...</p>
     </div>
 
-    <nav class="sg-nav-pills" role="tablist" aria-label="أقسام لوحة المتابعة">
+    <nav id="sg-nav-track" class="sg-nav-track" role="tablist" aria-label="أقسام لوحة المتابعة">
+      <div id="sg-nav-glider" class="sg-nav-glider"></div>
       <button type="button" class="sg-pill active" data-view="overview" onclick="switchDashView('overview')">نظرة عامة</button>
       <button type="button" class="sg-pill" data-view="pipeline" onclick="switchDashView('pipeline')">خط سير الشغل</button>
       <button type="button" class="sg-pill" data-view="team" onclick="switchDashView('team')">الموظفين والتارجت</button>
-      <button type="button" class="sg-pill" data-view="services" onclick="switchDashView('services')">الخدمات والذروة</button>
-      <button type="button" class="sg-pill" data-view="late" onclick="switchDashView('late')">المتأخرات <span id="dsh-late-count" class="sg-pill-badge sg-tabular">0</span></button>
+      <button type="button" class="sg-pill" data-view="ops" onclick="switchDashView('ops')">المنفذين والخدمات</button>
+      <button type="button" class="sg-pill" data-view="late" onclick="switchDashView('late')">المواعيد والمتأخرات <span id="dsh-late-count" class="sg-pill-badge sg-tabular">0</span></button>
     </nav>
 
     <div class="sg-controls">
@@ -590,62 +591,92 @@
     </div>
   </header>
 
-  <!-- VIEW 1: OVERVIEW -->
+  <!-- VIEW 1: OVERVIEW + SMART INSIGHTS + TARGETS -->
   <section id="sg-view-overview" class="sg-view active">
     <div id="dsh-kpis" class="sg-kpi-grid"></div>
     <div class="sg-grid-12">
-      <div class="sg-card sg-c8">
+      <div class="sg-card sg-c8 sg-stagger" style="--i:1">
         <div class="sg-card-head">
           <div><div class="sg-card-title">اتجاه المبيعات</div><div class="sg-card-sub">الفترة الحالية مقابل السابقة</div></div>
         </div>
         <div class="sg-chart-box"><canvas id="dsh-main"></canvas></div>
       </div>
-      <div class="sg-card sg-c4">
+      <div class="sg-card sg-c4 sg-stagger" style="--i:2">
         <div class="sg-card-head">
           <div><div class="sg-card-title">طرق الدفع</div><div class="sg-card-sub">توزيع التحصيل</div></div>
         </div>
         <div class="sg-chart-box"><canvas id="dsh-pay"></canvas></div>
       </div>
     </div>
-    <div class="sg-card">
-      <div class="sg-card-head">
-        <div><div class="sg-card-title">تحقيق التارجت</div><div class="sg-card-sub">مؤشرات الإنجاز الدائرية للفريق</div></div>
-        <button type="button" class="sg-pill" style="padding:5px 14px;font-size:12px" onclick="switchDashView('team')">عرض كل الموظفين ↗</button>
+    <div class="sg-grid-12">
+      <div class="sg-card sg-c6 sg-stagger" style="--i:3">
+        <div class="sg-card-head">
+          <div><div class="sg-card-title">الخلاصة الذكية</div><div class="sg-card-sub">اكتشافات تلقائية من بيانات الفترة</div></div>
+        </div>
+        <div id="dsh-insights" class="sg-ins-list"></div>
       </div>
-      <div id="dsh-ov-targets" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px"></div>
+      <div class="sg-card sg-c6 sg-stagger" style="--i:4">
+        <div class="sg-card-head">
+          <div><div class="sg-card-title">تحقيق التارجت</div><div class="sg-card-sub">مؤشرات الإنجاز الدائرية للفريق</div></div>
+          <button type="button" class="sg-av-chip" style="padding:4px 12px" onclick="switchDashView('team')">تفاصيل الفريق ↗</button>
+        </div>
+        <div id="dsh-ov-targets" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px"></div>
+      </div>
     </div>
   </section>
 
-  <!-- VIEW 2: 4-COLUMN PIPELINE (SugarCRM Frame 00:00) -->
+  <!-- VIEW 2: 4-COLUMN PIPELINE + AGING (SugarCRM Frame 00:00) -->
   <section id="sg-view-pipeline" class="sg-view">
     <div id="dsh-pipeline" class="sg-pipe-board"></div>
+    <div class="sg-card sg-stagger" style="--i:2">
+      <div class="sg-card-head">
+        <div><div class="sg-card-title">الشغل المفتوح حسب العمر</div><div class="sg-card-sub">توزيع أعمار المعاملات غير المكتملة</div></div>
+      </div>
+      <div id="dsh-aging"></div>
+    </div>
   </section>
 
-  <!-- VIEW 3: TEAM & TARGET ARCS (SugarCRM Frame 00:06 & 00:12) -->
+  <!-- VIEW 3: TEAM AVATAR FILTER & DUAL-ARC CARDS (SugarCRM Frame 00:06 & 00:12) -->
   <section id="sg-view-team" class="sg-view">
     <div id="dsh-av-strip" class="sg-avatar-strip"></div>
     <div id="dsh-emps" class="sg-emp-grid"></div>
   </section>
 
-  <!-- VIEW 4: SERVICES & PEAK HOURS -->
-  <section id="sg-view-services" class="sg-view">
+  <!-- VIEW 4: EXECUTORS, SERVICES & PROFITABILITY, TOP CLIENTS, PEAK HOURS -->
+  <section id="sg-view-ops" class="sg-view">
     <div class="sg-grid-12">
-      <div class="sg-card sg-c5">
-        <div class="sg-card-head"><div class="sg-card-title">أعلى الخدمات إيرادًا</div></div>
+      <div class="sg-card sg-c6 sg-stagger" style="--i:0">
+        <div class="sg-card-head"><div class="sg-card-title">الخدمات والربحية</div><span class="sg-card-sub">الأعلى إيرادًا مع هامش الربح</span></div>
         <div id="dsh-svcs"></div>
       </div>
-      <div class="sg-card sg-c7">
+      <div class="sg-card sg-c6 sg-stagger" style="--i:1">
+        <div class="sg-card-head"><div class="sg-card-title">المنفذين وعبء الشغل</div><span class="sg-card-sub">المفتوح والتكلفة في الفترة</span></div>
+        <div id="dsh-executors"></div>
+      </div>
+    </div>
+    <div class="sg-grid-12">
+      <div class="sg-card sg-c5 sg-stagger" style="--i:2">
+        <div class="sg-card-head"><div class="sg-card-title">أعلى 6 عملاء</div><span class="sg-card-sub">حسب إجمالي المبيعات</span></div>
+        <div id="dsh-clients"></div>
+      </div>
+      <div class="sg-card sg-c7 sg-stagger" style="--i:3">
         <div class="sg-card-head"><div class="sg-card-title">أيام وساعات الذروة</div><span class="sg-card-sub">الشهر الحالي</span></div>
         <div id="dsh-heat" class="overflow-x-auto"></div>
       </div>
     </div>
   </section>
 
-  <!-- VIEW 5: LATE ORDERS -->
+  <!-- VIEW 5: DUE SOON & LATE ORDERS -->
   <section id="sg-view-late" class="sg-view">
-    <div class="sg-card">
-      <div class="sg-card-head"><div class="sg-card-title">الطلبات المتأخرة</div><span class="sg-card-sub">اضغط على أي معاملة لفتح تفاصيلها</span></div>
-      <div id="dsh-late" class="sg-late-list"></div>
+    <div class="sg-grid-12">
+      <div class="sg-card sg-c6 sg-stagger" style="--i:0">
+        <div class="sg-card-head"><div class="sg-card-title">مواعيد تسليم قريبة</div><span class="sg-card-sub">اليوم وخلال يومين</span></div>
+        <div id="dsh-due" class="sg-list-stack"></div>
+      </div>
+      <div class="sg-card sg-c6 sg-stagger" style="--i:1">
+        <div class="sg-card-head"><div class="sg-card-title">الطلبات المتأخرة</div><span class="sg-card-sub">اضغط لفتح تفاصيل المعاملة</span></div>
+        <div id="dsh-late" class="sg-list-stack"></div>
+      </div>
     </div>
   </section>
 </div>

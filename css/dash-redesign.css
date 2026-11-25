@@ -1,7 +1,7 @@
 /* ==========================================================================
-   Tasahel ERP — SugarCRM-Inspired Dashboard (A–Z Clean Rebuild)
-   Zero legacy overrides. Frosted glass mist canvas, obsidian pill tabs,
-   4-column live pipeline, animated SVG semi-circle gauges, real avatars.
+   Tasahel ERP — SugarCRM-Inspired Rich Animated Dashboard (A–Z)
+   Gliding obsidian pill, blur-to-sharp view transitions, staggered spring
+   card entrances, sweeping SVG arc gauges, and 100% rich operational data.
    ========================================================================== */
 
 #tab-dash {
@@ -10,16 +10,15 @@
   --sg-mint: #47CD89;
   --sg-canvas: #EBF0EE;
   --sg-wash: radial-gradient(960px 540px at 88% -8%, rgba(171, 239, 198, 0.55), transparent 64%),
-             radial-gradient(760px 500px at 8% 85%, rgba(220, 250, 230, 0.7), transparent 64%);
+             radial-gradient(760px 500px at 8% 85%, rgba(220, 250, 230, 0.72), transparent 64%);
   --sg-glass: rgba(255, 255, 255, 0.72);
-  --sg-glass-strong: rgba(255, 255, 255, 0.9);
-  --sg-border: rgba(255, 255, 255, 0.88);
+  --sg-glass-strong: rgba(255, 255, 255, 0.92);
+  --sg-border: rgba(255, 255, 255, 0.9);
   --sg-hairline: rgba(16, 24, 40, 0.06);
   --sg-shadow: 0 14px 36px -16px rgba(16, 24, 40, 0.09), 0 1px 2px rgba(16, 24, 40, 0.04);
   --sg-ink: #101828;
   --sg-ink-2: #475467;
   --sg-mute: #667085;
-  --sg-pill-bg: rgba(255, 255, 255, 0.76);
   --sg-pill-active-bg: #101828;
   --sg-pill-active-fg: #FFFFFF;
 
@@ -27,7 +26,7 @@
   background-color: var(--sg-canvas) !important;
   background-image: var(--sg-wash) !important;
   border-radius: 28px;
-  padding: 24px 24px 32px !important;
+  padding: 24px 24px 34px !important;
   border: 1px solid rgba(255, 255, 255, 0.85);
   box-shadow: inset 0 1px 0 #FFFFFF, 0 18px 44px -22px rgba(16, 24, 40, 0.12);
   color: var(--sg-ink);
@@ -39,38 +38,32 @@ html.dark #tab-dash {
   --sg-canvas: #0C111D;
   --sg-wash: radial-gradient(960px 540px at 88% -8%, rgba(23, 178, 106, 0.16), transparent 64%),
              radial-gradient(760px 500px at 8% 85%, rgba(52, 64, 84, 0.24), transparent 64%);
-  --sg-glass: rgba(16, 24, 40, 0.76);
-  --sg-glass-strong: rgba(24, 34, 48, 0.88);
+  --sg-glass: rgba(16, 24, 40, 0.78);
+  --sg-glass-strong: rgba(24, 34, 48, 0.9);
   --sg-border: rgba(255, 255, 255, 0.09);
   --sg-hairline: rgba(255, 255, 255, 0.08);
   --sg-shadow: 0 20px 44px -18px rgba(0, 0, 0, 0.55);
   --sg-ink: #FCFCFD;
   --sg-ink-2: #D0D5DD;
   --sg-mute: #98A2B3;
-  --sg-pill-bg: rgba(24, 34, 48, 0.8);
   --sg-pill-active-bg: #17B26A;
   --sg-pill-active-fg: #051A0E;
   border-color: rgba(255, 255, 255, 0.08);
   box-shadow: 0 20px 50px -24px rgba(0, 0, 0, 0.65);
 }
 
-#tab-dash * {
-  box-sizing: border-box;
-}
-
-.sg-tabular {
-  font-variant-numeric: tabular-nums;
-}
+#tab-dash * { box-sizing: border-box; }
+.sg-tabular { font-variant-numeric: tabular-nums; }
 
 /* ==========================================================================
-   1. TOP HEADER & FLOATING PILL TABS (Exact SugarCRM Video Header)
+   1. HEADER + GLIDING OBSIDIAN PILL NAV (SugarCRM Video Motion)
    ========================================================================== */
 .sg-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
   margin-bottom: 22px;
 }
 
@@ -86,66 +79,74 @@ html.dark #tab-dash {
 .sg-title-box p {
   font-size: 12.5px !important;
   color: var(--sg-mute) !important;
-  margin-top: 3px;
+  margin-top: 2px;
 }
 
-.sg-nav-pills {
-  display: flex;
+.sg-nav-track {
+  position: relative;
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 999px;
+  background: var(--sg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--sg-border);
+  box-shadow: var(--sg-shadow);
+}
+
+.sg-nav-glider {
+  position: absolute;
+  top: 5px;
+  left: 0;
+  height: calc(100% - 10px);
+  border-radius: 999px;
+  background: var(--sg-pill-active-bg);
+  box-shadow: 0 10px 22px -8px rgba(16, 24, 40, 0.45);
+  transition: transform 0.42s cubic-bezier(0.34, 1.38, 0.64, 1),
+              width 0.42s cubic-bezier(0.34, 1.38, 0.64, 1);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .sg-pill {
+  position: relative;
+  z-index: 2;
   appearance: none;
-  border: 1px solid var(--sg-border);
-  background: var(--sg-pill-bg);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  border: none;
+  background: transparent;
   color: var(--sg-ink-2);
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
-  padding: 9px 17px;
+  padding: 8px 16px;
   border-radius: 999px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
-              background-color 0.2s ease,
-              color 0.2s ease,
-              box-shadow 0.2s ease;
+  gap: 6px;
+  transition: color 0.25s ease;
 }
 
-.sg-pill:hover {
-  transform: translateY(-1px);
-  color: var(--sg-ink);
-}
-
-.sg-pill.active {
-  background: var(--sg-pill-active-bg);
-  color: var(--sg-pill-active-fg);
-  border-color: transparent;
-  font-weight: 600;
-  box-shadow: 0 10px 24px -10px rgba(16, 24, 40, 0.45);
-}
+.sg-pill:hover { color: var(--sg-ink); }
+.sg-pill.active { color: var(--sg-pill-active-fg); font-weight: 600; }
 
 .sg-pill-badge {
   font-size: 11px;
   font-weight: 700;
   padding: 1px 7px;
   border-radius: 999px;
-  background: rgba(240, 68, 56, 0.14);
+  background: rgba(240, 68, 56, 0.16);
   color: #D92D20;
 }
 
 .sg-pill.active .sg-pill-badge {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.22);
   color: inherit;
 }
 
-/* Period & Refresh Controls */
 .sg-controls {
   display: flex;
   flex-wrap: wrap;
@@ -173,7 +174,7 @@ html.dark #tab-dash {
   padding: 6px 12px;
   border-radius: 999px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.22s ease;
 }
 
 .sg-range-btn.active {
@@ -205,34 +206,60 @@ html.dark #tab-dash {
   display: grid;
   place-items: center;
   cursor: pointer;
-  transition: transform 0.25s ease, color 0.2s ease;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
 }
 
-.sg-circle-btn:hover {
-  transform: rotate(90deg);
-  color: var(--sg-emerald);
-}
+.sg-circle-btn:hover { transform: rotate(180deg); color: var(--sg-emerald); }
 
 /* ==========================================================================
-   2. VIEWS & ANIMATED TRANSITIONS
+   2. BLUR-TO-SHARP VIEW TRANSITION & STAGGERED SPRING ENTRANCES (Frame 00:05)
    ========================================================================== */
-.sg-view {
-  display: none;
-  animation: sgFadeIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
+.sg-view { display: none; }
 
 .sg-view.active {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  animation: sgBlurZoomIn 0.44s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@keyframes sgFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+@keyframes sgBlurZoomIn {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
 }
 
-/* Frosted Glass Surface */
+.sg-stagger {
+  animation: sgCardPop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+
+@keyframes sgCardPop {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Sweeping SVG Arc Animation */
+.sg-arc-stroke {
+  transition: stroke-dashoffset 1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ==========================================================================
+   3. GLASS SURFACES & LAYOUT GRIDS
+   ========================================================================== */
 .sg-card {
   background: var(--sg-glass);
   backdrop-filter: blur(20px);
@@ -241,12 +268,10 @@ html.dark #tab-dash {
   border-radius: 26px;
   padding: 20px 22px;
   box-shadow: var(--sg-shadow);
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease;
 }
 
-.sg-card:hover {
-  transform: translateY(-2px);
-}
+.sg-card:hover { transform: translateY(-2px); }
 
 .sg-card-head {
   display: flex;
@@ -256,25 +281,10 @@ html.dark #tab-dash {
   margin-bottom: 14px;
 }
 
-.sg-card-title {
-  font-size: 14.5px;
-  font-weight: 600;
-  color: var(--sg-ink);
-}
+.sg-card-title { font-size: 14.5px; font-weight: 600; color: var(--sg-ink); }
+.sg-card-sub { font-size: 12px; color: var(--sg-mute); }
 
-.sg-card-sub {
-  font-size: 12px;
-  color: var(--sg-mute);
-}
-
-/* ==========================================================================
-   3. OVERVIEW GRID (Frame 00:06 — 4 Frosted Metric Cards + Arc Gauges)
-   ========================================================================== */
-.sg-kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-}
+.sg-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 
 .sg-kpi-tile {
   background: var(--sg-glass-strong);
@@ -286,31 +296,18 @@ html.dark #tab-dash {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 12px;
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease;
+  gap: 10px;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease, box-shadow 0.28s ease;
 }
 
 .sg-kpi-tile:hover {
-  transform: translateY(-3px);
+  transform: translateY(-4px);
   border-color: rgba(23, 178, 106, 0.45);
+  box-shadow: 0 20px 38px -16px rgba(3, 107, 41, 0.2);
 }
 
-.sg-kpi-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12.5px;
-  color: var(--sg-mute);
-  font-weight: 500;
-}
-
-.sg-kpi-num {
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -0.025em;
-  color: var(--sg-ink);
-  line-height: 1.15;
-}
+.sg-kpi-top { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--sg-mute); font-weight: 500; }
+.sg-kpi-num { font-size: 28px; font-weight: 600; letter-spacing: -0.025em; color: var(--sg-ink); line-height: 1.15; }
 
 .sg-delta {
   display: inline-flex;
@@ -324,48 +321,55 @@ html.dark #tab-dash {
   color: #067647;
 }
 
-html.dark .sg-delta {
-  background: rgba(23, 178, 106, 0.18);
-  color: #47CD89;
-}
+html.dark .sg-delta { background: rgba(23, 178, 106, 0.18); color: #47CD89; }
+.sg-delta.neg { background: #FEF3F2; color: #B42318; }
+html.dark .sg-delta.neg { background: rgba(240, 68, 56, 0.18); color: #FDA29B; }
 
-.sg-delta.neg {
-  background: #FEF3F2;
-  color: #B42318;
-}
-
-html.dark .sg-delta.neg {
-  background: rgba(240, 68, 56, 0.18);
-  color: #FDA29B;
-}
-
-.sg-grid-12 {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 16px;
-}
-
+.sg-grid-12 { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
 .sg-c8 { grid-column: span 8; }
 .sg-c7 { grid-column: span 7; }
+.sg-c6 { grid-column: span 6; }
 .sg-c5 { grid-column: span 5; }
 .sg-c4 { grid-column: span 4; }
-.sg-c6 { grid-column: span 6; }
+.sg-c12 { grid-column: span 12; }
 
-.sg-chart-box {
-  position: relative;
-  height: 250px;
-  width: 100%;
+.sg-chart-box { position: relative; height: 245px; width: 100%; }
+
+/* Rich Insights & Complementary Strip */
+.sg-ins-list { display: flex; flex-direction: column; gap: 10px; }
+.sg-ins-item {
+  padding: 11px 14px;
+  border-radius: 16px;
+  background: var(--sg-glass-strong);
+  border: 1px solid var(--sg-hairline);
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sg-mini-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.sg-mini-tile {
+  background: var(--sg-glass-strong);
+  border: 1px solid var(--sg-hairline);
+  border-radius: 18px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 /* ==========================================================================
-   4. SUGARCRM PIPELINE COLUMNS (Frame 00:00 & 00:01)
+   4. PIPELINE COLUMNS + AGING (SugarCRM Frame 00:00 & 00:01)
    ========================================================================== */
-.sg-pipe-board {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  align-items: start;
-}
+.sg-pipe-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; align-items: start; }
 
 .sg-pipe-col {
   background: var(--sg-glass);
@@ -392,6 +396,12 @@ html.dark .sg-delta.neg {
   color: var(--sg-ink);
 }
 
+.sg-col-val {
+  font-size: 11px;
+  color: var(--sg-mute);
+  padding: 0 10px;
+}
+
 .sg-col-count {
   font-size: 12px;
   font-weight: 700;
@@ -401,19 +411,9 @@ html.dark .sg-delta.neg {
   color: #036b29;
 }
 
-html.dark .sg-col-count {
-  background: rgba(23, 178, 106, 0.2);
-  color: #47CD89;
-}
+html.dark .sg-col-count { background: rgba(23, 178, 106, 0.2); color: #47CD89; }
 
-.sg-pipe-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 460px;
-  overflow-y: auto;
-  padding-left: 2px;
-}
+.sg-pipe-list { display: flex; flex-direction: column; gap: 8px; max-height: 440px; overflow-y: auto; padding-left: 2px; }
 
 .sg-case-card {
   background: var(--sg-glass-strong);
@@ -424,49 +424,28 @@ html.dark .sg-col-count {
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-              box-shadow 0.2s ease,
-              border-color 0.2s ease;
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease, border-color 0.2s ease;
 }
 
 .sg-case-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px) scale(1.01);
   border-color: rgba(23, 178, 106, 0.45);
-  box-shadow: 0 10px 24px -12px rgba(3, 107, 41, 0.18);
+  box-shadow: 0 12px 24px -12px rgba(3, 107, 41, 0.22);
 }
 
-.sg-case-body {
-  min-width: 0;
-  flex: 1;
-}
-
-.sg-case-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sg-ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sg-case-sub {
-  font-size: 11px;
-  color: var(--sg-mute);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 2px;
-}
+.sg-case-body { min-width: 0; flex: 1; }
+.sg-case-title { font-size: 13px; font-weight: 600; color: var(--sg-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sg-case-sub { font-size: 11px; color: var(--sg-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 
 /* ==========================================================================
-   5. TEAM AVATAR STRIP & SUGARCRM ARC CARDS (Frame 00:06 & 00:12)
+   5. TEAM AVATAR STRIP & DUAL-ARC CARDS (SugarCRM Frame 00:06 & 00:12)
    ========================================================================== */
 .sg-avatar-strip {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 10px 14px;
   background: var(--sg-glass);
   border: 1px solid var(--sg-border);
   border-radius: 999px;
@@ -486,19 +465,18 @@ html.dark .sg-col-count {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--sg-ink);
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease, background-color 0.2s ease;
 }
 
-.sg-av-chip:hover {
+.sg-av-chip:hover, .sg-av-chip.selected {
   transform: translateY(-2px);
   border-color: var(--sg-emerald);
+  background: #ECFDF3;
 }
 
-.sg-emp-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
-}
+html.dark .sg-av-chip.selected { background: rgba(23, 178, 106, 0.22); }
+
+.sg-emp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; }
 
 .sg-emp-card {
   background: var(--sg-glass-strong);
@@ -509,46 +487,20 @@ html.dark .sg-col-count {
   box-shadow: var(--sg-shadow);
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-              box-shadow 0.28s ease,
-              border-color 0.2s ease;
+  gap: 14px;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease, border-color 0.2s ease;
 }
 
 .sg-emp-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-6px) rotate(-0.3deg);
   border-color: rgba(23, 178, 106, 0.45);
-  box-shadow: 0 22px 42px -16px rgba(3, 107, 41, 0.2);
+  box-shadow: 0 24px 44px -16px rgba(3, 107, 41, 0.22);
 }
 
-.sg-emp-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.sg-emp-person {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-width: 0;
-}
-
-.sg-emp-nums {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: var(--sg-canvas);
-}
-
-.sg-arcs-pair {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
+.sg-emp-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sg-emp-person { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.sg-emp-nums { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 14px; border-radius: 16px; background: var(--sg-canvas); }
+.sg-arcs-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 .sg-arc-box {
   background: var(--sg-glass);
@@ -561,80 +513,45 @@ html.dark .sg-col-count {
   text-align: center;
 }
 
-.sg-arc-val {
-  font-size: 19px;
-  font-weight: 700;
-  margin-top: -16px;
-  color: var(--sg-ink);
-}
-
-.sg-arc-lbl {
-  font-size: 11px;
-  color: var(--sg-mute);
-  margin-top: 3px;
-}
+.sg-arc-val { font-size: 19px; font-weight: 700; margin-top: -16px; color: var(--sg-ink); }
+.sg-arc-lbl { font-size: 11px; color: var(--sg-mute); margin-top: 3px; }
 
 /* ==========================================================================
-   6. SERVICES, HEATMAP & LATE ORDERS
+   6. BARS, CLIENTS, EXECUTORS, DUE SOON & LATE
    ========================================================================== */
-.sg-svc-row {
-  margin-bottom: 13px;
-}
+.sg-bar-row { margin-bottom: 12px; }
+.sg-bar-top { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; margin-bottom: 5px; }
+.sg-bar-sub { font-size: 11px; color: var(--sg-mute); margin-top: 3px; }
+.sg-bar-track { height: 8px; border-radius: 999px; background: var(--sg-canvas); overflow: hidden; }
+.sg-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #47CD89, #036b29); transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
 
-.sg-svc-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 13px;
-  margin-bottom: 6px;
-}
-
-.sg-svc-track {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--sg-canvas);
-  overflow: hidden;
-}
-
-.sg-svc-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #47CD89, #036b29);
-}
-
-.sg-late-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.sg-late-row {
+.sg-list-stack { display: flex; flex-direction: column; gap: 9px; max-height: 380px; overflow-y: auto; }
+.sg-row-pill {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 11px 15px;
   border-radius: 18px;
   background: var(--sg-glass-strong);
   border: 1px solid var(--sg-hairline);
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease;
 }
 
-.sg-late-row:hover {
-  transform: translateX(-3px);
-  border-color: rgba(240, 68, 56, 0.35);
-}
+.sg-row-pill:hover { transform: translateX(-4px); border-color: rgba(23, 178, 106, 0.45); }
 
 @media (max-width: 1080px) {
   .sg-kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .sg-pipe-board { grid-template-columns: repeat(2, 1fr); }
-  .sg-c8, .sg-c7, .sg-c5, .sg-c4, .sg-c6 { grid-column: span 12; }
+  .sg-c8, .sg-c7, .sg-c6, .sg-c5, .sg-c4 { grid-column: span 12; }
 }
 
 @media (max-width: 640px) {
   #tab-dash { padding: 16px 14px 24px !important; border-radius: 18px; }
   .sg-kpi-grid { grid-template-columns: 1fr; }
   .sg-pipe-board { grid-template-columns: 1fr; }
-  .sg-avatar-strip { border-radius: 20px; }
+  .sg-nav-track { border-radius: 20px; }
+  .sg-nav-glider { display: none; }
+  .sg-pill.active { background: var(--sg-pill-active-bg); }
 }
