@@ -8,7 +8,7 @@
   }
   body::before, body::after, html::before, html::after { display: none !important; }
   body #gl-bn, body #gl-bn.gl-bn-on, body #nav-menu, body #gl-scrim, body #gl-calc, body #gl-calc-fab, body #toast,
-  body #tasahel-3d-overlay, body .gl-clock { display: none !important; }
+  body .gl-clock { display: none !important; }
   html.dark #printArea, html.dark #printArea * { color-scheme: light; }
   #printArea { background: #fff !important; }
 }

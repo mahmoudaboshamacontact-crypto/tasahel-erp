@@ -84,14 +84,6 @@
     };
   }
   window.pwOpen = () => pwModal('change');
-  window.forgotPassword = async function () {
-    const em = ($('login-email').value || '').trim() || (prompt('اكتب بريدك الإلكتروني:') || '').trim();
-    if (!em) return;
-    if (!sbClient && !initSupabase()) return;
-    const r = await sbClient.auth.resetPasswordForEmail(em, { redirectTo: location.origin + location.pathname });
-    if (r.error) return showToast('تعذّر الإرسال: ' + r.error.message, 'error', 7000);
-    showToast('لو الإيميل مسجل هيوصله رابط تغيير كلمة المرور', 'info', 8000);
-  };
   let recovery = /type=recovery/.test(location.hash);
   const _is = window.initSupabase;
   window.initSupabase = function () {
