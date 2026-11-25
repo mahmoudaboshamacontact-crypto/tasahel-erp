@@ -1,0 +1,397 @@
+/* Tasahel ERP — Creative Dashboard Redesign (Inntegrate Dark Hero + Employee Cards + CreditTB Emerald Glass Bento) */
+
+/* Base Canvas */
+html:not(.dark) body #tab-dash {
+  background:
+    radial-gradient(920px 460px at 86% 240px, rgba(171, 239, 198, 0.36), transparent 65%),
+    radial-gradient(720px 440px at 10% 440px, rgba(220, 250, 230, 0.52), transparent 65%),
+    #EEF3F0 !important;
+  border: 1px solid rgba(16, 24, 40, 0.06);
+  border-radius: 22px;
+  padding: 0 0 24px !important;
+  overflow: hidden;
+  font-family: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html.dark body #tab-dash {
+  background:
+    radial-gradient(900px 480px at 85% 220px, rgba(23, 178, 106, 0.1), transparent 65%),
+    #0C111D !important;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 22px;
+  padding: 0 0 24px !important;
+  overflow: hidden;
+  font-family: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Top Dark Obsidian-Emerald Hero Band (Inntegrate style) */
+body #tab-dash .hm-hero {
+  background: linear-gradient(135deg, #0C111D 0%, #101828 58%, #062C17 100%) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 24px 24px 72px !important;
+  margin: 0 !important;
+  position: relative;
+  overflow: hidden;
+}
+
+body #tab-dash .hm-hero::after {
+  content: "";
+  position: absolute;
+  width: 420px;
+  height: 220px;
+  top: -90px;
+  left: 8%;
+  background: radial-gradient(circle, rgba(23, 178, 106, 0.24), transparent 70%);
+  pointer-events: none;
+}
+
+body #tab-dash .hm-hero .text-violet-300 {
+  color: #47CD89 !important;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+body #tab-dash #dsh-title {
+  color: #FCFCFD !important;
+  font-size: 1.45rem !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em;
+}
+
+body #tab-dash #dsh-sub {
+  color: #98A2B3 !important;
+  font-size: 0.8rem !important;
+}
+
+/* Range Pill Bar inside Dark Hero */
+body #tab-dash .hm-hero .inline-flex {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 999px !important;
+  padding: 4px !important;
+  gap: 2px;
+}
+
+body #tab-dash .hm-hero .inline-flex button {
+  color: #98A2B3 !important;
+  border-radius: 999px !important;
+  padding: 6px 14px !important;
+  font-size: 12.5px !important;
+  transition: all 0.2s ease;
+}
+
+body #tab-dash .hm-hero .inline-flex button:hover {
+  color: #FFFFFF !important;
+}
+
+body #tab-dash .hm-hero .inline-flex button.bg-white,
+body #tab-dash .hm-hero .inline-flex button.shadow {
+  background: #17B26A !important;
+  color: #051B0E !important;
+  font-weight: 700 !important;
+  box-shadow: 0 6px 16px -6px rgba(23, 178, 106, 0.6) !important;
+}
+
+body #tab-dash .dsh-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 999px !important;
+  padding: 6px 28px 6px 14px !important;
+  font-size: 12.5px !important;
+  font-weight: 500;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #E4E7EC !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  cursor: pointer;
+  outline: none;
+}
+
+body #tab-dash .dsh-select option {
+  color: #101828;
+  background: #FFFFFF;
+}
+
+body #tab-dash .hm-hero > div > div:last-child > button[onclick="dashRefresh()"] {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #E4E7EC !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 999px !important;
+  width: 34px;
+  height: 34px;
+  padding: 0 !important;
+  display: inline-grid;
+  place-items: center;
+}
+
+/* Inner Content Padding */
+body #tab-dash > *:not(.hm-hero) {
+  margin-inline: 22px;
+}
+
+/* 4 Dark-Glass KPI Cards Overlapping the Dark Band */
+body #tab-dash #dsh-kpis {
+  margin-top: -54px !important;
+  position: relative;
+  z-index: 5;
+  gap: 14px !important;
+}
+
+body #tab-dash #dsh-kpis .card {
+  background: rgba(16, 24, 40, 0.92) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 18px !important;
+  padding: 18px 20px !important;
+  box-shadow: 0 18px 36px -14px rgba(12, 17, 29, 0.45) !important;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s ease;
+}
+
+body #tab-dash #dsh-kpis .card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(71, 205, 137, 0.4) !important;
+}
+
+body #tab-dash #dsh-kpis .text-slate-500 {
+  color: #98A2B3 !important;
+  font-weight: 500;
+}
+
+body #tab-dash #dsh-kpis .card span.rounded-lg {
+  background: rgba(23, 178, 106, 0.18) !important;
+  color: #47CD89 !important;
+  border-radius: 50% !important;
+  width: 34px !important;
+  height: 34px !important;
+}
+
+body #tab-dash #dsh-kpis [id^="dkpi-"] {
+  color: #FCFCFD !important;
+  font-size: 1.85rem !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+
+body #tab-dash #dsh-kpis .h-12 {
+  height: 32px !important;
+  opacity: 0.85;
+}
+
+/* General Clean Bento Cards inside #tab-dash */
+html:not(.dark) body #tab-dash .card,
+html:not(.dark) body #tab-dash details.card {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(16, 24, 40, 0.07) !important;
+  border-radius: 22px !important;
+  box-shadow: 0 12px 30px -14px rgba(16, 24, 40, 0.08) !important;
+}
+
+html.dark body #tab-dash .card,
+html.dark body #tab-dash details.card {
+  background: rgba(16, 24, 40, 0.88) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 22px !important;
+  box-shadow: 0 16px 36px -16px rgba(0, 0, 0, 0.5) !important;
+}
+
+body #tab-dash h3 {
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+}
+
+html:not(.dark) body #tab-dash h3 { color: #101828 !important; }
+html.dark body #tab-dash h3 { color: #FCFCFD !important; }
+body #tab-dash h3 i { color: #17B26A !important; }
+
+/* CreditTB-Style Emerald Glass Target Card */
+body #tab-dash .dsh-target-card {
+  background: linear-gradient(140deg, #064E3B 0%, #036b29 52%, #17B26A 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  color: #FFFFFF !important;
+}
+
+body #tab-dash .dsh-target-card h3,
+body #tab-dash .dsh-target-card h3 i,
+body #tab-dash .dsh-target-card #dsh-tgt-month {
+  color: #FFFFFF !important;
+}
+
+body #tab-dash .dsh-arcs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 12px;
+  padding-top: 8px;
+}
+
+body #tab-dash .dsh-arc-item {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 18px;
+  padding: 14px 10px 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s ease;
+}
+
+body #tab-dash .dsh-arc-item:hover {
+  transform: translateY(-3px);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+body #tab-dash .dsh-arc-pct {
+  font-size: 22px;
+  font-weight: 300;
+  margin-top: -18px;
+  color: #FFFFFF;
+  font-variant-numeric: tabular-nums;
+}
+
+body #tab-dash .dsh-arc-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin-top: 4px;
+}
+
+body #tab-dash .dsh-arc-sub {
+  font-size: 11px;
+  color: #DCFAE6;
+  opacity: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inntegrate-Style Employee Cards with Real Photos & Hover Tilt/Lift */
+body #tab-dash #dsh-emps {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  padding: 16px !important;
+  border: 0 !important;
+}
+
+body #tab-dash #dsh-emps > div {
+  border-top: 0 !important;
+}
+
+body #tab-dash .dsh-emp-card {
+  background: #FFFFFF;
+  border: 1px solid rgba(16, 24, 40, 0.08);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 10px 26px -14px rgba(16, 24, 40, 0.1);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.28s ease,
+              border-color 0.2s ease;
+}
+
+html.dark body #tab-dash .dsh-emp-card {
+  background: #182230;
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 14px 28px -14px rgba(0, 0, 0, 0.45);
+}
+
+body #tab-dash .dsh-emp-card:hover {
+  transform: translateY(-5px) rotate(-0.35deg);
+  box-shadow: 0 22px 40px -16px rgba(3, 107, 41, 0.2);
+  border-color: rgba(23, 178, 106, 0.4);
+}
+
+body #tab-dash .dsh-emp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+body #tab-dash .dsh-emp-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+body #tab-dash .dsh-emp-rank {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #ECFDF3;
+  color: #067647;
+  flex-shrink: 0;
+}
+
+html.dark body #tab-dash .dsh-emp-rank {
+  background: rgba(23, 178, 106, 0.18);
+  color: #47CD89;
+}
+
+body #tab-dash .dsh-emp-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: #F6F9F7;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+html.dark body #tab-dash .dsh-emp-metrics {
+  background: #101828;
+}
+
+body #tab-dash .dsh-emp-lbl {
+  font-size: 11px;
+  color: #667085;
+}
+
+body #tab-dash .dsh-emp-val {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+body #tab-dash .dsh-emp-bar-track {
+  height: 6px;
+  border-radius: 999px;
+  background: #E4E7EC;
+  overflow: hidden;
+}
+
+html.dark body #tab-dash .dsh-emp-bar-track {
+  background: #344054;
+}
+
+body #tab-dash .dsh-emp-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #47CD89, #036b29);
+}
+
+/* Harmonize #dx-wrap & #ops-dash secondary cards into Tasheel Emerald/Slate */
+body #tab-dash #dx-wrap .dx-card,
+body #tab-dash #ops-dash .card,
+body #tab-dash #ops-dash details.card {
+  border-radius: 20px !important;
+}
+
+@media (max-width: 767px) {
+  body #tab-dash > *:not(.hm-hero) {
+    margin-inline: 12px;
+  }
+  body #tab-dash .hm-hero {
+    padding: 18px 16px 64px !important;
+  }
+  body #tab-dash #dsh-kpis {
+    margin-top: -46px !important;
+  }
+}

@@ -11,7 +11,7 @@
   const addM = (m, k) => { const a = m.split('-').map(Number); return mk(new Date(a[0], a[1] - 1 + k, 1)); };
   const commOf = l => (l.commission != null && Number.isFinite(Number(l.commission))) ? Number(l.commission) : (Number(l.commission_per_unit) || 0) * (Number(l.qty) || 0);
   const AN = () => (window.__p18anim ? 700 : 0); /* الحركة بتشتغل وقت الضغط/الإجراء بس */
-  const C = { brand: '#0d9488', ink: '#0b1b33', pal: ['#0d9488', '#2563eb', '#8b5cf6', '#f59e0b', '#ec4899', '#64748b'] };
+  const C = { brand: '#036b29', ink: '#101828', pal: ['#036b29', '#17B26A', '#47CD89', '#75E0A7', '#344054', '#98A2B3'] };
 
   let refCache = {};
   async function loadMonthRefunds(m, force) {
@@ -148,7 +148,7 @@
   function renderKpis(cur, prv) {
     const defs = [['المبيعات', kMoney(cur.sales), cur.sales, prv.sales, cur.bs, '#0d9488', 'fa-coins'], ['المعاملات', kNum(cur.tx), cur.tx, prv.tx, cur.btx, '#2563eb', 'fa-folder-open'], ['متوسط المعاملة', kMoney(cur.avg), cur.avg, prv.avg, cur.bavg, '#8b5cf6', 'fa-receipt'], ['صافي الهامش', kMoney(cur.net), cur.net, prv.net, cur.bnet, '#059669', 'fa-chart-line']];
     $('dsh-kpis').innerHTML = defs.map((d, i) => '<div class="card p-5 overflow-hidden dash-in" style="animation-delay:' + (i * 0.09) + 's"><div class="flex items-center justify-between"><div class="flex items-center gap-2 text-xs text-slate-500"><span class="flex h-8 w-8 items-center justify-center rounded-lg text-white" style="background:' + d[5] + '"><i class="fa-solid ' + d[6] + ' text-xs"></i></span>' + d[0] + '</div>' + chip(d[2], d[3]) + '</div><div class="mt-3 text-2xl font-bold font-mono text-ink dark:text-white" id="dkpi-' + i + '" data-raw="' + d[2] + '" data-cur="' + (d[0] === 'المعاملات' ? 0 : 1) + '">' + d[1] + '</div><div class="h-12 mt-2 -mx-1"><canvas id="dsp-' + i + '"></canvas></div></div>').join('');
-    defs.forEach((d, i) => spark('dsp-' + i, d[4], '#0d9488'));
+    defs.forEach((d, i) => spark('dsp-' + i, d[4], '#47CD89'));
     defs.forEach((d, i) => countUp($('dkpi-' + i)));
   }
 
@@ -161,7 +161,7 @@
     charts.main = new Chart($('dsh-main'), {
       type: 'line',
       data: { labels: labels, datasets: [
-        { label: P.label, data: cur.bs, borderColor: C.brand, backgroundColor: 'rgba(13,148,136,.14)', fill: true, tension: .35, borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5 },
+        { label: P.label, data: cur.bs, borderColor: C.brand, backgroundColor: 'rgba(23,178,106,.16)', fill: true, tension: .35, borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5 },
         { label: P.plabel, data: prv.bs.slice(0, cur.bs.length), borderColor: '#94a3b8', borderDash: [5, 5], fill: false, tension: .35, borderWidth: 2, pointRadius: 0 }] },
       options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, animation: { duration: AN() },
         plugins: { legend: { display: false }, tooltip: { rtl: true, callbacks: { label: c => ' ' + c.dataset.label + ': ' + formatCurrency(c.parsed.y) } } },
@@ -187,11 +187,15 @@
     const rows = [...by.values()].sort((a, b) => b.sales - a.sales), max = rows.length ? rows[0].sales || 1 : 1, mgr = isMgr();
     $('dsh-emps').innerHTML = rows.map((r, i) => {
       const showComm = mgr || (r.p && currentUser && r.p.id === currentUser.id);
-      return '<div class="flex items-center gap-3 px-5 py-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ' + (i === 0 ? 'bg-amber-400 text-slate-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-500') + '">' + (i + 1) + '</span>' +
-        avatarHtml(r.p || { id: r.name, full_name: r.name }, 34) +
-        '<div class="min-w-0 flex-1"><div class="flex items-center justify-between gap-2"><span class="truncate text-sm font-bold text-ink dark:text-white">' + eh(r.name) + '</span><span class="shrink-0 font-mono text-xs font-bold text-brand-600">' + formatCurrency(r.sales) + '</span></div>' +
-        '<div class="mt-1.5 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div class="h-full rounded-full bg-brand-500" style="width:' + Math.round(r.sales / max * 100) + '%"></div></div>' +
-        '<div class="mt-1 flex justify-between text-[10px] text-slate-400"><span>' + r.tx.size + ' معاملة</span>' + (showComm ? '<span class="text-emerald-600">كوميشن ' + formatCurrency(r.comm) + '</span>' : '') + '</div></div></div>';
+      const pct = Math.round(r.sales / max * 100);
+      return '<article class="dsh-emp-card">' +
+        '<div class="dsh-emp-head"><div class="dsh-emp-id">' + avatarHtml(r.p || { id: r.name, full_name: r.name }, 42) +
+        '<div class="min-w-0"><div class="truncate text-sm font-bold text-ink dark:text-white">' + eh(r.name) + '</div><div class="text-[11px] text-slate-400">' + r.tx.size + ' معاملة</div></div></div>' +
+        '<span class="dsh-emp-rank">#' + (i + 1) + '</span></div>' +
+        '<div class="dsh-emp-metrics"><div><div class="dsh-emp-lbl">المبيعات</div><div class="dsh-emp-val text-ink dark:text-white">' + formatCurrency(r.sales) + '</div></div>' +
+        '<div><div class="dsh-emp-lbl">' + (showComm ? 'الكوميشن' : 'الحصة') + '</div><div class="dsh-emp-val" style="color:#17B26A">' + (showComm ? formatCurrency(r.comm) : pct + '%') + '</div></div></div>' +
+        '<div class="dsh-emp-bar-track"><div class="dsh-emp-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '</article>';
     }).join('') || '<div class="p-8 text-center text-xs text-slate-400">لا توجد بيانات</div>';
   }
 
@@ -210,7 +214,7 @@
     let h = '<div class="grid gap-1 text-[10px] min-w-[460px]" style="grid-template-columns:64px repeat(' + hrs.length + ',minmax(0,1fr))"><span></span>' + hrs.map(x => '<span class="text-center text-slate-400 font-mono">' + x + '</span>').join('');
     order.forEach(dw => {
       h += '<span class="flex items-center text-slate-500 font-semibold">' + names[dw] + '</span>';
-      hrs.forEach(x => { const v = g[dw][x], a = top ? v / top : 0; h += '<span title="' + names[dw] + ' ' + x + ':00 — ' + v + ' بند" class="h-7 rounded-md" style="background:' + (v ? 'rgba(13,148,136,' + (0.15 + a * 0.85).toFixed(2) + ')' : 'rgba(148,163,184,.12)') + '"></span>'; });
+      hrs.forEach(x => { const v = g[dw][x], a = top ? v / top : 0; h += '<span title="' + names[dw] + ' ' + x + ':00 — ' + v + ' بند" class="h-7 rounded-md" style="background:' + (v ? 'rgba(3,107,41,' + (0.14 + a * 0.86).toFixed(2) + ')' : 'rgba(148,163,184,.12)') + '"></span>'; });
     });
     $('dsh-heat').innerHTML = h + '</div>';
   }
@@ -228,10 +232,16 @@
       if (!rows.length) { box.innerHTML = '<div class="py-8 text-center text-xs text-slate-400">لم يتم تحديد تارجت لهذا الشهر بعد</div>'; return; }
       const lines = await loadMonth(wm), sales = new Map();
       lines.forEach(l => { const p = profileByName(l.employee); if (p) sales.set(p.id, (sales.get(p.id) || 0) + (Number(l.total) || 0)); });
-      box.innerHTML = rows.map(x => {
-        const p = profiles.find(q => q.id === x.user_id) || { id: x.user_id, full_name: 'موظف' }, s = sales.get(x.user_id) || 0, pct = Math.round(s / Number(x.target) * 100), col = pct >= 100 ? 'var(--r-ok,#059669)' : pct >= 60 ? 'var(--r-acc,#0d9488)' : pct >= 30 ? 'var(--r-acc2,#d97706)' : 'var(--r-bad,#dc2626)';
-        return '<div class="flex items-center gap-3"><div class="relative h-12 w-12 shrink-0 rounded-full" style="background:conic-gradient(' + col + ' ' + Math.min(100, pct) + '%,rgba(148,163,184,.25) 0)"><div class="absolute inset-[5px] flex items-center justify-center rounded-full bg-white dark:bg-slate-900 text-[11px] font-bold font-mono" style="color:' + col + '">' + pct + '%</div></div><div class="min-w-0 flex-1"><div class="truncate text-sm font-bold text-ink dark:text-white">' + eh(p.full_name) + '</div><div class="text-[11px] text-slate-400 font-mono">' + formatCurrency(s) + ' / ' + formatCurrency(x.target) + '</div></div></div>';
-      }).join('');
+      box.innerHTML = '<div class="dsh-arcs-grid">' + rows.map(x => {
+        const p = profiles.find(q => q.id === x.user_id) || { id: x.user_id, full_name: 'موظف' }, s = sales.get(x.user_id) || 0, pct = Math.round(s / Number(x.target) * 100);
+        const clamped = Math.max(0, Math.min(100, pct)), arcLen = 132, off = (arcLen - (arcLen * clamped / 100)).toFixed(1);
+        const stroke = pct >= 80 ? '#FFFFFF' : pct >= 50 ? '#ABEFC6' : '#75E0A7';
+        return '<div class="dsh-arc-item">' +
+          '<svg width="96" height="56" viewBox="0 0 104 60" style="overflow:visible"><path d="M 10 52 A 42 42 0 0 1 94 52" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="7" stroke-linecap="round"/><path d="M 10 52 A 42 42 0 0 1 94 52" fill="none" stroke="' + stroke + '" stroke-width="7" stroke-linecap="round" stroke-dasharray="' + arcLen + '" stroke-dashoffset="' + off + '"/></svg>' +
+          '<div class="dsh-arc-pct">' + pct + '%</div>' +
+          '<div class="dsh-arc-name">' + eh(p.full_name) + '</div>' +
+          '<div class="dsh-arc-sub">' + formatCurrency(s) + '</div></div>';
+      }).join('') + '</div>';
     } catch (err) { box.innerHTML = '<div class="py-8 text-center text-xs text-slate-400">شغّل ملف phase4-commission-targets.sql علشان يظهر التارجت</div>'; }
   }
 
