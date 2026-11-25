@@ -21,7 +21,6 @@
 <link rel="stylesheet" href="css/style.css?v=p1b1">
 <link rel="stylesheet" href="css/glassy-collapse.css?v=1">
 <link rel="stylesheet" href="css/mobile-bottom-nav.css?v=1">
-<link rel="stylesheet" href="css/login-neumorphic.css?v=1">
 <link rel="stylesheet" href="css/tx-status-cards.css?v=1">
 <link rel="stylesheet" href="css/home-light-glass.css?v=1">
 <link rel="stylesheet" href="css/phase2.css?v=3">
@@ -30,7 +29,7 @@
 <link rel="stylesheet" href="css/reels.css?v=6">
 <link rel="stylesheet" href="css/reels-light.css?v=2">
 <link rel="stylesheet" href="css/brand-fix.css?v=8">
-<link rel="stylesheet" href="css/login-orange.css?v=3">
+<link rel="stylesheet" href="css/login-redesign.css?v=1">
 <link rel="stylesheet" href="css/phase20.css?v=1">
 <link rel="stylesheet" href="css/part-b-work-tracking.css?v=1">
 <link rel="stylesheet" href="css/part-c-money-commissions.css?v=1">
@@ -124,24 +123,50 @@
 </div>
 </div>
 
-<section id="login" class="flex hidden min-h-screen items-center justify-center bg-ink p-6">
-<div class="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 p-7 shadow-2xl space-y-5">
-<div class="space-y-3">
-<div class="flex items-center justify-center gap-4">
-<span class="flex items-center rounded-xl bg-white px-2.5 py-1.5 ring-1 ring-slate-200 dark:ring-0"><img id="login-brand" alt="تساهيل" class="h-10 w-auto"></span>
-<span class="h-9 w-px bg-slate-200 dark:bg-slate-700"></span>
-<img src="icon.png" alt="أيقونة السيستم" class="h-12 w-12 rounded-xl object-cover shadow-lg shadow-black/30">
+<section id="login" class="hidden">
+<div class="login-shell">
+  <div class="login-visual-pane" aria-label="Tasahel">
+    <img id="login-brand" class="login-hero-logo" src="logo-transparent.png" alt="Tasahel">
+    <script src="js/02-login-brand.js?v=20261040"></script>
+  </div>
+  <div class="login-form-pane">
+    <div class="login-form-inner">
+      <img class="login-emblem" src="login-emblem.png" alt="Tasahel Emblem">
+      <div id="login-error" class="hidden" role="alert"></div>
+      <form onsubmit="handleLogin(event)" novalidate>
+        <div class="login-field-wrap">
+          <input id="login-email" type="email" required autocomplete="username" placeholder="Email" class="login-clean-input">
+        </div>
+        <div class="login-field-wrap">
+          <input id="login-password" type="password" required autocomplete="current-password" placeholder="Password" class="login-clean-input">
+          <button id="login-eye-btn" type="button" class="login-eye-btn" aria-label="Toggle password visibility">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <div class="login-options-row">
+          <label class="login-remember-wrap">
+            <button id="login-remember" type="button" class="login-pill-switch" role="switch" aria-checked="false" aria-label="Remember me">
+              <span class="login-pill-knob"></span>
+            </button>
+            <span>Remember me</span>
+          </label>
+          <button id="login-forgot-btn" type="button" class="login-forgot-link">Forgot Password?</button>
+        </div>
+        <button id="login-btn" type="submit">Login</button>
+      </form>
+    </div>
+  </div>
 </div>
-<script src="js/02-login-brand.js?v=20261040"></script>
-<div class="text-center"><div class="text-lg font-bold text-ink dark:text-white leading-tight">تساهيل</div><div class="text-xs text-slate-500 dark:text-slate-400 font-medium">قسم الخدمات الحكومية</div></div>
-</div>
-<div id="login-error" class="hidden rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"></div>
-<form onsubmit="handleLogin(event)" class="space-y-4">
-<div><label class="label" for="login-email">البريد الإلكتروني</label><input id="login-email" type="email" required autocomplete="username" dir="ltr" placeholder="user@domain.com" class="field text-right"></div>
-<div><label class="label" for="login-password">كلمة المرور</label><input id="login-password" type="password" required autocomplete="current-password" dir="ltr" placeholder="••••••••" class="field text-right"></div>
-<button id="login-btn" type="submit" class="btn-neo-pri w-full py-2.5 font-semibold text-white shadow-lg disabled:opacity-60"><i class="fa-solid fa-arrow-right-to-bracket"></i><span>تسجيل الدخول</span></button>
-</form>
-<div class="pt-2 border-t border-slate-100 dark:border-slate-800 text-center"><button type="button" onclick="openSupabaseModal()" class="text-xs text-brand-600 dark:text-brand-400 hover:underline"><i class="fa-solid fa-gear ms-1"></i> ضبط مفاتيح اتصال Supabase</button></div>
+<div id="forgot-modal" role="dialog" aria-modal="true" aria-labelledby="forgot-title">
+  <div class="forgot-card">
+    <h2 id="forgot-title" class="forgot-title">Reset Password</h2>
+    <p class="forgot-sub">Enter your email to receive a password reset link.</p>
+    <input id="forgot-email" type="email" placeholder="Email" class="login-clean-input">
+    <div class="forgot-actions">
+      <button id="forgot-send-btn" type="button" class="forgot-send-btn">Send</button>
+      <button id="forgot-cancel-btn" type="button" class="forgot-cancel-btn">Cancel</button>
+    </div>
+  </div>
 </div>
 </section>
 
@@ -685,7 +710,7 @@
 <script src="js/62-workflow-engine.js?v=2" defer></script>
 <script src="js/63-customer-360.js?v=2" defer></script>
 <script src="js/64-executive-intelligence.js?v=2" defer></script>
-<script src="js/login-lamp.js?v=2" defer></script>
+<script src="js/login-redesign.js?v=1" defer></script>
 <script src="js/home-stable.js?v=2" defer></script>
 <script src="js/help-modal.js?v=1" defer></script>
 <script src="js/68-modern-dashboard-requests-history.js?v=12" defer></script>
