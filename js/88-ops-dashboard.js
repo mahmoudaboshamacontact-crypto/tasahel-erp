@@ -20,13 +20,13 @@
     }
     return [iso(new Date(n.getFullYear(), n.getMonth(), 1)), iso(t)];
   }
-  var COL = { open: '#0ea5e9', ip: '#f59e0b', rev: '#f43f5e', ready: '#10b981', old: '#8b5cf6' };
+  var COL = { open: '#86efac', ip: '#fcd34d', rev: '#fda4af', ready: '#4ade80', old: '#c4b5fd' };
 
-  function tile(label, val, color, hint) {
-    return '<div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3.5"><div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">' + esc(label) + '</div><div class="mt-1.5 text-3xl font-bold font-mono" dir="ltr" style="color:' + color + '">' + nf(val) + '</div>' + (hint ? '<div class="mt-0.5 text-[10.5px] text-slate-400">' + esc(hint) + '</div>' : '') + '</div>';
+  function tile(label, val, color, hint, icon) {
+    return '<div class="od-tile"><div class="od-tile-top"><span class="od-ico" style="color:' + color + '"><i class="fa-solid ' + (icon || 'fa-layer-group') + '"></i></span><span class="od-lbl">' + esc(label) + '</span></div><div class="od-num" dir="ltr">' + nf(val) + '</div>' + (hint ? '<div class="od-hint">' + esc(hint) + '</div>' : '') + '</div>';
   }
   function section(id, title, inner, open) {
-    return '<details class="card overflow-hidden" ' + (open ? 'open' : '') + ' data-od="' + id + '"><summary class="flex cursor-pointer items-center justify-between px-4 py-3.5 font-bold text-sm text-ink dark:text-white">' + esc(title) + '<i class="fa-solid fa-chevron-down text-xs text-slate-400"></i></summary><div class="border-t border-slate-100 dark:border-slate-800 p-4 space-y-4">' + inner + '</div></details>';
+    return '<details class="card overflow-hidden ' + (id === 'queue' ? 'od-band' : '') + '" ' + (open ? 'open' : '') + ' data-od="' + id + '"><summary class="flex cursor-pointer items-center justify-between px-4 py-3.5 font-bold text-sm text-ink dark:text-white">' + esc(title) + '<i class="fa-solid fa-chevron-down text-xs text-slate-400"></i></summary><div class="border-t border-slate-100 dark:border-slate-800 p-4 space-y-4">' + inner + '</div></details>';
   }
   function bars(rows, color) {
     var max = Math.max.apply(null, rows.map(function (r) { return r[1]; }).concat([1]));
@@ -49,8 +49,8 @@
     var out = '';
     out += section('queue', 'طابور الشغل الحالي (لايف)',
       '<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">' +
-      tile('مفتوح للتسليم', q.open, COL.open, nf(q.orders_open) + ' معاملة') + tile('قيد التنفيذ', q.in_progress, COL.ip) + tile('تحت المراجعة', q.under_review, COL.rev) +
-      tile('جاهز للتسليم', q.ready, COL.ready) + tile('أقدم مفتوح (يوم)', q.oldest_days, COL.old) + tile('وصلت في الفترة', k.received, COL.open, nf(k.orders) + ' معاملة') + '</div>' +
+      tile('مفتوح للتسليم', q.open, COL.open, nf(q.orders_open) + ' معاملة', 'fa-folder-open') + tile('قيد التنفيذ', q.in_progress, COL.ip, '', 'fa-gears') + tile('تحت المراجعة', q.under_review, COL.rev, '', 'fa-magnifying-glass') +
+      tile('جاهز للتسليم', q.ready, COL.ready, '', 'fa-box-open') + tile('أقدم مفتوح (يوم)', q.oldest_days, COL.old, '', 'fa-hourglass-half') + tile('وصلت في الفترة', k.received, COL.open, nf(k.orders) + ' معاملة', 'fa-inbox') + '</div>' +
       '<div class="grid gap-4 lg:grid-cols-2"><div class="space-y-2"><div class="text-xs font-bold text-slate-500">الشغل المفتوح حسب العمر</div>' +
       bars([['أقل من يوم', a.d0], ['1 - 3 أيام', a.d1_3], ['4 - 7 أيام', a.d3_7], ['8 - 14 يوم', a.d7_14], ['أكتر من 14 يوم', a.d14p]], COL.open) + '</div>' +
       '<div class="space-y-2"><div class="text-xs font-bold text-slate-500">الاستلام اليومي في الفترة</div>' + bars((d.daily || []).slice(-14).map(function (x) { return [x.d.slice(5), x.n]; }), COL.ready) + '</div></div>', true);
@@ -86,6 +86,11 @@
     } catch (e) { box.innerHTML = ''; console.warn('ops dash', e); }
   }
 
+  window.dashAsk = function (q) {
+    q = String(q || '').trim(); var b = $('ts-ai-btn'); if (!q || !b) return;
+    b.click();
+    setTimeout(function () { var i = $('ts-ai-inp'), f = $('ts-ai-form'); if (i && f) { i.value = q; if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event('submit', { cancelable: true })); } }, 250);
+  };
   function wrap(name, fn, before) { var o = window[name]; if (typeof o === 'function') window[name] = function () { if (before) { try { fn.apply(this, arguments); } catch (e) { /* */ } } var x = o.apply(this, arguments); if (!before) { try { fn.apply(this, arguments); } catch (e) { /* */ } } return x; }; }
   function fillMonths() {
     var sel = $('dsh-month'); if (!sel || sel.options.length > 1) return;

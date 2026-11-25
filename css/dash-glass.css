@@ -1,0 +1,107 @@
+/* الداش بورد: لوح أخضر ناعم + مربعات بأحجام مختلفة + أرقام رفيعة. مخصوص #tab-dash بس. */
+#tab-dash { --g9:#06241a; --g8:#0b3d2a; --g7:#14532d; --g6:#15803d; --g5:#22a559; --g4:#4ade80; --g3:#86efac; --g2:#bbf7d0; --g1:#dcfce7; --lime:#c9f24d;
+  --ink:#0f1f17; --mute:#66806f; --cardbg:rgba(255,255,255,.74); --line:rgba(20,83,45,.12); --shadow:0 1px 0 rgba(255,255,255,.7) inset, 0 12px 30px -18px rgba(6,36,26,.25); }
+html.dark #tab-dash { --ink:#ecf8f0; --mute:#8fb09c; --cardbg:rgba(13,27,19,.78); --line:rgba(134,239,172,.12); --shadow:0 12px 30px -18px rgba(0,0,0,.6); }
+
+html:not(.dark) body #tab-dash { background: radial-gradient(60% 45% at 88% -5%, rgba(134,239,172,.38), transparent 62%), radial-gradient(45% 40% at 0% 100%, rgba(201,242,77,.16), transparent 60%), #eef4ef !important; border: 1px solid var(--line) !important; border-radius: 28px !important; padding: 22px !important; }
+html.dark body #tab-dash { background: radial-gradient(60% 45% at 88% -5%, rgba(34,165,89,.2), transparent 62%), #07120c !important; border: 1px solid var(--line) !important; border-radius: 28px !important; padding: 22px !important; }
+
+/* بطاقات عامة */
+html body #tab-dash .card, html body #tab-dash details.card { background: var(--cardbg) !important; border: 1px solid var(--line) !important; border-radius: 22px !important; box-shadow: var(--shadow) !important; color: var(--ink); }
+html body #tab-dash .card h3 { color: var(--ink) !important; font-weight: 600; }
+html body #tab-dash .card h3 i { color: var(--g6) !important; }
+html.dark body #tab-dash .card h3 i { color: var(--g4) !important; }
+html body #tab-dash .text-slate-500, html body #tab-dash .text-slate-400 { color: var(--mute) !important; }
+
+/* الهيدر */
+html body #tab-dash .dg-hero { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+#tab-dash .dg-greet { font-size: .85rem; font-weight: 500; color: var(--g6); }
+html.dark #tab-dash .dg-greet { color: var(--g4); }
+html body #tab-dash #dsh-title { font-size: clamp(1.9rem, 4vw, 2.9rem) !important; font-weight: 300 !important; letter-spacing: -.01em; line-height: 1.2 !important; color: var(--ink) !important; margin-top: 2px; }
+html body #tab-dash #dsh-sub { color: var(--mute) !important; font-size: .82rem !important; }
+#tab-dash .dg-pills { background: var(--g8); border-radius: 999px; padding: 4px; gap: 2px; }
+html body #tab-dash .dg-pills button { color: rgba(255,255,255,.72) !important; background: transparent !important; border-radius: 999px !important; padding: 6px 14px !important; box-shadow: none !important; }
+html body #tab-dash .dg-pills button.bg-white, html body #tab-dash .dg-pills button.shadow { background: var(--lime) !important; color: var(--g9) !important; font-weight: 700; }
+html body #tab-dash .dsh-select { border-radius: 999px !important; background-color: var(--cardbg) !important; color: var(--ink) !important; border: 1px solid var(--line) !important; padding: 8px 30px 8px 14px; }
+#tab-dash .dg-round { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--cardbg); border: 1px solid var(--line); color: var(--g6); }
+#tab-dash .dg-round:hover { background: var(--g1); }
+html.dark #tab-dash .dg-round { color: var(--g4); } html.dark #tab-dash .dg-round:hover { background: rgba(134,239,172,.12); }
+
+/* مربعات الأرقام: الأول كبير وغامق */
+#tab-dash #dsh-kpis { display: grid; gap: 14px; grid-template-columns: 1fr; }
+@media (min-width: 640px) { #tab-dash #dsh-kpis { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1100px) { #tab-dash #dsh-kpis { grid-template-columns: 2fr 1fr 1fr 1fr; } }
+html body #tab-dash #dsh-kpis .card { padding: 20px 22px !important; min-height: 138px; }
+html body #tab-dash #dsh-kpis [id^="dkpi-"] { font-weight: 300 !important; font-size: 2.1rem !important; letter-spacing: -.02em; color: var(--ink) !important; margin-top: 14px !important; }
+html body #tab-dash #dsh-kpis .card span.rounded-lg { background: var(--g1) !important; color: var(--g6) !important; border-radius: 50% !important; width: 32px; height: 32px; }
+html.dark body #tab-dash #dsh-kpis .card span.rounded-lg { background: rgba(134,239,172,.12) !important; color: var(--g4) !important; }
+html body #tab-dash #dsh-kpis .card:first-child { background: radial-gradient(70% 90% at 12% 0%, rgba(201,242,77,.22), transparent 60%), linear-gradient(145deg, var(--g8), var(--g9)) !important; border-color: rgba(134,239,172,.18) !important; }
+html body #tab-dash #dsh-kpis .card:first-child [id^="dkpi-"] { font-size: 3.2rem !important; color: #fff !important; font-weight: 200 !important; }
+html body #tab-dash #dsh-kpis .card:first-child .text-slate-500, html body #tab-dash #dsh-kpis .card:first-child .text-slate-400 { color: rgba(255,255,255,.7) !important; }
+html body #tab-dash #dsh-kpis .card:first-child span.rounded-lg { background: rgba(201,242,77,.18) !important; color: var(--lime) !important; }
+/* شارة النسبة */
+html body #tab-dash #dsh-kpis [class*="bg-emerald-100"] { background: rgba(34,165,89,.14) !important; color: var(--g6) !important; }
+html body #tab-dash #dsh-kpis [class*="bg-rose-100"] { background: rgba(225,29,72,.1) !important; color: #be123c !important; }
+html body #tab-dash #dsh-kpis .card:first-child [class*="bg-emerald-100"] { background: var(--lime) !important; color: var(--g9) !important; }
+html body #tab-dash #dsh-kpis .card:first-child [class*="bg-rose-100"] { background: rgba(253,164,175,.2) !important; color: #fecdd3 !important; }
+
+/* لوحة المساعد + الخلاصة */
+#tab-dash .dg-row { display: grid; gap: 14px; grid-template-columns: 1fr; }
+@media (min-width: 900px) { #tab-dash .dg-row:has(.dg-ai:not(.hidden)) { grid-template-columns: 1.3fr 1fr; } }
+#tab-dash .dg-ai { border-radius: 24px; padding: 18px; background: linear-gradient(125deg, rgba(134,239,172,.55), rgba(201,242,77,.38) 55%, rgba(167,243,208,.5)); border: 1px solid rgba(255,255,255,.7); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 18px 40px -24px rgba(6,36,26,.4); }
+html.dark #tab-dash .dg-ai { background: linear-gradient(125deg, rgba(34,165,89,.35), rgba(201,242,77,.16) 60%, rgba(13,61,42,.5)); border-color: rgba(134,239,172,.18); }
+#tab-dash .dg-ai-head { display: flex; align-items: center; gap: 10px; color: var(--g9); font-size: 1rem; }
+html.dark #tab-dash .dg-ai-head { color: #ecf8f0; }
+#tab-dash .dg-ai-ico { width: 30px; height: 30px; border-radius: 50%; background: var(--g9); color: var(--lime); display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; }
+#tab-dash .dg-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+#tab-dash .dg-chips button { background: rgba(255,255,255,.72); border: 1px solid rgba(255,255,255,.8); color: var(--g9); border-radius: 999px; padding: 7px 14px; font-size: .78rem; cursor: pointer; transition: background .15s; }
+#tab-dash .dg-chips button:hover { background: #fff; }
+html.dark #tab-dash .dg-chips button { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.14); color: #ecf8f0; }
+#tab-dash .dg-ask { display: flex; align-items: center; gap: 8px; background: var(--g9); border-radius: 999px; padding: 6px 6px 6px 8px; }
+#tab-dash .dg-ask input { flex: 1; background: transparent; border: 0; outline: 0; color: #fff; padding: 8px 14px; font-size: .85rem; min-width: 0; }
+#tab-dash .dg-ask input::placeholder { color: rgba(255,255,255,.5); }
+#tab-dash .dg-ask button { width: 36px; height: 36px; border-radius: 50%; background: var(--lime); color: var(--g9); border: 0; cursor: pointer; }
+#tab-dash .dg-ask:focus-within { box-shadow: 0 0 0 3px rgba(201,242,77,.5); }
+#tab-dash .dg-insight { border-radius: 24px; padding: 20px 22px; background: var(--cardbg); border: 1px solid var(--line); box-shadow: var(--shadow); }
+#tab-dash .dg-ins-t { font-size: .8rem; color: var(--mute); }
+#tab-dash .dg-ins-h { font-size: 1.25rem; font-weight: 300; line-height: 1.5; margin: 6px 0 16px; color: var(--ink); }
+#tab-dash .dg-ba { display: grid; grid-template-columns: 1.4fr 1fr; gap: 0; border-radius: 14px; overflow: hidden; }
+#tab-dash .dg-ba > div { padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+#tab-dash .dg-ba span { font-size: .72rem; }
+#tab-dash .dg-ba b { font-weight: 400; font-size: 1.1rem; direction: ltr; text-align: start; }
+#tab-dash .dg-ba-now { background: linear-gradient(180deg, rgba(34,165,89,.22), rgba(34,165,89,.06)); border-top: 2px solid var(--g5); color: var(--g7); }
+#tab-dash .dg-ba-prev { background: rgba(102,128,111,.1); border-top: 2px solid rgba(102,128,111,.4); color: var(--mute); }
+html.dark #tab-dash .dg-ba-now { color: var(--g3); }
+#tab-dash .dg-ins-h[data-up="0"] { color: #be123c; } html.dark #tab-dash .dg-ins-h[data-up="0"] { color: #fda4af; }
+
+/* شريط حالات الشغل: غامق بأيقونات */
+html body #tab-dash details.od-band { background: radial-gradient(60% 120% at 100% 0%, rgba(34,165,89,.35), transparent 60%), linear-gradient(160deg, var(--g8), var(--g9)) !important; border-color: rgba(134,239,172,.16) !important; color: #fff; }
+html body #tab-dash details.od-band summary { color: #fff !important; }
+html body #tab-dash details.od-band > div { border-color: rgba(255,255,255,.08) !important; }
+#tab-dash .od-tile { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.08); border-radius: 18px; padding: 14px 16px; }
+#tab-dash .od-tile-top { display: flex; align-items: center; gap: 8px; }
+#tab-dash .od-ico { width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,.1); display: inline-flex; align-items: center; justify-content: center; font-size: .75rem; }
+#tab-dash .od-lbl { font-size: .74rem; color: rgba(255,255,255,.72); }
+#tab-dash .od-num { font-size: 2.2rem; font-weight: 200; line-height: 1.1; margin-top: 10px; color: #fff; text-align: start; font-variant-numeric: tabular-nums; }
+#tab-dash .od-hint { font-size: .68rem; color: rgba(255,255,255,.5); margin-top: 2px; }
+html body #tab-dash details.od-band .text-slate-500 { color: rgba(255,255,255,.65) !important; }
+html body #tab-dash details.od-band [class*="bg-slate-100"] { background: rgba(255,255,255,.1) !important; }
+html body #tab-dash details.od-band div[style*="background:#0ea5e9"], html body #tab-dash details.od-band div[style*="background:#10b981"] { background: var(--g4) !important; }
+
+/* باقي الأقسام: هدوء */
+html body #tab-dash .border-slate-100 { border-color: var(--line) !important; }
+html body #tab-dash summary { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { #tab-dash * { transition: none !important; animation: none !important; } }
+
+/* تعزيز الأولوية فوق قواعد الهيدر القديمة */
+html:not(.dark) body #tab-dash .hm-hero .dg-pills button, html.dark body #tab-dash .hm-hero .dg-pills button { color: rgba(255,255,255,.75) !important; background: transparent !important; border-radius: 999px !important; padding: 6px 14px !important; }
+html:not(.dark) body.reels #tab-dash .hm-hero .dg-pills button.bg-white, html:not(.dark) body.reels #tab-dash .hm-hero .dg-pills button.shadow,
+html.dark body #tab-dash .hm-hero .dg-pills button.bg-white, html.dark body #tab-dash .hm-hero .dg-pills button.shadow { background: var(--lime) !important; color: var(--g9) !important; font-weight: 700; }
+html body #tab-dash .dg-ask input { background: transparent !important; color: #fff !important; border: 0 !important; box-shadow: none !important; outline: 0 !important; border-radius: 999px !important; }
+html body #tab-dash .dg-ask { background: var(--g9) !important; }
+html body #tab-dash .hm-hero .dg-round { color: var(--g6) !important; background: var(--cardbg) !important; border-radius: 50% !important; }
+html:not(.dark) body.reels #tab-dash .hm-hero .inline-flex.dg-pills button { color: rgba(255,255,255,.78) !important; background: transparent !important; box-shadow: none !important; }
+html:not(.dark) body.reels #tab-dash .hm-hero .inline-flex.dg-pills button.bg-white, html:not(.dark) body.reels #tab-dash .hm-hero .inline-flex.dg-pills button.shadow { background: var(--lime) !important; color: var(--g9) !important; font-weight: 700; }
+html:not(.dark) body #tab-dash details.card.od-band, html.dark body #tab-dash details.card.od-band { background: radial-gradient(60% 120% at 100% 0%, rgba(34,165,89,.35), transparent 60%), linear-gradient(160deg, var(--g8), var(--g9)) !important; border: 1px solid rgba(134,239,172,.16) !important; color: #fff !important; }
+html:not(.dark) body #tab-dash details.card.od-band summary, html:not(.dark) body #tab-dash details.card.od-band .text-slate-500 { color: rgba(255,255,255,.85) !important; }
+@media (max-width: 639px) { html body #tab-dash #dsh-kpis .card:first-child [id^="dkpi-"] { font-size: 2.3rem !important; } #tab-dash .od-num { font-size: 1.8rem; } }

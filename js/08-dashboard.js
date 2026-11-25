@@ -11,7 +11,7 @@
   const addM = (m, k) => { const a = m.split('-').map(Number); return mk(new Date(a[0], a[1] - 1 + k, 1)); };
   const commOf = l => (l.commission != null && Number.isFinite(Number(l.commission))) ? Number(l.commission) : (Number(l.commission_per_unit) || 0) * (Number(l.qty) || 0);
   const AN = () => (window.__p18anim ? 700 : 0); /* الحركة بتشتغل وقت الضغط/الإجراء بس */
-  const C = { brand: '#0d9488', ink: '#0b1b33', pal: ['#0d9488', '#2563eb', '#8b5cf6', '#f59e0b', '#ec4899', '#64748b'] };
+  const C = { brand: '#16a34a', ink: '#06241a', pal: ['#14532d', '#16a34a', '#4ade80', '#86efac', '#c9f24d', '#94a3b8'] };
 
   let refCache = {};
   async function loadMonthRefunds(m, force) {
@@ -148,6 +148,14 @@
   function renderKpis(cur, prv) {
     const defs = [['المبيعات', kMoney(cur.sales), cur.sales, prv.sales, cur.bs, '#0d9488', 'fa-coins'], ['المعاملات', kNum(cur.tx), cur.tx, prv.tx, cur.btx, '#2563eb', 'fa-folder-open'], ['متوسط المعاملة', kMoney(cur.avg), cur.avg, prv.avg, cur.bavg, '#8b5cf6', 'fa-receipt'], ['صافي الهامش', kMoney(cur.net), cur.net, prv.net, cur.bnet, '#059669', 'fa-chart-line']];
     $('dsh-kpis').innerHTML = defs.map((d, i) => '<div class="card p-5 overflow-hidden dash-in" style="animation-delay:' + (i * 0.09) + 's"><div class="flex items-center justify-between"><div class="flex items-center gap-2 text-xs text-slate-500"><span class="flex h-8 w-8 items-center justify-center rounded-lg text-white" style="background:' + d[5] + '"><i class="fa-solid ' + d[6] + ' text-xs"></i></span>' + d[0] + '</div>' + chip(d[2], d[3]) + '</div><div class="mt-3 text-2xl font-bold font-mono text-ink dark:text-white" id="dkpi-' + i + '" data-raw="' + d[2] + '" data-cur="' + (d[0] === 'المعاملات' ? 0 : 1) + '">' + d[1] + '</div><div class="h-12 mt-2 -mx-1"><canvas id="dsp-' + i + '"></canvas></div></div>').join('');
+    try {
+      const h = new Date().getHours(), g = $('dsh-greet'); if (g) g.textContent = h < 12 ? 'صباح الخير' : (h < 18 ? 'نهارك سعيد' : 'مساء الخير');
+      const d = prv.sales ? (cur.sales - prv.sales) / Math.abs(prv.sales) * 100 : null, up = d == null ? null : d >= 0;
+      const hh = $('dsh-ins-h'); if (hh) hh.textContent = d == null ? 'مفيش فترة سابقة نقارن بيها' : ('المبيعات ' + (up ? 'أعلى' : 'أقل') + ' بـ ' + Math.abs(Math.round(d)) + '% من الفترة اللي قبلها');
+      if ($('dsh-ins-now')) $('dsh-ins-now').textContent = kMoney(cur.sales); if ($('dsh-ins-prev')) $('dsh-ins-prev').textContent = kMoney(prv.sales);
+      const ia = $('dsh-ins-h'); if (ia) ia.dataset.up = up == null ? '' : (up ? '1' : '0');
+      const ai = $('dsh-ai'); if (ai) ai.classList.toggle('hidden', !$('ts-ai-btn'));
+    } catch (e) { /* */ }
     defs.forEach((d, i) => spark('dsp-' + i, d[4], '#0d9488'));
     defs.forEach((d, i) => countUp($('dkpi-' + i)));
   }
