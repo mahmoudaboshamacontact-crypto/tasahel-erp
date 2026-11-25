@@ -36,7 +36,7 @@
 <link rel="stylesheet" href="css/part-d-couriers-executors.css?v=1">
 <link rel="stylesheet" href="css/part-e-clients-growth.css?v=1">
 <link rel="stylesheet" href="css/part-h-morale.css?v=1">
-<link rel="stylesheet" href="css/dash-calm.css?v=3">
+<link rel="stylesheet" href="css/dash-redesign.css?v=2">
 <link rel="manifest" href="manifest.webmanifest?v=3">
 <meta name="theme-color" content="#0d0b14">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -564,34 +564,90 @@
 </div></div>
 </div>
 
-<div id="tab-dash" class="hidden space-y-5">
-<div class="hm-hero">
-<div class="relative flex flex-wrap items-center justify-between gap-3">
-<div><div class="text-[11px] font-semibold text-violet-300">لوحة المتابعة</div><h2 id="dsh-title" class="text-base sm:text-lg font-bold mt-0.5">—</h2><p id="dsh-sub" class="text-xs text-slate-300 mt-0.5">—</p></div>
-<div class="flex flex-wrap items-center gap-2">
-<div class="inline-flex rounded-xl bg-white/10 p-1 backdrop-blur text-xs">
-<button id="dash-btn-today" onclick="setDashboardRange('today')" class="rounded-lg px-3 py-1 font-semibold">اليوم</button>
-<button id="dash-btn-week" onclick="setDashboardRange('week')" class="rounded-lg px-3 py-1 font-semibold">آخر 7 أيام</button>
-<button id="dash-btn-month" onclick="setDashboardRange('month')" class="rounded-lg px-3 py-1 font-semibold">الشهر الحالي</button>
-</div>
-<select id="dsh-month" onchange="setDashboardMonth(this.value)" class="dsh-select" title="اختار شهر"><option value="">شهر آخر…</option></select>
-<button onclick="dashRefresh()" class="rounded-xl bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs font-semibold" title="تحديث"><i class="fa-solid fa-rotate-right"></i></button>
-</div></div></div>
-<div id="dsh-kpis" class="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4"></div>
-<div class="grid gap-5 lg:grid-cols-12">
-<div class="card p-4 sm:p-5 lg:col-span-8"><div class="flex items-center justify-between mb-3"><h3 class="font-bold text-ink dark:text-white text-sm"><i class="fa-solid fa-chart-area text-brand-600 ms-2"></i>اتجاه المبيعات</h3><div class="flex items-center gap-3 text-[11px] text-slate-500"><span class="flex items-center gap-1"><i class="inline-block h-0.5 w-4 bg-brand-500"></i><span id="dsh-l-cur">الحالي</span></span><span class="flex items-center gap-1"><i class="inline-block h-0 w-4 border-t-2 border-dashed border-slate-400"></i><span id="dsh-l-prv">السابق</span></span></div></div><div class="h-64 relative"><canvas id="dsh-main"></canvas></div></div>
-<div class="card p-4 sm:p-5 lg:col-span-4"><h3 class="font-bold text-ink dark:text-white text-sm mb-3.5"><i class="fa-solid fa-bullseye text-brand-600 ms-2"></i>تحقيق التارجت <span id="dsh-tgt-month" class="text-[11px] font-normal text-slate-400"></span></h3><div id="dsh-targets" class="space-y-2.5 max-h-64 overflow-y-auto"></div></div>
-</div>
-<div class="grid gap-5 lg:grid-cols-12">
-<div class="card overflow-hidden lg:col-span-7"><div class="border-b border-slate-100 dark:border-slate-800 px-4 py-3.5"><h3 class="font-bold text-ink dark:text-white text-sm"><i class="fa-solid fa-ranking-star text-amber-500 ms-2"></i>ترتيب الموظفين</h3></div><div id="dsh-emps" class="divide-y divide-slate-100 dark:divide-slate-800"></div></div>
-<div class="card p-4 sm:p-5 lg:col-span-5"><h3 class="font-bold text-ink dark:text-white text-sm mb-3"><i class="fa-solid fa-chart-pie text-brand-600 ms-2"></i>طرق الدفع</h3><div class="h-60 relative"><canvas id="dsh-pay"></canvas></div></div>
-</div>
-<div class="grid gap-5 lg:grid-cols-12">
-<div class="card p-4 sm:p-5 lg:col-span-5"><h3 class="font-bold text-ink dark:text-white text-sm mb-3.5"><i class="fa-solid fa-layer-group text-brand-600 ms-2"></i>أعلى الخدمات إيراداً</h3><div id="dsh-svcs" class="space-y-2.5"></div></div>
-<div class="card p-4 sm:p-5 lg:col-span-7"><div class="flex items-center justify-between mb-3"><h3 class="font-bold text-ink dark:text-white text-sm"><i class="fa-solid fa-fire text-rose-500 ms-2"></i>أيام وساعات الذروة</h3><span class="text-[11px] text-slate-400">الشهر الحالي</span></div><div id="dsh-heat" class="overflow-x-auto"></div></div>
-</div>
-<div id="ops-dash" class="space-y-3"></div>
-<div class="card overflow-hidden"><button type="button" onclick="toggleDashLate()" class="flex w-full items-center justify-between px-4 py-3.5 text-start"><h3 class="font-bold text-ink dark:text-white text-sm"><i class="fa-solid fa-clock text-rose-600 ms-2"></i>الطلبات المتأخرة</h3><span class="flex items-center gap-2"><span id="dsh-late-count" class="rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 px-2.5 py-0.5 text-[11px] font-bold">—</span><i id="dsh-late-chev" class="fa-solid fa-chevron-down text-xs text-slate-400 transition-transform"></i></span></button><div id="dsh-late" class="hidden divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800"></div></div>
+<div id="tab-dash" class="hidden">
+  <header class="sg-header">
+    <div class="sg-title-box">
+      <h2 id="dsh-title">لوحة المتابعة</h2>
+      <p id="dsh-sub">جاري تحميل البيانات...</p>
+    </div>
+
+    <nav class="sg-nav-pills" role="tablist" aria-label="أقسام لوحة المتابعة">
+      <button type="button" class="sg-pill active" data-view="overview" onclick="switchDashView('overview')">نظرة عامة</button>
+      <button type="button" class="sg-pill" data-view="pipeline" onclick="switchDashView('pipeline')">خط سير الشغل</button>
+      <button type="button" class="sg-pill" data-view="team" onclick="switchDashView('team')">الموظفين والتارجت</button>
+      <button type="button" class="sg-pill" data-view="services" onclick="switchDashView('services')">الخدمات والذروة</button>
+      <button type="button" class="sg-pill" data-view="late" onclick="switchDashView('late')">المتأخرات <span id="dsh-late-count" class="sg-pill-badge sg-tabular">0</span></button>
+    </nav>
+
+    <div class="sg-controls">
+      <div class="sg-range-bar" role="group" aria-label="الفترة الزمنية">
+        <button id="dash-btn-today" type="button" class="sg-range-btn" onclick="setDashboardRange('today')">اليوم</button>
+        <button id="dash-btn-week" type="button" class="sg-range-btn" onclick="setDashboardRange('week')">7 أيام</button>
+        <button id="dash-btn-month" type="button" class="sg-range-btn active" onclick="setDashboardRange('month')">الشهر</button>
+      </div>
+      <select id="dsh-month" onchange="setDashboardMonth(this.value)" class="sg-select" title="اختار شهر"><option value="">شهر آخر…</option></select>
+      <button type="button" onclick="dashRefresh()" class="sg-circle-btn" title="تحديث" aria-label="تحديث"><i class="fa-solid fa-rotate-right text-xs"></i></button>
+    </div>
+  </header>
+
+  <!-- VIEW 1: OVERVIEW -->
+  <section id="sg-view-overview" class="sg-view active">
+    <div id="dsh-kpis" class="sg-kpi-grid"></div>
+    <div class="sg-grid-12">
+      <div class="sg-card sg-c8">
+        <div class="sg-card-head">
+          <div><div class="sg-card-title">اتجاه المبيعات</div><div class="sg-card-sub">الفترة الحالية مقابل السابقة</div></div>
+        </div>
+        <div class="sg-chart-box"><canvas id="dsh-main"></canvas></div>
+      </div>
+      <div class="sg-card sg-c4">
+        <div class="sg-card-head">
+          <div><div class="sg-card-title">طرق الدفع</div><div class="sg-card-sub">توزيع التحصيل</div></div>
+        </div>
+        <div class="sg-chart-box"><canvas id="dsh-pay"></canvas></div>
+      </div>
+    </div>
+    <div class="sg-card">
+      <div class="sg-card-head">
+        <div><div class="sg-card-title">تحقيق التارجت</div><div class="sg-card-sub">مؤشرات الإنجاز الدائرية للفريق</div></div>
+        <button type="button" class="sg-pill" style="padding:5px 14px;font-size:12px" onclick="switchDashView('team')">عرض كل الموظفين ↗</button>
+      </div>
+      <div id="dsh-ov-targets" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px"></div>
+    </div>
+  </section>
+
+  <!-- VIEW 2: 4-COLUMN PIPELINE (SugarCRM Frame 00:00) -->
+  <section id="sg-view-pipeline" class="sg-view">
+    <div id="dsh-pipeline" class="sg-pipe-board"></div>
+  </section>
+
+  <!-- VIEW 3: TEAM & TARGET ARCS (SugarCRM Frame 00:06 & 00:12) -->
+  <section id="sg-view-team" class="sg-view">
+    <div id="dsh-av-strip" class="sg-avatar-strip"></div>
+    <div id="dsh-emps" class="sg-emp-grid"></div>
+  </section>
+
+  <!-- VIEW 4: SERVICES & PEAK HOURS -->
+  <section id="sg-view-services" class="sg-view">
+    <div class="sg-grid-12">
+      <div class="sg-card sg-c5">
+        <div class="sg-card-head"><div class="sg-card-title">أعلى الخدمات إيرادًا</div></div>
+        <div id="dsh-svcs"></div>
+      </div>
+      <div class="sg-card sg-c7">
+        <div class="sg-card-head"><div class="sg-card-title">أيام وساعات الذروة</div><span class="sg-card-sub">الشهر الحالي</span></div>
+        <div id="dsh-heat" class="overflow-x-auto"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW 5: LATE ORDERS -->
+  <section id="sg-view-late" class="sg-view">
+    <div class="sg-card">
+      <div class="sg-card-head"><div class="sg-card-title">الطلبات المتأخرة</div><span class="sg-card-sub">اضغط على أي معاملة لفتح تفاصيلها</span></div>
+      <div id="dsh-late" class="sg-late-list"></div>
+    </div>
+  </section>
 </div>
 
 <div id="tab-team" class="hidden space-y-5">

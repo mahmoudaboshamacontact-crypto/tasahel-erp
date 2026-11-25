@@ -153,8 +153,6 @@ html.dark #tx-modal-actions-left > button:not(#tx-save-btn):hover {
 
 /* 6) نهاري: عناوين الرئيسية والداشبورد كانت بيضاء على خلفية فاتحة + أزرار الفترة + بادجات الداشبورد + الشرطة الباهتة */
 html:not(.dark) body.reels #tab-home .hm-hero h1,
-html:not(.dark) body.reels #tab-dash #dsh-title { color: #1b1511 !important; }
-html:not(.dark) body.reels #tab-dash .hm-hero .inline-flex button { color: #3a2f27 !important; }
 html:not(.dark) .dx-pill { color: color-mix(in srgb, rgb(var(--c)) 55%, #000) !important; }
 html:not(.dark) #app table td span.text-slate-300 { color: #8a7f74 !important; }
 

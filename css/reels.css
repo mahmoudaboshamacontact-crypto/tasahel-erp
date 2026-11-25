@@ -231,11 +231,6 @@ html.dark body.reels #ub-panel {
 /* ==========================================================================
    الداشبورد (لوحة المتابعة): نفس لغة الكروت، أيقونات برتقالية موحدة
    ========================================================================== */
-html.dark body.reels #tab-dash .hm-hero { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: .2rem 0 !important; }
-html.dark body.reels #tab-dash .hm-hero h2 { font-size: clamp(1.5rem, 3.4vw, 2.2rem) !important; letter-spacing: -.01em; }
-html.dark body.reels #tab-dash .hm-hero p, html.dark body.reels #tab-dash .hm-hero .text-slate-300 { color: var(--r-mute) !important; }
-html.dark body.reels #tab-dash .hm-hero .bg-white\/10 { background: var(--r-card) !important; border: 1px solid var(--r-line); border-radius: 999px !important; padding: 3px !important; }
-html.dark body.reels #tab-dash .hm-hero .bg-white\/10 > button, html.dark body.reels #tab-dash .hm-hero button { border-radius: 999px !important; }
 html.dark body.reels .dx-card, html.dark body.reels #dsh-kpis > div {
   background: var(--r-card) !important; border: 1px solid var(--r-line) !important; box-shadow: none !important; border-radius: 1.1rem !important;
 }
@@ -245,8 +240,6 @@ html.dark body.reels .dx-ico, html.dark body.reels #dsh-kpis [class*="rounded-xl
 }
 html.dark body.reels .dx-card i, html.dark body.reels #dsh-kpis i { color: var(--r-acc) !important; }
 html.dark body.reels .dx-ins-row { background: var(--r-card) !important; }
-html.dark body.reels #tab-dash .text-brand-600, html.dark body.reels #tab-dash .bg-brand-500 { color: var(--r-acc) !important; }
-html.dark body.reels #tab-dash .bg-brand-500 { background: linear-gradient(90deg, var(--r-acc), var(--r-acc2)) !important; }
 
 /* ==========================================================================
    المودالات (تفاصيل المعاملة وغيرها) + الستيبر + الحقول

@@ -360,6 +360,7 @@
      --------------------------------------------------------------- */
   let timer = 0, goTimer = 0, lastAnim = false;
   function ensure() {
+    return false; /* disabled: replaced by clean A-Z dashboard */
     const root = $('tab-dash'), k = $('dsh-kpis'); if (!root || !k) return false;
     if (!$('dx-top')) k.insertAdjacentHTML('afterend', '<div id="dx-top" class="dx-sec"></div>');
     if (!$('dx-bot')) root.insertAdjacentHTML('beforeend', '<div id="dx-bot" class="dx-sec"></div>');

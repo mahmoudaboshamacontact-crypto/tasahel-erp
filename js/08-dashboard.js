@@ -1,17 +1,16 @@
-
-/* ===== المرحلة 5: الداش بورد الجديدة ===== */
+/* ===== الداش بورد الجديدة — SugarCRM Frosted Glass Architecture (A–Z Rebuild) ===== */
 (function () {
   if (window.__phase5) return;
   window.__phase5 = true;
-  const eh = escapeHtml, MGR = 'mahmoud.aboshama@tasahel.com.eg';
-  const isMgr = () => window.__role ? window.__role === 'manager' : !!(currentUser && ['mahmoud.aboshama@tasahel.com.eg','mahmoud.aboshama.contact@gmail.com'].includes(String(currentUser.email || '').toLowerCase()));
-  let range = 'month', cache = {}, charts = {}, seq = 0, selMonth = '';
+
+  const eh = escapeHtml;
+  const isMgr = () => window.__role ? window.__role === 'manager' : !!(currentUser && ['mahmoud.aboshama@tasahel.com.eg', 'mahmoud.aboshama.contact@gmail.com'].includes(String(currentUser.email || '').toLowerCase()));
+  let range = 'month', activeView = 'overview', cache = {}, charts = {}, seq = 0, selMonth = '';
   const pad = n => String(n).padStart(2, '0');
   const mk = d => d.getFullYear() + '-' + pad(d.getMonth() + 1);
   const addM = (m, k) => { const a = m.split('-').map(Number); return mk(new Date(a[0], a[1] - 1 + k, 1)); };
   const commOf = l => (l.commission != null && Number.isFinite(Number(l.commission))) ? Number(l.commission) : (Number(l.commission_per_unit) || 0) * (Number(l.qty) || 0);
-  const AN = () => (window.__p18anim ? 700 : 0); /* الحركة بتشتغل وقت الضغط/الإجراء بس */
-  const C = { brand: '#0d9488', ink: '#0b1b33', pal: ['#0d9488', '#2563eb', '#8b5cf6', '#f59e0b', '#ec4899', '#64748b'] };
+  const C = { brand: '#036b29', emerald: '#17B26A', pal: ['#036b29', '#17B26A', '#47CD89', '#75E0A7', '#344054', '#98A2B3'] };
 
   let refCache = {};
   async function loadMonthRefunds(m, force) {
@@ -49,41 +48,35 @@
     const c = cache[m];
     if (c && !force && Date.now() - c.t < 60000) return c.rows;
     const a0 = m + '-01T00:00:00', a = a0 > DATA_FROM_TS ? a0 : DATA_FROM_TS, b = addM(m, 1) + '-01T00:00:00', out = [];
-    if (b <= DATA_FROM_TS) return out; /* شهر قبل بداية البيانات: مفيش حاجة تتسحب */
+    if (b <= DATA_FROM_TS) return out;
     for (let f = 0; ; f += 1000) {
       const r = await sbClient.from('request_lines').select('*').gte('received_at', a).lt('received_at', b).order('id', { ascending: true }).range(f, f + 999);
       if (r.error) throw r.error;
       out.push.apply(out, r.data || []);
       if ((r.data || []).length < 1000) break;
     }
-    /* إدراج الاستردادات المعتمدة في هذا الشهر حسب decided_at كقيود خصم سالبة */
     const refs = await loadMonthRefunds(m, force);
     refs.forEach(rf => {
       const orig = rf._line || out.find(x => String(x.id) === String(rf.line_id));
       if (!orig) return;
       const rQty = Math.max(0, Number(rf.qty) || 0);
       const rSales = Number(rf.sales_amount) || 0;
+      const uComm = Number(rf.unit_comm_hint) || Number(orig.commission_per_unit) || 0;
+      const rComm = (rf.kind === 'full' && orig.commission != null) ? Number(orig.commission) || (uComm * rQty) : (uComm * rQty);
       const rExec = rf.exec_forfeit ? (Number(rf.exec_amount) || 0) : 0;
-      const hint = rf.unit_comm_hint != null && rf.unit_comm_hint !== '' ? rf.unit_comm_hint : orig.commission_per_unit;
-      const rComm = typeof window.lineComm === 'function'
-        ? window.lineComm({ service: orig.service, qty: rQty, commission_per_unit: hint })
-        : (Number(hint) || 0) * rQty;
       out.push({
-        id: 'REF-' + rf.id,
-        _isRefundEntry: true,
-        _refundKind: rf.kind,
-        line_id: orig.id,
-        transaction_id: null, /* لا يزيد عدد المعاملات */
-        received_at: rf.decided_at,
+        id: 'ref-' + rf.id,
+        transaction_id: orig.transaction_id,
+        received_at: rf.decided_at || orig.received_at,
         employee: orig.employee,
         service: orig.service,
         payment_method: orig.payment_method,
         qty: -rQty,
         total: -rSales,
-        exec_total: -rExec,
-        exec_unit_cost: 0,
         commission: -rComm,
-        commission_per_unit: hint
+        commission_per_unit: uComm,
+        executor_fee: -rExec,
+        _isRefundEntry: true
       });
     });
     cache[m] = { t: Date.now(), rows: out };
@@ -91,211 +84,356 @@
   }
 
   function period() {
-    const now = new Date(), t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()), end = new Date(t0.getTime() + 864e5);
-    if (range === 'today') { const y = new Date(t0.getTime() - 864e5); return { start: t0, end: end, pstart: y, pend: t0, unit: 'hour', n: 24, label: 'اليوم', plabel: 'أمس', title: 'أداء اليوم' }; }
-    if (range === 'week') { const s = new Date(t0.getTime() - 6 * 864e5); return { start: s, end: end, pstart: new Date(s.getTime() - 7 * 864e5), pend: s, unit: 'day', n: 7, label: 'آخر 7 أيام', plabel: 'الـ7 أيام السابقة', title: 'أداء آخر 7 أيام' }; }
+    const n = new Date(), t = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+    if (range === 'today') {
+      const s = t, e = new Date(t.getTime() + 864e5), ps = new Date(t.getTime() - 864e5);
+      return { start: s, end: e, pstart: ps, pend: s, n: 24, unit: 'hour', label: 'اليوم', plabel: 'أمس', months: [...new Set([mk(s), mk(ps)])] };
+    }
+    if (range === 'week') {
+      const s = new Date(t.getTime() - 6 * 864e5), e = new Date(t.getTime() + 864e5), ps = new Date(s.getTime() - 7 * 864e5);
+      return { start: s, end: e, pstart: ps, pend: s, n: 7, unit: 'day', label: 'آخر 7 أيام', plabel: 'الـ 7 أيام السابقة', months: [...new Set([mk(s), mk(t), mk(ps)])] };
+    }
     if (range === 'pick' && /^\d{4}-\d{2}$/.test(selMonth)) {
-      const y = +selMonth.slice(0, 4), mo = +selMonth.slice(5, 7) - 1, ms = new Date(y, mo, 1), me = new Date(y, mo + 1, 1), mps = new Date(y, mo - 1, 1);
-      const isCur = ms.getFullYear() === now.getFullYear() && ms.getMonth() === now.getMonth();
-      const days = isCur ? now.getDate() : Math.round((me - ms) / 864e5);
-      let mpe = new Date(mps.getFullYear(), mps.getMonth(), days + 1); if (mpe > ms) mpe = ms;
-      return { start: ms, end: isCur ? end : me, pstart: mps, pend: mpe, unit: 'day', n: days, label: 'الشهر ده', plabel: 'الشهر اللي قبله', title: 'أداء ' + new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(ms) };
+      const p = selMonth.split('-').map(Number), s = new Date(p[0], p[1] - 1, 1), e = new Date(p[0], p[1], 1);
+      const ps = new Date(p[0], p[1] - 2, 1), days = Math.round((e - s) / 864e5);
+      const lbl = new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(s);
+      const plbl = new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(ps);
+      return { start: s, end: e, pstart: ps, pend: s, n: days, unit: 'day', label: lbl, plabel: plbl, months: [selMonth, mk(ps)] };
     }
-    const s = new Date(now.getFullYear(), now.getMonth(), 1), ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    let pend = new Date(ps.getFullYear(), ps.getMonth(), now.getDate() + 1); if (pend > s) pend = s;
-    return { start: s, end: end, pstart: ps, pend: pend, unit: 'day', n: now.getDate(), label: 'هذا الشهر', plabel: 'نفس الفترة من الشهر السابق', title: 'أداء ' + new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(now) };
+    const s = new Date(n.getFullYear(), n.getMonth(), 1), e = new Date(n.getFullYear(), n.getMonth() + 1, 1), ps = new Date(n.getFullYear(), n.getMonth() - 1, 1);
+    const days = Math.round((e - s) / 864e5);
+    const lbl = new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(s);
+    const plbl = new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(ps);
+    return { start: s, end: e, pstart: ps, pend: s, n: days, unit: 'day', label: lbl, plabel: plbl, months: [mk(s), mk(ps)] };
   }
+
   function stats(lines, start, end, n, unit) {
-    const bs = new Array(n).fill(0), bc = new Array(n).fill(0), btx = Array.from({ length: n }, () => new Set()), tx = new Set();
-    let sales = 0, cost = 0;
+    let sales = 0, comm = 0, exec = 0; const tx = new Set();
+    const bs = new Array(n).fill(0), btx = Array.from({ length: n }, () => new Set()), bnet = new Array(n).fill(0);
     lines.forEach(l => {
-      const d = new Date(l.received_at);
-      if (isNaN(d) || d < start || d >= end) return;
-      const v = Number(l.total) || 0, c = execCostOf(l);
-      sales += v; cost += c; if (l.transaction_id) tx.add(l.transaction_id);
+      const d = new Date(l.received_at); if (isNaN(d) || d < start || d >= end) return;
+      const tot = Number(l.total) || 0, cm = commOf(l), ex = Number(l.executor_fee) || 0;
+      sales += tot; comm += cm; exec += ex; if (l.transaction_id && !l._isRefundEntry) tx.add(l.transaction_id);
       const i = unit === 'hour' ? d.getHours() : Math.floor((d - start) / 864e5);
-      if (i >= 0 && i < n) { bs[i] += v; bc[i] += c; if (l.transaction_id) btx[i].add(l.transaction_id); }
+      if (i >= 0 && i < n) { bs[i] += tot; if (l.transaction_id && !l._isRefundEntry) btx[i].add(l.transaction_id); bnet[i] += tot - cm - ex; }
     });
-    return { sales: sales, cost: cost, net: sales - cost, tx: tx.size, avg: tx.size ? sales / tx.size : 0, bs: bs, bnet: bs.map((v, i) => v - bc[i]), btx: btx.map(s => s.size), bavg: bs.map((v, i) => btx[i].size ? v / btx[i].size : 0) };
+    const txCount = tx.size, net = sales - comm - exec, avg = txCount ? sales / txCount : 0;
+    return { sales, comm, exec, net, tx: txCount, avg, bs, btx: btx.map(s => s.size), bnet };
   }
-  function inRange(lines, a, b) { return lines.filter(l => { const d = new Date(l.received_at); return !isNaN(d) && d >= a && d < b; }); }
 
-  function chip(cur, prv) {
-    if (!prv) return '<span class="rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 text-[10px] font-bold">' + (cur ? 'جديد' : '—') + '</span>';
-    const p = (cur - prv) / Math.abs(prv) * 100, up = p >= 0;
-    return '<span class="rounded-full px-2 py-0.5 text-[10px] font-bold ' + (up ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300') + '"><i class="fa-solid ' + (up ? 'fa-arrow-up' : 'fa-arrow-down') + ' ms-0.5"></i>' + Math.abs(Math.round(p)) + '%</span>';
+  function inRange(lines, a, b) {
+    return lines.filter(l => { const d = new Date(l.received_at); return !isNaN(d) && d >= a && d < b; });
   }
+
+  function deltaBadge(cur, prv) {
+    if (!prv) return cur ? '<span class="sg-delta sg-tabular">جديد</span>' : '';
+    const p = Math.round((cur - prv) / Math.abs(prv) * 100);
+    return '<span class="sg-delta sg-tabular ' + (p < 0 ? 'neg' : '') + '">' + (p >= 0 ? '▲ +' : '▼ ') + p + '%</span>';
+  }
+
   function destroy(k) { if (charts[k]) { charts[k].destroy(); delete charts[k]; } }
-  function spark(id, data, color) {
-    destroy(id); const el = $(id); if (!el || typeof Chart === 'undefined') return;
-    charts[id] = new Chart(el, { type: 'line', data: { labels: data.map((_, i) => i), datasets: [{ data: data, borderColor: color, backgroundColor: color + '14', fill: true, tension: .25, borderWidth: 1.5, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, animation: { duration: AN() }, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } } } });
+
+  function svgArc(pct, color) {
+    const cl = Math.max(0, Math.min(100, pct || 0)), len = 132, off = (len - len * cl / 100).toFixed(1);
+    return '<svg width="92" height="52" viewBox="0 0 104 60" style="overflow:visible">' +
+      '<path d="M 10 52 A 42 42 0 0 1 94 52" fill="none" stroke="rgba(148,163,184,0.22)" stroke-width="7.5" stroke-linecap="round"/>' +
+      '<path d="M 10 52 A 42 42 0 0 1 94 52" fill="none" stroke="' + color + '" stroke-width="7.5" stroke-linecap="round" stroke-dasharray="' + len + '" stroke-dashoffset="' + off + '"/></svg>';
   }
 
+  const kMoney = n => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(n) || 0) + ' ج.م';
+  const kNum = n => new Intl.NumberFormat('en-US').format(Number(n) || 0);
 
-  /* عدّاد تصاعدي للأرقام: بيشتغل وقت الضغط بس، وغير كده الرقم بيظهر ثابت */
-  function countUp(el) {
-    if (!el || !window.__p18anim) return;
-    const to = Number(el.dataset.raw) || 0, isCur = el.dataset.cur === '1', dur = 750, t0 = performance.now();
-    function frame(t) {
-      const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
-      el.textContent = isCur ? kMoney(to * e) : kNum(Math.round(to * e));
-      if (p < 1) requestAnimationFrame(frame); else el.textContent = isCur ? kMoney(to) : kNum(Math.round(to));
-    }
-    requestAnimationFrame(frame);
-  }
-
-  const kMoney = n => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(n) || 0) + ' ج.م', kNum = n => new Intl.NumberFormat('en-US').format(Number(n) || 0);
   function renderKpis(cur, prv) {
-    const defs = [['المبيعات', kMoney(cur.sales), cur.sales, prv.sales, cur.bs, '#0d9488', 'fa-coins'], ['المعاملات', kNum(cur.tx), cur.tx, prv.tx, cur.btx, '#2563eb', 'fa-folder-open'], ['متوسط المعاملة', kMoney(cur.avg), cur.avg, prv.avg, cur.bavg, '#8b5cf6', 'fa-receipt'], ['صافي الهامش', kMoney(cur.net), cur.net, prv.net, cur.bnet, '#059669', 'fa-chart-line']];
-    $('dsh-kpis').innerHTML = defs.map((d, i) => '<div class="card p-5 overflow-hidden dash-in" style="animation-delay:' + (i * 0.09) + 's"><div class="flex items-center justify-between"><div class="flex items-center gap-2 text-xs text-slate-500"><span class="flex h-8 w-8 items-center justify-center rounded-lg text-white" style="background:' + d[5] + '"><i class="fa-solid ' + d[6] + ' text-xs"></i></span>' + d[0] + '</div>' + chip(d[2], d[3]) + '</div><div class="mt-3 text-2xl font-bold font-mono text-ink dark:text-white" id="dkpi-' + i + '" data-raw="' + d[2] + '" data-cur="' + (d[0] === 'المعاملات' ? 0 : 1) + '">' + d[1] + '</div><div class="h-12 mt-2 -mx-1"><canvas id="dsp-' + i + '"></canvas></div></div>').join('');
-    defs.forEach((d, i) => spark('dsp-' + i, d[4], '#0d9488'));
-    defs.forEach((d, i) => countUp($('dkpi-' + i)));
+    const el = $('dsh-kpis'); if (!el) return;
+    const defs = [
+      ['إجمالي المبيعات', kMoney(cur.sales), cur.sales, prv.sales],
+      ['عدد المعاملات', kNum(cur.tx) + ' معاملة', cur.tx, prv.tx],
+      ['متوسط المعاملة', kMoney(cur.avg), cur.avg, prv.avg],
+      ['صافي الهامش', kMoney(cur.net), cur.net, prv.net]
+    ];
+    el.innerHTML = defs.map(d =>
+      '<div class="sg-kpi-tile">' +
+        '<div class="sg-kpi-top"><span>' + d[0] + '</span>' + deltaBadge(d[2], d[3]) + '</div>' +
+        '<div class="sg-kpi-num sg-tabular">' + d[1] + '</div>' +
+      '</div>'
+    ).join('');
   }
 
   function renderMain(P, cur, prv, dark) {
     destroy('main');
+    const cnv = $('dsh-main'); if (!cnv) return;
     const wd = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
     const labels = cur.bs.map((_, i) => P.unit === 'hour' ? pad(i) + ':00' : (range === 'week' ? wd[new Date(P.start.getTime() + i * 864e5).getDay()] : String(i + 1)));
-    $('dsh-l-cur').textContent = P.label; $('dsh-l-prv').textContent = P.plabel;
-    const grid = dark ? 'rgba(148,163,184,.12)' : 'rgba(148,163,184,.2)', txt = dark ? '#94a3b8' : '#64748b';
-    charts.main = new Chart($('dsh-main'), {
-      type: 'line',
-      data: { labels: labels, datasets: [
-        { label: P.label, data: cur.bs, borderColor: C.brand, backgroundColor: 'rgba(13,148,136,.14)', fill: true, tension: .35, borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 5 },
-        { label: P.plabel, data: prv.bs.slice(0, cur.bs.length), borderColor: '#94a3b8', borderDash: [5, 5], fill: false, tension: .35, borderWidth: 2, pointRadius: 0 }] },
-      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, animation: { duration: AN() },
+    const grid = dark ? 'rgba(255,255,255,0.06)' : 'rgba(16,24,40,0.06)';
+    const txt = dark ? '#98A2B3' : '#667085';
+    const maxV = Math.max.apply(null, cur.bs.concat([1]));
+    charts.main = new Chart(cnv, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { type: 'bar', label: P.label, data: cur.bs, backgroundColor: cur.bs.map(v => v === maxV ? '#036b29' : 'rgba(23,178,106,0.28)'), borderColor: '#17B26A', borderWidth: 1, borderRadius: 7, barPercentage: 0.6 },
+          { type: 'line', label: P.plabel, data: prv.bs.slice(0, cur.bs.length), borderColor: '#98A2B3', borderDash: [4, 4], fill: false, tension: 0.35, borderWidth: 1.8, pointRadius: 0 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
         plugins: { legend: { display: false }, tooltip: { rtl: true, callbacks: { label: c => ' ' + c.dataset.label + ': ' + formatCurrency(c.parsed.y) } } },
-        scales: { y: { beginAtZero: true, grid: { color: grid }, ticks: { color: txt } }, x: { grid: { display: false }, ticks: { color: txt, maxTicksLimit: 12 } } } }
+        scales: { y: { beginAtZero: true, grid: { color: grid }, ticks: { color: txt } }, x: { grid: { display: false }, ticks: { color: txt, maxTicksLimit: 12 } } }
+      }
     });
   }
 
   function renderPay(lines, dark) {
     destroy('pay');
-    const m = new Map(); lines.forEach(l => { const k = (l.payment_method || 'كاش').trim(); m.set(k, (m.get(k) || 0) + (Number(l.total) || 0)); });
+    const cnv = $('dsh-pay'); if (!cnv) return;
+    const m = new Map();
+    lines.forEach(l => { const k = (l.payment_method || 'كاش').trim(); m.set(k, (m.get(k) || 0) + (Number(l.total) || 0)); });
     const e = [...m.entries()].sort((a, b) => b[1] - a[1]);
-    charts.pay = new Chart($('dsh-pay'), { type: 'doughnut', data: { labels: e.length ? e.map(x => x[0]) : ['—'], datasets: [{ data: e.length ? e.map(x => x[1]) : [1], backgroundColor: C.pal, borderWidth: 0 }] },
-      options: { responsive: true, maintainAspectRatio: false, cutout: '68%', animation: { duration: AN() }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, color: dark ? '#cbd5e1' : '#475569', font: { family: 'IBM Plex Sans Arabic' } } }, tooltip: { rtl: true, callbacks: { label: c => ' ' + c.label + ': ' + formatCurrency(c.parsed) } } } } });
+    charts.pay = new Chart(cnv, {
+      type: 'doughnut',
+      data: { labels: e.length ? e.map(x => x[0]) : ['—'], datasets: [{ data: e.length ? e.map(x => x[1]) : [1], backgroundColor: C.pal, borderWidth: 0 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '70%',
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 9, color: dark ? '#D0D5DD' : '#475467', font: { family: 'IBM Plex Sans Arabic', size: 12 } } }, tooltip: { rtl: true, callbacks: { label: c => ' ' + c.label + ': ' + formatCurrency(c.parsed) } } }
+      }
+    });
   }
 
-  function renderEmps(lines) {
+  function renderPipeline(lines) {
+    const board = $('dsh-pipeline'); if (!board) return;
+    const activeLines = lines.filter(l => !l._isRefundEntry && !(window.isLineCancelled && window.isLineCancelled(l)));
+    const cols = [
+      { key: 'prog', title: 'قيد التنفيذ', items: [] },
+      { key: 'rev',  title: 'تحت المراجعة', items: [] },
+      { key: 'done', title: 'جاهز للتسليم', items: [] },
+      { key: 'del',  title: 'تم التسليم', items: [] }
+    ];
+    activeLines.forEach(l => {
+      const st = String(l.status || '').toLowerCase();
+      if (l.delivered || st === 'delivered' || st === 'closed') cols[3].items.push(l);
+      else if (l.complete || st === 'complete') cols[2].items.push(l);
+      else if (st.indexOf('review') !== -1 || st.indexOf('مراجع') !== -1) cols[1].items.push(l);
+      else cols[0].items.push(l);
+    });
+    board.innerHTML = cols.map(c =>
+      '<div class="sg-pipe-col">' +
+        '<div class="sg-col-pill"><span>' + c.title + '</span><span class="sg-col-count sg-tabular">' + c.items.length + '</span></div>' +
+        '<div class="sg-pipe-list">' +
+          (c.items.slice(0, 18).map(l => {
+            const p = profileByName(l.employee);
+            return '<div class="sg-case-card" onclick="openTxModal(\'' + eh(l.transaction_id || '') + '\')">' +
+              avatarHtml(p || { id: l.employee || 'u', full_name: l.employee || 'موظف' }, 34) +
+              '<div class="sg-case-body"><div class="sg-case-title">' + eh(l.client_name || l.service || 'معاملة') + '</div>' +
+              '<div class="sg-case-sub">' + eh(l.service || '—') + ' · ' + formatCurrency(l.total || 0) + '</div></div></div>';
+          }).join('') || '<div class="text-center text-xs py-6" style="color:var(--sg-mute)">لا توجد بنود</div>') +
+        '</div></div>'
+    ).join('');
+  }
+
+  async function renderTeamAndTargets(lines) {
+    const strip = $('dsh-av-strip'), grid = $('dsh-emps'), ovGrid = $('dsh-ov-targets');
+    if (!grid) return;
     const by = new Map();
     lines.forEach(l => {
       const p = profileByName(l.employee), key = p ? p.id : 'n:' + (l.employee || 'غير محدد');
-      if (!by.has(key)) by.set(key, { p: p, name: p ? p.full_name : (l.employee || 'غير محدد'), sales: 0, comm: 0, tx: new Set() });
-      const d = by.get(key); d.sales += Number(l.total) || 0; d.comm += commOf(l); if (l.transaction_id) d.tx.add(l.transaction_id);
+      if (!by.has(key)) by.set(key, { p: p, id: p ? p.id : key, name: p ? p.full_name : (l.employee || 'غير محدد'), sales: 0, comm: 0, tx: new Set() });
+      const d = by.get(key); d.sales += Number(l.total) || 0; d.comm += commOf(l);
+      if (l.transaction_id && !l._isRefundEntry) d.tx.add(l.transaction_id);
     });
-    const rows = [...by.values()].sort((a, b) => b.sales - a.sales), max = rows.length ? rows[0].sales || 1 : 1, mgr = isMgr();
-    $('dsh-emps').innerHTML = rows.map((r, i) => {
+
+    // Load monthly targets
+    const tgtMap = new Map();
+    try {
+      const cl = await sbClient.from('month_closures').select('month').order('month');
+      const last = (!cl.error && (cl.data || []).length) ? cl.data[cl.data.length - 1].month : null;
+      const wm = last ? addM(last, 1) : mk(new Date());
+      const t = await sbClient.from('emp_targets').select('user_id,target').eq('month', wm);
+      if (!t.error) (t.data || []).forEach(x => { if (Number(x.target) > 0) tgtMap.set(x.user_id, Number(x.target)); });
+    } catch (_) {}
+
+    const rows = [...by.values()].sort((a, b) => b.sales - a.sales);
+    const maxS = rows.length ? rows[0].sales || 1 : 1, mgr = isMgr();
+
+    if (strip) {
+      strip.innerHTML = rows.map(r =>
+        '<div class="sg-av-chip">' + avatarHtml(r.p || { id: r.name, full_name: r.name }, 28) +
+        '<span>' + eh(r.name) + '</span><span class="sg-col-count sg-tabular">' + r.tx.size + '</span></div>'
+      ).join('') || '<span class="text-xs" style="color:var(--sg-mute)">لا توجد بيانات</span>';
+    }
+
+    const cardsHtml = rows.map((r, i) => {
       const showComm = mgr || (r.p && currentUser && r.p.id === currentUser.id);
-      return '<div class="flex items-center gap-3 px-5 py-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ' + (i === 0 ? 'bg-amber-400 text-slate-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-500') + '">' + (i + 1) + '</span>' +
-        avatarHtml(r.p || { id: r.name, full_name: r.name }, 34) +
-        '<div class="min-w-0 flex-1"><div class="flex items-center justify-between gap-2"><span class="truncate text-sm font-bold text-ink dark:text-white">' + eh(r.name) + '</span><span class="shrink-0 font-mono text-xs font-bold text-brand-600">' + formatCurrency(r.sales) + '</span></div>' +
-        '<div class="mt-1.5 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div class="h-full rounded-full bg-brand-500" style="width:' + Math.round(r.sales / max * 100) + '%"></div></div>' +
-        '<div class="mt-1 flex justify-between text-[10px] text-slate-400"><span>' + r.tx.size + ' معاملة</span>' + (showComm ? '<span class="text-emerald-600">كوميشن ' + formatCurrency(r.comm) + '</span>' : '') + '</div></div></div>';
-    }).join('') || '<div class="p-8 text-center text-xs text-slate-400">لا توجد بيانات</div>';
+      const tgt = tgtMap.get(r.id) || 0;
+      const tgtPct = tgt ? Math.round(r.sales / tgt * 100) : Math.round(r.sales / maxS * 100);
+      const sharePct = Math.round(r.sales / Math.max(1, rows.reduce((a, b) => a + b.sales, 0)) * 100);
+      return '<article class="sg-emp-card">' +
+        '<div class="sg-emp-top"><div class="sg-emp-person">' + avatarHtml(r.p || { id: r.name, full_name: r.name }, 44) +
+        '<div class="min-w-0"><div class="truncate font-bold text-sm">' + eh(r.name) + '</div><div class="text-xs" style="color:var(--sg-mute)">' + r.tx.size + ' معاملة</div></div></div>' +
+        '<span class="sg-col-count sg-tabular">#' + (i + 1) + '</span></div>' +
+        '<div class="sg-emp-nums"><div><div class="text-[11px]" style="color:var(--sg-mute)">المبيعات</div><div class="font-bold text-sm sg-tabular mt-0.5">' + formatCurrency(r.sales) + '</div></div>' +
+        '<div><div class="text-[11px]" style="color:var(--sg-mute)">' + (showComm ? 'الكوميشن' : 'الترتيب') + '</div><div class="font-bold text-sm sg-tabular mt-0.5" style="color:#17B26A">' + (showComm ? formatCurrency(r.comm) : '#' + (i + 1)) + '</div></div></div>' +
+        '<div class="sg-arcs-pair">' +
+          '<div class="sg-arc-box">' + svgArc(tgtPct, '#036b29') + '<div class="sg-arc-val sg-tabular">' + tgtPct + '%</div><div class="sg-arc-lbl">' + (tgt ? 'تحقيق التارجت' : 'مقارنة بالأعلى') + '</div></div>' +
+          '<div class="sg-arc-box">' + svgArc(sharePct, '#17B26A') + '<div class="sg-arc-val sg-tabular">' + sharePct + '%</div><div class="sg-arc-lbl">حصة المبيعات</div></div>' +
+        '</div></article>';
+    }).join('') || '<div class="text-center text-xs py-8" style="color:var(--sg-mute)">لا توجد بيانات</div>';
+
+    grid.innerHTML = cardsHtml;
+    if (ovGrid) {
+      ovGrid.innerHTML = rows.slice(0, 3).map(r => {
+        const tgt = tgtMap.get(r.id) || 0;
+        const pct = tgt ? Math.round(r.sales / tgt * 100) : Math.round(r.sales / maxS * 100);
+        return '<div class="sg-arc-box">' + svgArc(pct, pct >= 60 ? '#036b29' : '#17B26A') +
+          '<div class="sg-arc-val sg-tabular">' + pct + '%</div><div class="sg-arc-lbl font-semibold">' + eh(r.name) + '</div></div>';
+      }).join('') || '<div class="text-center text-xs py-6" style="color:var(--sg-mute)">لا يوجد تارجت محدد</div>';
+    }
   }
 
   function renderSvcs(lines) {
-    const m = new Map(); lines.forEach(l => { const k = l.service || 'أخرى'; m.set(k, (m.get(k) || 0) + (Number(l.total) || 0)); });
-    const e = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6), max = e.length ? e[0][1] || 1 : 1;
-    $('dsh-svcs').innerHTML = e.map((x, i) => '<div><div class="flex justify-between gap-2 text-xs"><span class="truncate font-semibold text-ink dark:text-white">' + eh(x[0]) + '</span><span class="shrink-0 font-mono text-slate-500">' + formatCurrency(x[1]) + '</span></div><div class="mt-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div class="h-full rounded-full" style="width:' + Math.round(x[1] / max * 100) + '%;background:' + C.pal[i % C.pal.length] + '"></div></div></div>').join('') || '<div class="py-6 text-center text-xs text-slate-400">لا توجد بيانات</div>';
+    const el = $('dsh-svcs'); if (!el) return;
+    const m = new Map();
+    lines.forEach(l => { const k = l.service || 'أخرى'; m.set(k, (m.get(k) || 0) + (Number(l.total) || 0)); });
+    const e = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 7), max = e.length ? e[0][1] || 1 : 1;
+    el.innerHTML = e.map(x =>
+      '<div class="sg-svc-row"><div class="sg-svc-top"><span class="truncate font-semibold">' + eh(x[0]) + '</span><strong class="sg-tabular shrink-0">' + formatCurrency(x[1]) + '</strong></div>' +
+      '<div class="sg-svc-track"><div class="sg-svc-fill" style="width:' + Math.round(x[1] / max * 100) + '%"></div></div></div>'
+    ).join('') || '<div class="text-center text-xs py-6" style="color:var(--sg-mute)">لا توجد بيانات</div>';
   }
 
   function renderHeat(monthLines) {
+    const el = $('dsh-heat'); if (!el) return;
     const order = [6, 0, 1, 2, 3, 4, 5], names = { 6: 'السبت', 0: 'الأحد', 1: 'الاثنين', 2: 'الثلاثاء', 3: 'الأربعاء', 4: 'الخميس', 5: 'الجمعة' };
     const g = Array.from({ length: 7 }, () => new Array(24).fill(0)); let mn = 24, mx = -1, top = 0;
-    monthLines.forEach(l => { if (l._isRefundEntry) return; const d = new Date(l.received_at); if (isNaN(d)) return; const v = ++g[d.getDay()][d.getHours()]; if (v > top) top = v; if (d.getHours() < mn) mn = d.getHours(); if (d.getHours() > mx) mx = d.getHours(); });
-    if (mx < 0) { $('dsh-heat').innerHTML = '<div class="py-8 text-center text-xs text-slate-400">لا توجد بيانات كافية</div>'; return; }
-    const hrs = []; for (let h = mn; h <= mx; h++) hrs.push(h);
-    let h = '<div class="grid gap-1 text-[10px] min-w-[460px]" style="grid-template-columns:64px repeat(' + hrs.length + ',minmax(0,1fr))"><span></span>' + hrs.map(x => '<span class="text-center text-slate-400 font-mono">' + x + '</span>').join('');
-    order.forEach(dw => {
-      h += '<span class="flex items-center text-slate-500 font-semibold">' + names[dw] + '</span>';
-      hrs.forEach(x => { const v = g[dw][x], a = top ? v / top : 0; h += '<span title="' + names[dw] + ' ' + x + ':00 — ' + v + ' بند" class="h-7 rounded-md" style="background:' + (v ? 'rgba(13,148,136,' + (0.15 + a * 0.85).toFixed(2) + ')' : 'rgba(148,163,184,.12)') + '"></span>'; });
+    monthLines.forEach(l => {
+      if (l._isRefundEntry) return;
+      const d = new Date(l.received_at); if (isNaN(d)) return;
+      const v = ++g[d.getDay()][d.getHours()]; if (v > top) top = v;
+      if (d.getHours() < mn) mn = d.getHours(); if (d.getHours() > mx) mx = d.getHours();
     });
-    $('dsh-heat').innerHTML = h + '</div>';
-  }
-
-  async function renderTargets() {
-    const box = $('dsh-targets'); $('dsh-tgt-month').textContent = '';
-    try {
-      const cl = await sbClient.from('month_closures').select('month').order('month');
-      if (cl.error) throw cl.error;
-      const last = (cl.data || []).length ? cl.data[cl.data.length - 1].month : null, wm = last ? addM(last, 1) : mk(new Date());
-      const t = await sbClient.from('emp_targets').select('user_id,target').eq('month', wm);
-      if (t.error) throw t.error;
-      const rows = (t.data || []).filter(x => Number(x.target) > 0);
-      $('dsh-tgt-month').textContent = '· ' + new Intl.DateTimeFormat('ar-EG', { month: 'long' }).format(new Date(wm + '-01T00:00'));
-      if (!rows.length) { box.innerHTML = '<div class="py-8 text-center text-xs text-slate-400">لم يتم تحديد تارجت لهذا الشهر بعد</div>'; return; }
-      const lines = await loadMonth(wm), sales = new Map();
-      lines.forEach(l => { const p = profileByName(l.employee); if (p) sales.set(p.id, (sales.get(p.id) || 0) + (Number(l.total) || 0)); });
-      box.innerHTML = rows.map(x => {
-        const p = profiles.find(q => q.id === x.user_id) || { id: x.user_id, full_name: 'موظف' }, s = sales.get(x.user_id) || 0, pct = Math.round(s / Number(x.target) * 100), col = pct >= 100 ? 'var(--r-ok,#059669)' : pct >= 60 ? 'var(--r-acc,#0d9488)' : pct >= 30 ? 'var(--r-acc2,#d97706)' : 'var(--r-bad,#dc2626)';
-        return '<div class="flex items-center gap-3"><div class="relative h-12 w-12 shrink-0 rounded-full" style="background:conic-gradient(' + col + ' ' + Math.min(100, pct) + '%,rgba(148,163,184,.25) 0)"><div class="absolute inset-[5px] flex items-center justify-center rounded-full bg-white dark:bg-slate-900 text-[11px] font-bold font-mono" style="color:' + col + '">' + pct + '%</div></div><div class="min-w-0 flex-1"><div class="truncate text-sm font-bold text-ink dark:text-white">' + eh(p.full_name) + '</div><div class="text-[11px] text-slate-400 font-mono">' + formatCurrency(s) + ' / ' + formatCurrency(x.target) + '</div></div></div>';
-      }).join('');
-    } catch (err) { box.innerHTML = '<div class="py-8 text-center text-xs text-slate-400">شغّل ملف phase4-commission-targets.sql علشان يظهر التارجت</div>'; }
+    if (mx < 0) { el.innerHTML = '<div class="py-8 text-center text-xs" style="color:var(--sg-mute)">لا توجد بيانات كافية</div>'; return; }
+    const hrs = []; for (let h = mn; h <= mx; h++) hrs.push(h);
+    let h = '<div class="grid gap-1.5 text-[10px] min-w-[440px]" style="grid-template-columns:58px repeat(' + hrs.length + ',minmax(0,1fr))"><span></span>' + hrs.map(x => '<span class="text-center sg-tabular" style="color:var(--sg-mute)">' + x + '</span>').join('');
+    order.forEach(dw => {
+      h += '<span class="flex items-center font-semibold" style="color:var(--sg-ink-2)">' + names[dw] + '</span>';
+      hrs.forEach(x => {
+        const v = g[dw][x], a = top ? v / top : 0;
+        h += '<span title="' + names[dw] + ' ' + x + ':00 — ' + v + ' بند" class="h-7 rounded-lg" style="background:' + (v ? 'rgba(3,107,41,' + (0.14 + a * 0.86).toFixed(2) + ')' : 'rgba(148,163,184,0.14)') + '"></span>';
+      });
+    });
+    el.innerHTML = h + '</div>';
   }
 
   async function renderLate() {
-    const box = $('dsh-late');
+    const box = $('dsh-late'), cnt = $('dsh-late-count'); if (!box) return;
     try {
       const r = await sbClient.from('request_lines').select('id,client_name,service,transaction_id,employee,received_at,exec_start_date,duration_days,qty')
         .eq('complete', false).gte('received_at', DATA_FROM_TS).not('duration_days', 'is', null).order('id', { ascending: false }).limit(500);
       if (r.error) throw r.error;
       const t0 = new Date(); t0.setHours(0, 0, 0, 0);
       const late = (r.data || []).filter(l => !(window.isLineCancelled && window.isLineCancelled(l))).map(l => {
-        const base = new Date(String(l.exec_start_date || l.received_at || '').slice(0, 10) + 'T00:00'); if (isNaN(base)) return null;
-        const due = new Date(base.getTime() + (Number(l.duration_days) || 0) * 864e5), days = Math.floor((t0 - due) / 864e5);
-        return days > 0 ? { l: l, days: days, due: due } : null;
-      }).filter(Boolean).sort((a, b) => b.days - a.days);
-      $('dsh-late-count').textContent = late.length + ' متأخر';
-      box.innerHTML = late.slice(0, 15).map(x => '<div class="flex items-center justify-between gap-3 px-5 py-3"><div class="min-w-0"><div class="truncate text-sm font-bold text-ink dark:text-white"><button ' + ac(x.l.client_name) + ' class="hover:text-brand-600 hover:underline">' + eh(x.l.client_name) + '</button> <span class="font-normal text-slate-400">· ' + eh(x.l.service) + '</span></div><div class="text-[11px] text-slate-400"><button ' + at(x.l.transaction_id) + ' class="font-mono text-brand-600 hover:underline" dir="ltr">' + eh(x.l.transaction_id) + '</button> · ' + eh(x.l.employee || '—') + ' · الموعد ' + eh(formatDateOnly(dayKey(x.due))) + '</div></div><span class="shrink-0 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 px-3 py-1 text-[11px] font-bold">متأخر ' + x.days + ' يوم</span></div>').join('') || '<div class="p-8 text-center text-xs text-slate-400"><i class="fa-solid fa-circle-check text-emerald-500 text-xl mb-2 block"></i>مفيش طلبات متأخرة</div>';
-    } catch (err) { $('dsh-late-count').textContent = '—'; box.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">تعذّر تحميل المتأخرات</div>'; console.warn('late', err); }
+        const base = l.exec_start_date ? new Date(l.exec_start_date + 'T00:00:00') : new Date(l.received_at);
+        const due = new Date(base.getTime() + (Number(l.duration_days) || 0) * 864e5);
+        const days = Math.floor((t0 - due) / 864e5);
+        return { l, days };
+      }).filter(x => x.days > 0).sort((a, b) => b.days - a.days);
+      if (cnt) cnt.textContent = String(late.length);
+      box.innerHTML = late.slice(0, 40).map(x => {
+        const p = profileByName(x.l.employee);
+        return '<div class="sg-late-row" onclick="openTxModal(\'' + eh(x.l.transaction_id || '') + '\')">' +
+          '<div class="flex items-center gap-3 min-w-0">' + avatarHtml(p || { id: x.l.employee || 'u', full_name: x.l.employee || 'موظف' }, 34) +
+          '<div class="min-w-0"><div class="truncate font-semibold text-sm">' + eh(x.l.client_name || 'عميل') + ' — ' + eh(x.l.service || '') + '</div>' +
+          '<div class="text-xs" style="color:var(--sg-mute)">' + eh(x.l.employee || '—') + '</div></div></div>' +
+          '<span class="sg-delta neg sg-tabular shrink-0">متأخر ' + x.days + ' يوم</span></div>';
+      }).join('') || '<div class="text-center text-xs py-8" style="color:var(--sg-mute)">لا توجد طلبات متأخرة 🎉</div>';
+    } catch (_) {
+      box.innerHTML = '<div class="text-center text-xs py-6" style="color:var(--sg-mute)">تعذّر تحميل المتأخرات</div>';
+    }
   }
 
+  window.switchDashView = function (v) {
+    activeView = v;
+    document.querySelectorAll('#tab-dash .sg-pill').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+    document.querySelectorAll('#tab-dash .sg-view').forEach(p => p.classList.toggle('active', p.id === 'sg-view-' + v));
+  };
+
   window.styleDashButtons = function () {
-    ['today', 'week', 'month'].forEach(r => { const b = $('dash-btn-' + r); if (b) b.className = 'rounded-lg px-3.5 py-1.5 font-semibold transition ' + (r === range ? 'bg-white text-ink shadow' : 'text-white/80 hover:text-white'); });
-  };
-  window.setDashboardRange = function (r) { range = r; if (r !== 'pick') { selMonth = ''; const i = $('dsh-month'); if (i) i.value = ''; } styleDashButtons(); renderDashboardMetrics(); };
-  window.setDashboardMonth = function (m) { if (!/^\d{4}-\d{2}$/.test(m || '')) { window.setDashboardRange('month'); return; } selMonth = m; range = 'pick'; styleDashButtons(); renderDashboardMetrics(); };
-  window.toggleDashLate = function () {
-    const b = $('dsh-late'), c = $('dsh-late-chev'); if (!b) return;
-    const open = b.classList.toggle('hidden') === false;
-    if (c) c.style.transform = open ? 'rotate(180deg)' : '';
-    try { localStorage.setItem('dsh_late_open', open ? '1' : '0'); } catch (e) { /* */ }
-  };
-  window.dashRefresh = function () { cache = {}; refCache = {}; renderDashboardMetrics(); };
-  window.renderDashboardMetrics = async function () {
-    if (!sbClient || !$('dsh-kpis')) return;
-    const my = ++seq, P = period(), dark = document.documentElement.classList.contains('dark');
-    styleDashButtons();
-    $('dsh-title').textContent = P.title;
-    $('dsh-sub').textContent = 'مقارنة مع ' + P.plabel;
-    if (typeof Chart !== 'undefined') { Chart.defaults.font.family = '"IBM Plex Sans Arabic",Tahoma,sans-serif'; Chart.defaults.color = dark ? '#94a3b8' : '#64748b'; }
-    try {
-      const cm = (range === 'pick' && selMonth) ? selMonth : mk(new Date()), pm = addM(cm, -1), all = (await loadMonth(pm)).concat(await loadMonth(cm));
-      if (my !== seq) return;
-      const cl = inRange(all, P.start, P.end), cur = stats(all, P.start, P.end, P.n, P.unit), prv = stats(all, P.pstart, P.pend, P.n, P.unit);
-      renderKpis(cur, prv); renderMain(P, cur, prv, dark); renderPay(cl, dark); renderEmps(cl); renderSvcs(cl);
-      renderHeat(await loadMonth(cm));
-      renderTargets(); renderLate();
-      if (!window.__lateInit) { window.__lateInit = 1; try { if (localStorage.getItem('dsh_late_open') === '1') window.toggleDashLate(); } catch (e) { /* */ } }
-    } catch (err) { showError('تعذّر تحميل الداش بورد', err); }
-  };
-  /* تبديل ليلي/نهاري: نغيّر ألوان الرسومات بس من غير ما نعيد تحميل أو نبني الداشبورد من الأول */
-  function recolor() {
-    const dark = document.documentElement.classList.contains('dark'), txt = dark ? '#94a3b8' : '#64748b', grid = dark ? 'rgba(148,163,184,.12)' : 'rgba(148,163,184,.2)';
-    if (typeof Chart !== 'undefined') Chart.defaults.color = txt;
-    Object.keys(charts).forEach(k => {
-      const ch = charts[k]; if (!ch || !ch.options) return;
-      try {
-        const sc = ch.options.scales; if (sc && sc.y && sc.x && k === 'main') { sc.y.grid.color = grid; sc.y.ticks.color = txt; sc.x.ticks.color = txt; }
-        const lg = ch.options.plugins && ch.options.plugins.legend; if (lg && lg.labels) lg.labels.color = dark ? '#cbd5e1' : '#475569';
-        ch.update('none');
-      } catch (e) { /* */ }
+    ['today', 'week', 'month'].forEach(k => {
+      const b = $('dash-btn-' + k);
+      if (b) b.classList.toggle('active', range === k);
     });
-  }
+  };
+
+  window.setDashboardRange = function (r) {
+    range = r;
+    if (r !== 'pick') { selMonth = ''; const i = $('dsh-month'); if (i) i.value = ''; }
+    styleDashButtons();
+    renderDashboardMetrics();
+  };
+
+  window.setDashboardMonth = function (m) {
+    if (!/^\d{4}-\d{2}$/.test(m || '')) { window.setDashboardRange('month'); return; }
+    selMonth = m; range = 'pick';
+    styleDashButtons();
+    renderDashboardMetrics();
+  };
+
+  window.dashRefresh = function () { cache = {}; refCache = {}; renderDashboardMetrics(); };
+
+  window.renderDashboardMetrics = async function () {
+    if (!sbClient) return;
+    const mySeq = ++seq;
+    const sel = $('dsh-month');
+    if (sel && sel.options.length <= 1) {
+      const now = new Date();
+      for (let i = 0; i < 12; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1), val = mk(d);
+        if (val + '-31' < DATA_FROM_TS) break;
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = new Intl.DateTimeFormat('ar-EG', { month: 'long', year: 'numeric' }).format(d);
+        sel.appendChild(opt);
+      }
+    }
+    styleDashButtons();
+    const P = period();
+    if ($('dsh-title')) $('dsh-title').textContent = 'لوحة المتابعة — ' + P.label;
+    if ($('dsh-sub')) $('dsh-sub').textContent = 'مقارنة مع ' + P.plabel;
+    try {
+      const chunks = await Promise.all(P.months.map(m => loadMonth(m)));
+      if (mySeq !== seq) return;
+      const all = chunks.flat();
+      const curLines = inRange(all, P.start, P.end), prvLines = inRange(all, P.pstart, P.pend);
+      const cur = stats(curLines, P.start, P.end, P.n, P.unit), prv = stats(prvLines, P.pstart, P.pend, P.n, P.unit);
+      const dark = document.documentElement.classList.contains('dark');
+      renderKpis(cur, prv);
+      renderMain(P, cur, prv, dark);
+      renderPay(curLines, dark);
+      renderPipeline(curLines);
+      renderTeamAndTargets(curLines);
+      renderSvcs(curLines);
+      renderHeat(chunks[0] || curLines);
+      renderLate();
+    } catch (err) {
+      console.warn('dash render error:', err);
+    }
+  };
+
   const _tg = window.toggleDarkMode;
-  window.toggleDarkMode = function () { const r = _tg.apply(this, arguments); if (currentTab === 'dash') { try { recolor(); } catch (e) { /* */ } } return r; };
+  if (typeof _tg === 'function') {
+    window.toggleDarkMode = function () {
+      const r = _tg.apply(this, arguments);
+      if (typeof currentTab !== 'undefined' && currentTab === 'dash') {
+        try { renderDashboardMetrics(); } catch (_) {}
+      }
+      return r;
+    };
+  }
   const _lr2 = window.loadRecentRequests;
-  window.loadRecentRequests = async function () { const x = await _lr2(); cache = {}; refCache = {}; return x; };
+  if (typeof _lr2 === 'function') {
+    window.loadRecentRequests = async function () {
+      const x = await _lr2(); cache = {}; refCache = {}; return x;
+    };
+  }
 })();
