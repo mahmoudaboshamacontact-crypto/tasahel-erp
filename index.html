@@ -37,6 +37,7 @@
 <link rel="stylesheet" href="css/part-e-clients-growth.css?v=1">
 <link rel="stylesheet" href="css/part-h-morale.css?v=1">
 <link rel="stylesheet" href="css/dash-calm.css?v=3">
+<link rel="stylesheet" href="css/tx-pipelines.css?v=1">
 <link rel="manifest" href="manifest.webmanifest?v=3">
 <meta name="theme-color" content="#0d0b14">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -407,6 +408,10 @@
       </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
+      <div class="tx-mode-switch" role="group" aria-label="طريقة العرض">
+        <button id="tx-mode-table" type="button" class="tx-mode-btn active" onclick="setTxViewMode('table')">جدول</button>
+        <button id="tx-mode-pipe" type="button" class="tx-mode-btn" onclick="setTxViewMode('pipelines')">Pipelines</button>
+      </div>
       <button type="button" onclick="loadRecentRequests()" class="btn-neo-sec text-xs"><i class="fa-solid fa-rotate-right"></i><span>تحديث</span></button>
       <button type="button" onclick="switchTab('new')" class="btn-neo-pri text-xs"><i class="fa-solid fa-plus"></i><span>طلب جديد</span></button>
     </div>
@@ -430,6 +435,8 @@
       <div id="tx-kpi-today" class="mt-1.5 text-xl sm:text-2xl font-bold font-mono text-ink dark:text-white">0</div>
     </button>
   </div>
+
+  <div id="tx-pipe-root"></div>
 
   <div class="card overflow-hidden">
     <div class="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-100 dark:border-slate-800 px-4 py-3">
@@ -679,6 +686,7 @@
 <script src="js/27-glassy-collapse.js?v=1" defer></script>
 <script src="js/28-mobile-bottom-nav.js?v=1" defer></script>
 <script src="js/29-tx-status-cards.js?v=1" defer></script>
+<script src="js/tx-pipelines.js?v=1" defer></script>
 <script src="js/30-home-cleanup.js?v=1" defer></script>
 <script src="js/31-search-clear.js?v=1" defer></script>
 <script src="js/32-sidebar-polish.js?v=1" defer></script>
