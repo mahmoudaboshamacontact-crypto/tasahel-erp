@@ -1,5 +1,5 @@
 /* tokens.css - Tasahel design tokens. Palette A (Sage & Cream, light) + C (Moss Night, dark).
-   Load right after tailwind.css, before every other css file.
+   Load AFTER reels-light.css (see index.html placement), so the bridge wins by order.
    Dark applies with html[data-theme="dark"] or the existing html.dark class.
    Bridge at the bottom maps the old orange --r-* variables to these tokens. */
 :root {
@@ -46,8 +46,13 @@ html[data-theme="dark"], html.dark {
 }
 
 /* Bridge (remove when reels.css / reels-light.css are retired).
-   Note: this changes the app accent from orange to green on purpose. */
-:root, html.dark, html[data-theme="dark"], body.reels {
+   Same specificity as the selectors in reels.css (html.dark body.reels) and
+   reels-light.css (html:not(.dark) body.reels), and loaded after them, so it wins.
+   Changes the app accent from orange to green on purpose. */
+:root,
+html.dark body.reels,
+html:not(.dark) body.reels,
+html[data-theme="dark"] body.reels {
   --r-acc: var(--t-brand);
   --r-acc2: var(--t-brand);
   --r-ok: var(--t-ok);
