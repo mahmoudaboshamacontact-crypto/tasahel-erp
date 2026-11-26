@@ -1,0 +1,61 @@
+/* tokens.css - Tasahel design tokens. Palette A (Sage & Cream, light) + C (Moss Night, dark).
+   Load right after tailwind.css, before every other css file.
+   Dark applies with html[data-theme="dark"] or the existing html.dark class.
+   Bridge at the bottom maps the old orange --r-* variables to these tokens. */
+:root {
+  --t-bg: #F4F1EA;
+  --t-card: #FFFFFF;
+  --t-brand: #036B29;
+  --t-soft: #8FA98B;
+  --t-accent: #D9B779;
+  --t-error: #881337;
+  --t-ink: #1C2420;
+  --t-ink-mute: #5E6B63;
+  --t-line: #E2DED3;
+  --t-card-2: #EDE9DF;
+  --t-on-brand: #FFFFFF;
+  --t-ok: #036B29;
+
+  --t-r-sm: 8px; --t-r-md: 12px; --t-r-lg: 16px; --t-r-xl: 22px; --t-r-pill: 999px;
+  --t-sh-1: 0 1px 2px rgba(28, 36, 32, .06);
+  --t-sh-2: 0 6px 18px rgba(28, 36, 32, .08);
+  --t-sh-3: 0 20px 50px rgba(28, 36, 32, .16);
+  --t-s-1: 4px; --t-s-2: 8px; --t-s-3: 12px; --t-s-4: 16px; --t-s-5: 24px; --t-s-6: 32px;
+  --t-font: 'IBM Plex Sans Arabic', Tahoma, sans-serif;
+  --t-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --t-ease: cubic-bezier(.2, .8, .2, 1);
+  --t-dur: 180ms;
+}
+
+html[data-theme="dark"], html.dark {
+  --t-bg: #0F1714;
+  --t-card: #17221D;
+  --t-brand: #4CAF7A;
+  --t-soft: #2F6F6A;
+  --t-accent: #E8B64C;
+  --t-error: #C0455F;
+  --t-ink: #E6EDE8;
+  --t-ink-mute: #93A39A;
+  --t-line: rgba(255, 255, 255, .09);
+  --t-card-2: #1E2B25;
+  --t-on-brand: #0F1714;
+  --t-ok: #4CAF7A;
+  --t-sh-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --t-sh-2: 0 6px 18px rgba(0, 0, 0, .45);
+  --t-sh-3: 0 20px 50px rgba(0, 0, 0, .6);
+}
+
+/* Bridge (remove when reels.css / reels-light.css are retired).
+   Note: this changes the app accent from orange to green on purpose. */
+:root, html.dark, html[data-theme="dark"], body.reels {
+  --r-acc: var(--t-brand);
+  --r-acc2: var(--t-brand);
+  --r-ok: var(--t-ok);
+  --r-bad: var(--t-error);
+  --r-bg: var(--t-bg);
+  --r-card: var(--t-card);
+  --r-card-2: var(--t-card-2);
+  --r-line: var(--t-line);
+  --r-text: var(--t-ink);
+  --r-mute: var(--t-ink-mute);
+}
