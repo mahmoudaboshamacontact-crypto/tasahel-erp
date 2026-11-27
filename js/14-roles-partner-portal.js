@@ -6,7 +6,7 @@
   const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
   const sqlHint = '<div class="card p-5 text-center space-y-2 border border-amber-300 bg-amber-50/70 dark:bg-amber-950/30 dark:border-amber-800"><div class="text-sm font-bold text-amber-900 dark:text-amber-200"><i class="fa-solid fa-database ms-1.5"></i>يلزم تفعيل دوال بوابة المنفذ الخارجي في Supabase</div><div class="text-xs text-amber-800 dark:text-amber-300">شغّل ملف <b class="font-mono">sql/partner-portal-requests.sql</b> مرة واحدة في Supabase (SQL Editor) لتفعيل البوابة التفاعلية.</div></div>';
   const st = {};
-  const PAGE = 20;   /* عدد الطلبات في كل دفعة تحميل */
+  const PAGE = 100;  /* عدد الطلبات في كل دفعة تحميل (الحد الأقصى للـ RPC) */
 
   function injectPartnerIsolationStyle() {
     if (document.getElementById('partner-isolation-style')) return;
@@ -688,16 +688,57 @@
     finally { host.remove(); }
   }
 
+  async function ensureAllLoaded(b) {
+    const s = st[b];
+    if (!s || !s.hasMore) return;
+    if (s._loadingAllPromise) return s._loadingAllPromise;
+    s._loadingAllPromise = (async () => {
+      s.loadingMore = true;
+      renderTableAndCards(b);
+      try {
+        let guard = 0;
+        while (s.hasMore && guard < 30) {
+          guard++;
+          const r = await sbClient.rpc('get_partner_requests', {
+            p_partner_uid: s.mgr ? s.pid : null,
+            p_limit: PAGE,
+            p_offset: (s.allRows || []).length
+          });
+          if (r.error || !r.data) break;
+          const batch = r.data.lines || [];
+          const have = new Set((s.allRows || []).map(l => String(l.id)));
+          const added = batch.filter(l => !have.has(String(l.id)));
+          s.allRows = (s.allRows || []).concat(added);
+          s.hasMore = !!r.data.has_more && batch.length > 0;
+          if (r.data.total_count != null) s.total = Number(r.data.total_count);
+          renderTableAndCards(b);
+          if (!added.length) break;
+        }
+      } finally {
+        s.loadingMore = false;
+        s._loadingAllPromise = null;
+        renderTableAndCards(b);
+      }
+    })();
+    return s._loadingAllPromise;
+  }
+
   window.p8 = {
     setFilter: (b, k, v) => {
       if (!st[b]) return;
       st[b][k] = v;
       renderTableAndCards(b);
+      if ((st[b].from || st[b].to || st[b].q) && st[b].hasMore) {
+        ensureAllLoaded(b);
+      }
     },
     setQuickFilter: (b, mode) => {
       if (!st[b]) return;
       st[b].quickFilter = (st[b].quickFilter === mode && mode !== 'all') ? 'all' : mode;
       renderTableAndCards(b);
+      if (st[b].quickFilter !== 'all' && st[b].hasMore) {
+        ensureAllLoaded(b);
+      }
     },
     clearFilters: b => {
       const s = st[b];
@@ -728,8 +769,8 @@
       if (r.data.total_count != null) s.total = Number(r.data.total_count);
       renderTableAndCards(b);
     },
-    print: b => { const s = st[b]; if (!s) return; printReport(reportHtml(s)); },
-    pdf: b => { const s = st[b]; if (s) exportPdf(s); },
+    print: async b => { const s = st[b]; if (!s) return; if (s.hasMore) await ensureAllLoaded(b); printReport(reportHtml(s)); },
+    pdf: async b => { const s = st[b]; if (!s) return; if (s.hasMore) await ensureAllLoaded(b); exportPdf(s); },
     closeDetail: () => {
       const m = document.getElementById('partner-tx-modal');
       if (m) m.classList.add('hidden');
